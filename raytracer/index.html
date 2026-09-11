@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Raytracer</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #14161a;
+    color: #e8e8e8;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 12px;
+    color: #f0f0f0;
+    letter-spacing: 0.02em;
+  }
+  #toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #b8b8b8;
+  }
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 12px;
+    border-left: 1px solid #33373f;
+  }
+  .control-group:first-child { border-left: none; padding-left: 0; }
+  #canvasWrap {
+    border: 1px solid #33373f;
+    border-radius: 8px;
+    overflow: hidden;
+    line-height: 0;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+  }
+  canvas { display: block; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+  #stats {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #777;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Raytracer</h1>
+
+<div id="toolbar">
+  <div class="control-group">
+    <label for="depth">Reflection depth</label>
+    <input type="range" id="depth" min="0" max="5" value="3">
+    <span id="depthVal">3</span>
+  </div>
+  <div class="control-group">
+    <label><input type="checkbox" id="aa" checked> Anti-alias (final render)</label>
+  </div>
+  <div class="control-group">Drag to orbit · scroll to zoom</div>
+</div>
+
+<div id="canvasWrap">
+  <canvas id="c" width="640" height="480"></canvas>
+</div>
+
+<div id="stats">rendering...</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const WIDTH = 640, HEIGHT = 480;
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const statsEl = document.getElementById("stats");
+  const depthSlider = document.getElementById("depth");
+  const depthVal = document.getElementById("depthVal");
+  const aaCheckbox = document.getElementById("aa");
+
+  const PREVIEW_SCALE = 4; // render at 1/4 resolution while dragging/zooming
+  const EPS = 1e-4;
+
+  // ---- Vec3 helpers (plain [x,y,z] arrays) ----
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+  const length = (a) => Math.sqrt(dot(a, a));
+  const normalize = (a) => { const l = length(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const reflect = (d, n) => sub(d, scale(n, 2 * dot(d, n)));
+  const mulC = (a, b) => [a[0] * b[0], a[1] * b[1], a[2] * b[2]];
+  const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+  // ---- Scene ----
+  const spheres = [
+    { center: [-1.3, 0, -5],    radius: 1.0, color: [220, 60, 60],   diffuse: 0.75, specular: 0.35, shininess: 40,  reflectivity: 0.15 },
+    { center: [1.3, 0.3, -4.5], radius: 1.3, color: [60, 140, 220],  diffuse: 0.6,  specular: 0.5,  shininess: 60,  reflectivity: 0.35 },
+    { center: [0, -0.7, -2.8],  radius: 0.6, color: [230, 210, 80],  diffuse: 0.85, specular: 0.25, shininess: 20,  reflectivity: 0.05 },
+    { center: [2.7, -0.4, -6],  radius: 0.9, color: [235, 235, 240], diffuse: 0.15, specular: 0.9,  shininess: 150, reflectivity: 0.8 },
+    { center: [-2.6, -0.5, -6.5], radius: 0.8, color: [80, 220, 140], diffuse: 0.75, specular: 0.3, shininess: 30, reflectivity: 0.1 },
+  ];
+  const groundY = -1.3;
+  const plane = { point: [0, groundY, 0], normal: [0, 1, 0] };
+
+  const lights = [
+    { position: [-5, 6, 1], color: [1, 1, 1], intensity: 1.15 },
+    { position: [4, 3, 3],  color: [0.6, 0.7, 1.0], intensity: 0.5 },
+  ];
+  const AMBIENT = 0.12;
+  const BG_TOP = [40, 55, 90], BG_BOTTOM = [10, 11, 18];
+
+  // ---- Intersection ----
+  function intersectSphere(origin, dir, sph) {
+    const oc = sub(origin, sph.center);
+    const b = 2 * dot(oc, dir);
+    const c = dot(oc, oc) - sph.radius * sph.radius;
+    const disc = b * b - 4 * c;
+    if (disc < 0) return null;
+    const sq = Math.sqrt(disc);
+    const t1 = (-b - sq) / 2, t2 = (-b + sq) / 2;
+    if (t1 > EPS) return t1;
+    if (t2 > EPS) return t2;
+    return null;
+  }
+
+  function intersectPlane(origin, dir) {
+    const denom = dot(plane.normal, dir);
+    if (Math.abs(denom) < 1e-6) return null;
+    const t = dot(sub(plane.point, origin), plane.normal) / denom;
+    return t > EPS ? t : null;
+  }
+
+  function findClosest(origin, dir, maxT) {
+    let bestT = maxT === undefined ? Infinity : maxT;
+    let bestObj = null, bestIsPlane = false;
+    for (const s of spheres) {
+      const t = intersectSphere(origin, dir, s);
+      if (t !== null && t < bestT) { bestT = t; bestObj = s; bestIsPlane = false; }
+    }
+    const tp = intersectPlane(origin, dir);
+    if (tp !== null && tp < bestT) { bestT = tp; bestObj = plane; bestIsPlane = true; }
+    if (!bestObj) return null;
+    return { t: bestT, object: bestObj, isPlane: bestIsPlane };
+  }
+
+  function backgroundColor(dir) {
+    const t = 0.5 * (dir[1] + 1);
+    return lerp(BG_BOTTOM, BG_TOP, Math.max(0, Math.min(1, t)));
+  }
+
+  function shade(point, normal, baseColor, mat, viewDir) {
+    let color = scale(baseColor, AMBIENT);
+    for (const light of lights) {
+      const toLight = sub(light.position, point);
+      const dist = length(toLight);
+      const lightDir = scale(toLight, 1 / dist);
+      const shadowOrigin = add(point, scale(normal, EPS * 4));
+      const blocked = findClosest(shadowOrigin, lightDir, dist);
+      if (blocked) continue;
+
+      const diff = Math.max(0, dot(normal, lightDir));
+      if (diff > 0) {
+        const contrib = scale(mulC(baseColor, light.color), mat.diffuse * diff * light.intensity);
+        color = add(color, contrib);
+      }
+      const halfVec = normalize(add(lightDir, viewDir));
+      const specAngle = Math.max(0, dot(normal, halfVec));
+      const specPower = Math.pow(specAngle, mat.shininess);
+      if (specPower > 0) {
+        const spec = scale(light.color, mat.specular * specPower * light.intensity * 255);
+        color = add(color, spec);
+      }
+    }
+    return color;
+  }
+
+  function traceRay(origin, dir, depth) {
+    const hit = findClosest(origin, dir);
+    if (!hit) return backgroundColor(dir);
+
+    const point = add(origin, scale(dir, hit.t));
+    let normal, baseColor, mat;
+
+    if (hit.isPlane) {
+      normal = plane.normal;
+      const cx = Math.floor(point[0]), cz = Math.floor(point[2]);
+      const isLightSq = ((cx % 2) + 2) % 2 === ((cz % 2) + 2) % 2;
+      baseColor = isLightSq ? [190, 190, 195] : [35, 36, 42];
+      mat = { diffuse: 0.9, specular: 0.15, shininess: 12, reflectivity: isLightSq ? 0.06 : 0.02 };
+    } else {
+      normal = normalize(sub(point, hit.object.center));
+      baseColor = hit.object.color;
+      mat = hit.object;
+    }
+
+    const viewDir = normalize(scale(dir, -1));
+    let color = shade(point, normal, baseColor, mat, viewDir);
+
+    if (mat.reflectivity > 0 && depth < MAX_DEPTH) {
+      const reflDir = reflect(dir, normal);
+      const reflOrigin = add(point, scale(normal, EPS * 4));
+      const reflColor = traceRay(reflOrigin, reflDir, depth + 1);
+      color = lerp(color, reflColor, mat.reflectivity);
+    }
+
+    return color;
+  }
+
+  // ---- Camera (orbit) ----
+  const target = [0, -0.3, -4.5];
+  let theta = 0.15, phi = 1.35, radius = 8; // spherical angles around target
+  let MAX_DEPTH = 3;
+
+  function cameraBasis() {
+    const eye = [
+      target[0] + radius * Math.sin(phi) * Math.sin(theta),
+      target[1] + radius * Math.cos(phi),
+      target[2] + radius * Math.sin(phi) * Math.cos(theta),
+    ];
+    const forward = normalize(sub(target, eye));
+    const worldUp = [0, 1, 0];
+    const right = normalize(cross(forward, worldUp));
+    const camUp = cross(right, forward);
+    return { eye, forward, right, camUp };
+  }
+
+  const FOV = 60 * Math.PI / 180;
+
+  function renderAt(width, height, samples) {
+    const { eye, forward, right, camUp } = cameraBasis();
+    const halfH = Math.tan(FOV / 2);
+    const halfW = halfH * (width / height);
+
+    const imgData = ctx.createImageData(width, height);
+    const data = imgData.data;
+
+    for (let py = 0; py < height; py++) {
+      for (let px = 0; px < width; px++) {
+        let r = 0, g = 0, b = 0;
+        for (let s = 0; s < samples; s++) {
+          const jx = samples > 1 ? (Math.random() - 0.5) : 0;
+          const jy = samples > 1 ? (Math.random() - 0.5) : 0;
+          const u = ((px + 0.5 + jx) / width) * 2 - 1;
+          const v = 1 - ((py + 0.5 + jy) / height) * 2;
+          const dir = normalize(add(forward, add(scale(right, u * halfW), scale(camUp, v * halfH))));
+          const c = traceRay(eye, dir, 0);
+          r += c[0]; g += c[1]; b += c[2];
+        }
+        const i = (py * width + px) * 4;
+        data[i] = Math.max(0, Math.min(255, r / samples));
+        data[i + 1] = Math.max(0, Math.min(255, g / samples));
+        data[i + 2] = Math.max(0, Math.min(255, b / samples));
+        data[i + 3] = 255;
+      }
+    }
+    return imgData;
+  }
+
+  const offCanvas = document.createElement("canvas");
+  const offCtx = offCanvas.getContext("2d");
+
+  function renderPreview() {
+    const w = Math.round(WIDTH / PREVIEW_SCALE), h = Math.round(HEIGHT / PREVIEW_SCALE);
+    offCanvas.width = w; offCanvas.height = h;
+    const t0 = performance.now();
+    offCtx.putImageData(renderAt(w, h, 1), 0, 0);
+    const ms = (performance.now() - t0).toFixed(0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(offCanvas, 0, 0, WIDTH, HEIGHT);
+    statsEl.textContent = `preview: ${w}x${h}, ${ms}ms`;
+  }
+
+  function renderFinal() {
+    const samples = aaCheckbox.checked ? 4 : 1;
+    statsEl.textContent = "rendering...";
+    requestAnimationFrame(() => {
+      const t0 = performance.now();
+      const imgData = renderAt(WIDTH, HEIGHT, samples);
+      const ms = (performance.now() - t0).toFixed(0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.putImageData(imgData, 0, 0);
+      statsEl.textContent = `${WIDTH}x${HEIGHT}, ${samples}x samples/px, depth ${MAX_DEPTH}, ${ms}ms`;
+    });
+  }
+
+  // ---- UI wiring ----
+  depthSlider.addEventListener("input", () => {
+    MAX_DEPTH = parseInt(depthSlider.value, 10);
+    depthVal.textContent = MAX_DEPTH;
+    renderFinal();
+  });
+  aaCheckbox.addEventListener("change", renderFinal);
+
+  let dragging = false, lastX = 0, lastY = 0;
+  canvas.addEventListener("mousedown", (e) => {
+    dragging = true;
+    canvas.classList.add("dragging");
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    theta -= dx * 0.008;
+    phi -= dy * 0.008;
+    phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi));
+    renderPreview();
+  });
+  window.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    canvas.classList.remove("dragging");
+    renderFinal();
+  });
+
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    radius *= (1 + Math.sign(e.deltaY) * 0.08);
+    radius = Math.max(3, Math.min(20, radius));
+    renderPreview();
+    clearTimeout(canvas._wheelTimer);
+    canvas._wheelTimer = setTimeout(renderFinal, 200);
+  }, { passive: false });
+
+  renderFinal();
+})();
+</script>
+</body>
+</html>
