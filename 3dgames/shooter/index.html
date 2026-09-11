@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3D Shooter</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #0a0a0e;
+    color: #e8e8ee;
+    font-family: 'Segoe UI', Arial, sans-serif;
+  }
+  #gameCanvas { display: block; }
+
+  #crosshair {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 20px; height: 20px; pointer-events: none; z-index: 5;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: #eee; box-shadow: 0 0 2px #000;
+  }
+  #crosshair::before { left: 9px; top: 0; width: 2px; height: 20px; }
+  #crosshair::after { top: 9px; left: 0; width: 20px; height: 2px; }
+
+  #hitmarker {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 26px; height: 26px; pointer-events: none; z-index: 6; opacity: 0;
+  }
+  #hitmarker::before, #hitmarker::after {
+    content: ''; position: absolute; top: 12px; width: 26px; height: 3px; background: #fff;
+  }
+  #hitmarker::before { transform: rotate(45deg); }
+  #hitmarker::after { transform: rotate(-45deg); }
+  #hitmarker.head::before, #hitmarker.head::after { background: #ff3b3b; }
+
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 4; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(200,0,0,0.55) 100%);
+  }
+
+  #hud {
+    position: fixed; left: 20px; bottom: 18px; z-index: 5; user-select: none;
+  }
+  #healthBarOuter {
+    width: 240px; height: 18px; background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 3px; overflow: hidden;
+  }
+  #healthBarInner { height: 100%; width: 100%; background: #4caf50; transition: width 0.15s, background 0.15s; }
+  #hpText { font-size: 13px; margin-top: 3px; color: #ccc; }
+  #armorBarOuter {
+    width: 240px; height: 10px; background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 3px;
+    overflow: hidden; margin-bottom: 4px; display: none;
+  }
+  #armorBarInner { height: 100%; width: 100%; background: #4a90d9; transition: width 0.15s; }
+  #armorText { font-size: 12px; color: #9fc4ea; margin-bottom: 2px; }
+
+  #hud2 {
+    position: fixed; right: 20px; bottom: 18px; z-index: 5; text-align: right; user-select: none;
+  }
+  #ammoText { font-size: 26px; font-weight: bold; }
+  #ammoSub { font-size: 13px; color: #aaa; }
+  #reloadText { font-size: 13px; color: #ffb84d; height: 16px; }
+  #dashText { font-size: 12px; color: #9fd3ff; margin-top: 2px; display: none; }
+
+  #topHud {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 5;
+    display: flex; gap: 28px; font-size: 15px; user-select: none;
+  }
+  #topHud span.val { color: #ffd479; font-weight: bold; }
+
+  #bossBar {
+    position: fixed; top: 50px; left: 50%; transform: translateX(-50%); z-index: 5;
+    display: none; flex-direction: column; align-items: center; gap: 4px; user-select: none;
+  }
+  #bossName { font-size: 16px; color: #ff8a6a; font-weight: bold; text-shadow: 0 1px 3px #000; }
+  #bossHpOuter {
+    width: 420px; height: 14px; background: rgba(0,0,0,0.55); border: 1px solid #663; border-radius: 3px; overflow: hidden;
+  }
+  #bossHpInner { height: 100%; width: 100%; background: #d9484b; transition: width 0.15s; }
+
+  #weaponName {
+    position: fixed; right: 20px; bottom: 62px; z-index: 5; font-size: 14px; color: #9fd3ff; user-select: none;
+  }
+
+  #banner {
+    position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 46px; font-weight: bold; z-index: 6; opacity: 0; text-shadow: 0 2px 8px #000;
+    transition: opacity 0.4s; pointer-events: none; text-align: center;
+  }
+
+  #log {
+    position: fixed; left: 20px; bottom: 60px; z-index: 5; font-size: 13px; color: #bbb;
+    width: 320px; user-select: none;
+  }
+  #log div { text-shadow: 0 1px 3px #000; margin-bottom: 2px; }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(5,5,10,0.88); z-index: 20;
+    display: none; align-items: center; justify-content: center; flex-direction: column; gap: 18px;
+  }
+  .overlay h1 { font-size: 40px; margin: 0; }
+  .overlay p { color: #aaa; max-width: 520px; text-align: center; line-height: 1.5; }
+  .overlay button {
+    font-size: 18px; padding: 12px 28px; background: #3a7bd5; color: #fff; border: none;
+    border-radius: 4px; cursor: pointer;
+  }
+  .overlay button:hover { background: #4a8be5; }
+  #bestScoreText { color: #ffd479; font-size: 14px; margin: -8px 0 0; }
+
+  #shop {
+    position: fixed; inset: 0; background: rgba(5,5,10,0.92); z-index: 20;
+    display: none; align-items: center; justify-content: flex-start; flex-direction: column; gap: 12px;
+    overflow-y: auto; padding: 30px 0 40px;
+  }
+  #shop h1 { margin: 0; }
+  #shop h2 { margin: 6px 0 0; font-size: 16px; color: #9fc4ea; align-self: center; }
+  #shopGold { color: #ffd479; font-size: 18px; }
+  #shopStatus { color: #aaa; font-size: 14px; margin-top: -6px; }
+  #shopGrid, #armorGrid, #medkitGrid, #perkGrid {
+    display: grid; grid-template-columns: repeat(3, 220px); gap: 14px;
+  }
+  .weaponCard {
+    background: #16161f; border: 1px solid #333; border-radius: 6px; padding: 14px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .weaponCard h3 { margin: 0; font-size: 17px; }
+  .weaponCard .stat { font-size: 12px; color: #999; }
+  .weaponCard button {
+    margin-top: 8px; padding: 8px; border: none; border-radius: 4px; cursor: pointer;
+    background: #3a7bd5; color: #fff; font-size: 14px;
+  }
+  .weaponCard button:disabled { background: #333; color: #777; cursor: default; }
+  .weaponCard.owned { border-color: #4caf50; }
+
+  #upgradeList { display: flex; flex-direction: column; gap: 8px; width: 700px; max-width: 90vw; }
+  .upgradeRow {
+    display: flex; align-items: center; gap: 10px; background: #16161f; border: 1px solid #333;
+    border-radius: 6px; padding: 10px 14px;
+  }
+  .upgradeLabel { width: 90px; font-size: 14px; font-weight: bold; }
+  .upgradeRow button {
+    padding: 7px 10px; border: none; border-radius: 4px; cursor: pointer;
+    background: #3a7bd5; color: #fff; font-size: 12px;
+  }
+  .upgradeRow button:disabled { background: #333; color: #777; cursor: default; }
+  .upgradeRow button.upgradeOwned { background: #2c5c2f; color: #bfe8c2; }
+
+  #shopContinue {
+    font-size: 18px; padding: 12px 32px; background: #4caf50; color: #fff; border: none;
+    border-radius: 4px; cursor: pointer; margin-top: 8px;
+  }
+  #shopContinue:hover { background: #5cbf60; }
+
+  #paused {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 15;
+    display: none; align-items: center; justify-content: center; font-size: 24px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<div id="crosshair"></div>
+<div id="hitmarker"></div>
+<div id="vignette"></div>
+<div id="banner"></div>
+
+<div id="topHud">
+  <div>Round <span id="roundVal" class="val">1</span></div>
+  <div>Time <span id="timerVal" class="val">0:00</span></div>
+  <div>Gold <span id="goldVal" class="val">0</span></div>
+  <div id="enemiesLeftWrap">Enemies <span id="enemiesVal" class="val">0</span></div>
+</div>
+
+<div id="bossBar">
+  <div id="bossName"></div>
+  <div id="bossHpOuter"><div id="bossHpInner"></div></div>
+</div>
+
+<div id="hud">
+  <div id="armorText"></div>
+  <div id="armorBarOuter"><div id="armorBarInner"></div></div>
+  <div id="healthBarOuter"><div id="healthBarInner"></div></div>
+  <div id="hpText">100 / 100</div>
+</div>
+
+<div id="log"></div>
+
+<div id="hud2">
+  <div id="weaponNameInline"></div>
+  <div id="ammoText">12</div>
+  <div id="ammoSub">/ mag</div>
+  <div id="reloadText"></div>
+  <div id="dashText"></div>
+</div>
+
+<div id="paused">Paused — click to resume</div>
+
+<div class="overlay" id="startOverlay" style="display:flex;">
+  <h1>3D Shooter</h1>
+  <p>
+    A round-based wave shooter. Clear enemies each round to earn gold, then spend it in the shop
+    on better weapons, armor, perks and upgrades before the next round starts. Every 5th round is
+    a boss fight.
+  </p>
+  <p>
+    <b>WASD</b> move &nbsp; <b>Mouse</b> look &nbsp; <b>Click</b> shoot &nbsp; <b>R</b> reload &nbsp;
+    <b>1-5</b> weapons &nbsp; <b>6</b> knife &nbsp; <b>Shift</b> dash (if bought) &nbsp;
+    <b>Right-click</b> zoom (sniper) &nbsp; <b>Esc</b> pause
+  </p>
+  <p>
+    Rounds 1-2 are melee-only so you can get your bearings. Ranged gunners appear from round 3, and
+    snipers telegraph with a red laser before firing — break line of sight to dodge them. Regular gun
+    shots are real dodgeable projectiles, not instant hits, so keep moving.
+  </p>
+  <p id="bestScoreText"></p>
+  <button id="startBtn">Click to Play</button>
+</div>
+
+<div class="overlay" id="gameOverOverlay">
+  <h1>You Died</h1>
+  <p id="gameOverText"></p>
+  <button id="restartBtn">Try Again</button>
+</div>
+
+<div id="shop">
+  <h1>Round Cleared</h1>
+  <div id="shopGold">Gold: 0</div>
+  <div id="shopStatus"></div>
+  <h2>Weapons</h2>
+  <div id="shopGrid"></div>
+  <h2>Weapon Upgrades</h2>
+  <div id="upgradeList"></div>
+  <h2>Perks</h2>
+  <div id="perkGrid"></div>
+  <h2>Armor (blocks hits before HP, refills free each round)</h2>
+  <div id="armorGrid"></div>
+  <h2>Medkits (instant heal)</h2>
+  <div id="medkitGrid"></div>
+  <button id="shopContinue">Start Next Round</button>
+</div>
+
+<script src="three.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

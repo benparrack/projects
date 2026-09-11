@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dungeon Crawler</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #111117;
+    color: #ddd;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  #hud {
+    display: flex;
+    gap: 24px;
+    font-size: 16px;
+    width: 1000px;
+  }
+  #hud span { color: #ffd479; }
+  canvas {
+    background: #000;
+    border: 2px solid #444;
+    image-rendering: pixelated;
+  }
+  #log {
+    width: 1000px;
+    height: 90px;
+    overflow-y: auto;
+    font-size: 13px;
+    color: #9a9aa5;
+    border: 1px solid #333;
+    padding: 4px 8px;
+    box-sizing: border-box;
+  }
+  #controls {
+    width: 1000px;
+    font-size: 12px;
+    color: #666;
+  }
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    text-align: center;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #overlay span { font-size: 16px; color: #999; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div>HP: <span id="hp"></span></div>
+    <div>Level: <span id="level"></span></div>
+    <div>Gold: <span id="gold"></span></div>
+  </div>
+  <canvas id="game"></canvas>
+  <div id="log"></div>
+  <div id="controls">Move/attack: Arrow keys or WASD. Walk into the golden stairs (▼) to descend. Walk into an enemy to attack it.</div>
+</div>
+<div id="overlay">
+  <div id="overlayText"></div>
+  <span>Press R to start a new run</span>
+</div>
+<script>
+(() => {
+  const TILE_SIZE = 20;
+  const GRID_W = 50;
+  const GRID_H = 35;
+  const MIN_LEAF = 8;
+  const VISION_RADIUS = 8;
+  const DETECT_RADIUS = 6;
+
+  const TILE = { WALL: 0, FLOOR: 1, STAIRS: 2 };
+
+  const ENEMY_STATS = {
+    rat:    { hp: [4, 6],   attack: [1, 2], color: '#7fbf5f', symbol: 'r' },
+    goblin: { hp: [8, 12],  attack: [2, 4], color: '#e0a030', symbol: 'g' },
+    orc:    { hp: [16, 22], attack: [4, 7], color: '#d0504a', symbol: 'o' },
+  };
+
+  const canvas = document.getElementById('game');
+  canvas.width = GRID_W * TILE_SIZE;
+  canvas.height = GRID_H * TILE_SIZE;
+  const ctx = canvas.getContext('2d');
+
+  const hpEl = document.getElementById('hp');
+  const levelEl = document.getElementById('level');
+  const goldEl = document.getElementById('gold');
+  const logEl = document.getElementById('log');
+  const overlay = document.getElementById('overlay');
+  const overlayText = document.getElementById('overlayText');
+
+  let grid, rooms, enemies, items, player, level, gameState, messages;
+
+  function randInt(min, max) {
+    if (min >= max) return min;
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function inBounds(x, y) {
+    return x >= 0 && x < GRID_W && y >= 0 && y < GRID_H;
+  }
+
+  function chebyshev(a, b) {
+    return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  }
+
+  // ---------- Dungeon generation (BSP) ----------
+
+  function splitNode(node, depth) {
+    const canSplitH = node.h > MIN_LEAF * 2;
+    const canSplitV = node.w > MIN_LEAF * 2;
+    if (depth <= 0 || (!canSplitH && !canSplitV)) return;
+
+    const splitHorizontal = canSplitH && canSplitV ? Math.random() < 0.5 : canSplitH;
+
+    if (splitHorizontal) {
+      const splitY = randInt(node.y + MIN_LEAF, node.y + node.h - MIN_LEAF);
+      node.left = { x: node.x, y: node.y, w: node.w, h: splitY - node.y };
+      node.right = { x: node.x, y: splitY, w: node.w, h: node.y + node.h - splitY };
+    } else {
+      const splitX = randInt(node.x + MIN_LEAF, node.x + node.w - MIN_LEAF);
+      node.left = { x: node.x, y: node.y, w: splitX - node.x, h: node.h };
+      node.right = { x: splitX, y: node.y, w: node.x + node.w - splitX, h: node.h };
+    }
+    splitNode(node.left, depth - 1);
+    splitNode(node.right, depth - 1);
+  }
+
+  function carveRoom(room) {
+    for (let y = room.y; y < room.y + room.h; y++) {
+      for (let x = room.x; x < room.x + room.w; x++) {
+        grid[y][x].type = TILE.FLOOR;
+      }
+    }
+  }
+
+  function createRooms(node) {
+    if (node.left || node.right) {
+      if (node.left) createRooms(node.left);
+      if (node.right) createRooms(node.right);
+      return;
+    }
+    const pad = 1;
+    const maxW = node.w - pad * 2;
+    const maxH = node.h - pad * 2;
+    const roomW = randInt(Math.max(4, maxW - 4), maxW);
+    const roomH = randInt(Math.max(4, maxH - 4), maxH);
+    const roomX = node.x + pad + randInt(0, maxW - roomW);
+    const roomY = node.y + pad + randInt(0, maxH - roomH);
+    node.room = { x: roomX, y: roomY, w: roomW, h: roomH };
+    carveRoom(node.room);
+    rooms.push(node.room);
+  }
+
+  function getRoom(node) {
+    if (node.room) return node.room;
+    if (node.left) return getRoom(node.left);
+    if (node.right) return getRoom(node.right);
+    return null;
+  }
+
+  function centerOfRoom(room) {
+    return { x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) };
+  }
+
+  function carveH(x1, x2, y) {
+    for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) grid[y][x].type = TILE.FLOOR;
+  }
+  function carveV(y1, y2, x) {
+    for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) grid[y][x].type = TILE.FLOOR;
+  }
+
+  function connect(node) {
+    if (!node.left || !node.right) return;
+    connect(node.left);
+    connect(node.right);
+    const a = centerOfRoom(getRoom(node.left));
+    const b = centerOfRoom(getRoom(node.right));
+    if (Math.random() < 0.5) {
+      carveH(a.x, b.x, a.y);
+      carveV(a.y, b.y, b.x);
+    } else {
+      carveV(a.y, b.y, a.x);
+      carveH(a.x, b.x, b.y);
+    }
+  }
+
+  function generateDungeon() {
+    grid = Array.from({ length: GRID_H }, () =>
+      Array.from({ length: GRID_W }, () => ({ type: TILE.WALL, explored: false, visible: false }))
+    );
+    rooms = [];
+    const root = { x: 1, y: 1, w: GRID_W - 2, h: GRID_H - 2 };
+    splitNode(root, 6);
+    createRooms(root);
+    connect(root);
+    return root;
+  }
+
+  // ---------- Line of sight ----------
+
+  function linePoints(x0, y0, x1, y1) {
+    const pts = [];
+    let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    let sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    let x = x0, y = y0;
+    while (true) {
+      pts.push([x, y]);
+      if (x === x1 && y === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x += sx; }
+      if (e2 < dx) { err += dx; y += sy; }
+    }
+    return pts;
+  }
+
+  function hasLOS(a, b) {
+    const pts = linePoints(a.x, a.y, b.x, b.y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [px, py] = pts[i];
+      if (!inBounds(px, py) || grid[py][px].type === TILE.WALL) return false;
+    }
+    return true;
+  }
+
+  function updateVisibility() {
+    for (const row of grid) for (const cell of row) cell.visible = false;
+    for (let dy = -VISION_RADIUS; dy <= VISION_RADIUS; dy++) {
+      for (let dx = -VISION_RADIUS; dx <= VISION_RADIUS; dx++) {
+        if (dx * dx + dy * dy > VISION_RADIUS * VISION_RADIUS) continue;
+        const tx = player.x + dx, ty = player.y + dy;
+        if (!inBounds(tx, ty)) continue;
+        if (hasLOS(player, { x: tx, y: ty })) {
+          grid[ty][tx].visible = true;
+          grid[ty][tx].explored = true;
+        }
+      }
+    }
+  }
+
+  // ---------- Entity spawning ----------
+
+  function isFreeFloor(x, y) {
+    if (!inBounds(x, y) || grid[y][x].type === TILE.WALL) return false;
+    if (enemies.some(e => e.x === x && e.y === y)) return false;
+    if (items.some(i => i.x === x && i.y === y)) return false;
+    return true;
+  }
+
+  function randomSpotInRoom(room) {
+    for (let tries = 0; tries < 20; tries++) {
+      const x = randInt(room.x, room.x + room.w - 1);
+      const y = randInt(room.y, room.y + room.h - 1);
+      if (isFreeFloor(x, y)) return { x, y };
+    }
+    return null;
+  }
+
+  function randomEnemyType() {
+    const roll = Math.random();
+    if (level >= 4 && roll < 0.25) return 'orc';
+    if (level >= 2 && roll < 0.55) return 'goblin';
+    return 'rat';
+  }
+
+  function spawnEnemy(x, y) {
+    const type = randomEnemyType();
+    const stats = ENEMY_STATS[type];
+    const hp = randInt(stats.hp[0] + level, stats.hp[1] + level);
+    enemies.push({ type, x, y, hp, maxHp: hp, attack: stats.attack, color: stats.color, symbol: stats.symbol, awake: false });
+  }
+
+  function spawnItem(x, y) {
+    if (Math.random() < 0.5) {
+      items.push({ type: 'gold', x, y, value: randInt(5, 20) });
+    } else {
+      items.push({ type: 'potion', x, y, value: randInt(5, 10) });
+    }
+  }
+
+  function populateLevel(startRoom, stairsRoom) {
+    enemies = [];
+    items = [];
+    for (const room of rooms) {
+      if (room === startRoom) continue;
+      const enemyCount = Math.random() < 0.3 ? 0 : randInt(1, Math.min(3, 1 + Math.floor(level / 2)));
+      for (let i = 0; i < enemyCount; i++) {
+        const spot = randomSpotInRoom(room);
+        if (spot) spawnEnemy(spot.x, spot.y);
+      }
+      const itemCount = randInt(0, 2);
+      for (let i = 0; i < itemCount; i++) {
+        const spot = randomSpotInRoom(room);
+        if (spot) spawnItem(spot.x, spot.y);
+      }
+    }
+    const stairsPos = centerOfRoom(stairsRoom);
+    grid[stairsPos.y][stairsPos.x].type = TILE.STAIRS;
+  }
+
+  function farthestRoomFrom(room) {
+    const c0 = centerOfRoom(room);
+    let best = rooms[0], bestDist = -1;
+    for (const r of rooms) {
+      if (r === room) continue;
+      const c = centerOfRoom(r);
+      const d = Math.abs(c.x - c0.x) + Math.abs(c.y - c0.y);
+      if (d > bestDist) { bestDist = d; best = r; }
+    }
+    return best;
+  }
+
+  function loadLevel() {
+    generateDungeon();
+    const startRoom = rooms[0];
+    const stairsRoom = farthestRoomFrom(startRoom);
+    const start = centerOfRoom(startRoom);
+    player.x = start.x;
+    player.y = start.y;
+    populateLevel(startRoom, stairsRoom);
+    updateVisibility();
+  }
+
+  // ---------- Messages ----------
+
+  function addMessage(msg) {
+    messages.push(msg);
+    if (messages.length > 50) messages.shift();
+    logEl.innerHTML = messages.slice(-6).map(m => `<div>${m}</div>`).join('');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // ---------- Combat & turns ----------
+
+  function enemyAt(x, y) {
+    return enemies.find(e => e.x === x && e.y === y);
+  }
+
+  function playerAttack(enemy) {
+    const dmg = randInt(player.attack[0], player.attack[1]);
+    enemy.hp -= dmg;
+    addMessage(`You hit the ${enemy.type} for ${dmg}.`);
+    if (enemy.hp <= 0) {
+      addMessage(`The ${enemy.type} dies.`);
+      const reward = randInt(1, 3);
+      player.gold += reward;
+      enemies = enemies.filter(e => e !== enemy);
+    }
+  }
+
+  function enemyAttack(enemy) {
+    const dmg = randInt(enemy.attack[0], enemy.attack[1]);
+    player.hp -= dmg;
+    addMessage(`The ${enemy.type} hits you for ${dmg}.`);
+    if (player.hp <= 0) {
+      player.hp = 0;
+      endGame(`You died on level ${level} with ${player.gold} gold.`);
+    }
+  }
+
+  function tryMoveEnemy(enemy, dx, dy) {
+    const nx = enemy.x + dx, ny = enemy.y + dy;
+    if (inBounds(nx, ny) && grid[ny][nx].type !== TILE.WALL && !enemyAt(nx, ny) &&
+        !(player.x === nx && player.y === ny)) {
+      enemy.x = nx;
+      enemy.y = ny;
+      return true;
+    }
+    return false;
+  }
+
+  function enemiesAct() {
+    for (const enemy of [...enemies]) {
+      if (enemy.hp <= 0) continue;
+      const dist = chebyshev(enemy, player);
+      if (dist <= 1) {
+        enemyAttack(enemy);
+        if (gameState !== 'playing') return;
+        continue;
+      }
+      if (!enemy.awake && dist <= DETECT_RADIUS && hasLOS(enemy, player)) enemy.awake = true;
+      if (enemy.awake && hasLOS(enemy, player)) {
+        const dx = Math.sign(player.x - enemy.x);
+        const dy = Math.sign(player.y - enemy.y);
+        if (!tryMoveEnemy(enemy, dx, dy)) {
+          if (dx !== 0) tryMoveEnemy(enemy, dx, 0);
+          else if (dy !== 0) tryMoveEnemy(enemy, 0, dy);
+        }
+      } else if (Math.random() < 0.25) {
+        const [rdx, rdy] = [[1,0],[-1,0],[0,1],[0,-1]][randInt(0, 3)];
+        tryMoveEnemy(enemy, rdx, rdy);
+      }
+    }
+  }
+
+  function pickUpItemAt(x, y) {
+    const item = items.find(i => i.x === x && i.y === y);
+    if (!item) return;
+    if (item.type === 'gold') {
+      player.gold += item.value;
+      addMessage(`You pick up ${item.value} gold.`);
+    } else {
+      const healed = Math.min(item.value, player.maxHp - player.hp);
+      player.hp += healed;
+      addMessage(`You drink a potion and heal ${healed} HP.`);
+    }
+    items = items.filter(i => i !== item);
+  }
+
+  function playerAct(dx, dy) {
+    if (gameState !== 'playing') return;
+    const tx = player.x + dx, ty = player.y + dy;
+    if (!inBounds(tx, ty)) return;
+
+    const targetEnemy = enemyAt(tx, ty);
+    if (targetEnemy) {
+      playerAttack(targetEnemy);
+    } else if (grid[ty][tx].type === TILE.WALL) {
+      return; // bump into wall, no turn spent
+    } else {
+      player.x = tx;
+      player.y = ty;
+      pickUpItemAt(tx, ty);
+      if (grid[ty][tx].type === TILE.STAIRS) {
+        level++;
+        addMessage(`You descend to level ${level}.`);
+        loadLevel();
+        updateHUD();
+        render();
+        return;
+      }
+    }
+
+    enemiesAct();
+    if (gameState === 'playing') {
+      updateVisibility();
+      updateHUD();
+      render();
+    }
+  }
+
+  // ---------- Rendering ----------
+
+  function shade(hex, factor) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const f = c => Math.round(c * factor).toString(16).padStart(2, '0');
+    return `#${f(r)}${f(g)}${f(b)}`;
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let y = 0; y < GRID_H; y++) {
+      for (let x = 0; x < GRID_W; x++) {
+        const cell = grid[y][x];
+        if (!cell.explored) continue;
+        let color;
+        if (cell.type === TILE.WALL) color = '#2a2a35';
+        else if (cell.type === TILE.STAIRS) color = '#d4af37';
+        else color = '#55555f';
+        if (!cell.visible) color = shade(color, 0.4);
+        ctx.fillStyle = color;
+        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      }
+    }
+
+    for (const item of items) {
+      if (!grid[item.y][item.x].visible) continue;
+      const cx = item.x * TILE_SIZE + TILE_SIZE / 2, cy = item.y * TILE_SIZE + TILE_SIZE / 2;
+      ctx.fillStyle = item.type === 'gold' ? '#ffd479' : '#e05a5a';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (const enemy of enemies) {
+      if (!grid[enemy.y][enemy.x].visible) continue;
+      const cx = enemy.x * TILE_SIZE + TILE_SIZE / 2, cy = enemy.y * TILE_SIZE + TILE_SIZE / 2;
+      ctx.fillStyle = enemy.color;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(enemy.symbol, cx, cy + 3);
+    }
+
+    const pcx = player.x * TILE_SIZE + TILE_SIZE / 2, pcy = player.y * TILE_SIZE + TILE_SIZE / 2;
+    ctx.fillStyle = '#4a90d9';
+    ctx.beginPath();
+    ctx.arc(pcx, pcy, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function updateHUD() {
+    hpEl.textContent = `${player.hp}/${player.maxHp}`;
+    levelEl.textContent = level;
+    goldEl.textContent = player.gold;
+  }
+
+  function endGame(msg) {
+    gameState = 'gameover';
+    overlayText.textContent = msg;
+    overlay.style.display = 'flex';
+    addMessage(msg);
+  }
+
+  // ---------- Game lifecycle ----------
+
+  function newGame() {
+    level = 1;
+    player = { x: 0, y: 0, hp: 20, maxHp: 20, attack: [3, 6], gold: 0 };
+    messages = [];
+    gameState = 'playing';
+    overlay.style.display = 'none';
+    loadLevel();
+    addMessage('You descend into the dungeon. Find the stairs (gold tile) to go deeper.');
+    updateHUD();
+    render();
+  }
+
+  const KEY_MOVES = {
+    ArrowUp: [0, -1], KeyW: [0, -1],
+    ArrowDown: [0, 1], KeyS: [0, 1],
+    ArrowLeft: [-1, 0], KeyA: [-1, 0],
+    ArrowRight: [1, 0], KeyD: [1, 0],
+  };
+
+  window.addEventListener('keydown', (e) => {
+    if (gameState === 'gameover') {
+      if (e.code === 'KeyR') newGame();
+      return;
+    }
+    const move = KEY_MOVES[e.code];
+    if (move) {
+      e.preventDefault();
+      playerAct(move[0], move[1]);
+    }
+  });
+
+  newGame();
+})();
+</script>
+</body>
+</html>
