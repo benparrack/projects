@@ -6,12 +6,11 @@
 <style>
   html, body {
     margin: 0;
-    height: 100%;
+    min-height: 100%;
     background: #0b0b10;
     color: #ddd;
     font-family: 'Courier New', monospace;
     display: flex;
-    align-items: center;
     justify-content: center;
   }
   #wrap {
@@ -19,6 +18,7 @@
     flex-direction: column;
     align-items: center;
     gap: 10px;
+    padding: 16px 0 32px;
   }
   #toolbar {
     display: flex;
@@ -37,6 +37,15 @@
     border-radius: 3px;
   }
   button:hover, select:hover { border-color: #888; }
+  #toolbar label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    color: #bbb;
+    cursor: pointer;
+    user-select: none;
+  }
   #info {
     margin-left: auto;
     font-size: 12px;
@@ -57,16 +66,14 @@
 <div id="wrap">
   <div id="toolbar">
     <button id="regenBtn">Regenerate (space)</button>
-    <select id="modeSelect">
-      <option value="random">Random</option>
-      <option value="flow">Flow Field</option>
-      <option value="branches">Radial Branches</option>
-    </select>
     <button id="saveBtn">Save PNG (s)</button>
+    <label><input type="checkbox" id="darkModeCheckbox"> Dark mode only</label>
+    <label><input type="checkbox" id="blackHoleCheckbox"> Black hole</label>
+    <label><input type="checkbox" id="animationCheckbox"> Animation</label>
     <span id="info"></span>
   </div>
   <canvas id="canvas" width="900" height="900"></canvas>
-  <div id="hint">Each piece is generated from a random seed + palette. Click Regenerate (or press space) for a new one.</div>
+  <div id="hint">Each piece is a noise-driven flow field with a random seed, palette, and field style. Click Regenerate (or press space) for a new one.</div>
 </div>
 
 <script>
@@ -149,33 +156,72 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
 
-let rand, noise, palette, rafId, info;
+let rand, noise, palette, rafId;
 const infoEl = document.getElementById("info");
+const animationCheckbox = document.getElementById("animationCheckbox");
 
 function newSeed() {
   return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
 }
 
-// ---------- Flow field renderer ----------
-function runFlowField(seed) {
-  const scale = 0.0035 + rand() * 0.004;
-  const curl = 2.5 + rand() * 3;
-  const particleCount = 1400;
-  const stepSize = 1.6;
-  const stepsPerFrame = 6;
-  const maxLife = 260 + Math.floor(rand() * 200);
+// Lets "Animation" be toggled on after a piece has already finished its
+// normal run and stopped — resumeFrame/animationRunning let the checkbox's
+// change handler kick the same closure's loop back into motion rather than
+// only affecting future pieces.
+let resumeFrame = null;
+let animationRunning = false;
 
-  ctx.fillStyle = "#07070a";
+// ---------- Flow field renderer ----------
+// Three distinct field "shapes" and three color strategies, mixed with wide
+// parameter ranges, so consecutive pieces read as genuinely different works
+// rather than the same noise pattern with a new palette.
+function fieldAngle(style, x, y, scale, curl, cx, cy) {
+  const n = noise.noise(x * scale, y * scale);
+  if (style === "swirl") {
+    const radial = Math.atan2(y - cy, x - cx) + Math.PI / 2;
+    return n * Math.PI * curl * 0.6 + radial;
+  }
+  if (style === "waves") {
+    return Math.sin(x * scale * 3 + n * Math.PI * 2) * Math.PI * 0.9 + Math.cos(y * scale * 3) * Math.PI * 0.5;
+  }
+  return n * Math.PI * curl; // "curl"
+}
+
+function runFlowField(bgIsLight) {
+  const bgColor = bgIsLight ? mixHex("#ffffff", palette[palette.length - 1], 0.12) : mixHex("#000000", palette[0], 0.15);
+  ctx.fillStyle = bgColor;
   ctx.fillRect(0, 0, W, H);
+
+  const fieldStyle = pick(rand, ["curl", "swirl", "waves"]);
+  const colorStrategy = pick(rand, ["random", "noise", "angle"]);
+  const scale = 0.0025 + rand() * 0.006;
+  const curl = 1.5 + rand() * 4;
+  const swirlCx = W * (0.3 + rand() * 0.4);
+  const swirlCy = H * (0.3 + rand() * 0.4);
+  const particleCount = 500 + Math.floor(rand() * 1600);
+  const stepSize = 1.0 + rand() * 1.6;
+  const stepsPerFrame = 6;
+  const maxLife = 200 + Math.floor(rand() * 260);
+  const baseAlpha = 0.06 + rand() * 0.12;
+  const lineWidth = 0.8 + rand() * 1.6;
+
+  function spawnColor(x, y) {
+    if (colorStrategy === "noise") {
+      const idx = Math.floor(((noise.noise(x * 0.004, y * 0.004) + 1) / 2) * palette.length);
+      return palette[Math.min(palette.length - 1, Math.max(0, idx))];
+    }
+    if (colorStrategy === "angle") {
+      const a = Math.atan2(y - H / 2, x - W / 2);
+      const idx = Math.floor(((a + Math.PI) / (2 * Math.PI)) * palette.length);
+      return palette[Math.min(palette.length - 1, Math.max(0, idx))];
+    }
+    return pick(rand, palette);
+  }
 
   const particles = [];
   for (let i = 0; i < particleCount; i++) {
-    particles.push({
-      x: rand() * W,
-      y: rand() * H,
-      life: Math.floor(rand() * maxLife),
-      color: pick(rand, palette),
-    });
+    const x = rand() * W, y = rand() * H;
+    particles.push({ x, y, life: Math.floor(rand() * maxLife), color: spawnColor(x, y) });
   }
 
   let steps = 0;
@@ -184,13 +230,13 @@ function runFlowField(seed) {
   function frame() {
     for (let s = 0; s < stepsPerFrame; s++) {
       for (const p of particles) {
-        const angle = noise.noise(p.x * scale, p.y * scale) * Math.PI * curl;
+        const angle = fieldAngle(fieldStyle, p.x, p.y, scale, curl, swirlCx, swirlCy);
         const nx = p.x + Math.cos(angle) * stepSize;
         const ny = p.y + Math.sin(angle) * stepSize;
 
-        const [r, g, b] = hexToRgb(p.color);
-        ctx.strokeStyle = `rgba(${r},${g},${b},0.10)`;
-        ctx.lineWidth = 1.2;
+        const [r, g, b] = contrastRgb(hexToRgb(p.color), bgIsLight);
+        ctx.strokeStyle = `rgba(${r},${g},${b},${baseAlpha})`;
+        ctx.lineWidth = lineWidth;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
         ctx.lineTo(nx, ny);
@@ -202,83 +248,145 @@ function runFlowField(seed) {
           p.x = rand() * W;
           p.y = rand() * H;
           p.life = 0;
-          p.color = pick(rand, palette);
+          p.color = spawnColor(p.x, p.y);
         }
       }
     }
     steps++;
-    if (steps < totalSteps) {
+    if (steps < totalSteps || animationCheckbox.checked) {
+      animationRunning = true;
       rafId = requestAnimationFrame(frame);
+    } else {
+      animationRunning = false;
     }
   }
+  resumeFrame = frame;
+  animationRunning = true;
   frame();
-  return `flow field  scale=${scale.toFixed(4)}  curl=${curl.toFixed(2)}`;
+  return `flow field (${fieldStyle}, color=${colorStrategy})  scale=${scale.toFixed(4)}  curl=${curl.toFixed(2)}`;
 }
 
-// ---------- Radial branching fractal ----------
-function drawBranch(x, y, angle, length, depth, maxDepth, branchRand) {
-  if (depth <= 0 || length < 2) return;
-  const x2 = x + Math.cos(angle) * length;
-  const y2 = y + Math.sin(angle) * length;
+// ---------- Black hole renderer ----------
+// An accretion disk of particles orbiting a solid event horizon: angular
+// speed and inward drift both increase near the horizon (loosely Keplerian),
+// particles are "swallowed" and respawned at the disk's outer edge, and the
+// horizon + a warm photon-ring glow are repainted on top every frame so nothing
+// ever appears to cross in front of the void.
+const HOT_CORE_COLORS = ["#eaf6ff", "#bfe4ff", "#8ecbff", "#5aa9ff", "#ffffff"];
 
-  const t = depth / maxDepth;
-  const color = pick(branchRand, palette);
-  const [r, g, b] = hexToRgb(color);
-  ctx.strokeStyle = `rgba(${r},${g},${b},${0.55 + 0.4 * (1 - t)})`;
-  ctx.lineWidth = Math.max(0.6, t * 5);
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
-
-  const branchCount = depth > maxDepth - 2 ? 2 + Math.floor(branchRand() * 2) : 2;
-  for (let i = 0; i < branchCount; i++) {
-    const spread = 0.35 + branchRand() * 0.5;
-    const dir = i % 2 === 0 ? 1 : -1;
-    const nextAngle = angle + dir * spread * (0.6 + branchRand() * 0.6);
-    const nextLength = length * (0.68 + branchRand() * 0.18);
-    drawBranch(x2, y2, nextAngle, nextLength, depth - 1, maxDepth, branchRand);
-  }
-}
-
-function runBranches(seed) {
-  ctx.fillStyle = "#07070a";
+function runBlackHole() {
+  ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, W, H);
 
-  const centerX = W / 2, centerY = H / 2;
-  const arms = 5 + Math.floor(rand() * 4);
-  const maxDepth = 9 + Math.floor(rand() * 3);
-  const baseLength = (Math.min(W, H) * 0.16) * (0.8 + rand() * 0.4);
-  const rotationOffset = rand() * Math.PI * 2;
-
-  for (let i = 0; i < arms; i++) {
-    const angle = rotationOffset + (i / arms) * Math.PI * 2;
-    drawBranch(centerX, centerY, angle, baseLength, maxDepth, maxDepth, rand);
+  const starCount = 150 + Math.floor(rand() * 200);
+  for (let i = 0; i < starCount; i++) {
+    const b = 90 + Math.floor(rand() * 165);
+    ctx.fillStyle = `rgba(${b},${b},${b},${0.25 + rand() * 0.55})`;
+    ctx.fillRect(rand() * W, rand() * H, 1, 1);
   }
-  return `radial branches  arms=${arms}  depth=${maxDepth}`;
+
+  const cx = W / 2 + (rand() - 0.5) * W * 0.06;
+  const cy = H / 2 + (rand() - 0.5) * H * 0.06;
+  const horizonRadius = Math.min(W, H) * (0.06 + rand() * 0.05);
+  const diskOuter = horizonRadius * (3.2 + rand() * 1.6);
+  const diskSquish = 0.3 + rand() * 0.3;
+  const particleCount = 900 + Math.floor(rand() * 900);
+  const stepsPerFrame = 6;
+  const totalSteps = 320 + Math.floor(rand() * 200);
+
+  function spawnParticle() {
+    return { angle: rand() * Math.PI * 2, dist: horizonRadius * (1.3 + rand() * (diskOuter / horizonRadius - 1.3)) };
+  }
+  function colorForRadiusFrac(rFrac) {
+    return rFrac < 0.35 ? pick(rand, HOT_CORE_COLORS) : pick(rand, palette);
+  }
+  function drawHorizon() {
+    const glowRadius = horizonRadius * 2.2;
+    const grad = ctx.createRadialGradient(cx, cy, horizonRadius * 0.9, cx, cy, glowRadius);
+    grad.addColorStop(0, "rgba(255,235,190,0.9)");
+    grad.addColorStop(0.18, "rgba(255,205,150,0.5)");
+    grad.addColorStop(0.45, "rgba(255,180,120,0.12)");
+    grad.addColorStop(1, "rgba(255,180,120,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#000000";
+    ctx.beginPath();
+    ctx.arc(cx, cy, horizonRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const particles = [];
+  for (let i = 0; i < particleCount; i++) particles.push(spawnParticle());
+
+  let steps = 0;
+  function frame() {
+    for (let s = 0; s < stepsPerFrame; s++) {
+      for (const p of particles) {
+        const prevAngle = p.angle, prevDist = p.dist;
+        const angularSpeed = 0.05 * Math.pow(horizonRadius / p.dist, 1.5) + 0.002;
+        p.angle += angularSpeed;
+        p.dist -= (0.05 + 0.35 * (horizonRadius / p.dist));
+
+        const rFrac = Math.min(1, Math.max(0, (p.dist - horizonRadius) / (diskOuter - horizonRadius)));
+        const [r, g, b] = hexToRgb(colorForRadiusFrac(rFrac));
+
+        ctx.strokeStyle = `rgba(${r},${g},${b},${0.16 + 0.3 * (1 - rFrac)})`;
+        ctx.lineWidth = 0.8 + 1.6 * (1 - rFrac);
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(prevAngle) * prevDist, cy + Math.sin(prevAngle) * prevDist * diskSquish);
+        ctx.lineTo(cx + Math.cos(p.angle) * p.dist, cy + Math.sin(p.angle) * p.dist * diskSquish);
+        ctx.stroke();
+
+        if (p.dist <= horizonRadius * 1.05) Object.assign(p, spawnParticle());
+      }
+    }
+    drawHorizon();
+    steps++;
+    if (steps < totalSteps || animationCheckbox.checked) {
+      animationRunning = true;
+      rafId = requestAnimationFrame(frame);
+    } else {
+      animationRunning = false;
+    }
+  }
+  resumeFrame = frame;
+  animationRunning = true;
+  frame();
+  return `black hole  horizon=${horizonRadius.toFixed(0)}px`;
 }
 
-function generate(modeOverride) {
+function generate() {
   if (rafId) cancelAnimationFrame(rafId);
   const seed = newSeed();
   rand = mulberry32(seed);
   noise = new PerlinNoise2D(rand);
   palette = pick(rand, PALETTES);
 
-  let mode = modeOverride || document.getElementById("modeSelect").value;
-  if (mode === "random") mode = rand() < 0.5 ? "flow" : "branches";
+  const darkModeOnly = document.getElementById("darkModeCheckbox").checked;
+  const blackHoleOnly = document.getElementById("blackHoleCheckbox").checked;
 
   let detail;
-  if (mode === "flow") {
-    detail = runFlowField(seed);
+  if (blackHoleOnly) {
+    detail = runBlackHole();
   } else {
-    detail = runBranches(seed);
+    const bgIsLight = darkModeOnly ? false : rand() < 0.3;
+    detail = runFlowField(bgIsLight);
   }
   infoEl.textContent = `seed=${seed}  ${detail}`;
 }
 
 document.getElementById("regenBtn").addEventListener("click", () => generate());
-document.getElementById("modeSelect").addEventListener("change", () => generate());
+document.getElementById("darkModeCheckbox").addEventListener("change", () => generate());
+document.getElementById("blackHoleCheckbox").addEventListener("change", () => generate());
+animationCheckbox.addEventListener("change", () => {
+  if (animationCheckbox.checked && !animationRunning && resumeFrame) {
+    animationRunning = true;
+    rafId = requestAnimationFrame(resumeFrame);
+  }
+});
 document.getElementById("saveBtn").addEventListener("click", () => {
   const a = document.createElement("a");
   a.download = `generative-art-${Date.now()}.png`;

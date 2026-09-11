@@ -210,7 +210,7 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 12. Generative Art Gallery
 
-**Status:** In progress — see `generative_art_gallery/` (flow field + radial branching fractal renderers, seeded PRNG, curated palettes).
+**Status:** In progress — see `generative_art_gallery/` (noise-driven flow field renderer with multiple field shapes/color strategies, seeded PRNG, curated palettes). A recursive branching-fractal renderer was tried and dropped — looked worse than the flow field.
 **Pitch:** A page that generates an endless stream of unique visual art pieces algorithmically — flow fields, L-systems, Perlin-noise compositions, recursive/fractal patterns — no two alike, purely from code and randomness.
 
 **Why this one:** Distinct from the falling-sand (`#2`) and ACO (`#9`) projects — this is aesthetic output for its own sake rather than simulating a physical/optimization process. A good showcase of how much visual richness comes from a few well-chosen math primitives.
