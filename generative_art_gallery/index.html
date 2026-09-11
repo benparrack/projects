@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Generative Art Gallery</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #0b0b10;
+    color: #ddd;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 900px;
+  }
+  button, select {
+    background: #1b1b24;
+    color: #ddd;
+    border: 1px solid #444;
+    padding: 6px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+  button:hover, select:hover { border-color: #888; }
+  #info {
+    margin-left: auto;
+    font-size: 12px;
+    color: #777;
+  }
+  canvas {
+    background: #000;
+    border: 2px solid #333;
+  }
+  #hint {
+    width: 900px;
+    font-size: 12px;
+    color: #555;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="toolbar">
+    <button id="regenBtn">Regenerate (space)</button>
+    <select id="modeSelect">
+      <option value="random">Random</option>
+      <option value="flow">Flow Field</option>
+      <option value="branches">Radial Branches</option>
+    </select>
+    <button id="saveBtn">Save PNG (s)</button>
+    <span id="info"></span>
+  </div>
+  <canvas id="canvas" width="900" height="900"></canvas>
+  <div id="hint">Each piece is generated from a random seed + palette. Click Regenerate (or press space) for a new one.</div>
+</div>
+
+<script>
+// ---------- Seeded PRNG (mulberry32) ----------
+function mulberry32(seed) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ---------- Classic 2D Perlin noise, seeded via the PRNG above ----------
+class PerlinNoise2D {
+  constructor(rand) {
+    const perm = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) perm[i] = i;
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [perm[i], perm[j]] = [perm[j], perm[i]];
+    }
+    this.p = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) this.p[i] = perm[i & 255];
+  }
+  static fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  static lerp(t, a, b) { return a + t * (b - a); }
+  static grad(hash, x, y) {
+    const h = hash & 3;
+    const u = h < 2 ? x : y;
+    const v = h < 2 ? y : x;
+    return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+  }
+  noise(x, y) {
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+    x -= Math.floor(x); y -= Math.floor(y);
+    const u = PerlinNoise2D.fade(x), v = PerlinNoise2D.fade(y);
+    const p = this.p;
+    const aa = p[p[X] + Y], ab = p[p[X] + Y + 1];
+    const ba = p[p[X + 1] + Y], bb = p[p[X + 1] + Y + 1];
+    return PerlinNoise2D.lerp(v,
+      PerlinNoise2D.lerp(u, PerlinNoise2D.grad(aa, x, y), PerlinNoise2D.grad(ba, x - 1, y)),
+      PerlinNoise2D.lerp(u, PerlinNoise2D.grad(ab, x, y - 1), PerlinNoise2D.grad(bb, x - 1, y - 1))
+    );
+  }
+}
+
+// ---------- Curated color palettes (order = dark -> light / base -> accent) ----------
+const PALETTES = [
+  ["#0d1b2a", "#1b263b", "#415a77", "#778da9", "#e0e1dd"],
+  ["#22223b", "#4a4e69", "#9a8c98", "#c9ada7", "#f2e9e4"],
+  ["#03045e", "#023e8a", "#0077b6", "#0096c7", "#00b4d8", "#48cae4", "#90e0ef", "#ade8f4"],
+  ["#240046", "#3c096c", "#5a189a", "#7b2cbf", "#9d4edd", "#c77dff"],
+  ["#1b4332", "#2d6a4f", "#40916c", "#52b788", "#74c69d", "#95d5b2", "#b7e4c7"],
+  ["#3a0ca3", "#7209b7", "#f72585", "#4361ee", "#4cc9f0"],
+  ["#641220", "#6e1423", "#85182a", "#a11d33", "#c71f37", "#e01e37", "#f7286d"],
+  ["#293241", "#3d5a80", "#98c1d9", "#e0fbfc", "#ee6c4d"],
+];
+
+function pick(rand, arr) { return arr[Math.floor(rand() * arr.length)]; }
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function mixHex(hexA, hexB, t) {
+  const a = hexToRgb(hexA), b = hexToRgb(hexB);
+  const r = Math.round(a[0] + (b[0] - a[0]) * t);
+  const g = Math.round(a[1] + (b[1] - a[1]) * t);
+  const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+// On a light background, palette colors (mostly chosen to pop on black) need
+// darkening to stay legible instead of washing out.
+function contrastRgb([r, g, b], bgIsLight) {
+  return bgIsLight ? [Math.round(r * 0.55), Math.round(g * 0.55), Math.round(b * 0.55)] : [r, g, b];
+}
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+
+let rand, noise, palette, rafId, info;
+const infoEl = document.getElementById("info");
+
+function newSeed() {
+  return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+}
+
+// ---------- Flow field renderer ----------
+function runFlowField(seed) {
+  const scale = 0.0035 + rand() * 0.004;
+  const curl = 2.5 + rand() * 3;
+  const particleCount = 1400;
+  const stepSize = 1.6;
+  const stepsPerFrame = 6;
+  const maxLife = 260 + Math.floor(rand() * 200);
+
+  ctx.fillStyle = "#07070a";
+  ctx.fillRect(0, 0, W, H);
+
+  const particles = [];
+  for (let i = 0; i < particleCount; i++) {
+    particles.push({
+      x: rand() * W,
+      y: rand() * H,
+      life: Math.floor(rand() * maxLife),
+      color: pick(rand, palette),
+    });
+  }
+
+  let steps = 0;
+  const totalSteps = maxLife + 40;
+
+  function frame() {
+    for (let s = 0; s < stepsPerFrame; s++) {
+      for (const p of particles) {
+        const angle = noise.noise(p.x * scale, p.y * scale) * Math.PI * curl;
+        const nx = p.x + Math.cos(angle) * stepSize;
+        const ny = p.y + Math.sin(angle) * stepSize;
+
+        const [r, g, b] = hexToRgb(p.color);
+        ctx.strokeStyle = `rgba(${r},${g},${b},0.10)`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(nx, ny);
+        ctx.stroke();
+
+        p.x = nx; p.y = ny;
+        p.life++;
+        if (p.life > maxLife || p.x < 0 || p.x > W || p.y < 0 || p.y > H) {
+          p.x = rand() * W;
+          p.y = rand() * H;
+          p.life = 0;
+          p.color = pick(rand, palette);
+        }
+      }
+    }
+    steps++;
+    if (steps < totalSteps) {
+      rafId = requestAnimationFrame(frame);
+    }
+  }
+  frame();
+  return `flow field  scale=${scale.toFixed(4)}  curl=${curl.toFixed(2)}`;
+}
+
+// ---------- Radial branching fractal ----------
+function drawBranch(x, y, angle, length, depth, maxDepth, branchRand) {
+  if (depth <= 0 || length < 2) return;
+  const x2 = x + Math.cos(angle) * length;
+  const y2 = y + Math.sin(angle) * length;
+
+  const t = depth / maxDepth;
+  const color = pick(branchRand, palette);
+  const [r, g, b] = hexToRgb(color);
+  ctx.strokeStyle = `rgba(${r},${g},${b},${0.55 + 0.4 * (1 - t)})`;
+  ctx.lineWidth = Math.max(0.6, t * 5);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  const branchCount = depth > maxDepth - 2 ? 2 + Math.floor(branchRand() * 2) : 2;
+  for (let i = 0; i < branchCount; i++) {
+    const spread = 0.35 + branchRand() * 0.5;
+    const dir = i % 2 === 0 ? 1 : -1;
+    const nextAngle = angle + dir * spread * (0.6 + branchRand() * 0.6);
+    const nextLength = length * (0.68 + branchRand() * 0.18);
+    drawBranch(x2, y2, nextAngle, nextLength, depth - 1, maxDepth, branchRand);
+  }
+}
+
+function runBranches(seed) {
+  ctx.fillStyle = "#07070a";
+  ctx.fillRect(0, 0, W, H);
+
+  const centerX = W / 2, centerY = H / 2;
+  const arms = 5 + Math.floor(rand() * 4);
+  const maxDepth = 9 + Math.floor(rand() * 3);
+  const baseLength = (Math.min(W, H) * 0.16) * (0.8 + rand() * 0.4);
+  const rotationOffset = rand() * Math.PI * 2;
+
+  for (let i = 0; i < arms; i++) {
+    const angle = rotationOffset + (i / arms) * Math.PI * 2;
+    drawBranch(centerX, centerY, angle, baseLength, maxDepth, maxDepth, rand);
+  }
+  return `radial branches  arms=${arms}  depth=${maxDepth}`;
+}
+
+function generate(modeOverride) {
+  if (rafId) cancelAnimationFrame(rafId);
+  const seed = newSeed();
+  rand = mulberry32(seed);
+  noise = new PerlinNoise2D(rand);
+  palette = pick(rand, PALETTES);
+
+  let mode = modeOverride || document.getElementById("modeSelect").value;
+  if (mode === "random") mode = rand() < 0.5 ? "flow" : "branches";
+
+  let detail;
+  if (mode === "flow") {
+    detail = runFlowField(seed);
+  } else {
+    detail = runBranches(seed);
+  }
+  infoEl.textContent = `seed=${seed}  ${detail}`;
+}
+
+document.getElementById("regenBtn").addEventListener("click", () => generate());
+document.getElementById("modeSelect").addEventListener("change", () => generate());
+document.getElementById("saveBtn").addEventListener("click", () => {
+  const a = document.createElement("a");
+  a.download = `generative-art-${Date.now()}.png`;
+  a.href = canvas.toDataURL("image/png");
+  a.click();
+});
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space") { e.preventDefault(); generate(); }
+  if (e.key === "s" || e.key === "S") document.getElementById("saveBtn").click();
+});
+
+generate();
+</script>
+</body>
+</html>
