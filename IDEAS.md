@@ -176,3 +176,167 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 - ACO core loop: ants probabilistically choose paths weighted by pheromone strength + heuristic (e.g. inverse distance); after each ant completes a path, deposit pheromone proportional to path quality; apply evaporation each iteration so bad paths fade.
 - Visualization: render the graph/grid, animate ants moving, show pheromone trail strength as line thickness/opacity, show convergence over iterations (e.g. best-path-length-so-far chart).
 - UI: iteration speed control, reset/re-randomize graph, parameter sliders (evaporation rate, pheromone weight vs heuristic weight).
+
+---
+
+## 10. Text Adventure with LLM Dungeon Master
+
+**Status:** Stocked, not started.
+**Pitch:** A choose-your-own-path text adventure where an LLM acts as a live dungeon master, reacting to arbitrary free-text player input instead of a fixed branching-tree script — genuinely open-ended interaction.
+
+**Why this one:** Different kind of "coolest thing" than the algorithmic projects on this list — uses an LLM as the actual game engine/narrator at runtime rather than only using AI to help write code beforehand.
+
+**What it needs when resumed:**
+- Persistent world/game state (inventory, location, NPC status) that the LLM must respect each turn, rather than trusting model memory alone across a long session.
+- A system prompt establishing tone/rules and hard constraints (e.g. can't just narrate the player winning outright, must ask before major state changes).
+- A tracked state object updated after each turn (parsed from structured output or via tool-calling) to keep the world consistent over many turns.
+- UI: a simple HTML chat-style artifact, or even a terminal input loop, works fine — the interesting part is the state/prompt design, not the interface.
+
+---
+
+## 11. Real-Time Multiplayer Shared Canvas / Mini Game
+
+**Status:** Stocked, not started.
+**Pitch:** A lightweight multiplayer experience where multiple browser tabs/players share live state — a shared drawing canvas, a tiny `.io`-style game, or a synchronized game board.
+
+**Why this one:** The WebGL shooter (`#0`) explicitly scoped out "real" competitive multiplayer as too large solo. This is the achievable version: no anti-cheat, no ranked matchmaking, just shared live state between a handful of clients — a genuinely new category (networking/sync) versus everything else here, which is all single-player/local.
+
+**What it needs when resumed:**
+- A lightweight realtime transport (a small WebSocket server, since browser tabs can't talk to each other directly).
+- An authoritative-server model (server holds true state, clients send inputs, server broadcasts updates) to avoid classic peer-to-peer desync issues.
+- Keep the shared mechanic simple (drawing strokes, or basic position broadcasting) rather than full networked hit detection, which reintroduces the netcode complexity `#0` deliberately avoided.
+
+---
+
+## 12. Generative Art Gallery
+
+**Status:** In progress — see `generative_art_gallery/` (flow field + radial branching fractal renderers, seeded PRNG, curated palettes).
+**Pitch:** A page that generates an endless stream of unique visual art pieces algorithmically — flow fields, L-systems, Perlin-noise compositions, recursive/fractal patterns — no two alike, purely from code and randomness.
+
+**Why this one:** Distinct from the falling-sand (`#2`) and ACO (`#9`) projects — this is aesthetic output for its own sake rather than simulating a physical/optimization process. A good showcase of how much visual richness comes from a few well-chosen math primitives.
+
+**What it needs when resumed:**
+- Pick 2-3 generative techniques to start — flow fields via Perlin/simplex noise are the most reliably beautiful and least finicky to tune.
+- A canvas render loop or SVG output, plus a "regenerate" button using a new random seed each time.
+- Optional export (`canvas.toDataURL`) to save a piece you like.
+- Color palette choice matters as much as the algorithm — deliberate palette curation beats random RGB.
+
+---
+
+## 13. Procedural Terrain / World Map Generator
+
+**Status:** Stocked, not started.
+**Pitch:** Generate a full fantasy-style or realistic world map from scratch — elevation via noise functions, then derived biomes, rivers, and coastlines — rendered as a colored, readable map, not just a heightmap.
+
+**Why this one:** A different generation problem than the dungeon crawler (`#4`) — continuous terrain and biome logic instead of discrete rooms/corridors. The "rivers flow downhill to the sea" and "biome depends on elevation + moisture" rules are satisfying emergent-from-simple-rules territory, visually distinct from the other simulations on this list.
+
+**What it needs when resumed:**
+- Layered noise (Perlin/simplex at multiple octaves) for elevation.
+- A second noise layer for moisture/temperature to derive biomes (desert, forest, tundra, etc. via a Whittaker-diagram-style lookup).
+- River generation by tracing steepest-descent paths from high-elevation points down to the sea/lowest neighbor.
+- Rendering as a colored canvas map with a legend. Stretch goal: name generation for regions/settlements.
+
+---
+
+## 14. Audio-Reactive Music Visualizer
+
+**Status:** Stocked, not started.
+**Pitch:** A visualizer that reacts live to actual audio (an uploaded file or microphone input) — bars, particles, or generative shapes pulsing/moving with the music's frequency and amplitude in real time.
+
+**Why this one:** Complements the algorithmic sequencer (`#6`), which generates audio, with the reverse: consuming and responding to it. A genuinely different technical skill (Web Audio API's analyser/FFT data) from anything else on this list, and immediately satisfying with a song you actually like.
+
+**What it needs when resumed:**
+- Web Audio API `AnalyserNode` for real-time frequency-domain (FFT) and time-domain data from an audio source.
+- A canvas render loop mapping frequency bins to visual elements (bar heights, particle sizes/colors, radial patterns).
+- Two source modes: file upload (`<input type="file">` → `AudioContext.decodeAudioData`) and live microphone (`getUserMedia`).
+- Start with a simple frequency-bar visualization before attempting particle systems or 3D reactive scenes.
+
+---
+
+## 15. ASCII / Terminal Art Renderer
+
+**Status:** Stocked, not started.
+**Pitch:** Convert images (or a live 3D scene) into ASCII art — mapping pixel brightness to character density, optionally in color.
+
+**Why this one:** Small and self-contained, with the specific charm of an old technique that still looks great — a different medium from every canvas/WebGL project here despite reusing similar image-processing fundamentals.
+
+**What it needs when resumed:**
+- Sample an image (or a render-to-canvas snapshot of a 3D scene) at low resolution.
+- Map per-pixel brightness to a character ramp (sparse `.` to dense `@`/`#`).
+- Optional color via terminal ANSI codes (real terminal target) or styled `<span>` colors (web page mimicking a terminal).
+- Stretch goal: animate a live webcam feed or a rotating 3D object as continuously updating ASCII frames.
+
+---
+
+## 16. Multi-Agent Debate Simulator
+
+**Status:** Stocked, not started.
+**Pitch:** Spin up multiple distinct AI personas with assigned positions/personalities and let them argue a topic back and forth, producing a real multi-turn debate transcript.
+
+**Why this one:** A different kind of "AI as content" project than the dungeon-master text adventure (`#10`) — this is about orchestrating multiple model calls with distinct roles and managing turn-taking/context between them, not one persistent single-agent conversation.
+
+**What it needs when resumed:**
+- Distinct system prompts per persona (position, tone, argument style), each fed the same running transcript so every turn sees prior turns.
+- A turn-taking loop (fixed rounds, or a moderator persona deciding when the debate concludes).
+- A simple UI to pick the topic and personas and watch turns stream in.
+- Guardrails so personas maintain their assigned position rather than converging/agreeing or dissolving into repetition.
+
+---
+
+## 17. Codebase History Storyteller
+
+**Status:** Stocked, not started.
+**Pitch:** Walk a repo's git history and turn it into a readable narrative — how the project evolved, what changed and roughly why, major turning points — rather than a raw `git log`.
+
+**Why this one:** A genuinely different use of AI-as-tool than any code-generation project: summarization and synthesis over structured historical data (commits/diffs), applied to a codebase you actually have.
+
+**What it needs when resumed:**
+- Walk `git log` with diffs for a target repo, chunked since a large history won't fit one pass.
+- Summarize eras/phases rather than every single commit — group by time window or by detecting shifts in what files get touched.
+- Output as a written narrative or a simple visual timeline.
+- Works best on a repo with real history — a good candidate once one of the projects here has enough commits to be interesting.
+
+---
+
+## 18. Personal "On This Day" Memory App
+
+**Status:** Stocked, not started — needs a look at what local data actually exists before this is more than a pitch.
+**Pitch:** Surface old photos, notes, or commits from exactly N years/months ago today, pulled from your own local data — a nostalgia feed that doesn't need manual curation.
+
+**Why this one:** A rare "useful to Ben specifically" entry on this otherwise build-for-fun list.
+
+**What it needs when resumed:**
+- An inventory pass of what dated personal data actually exists locally (photo directories with EXIF dates, notes with timestamps, commit history) before designing anything further.
+- A scheduled or on-demand check comparing today's date against historical items.
+- A simple display — a terminal digest, a small local web page, or a scheduled notification would all work.
+
+---
+
+## 19. Raytracer From Scratch
+
+**Status:** Stocked, not started.
+**Pitch:** A from-scratch raytracer — rays cast per-pixel into a 3D scene, intersecting spheres/planes, with real lighting, shadows, and reflections.
+
+**Why this one:** Distinct from the WebGL/Three.js work in `#0` — that uses a rendering engine; this builds the render pipeline itself (ray-sphere intersection math, shading, recursive reflection). A deeper, more foundational graphics exercise.
+
+**What it needs when resumed:**
+- Basic scene representation: spheres/planes with material properties (color, reflectivity, diffuse/specular).
+- A camera model casting one ray per pixel through a virtual image plane.
+- Ray-object intersection math (ray-sphere is simplest to start).
+- A shading model (Phong/Blinn-Phong is the standard starting point) plus shadow rays cast toward each light, checking for occlusion.
+- Recursive reflection rays as a stretch goal. Renders directly to a canvas pixel-by-pixel — no WebGL needed, slower but that's the whole point.
+
+---
+
+## 20. Terminal "Mission Control" Dashboard
+
+**Status:** Stocked, not started.
+**Pitch:** A glanceable terminal dashboard (a TUI) showing live system stats, weather, calendar, and whatever else is useful, all in one view.
+
+**Why this one:** A genuinely different interaction surface (terminal UI, not a browser page) from almost everything else on this list, and practical enough that Ben might actually open it daily if it's good — unlike most of the purely-for-fun entries.
+
+**What it needs when resumed:**
+- A TUI framework/library (e.g. `blessed`/`ink` for Node, or Python's `rich`/`textual`) rather than hand-rolled ANSI escape codes.
+- Data sources per panel: system stats via OS calls, weather via a public API, calendar via a local `.ics` file or an API.
+- A refresh loop redrawing on an interval, laid out as a grid of panels rather than one long scroll.
+- Scope discipline: start with 2-3 panels that are genuinely useful daily, not a kitchen-sink dashboard nobody reads.
