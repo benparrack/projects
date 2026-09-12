@@ -1,0 +1,11 @@
+/* "stacked" layout - a single scrolling column, all panels in priority
+   order. Good for a narrow or short terminal window. */
+
+#stack {
+    padding: 1 2;
+}
+
+#stack > * {
+    height: auto;
+    margin-bottom: 1;
+}

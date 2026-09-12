@@ -1,0 +1,32 @@
+/* "sidebar" layout - a narrow left column for the frequently-glanced-at
+   stuff (Clock, Now Playing, Up Next), wider right area for the rest. */
+
+#body {
+    height: 1fr;
+}
+
+#sidebar {
+    width: 38;
+    padding: 1;
+}
+
+#sidebar > * {
+    height: auto;
+    margin-bottom: 1;
+}
+
+#main {
+    width: 1fr;
+    padding: 1;
+}
+
+#top_grid {
+    grid-size: 3 1;
+    grid-gutter: 1 1;
+    height: 12;
+    margin-bottom: 1;
+}
+
+#git {
+    height: 1fr;
+}

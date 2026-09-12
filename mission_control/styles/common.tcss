@@ -1,3 +1,6 @@
+/* Shared across every layout: widget/panel look, not structural
+   placement (that lives in each layout's own stylesheet). */
+
 Screen {
     background: $background;
 }
@@ -8,13 +11,6 @@ TopBar {
     background: $surface;
     color: $primary;
     text-style: bold;
-}
-
-#grid {
-    grid-size: 3 3;
-    grid-gutter: 1 1;
-    grid-rows: 1fr 1fr auto;
-    padding: 1;
 }
 
 Panel, LivePanel {
@@ -49,7 +45,6 @@ Panel, LivePanel {
 }
 
 #git {
-    column-span: 3;
     border: round $success;
 }
 

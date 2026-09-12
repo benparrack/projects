@@ -6,6 +6,7 @@ const GAMES = [
   { type: 'drawing', label: 'SHARED DRAWING CANVAS' },
   { type: 'hangman', label: 'HANGMAN' },
   { type: 'checkers', label: 'CHECKERS' },
+  { type: 'chess', label: 'CHESS' },
 ];
 
 const SESSION_KEY = 'game_terminal.session';

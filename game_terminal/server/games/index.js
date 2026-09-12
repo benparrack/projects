@@ -4,9 +4,11 @@
 const drawing = require('./drawing');
 const hangman = require('./hangman');
 const checkers = require('./checkers');
+const chess = require('./chess');
 
 module.exports = {
   [drawing.type]: drawing,
   [hangman.type]: hangman,
   [checkers.type]: checkers,
+  [chess.type]: chess,
 };

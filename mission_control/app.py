@@ -9,23 +9,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from textual.app import App, ComposeResult
-from textual.containers import Grid
+from textual.app import App
 from textual.theme import Theme
-from textual.widgets import Footer
 
 import config as cfg
 from panels.base import LivePanel, Panel
-from panels.calendar_panel import CalendarPanel
-from panels.clock import ClockPanel
-from panels.git_status import GitStatusPanel
 from panels.now_playing import NowPlayingPanel
-from panels.system import SystemPanel
-from panels.top_bar import TopBar
-from panels.up_next import UpNextPanel
-from panels.weather import WeatherPanel
+from screens import LAYOUTS
 
-CSS_PATH = Path(__file__).resolve().parent / "styles.tcss"
+CSS_PATH = Path(__file__).resolve().parent / "styles" / "common.tcss"
 
 MISSION_CONTROL_THEME = Theme(
     name="mission-control",
@@ -56,6 +48,7 @@ class MissionControlApp(App):
         ("p", "play_pause", "Play/Pause"),
         ("n", "next_track", "Next"),
         ("b", "prev_track", "Prev"),
+        ("l", "cycle_layout", "Layout"),
     ]
 
     def __init__(self):
@@ -63,33 +56,29 @@ class MissionControlApp(App):
         self.config = cfg.load()
         self.register_theme(MISSION_CONTROL_THEME)
         self.theme = "mission-control"
+        self._layout_index = 0
 
-    def compose(self) -> ComposeResult:
-        yield TopBar()
-        with Grid(id="grid"):
-            yield SystemPanel(id="system")
-            yield WeatherPanel(self.config, id="weather")
-            yield CalendarPanel(self.config, id="calendar")
-            yield NowPlayingPanel(self.config, id="nowplaying")
-            yield ClockPanel(id="clock")
-            yield UpNextPanel(self.config, id="upnext")
-            yield GitStatusPanel(self.config, id="git")
-        yield Footer()
+    def on_mount(self) -> None:
+        self.push_screen(LAYOUTS[self._layout_index](self.config))
+
+    def action_cycle_layout(self) -> None:
+        self._layout_index = (self._layout_index + 1) % len(LAYOUTS)
+        self.switch_screen(LAYOUTS[self._layout_index](self.config))
 
     def action_refresh_all(self) -> None:
-        for panel in list(self.query(Panel)) + list(self.query(LivePanel)):
+        for panel in list(self.screen.query(Panel)) + list(self.screen.query(LivePanel)):
             panel._trigger_refresh()
 
     def action_play_pause(self) -> None:
-        panel = self.query_one(NowPlayingPanel)
+        panel = self.screen.query_one(NowPlayingPanel)
         panel.run_worker(panel.toggle_play_pause(), exclusive=True)
 
     def action_next_track(self) -> None:
-        panel = self.query_one(NowPlayingPanel)
+        panel = self.screen.query_one(NowPlayingPanel)
         panel.run_worker(panel.skip_next(), exclusive=True)
 
     def action_prev_track(self) -> None:
-        panel = self.query_one(NowPlayingPanel)
+        panel = self.screen.query_one(NowPlayingPanel)
         panel.run_worker(panel.skip_previous(), exclusive=True)
 
 

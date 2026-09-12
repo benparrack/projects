@@ -1,0 +1,13 @@
+/* "grid" layout - the original: System/Weather/Calendar on top,
+   Now Playing/Clock/Up Next in the middle, Git full-width below. */
+
+#grid {
+    grid-size: 3 3;
+    grid-gutter: 1 1;
+    grid-rows: 1fr 1fr auto;
+    padding: 1;
+}
+
+#git {
+    column-span: 3;
+}
