@@ -6,18 +6,8 @@ TopBar {
     height: 1;
     padding: 0 2;
     background: $surface;
-}
-
-TopBar #title {
-    width: 1fr;
     color: $primary;
     text-style: bold;
-}
-
-TopBar #clock {
-    width: 1fr;
-    color: $secondary;
-    text-align: right;
 }
 
 #grid {
@@ -46,19 +36,21 @@ Panel, LivePanel {
     border: round $accent;
 }
 
-#git {
-    column-span: 2;
-    border: round $success;
+#nowplaying {
+    border: round $panel-teal;
+}
+
+#clock {
+    border: round $secondary;
 }
 
 #upnext {
     border: round $panel-pink;
 }
 
-#nowplaying {
+#git {
     column-span: 3;
-    height: 5;
-    border: round $panel-teal;
+    border: round $success;
 }
 
 SystemPanel Label {

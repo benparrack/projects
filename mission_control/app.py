@@ -17,6 +17,7 @@ from textual.widgets import Footer
 import config as cfg
 from panels.base import LivePanel, Panel
 from panels.calendar_panel import CalendarPanel
+from panels.clock import ClockPanel
 from panels.git_status import GitStatusPanel
 from panels.now_playing import NowPlayingPanel
 from panels.system import SystemPanel
@@ -66,9 +67,10 @@ class MissionControlApp(App):
             yield SystemPanel(id="system")
             yield WeatherPanel(self.config, id="weather")
             yield CalendarPanel(self.config, id="calendar")
-            yield GitStatusPanel(self.config, id="git")
-            yield UpNextPanel(self.config, id="upnext")
             yield NowPlayingPanel(self.config, id="nowplaying")
+            yield ClockPanel(id="clock")
+            yield UpNextPanel(self.config, id="upnext")
+            yield GitStatusPanel(self.config, id="git")
         yield Footer()
 
     def action_refresh_all(self) -> None:
