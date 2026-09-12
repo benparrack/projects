@@ -196,7 +196,7 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 11. Real-Time Multiplayer Shared Canvas / Mini Game
 
-**Status:** Stocked, not started.
+**Status:** Done (first game) — see `game_terminal/`, deployed at https://game-terminal.onrender.com. A "game terminal" hub: Node + `ws` server, public rooms + private rooms via short codes, and a per-game plugin interface (`server/games/<name>.js` + `public/games/<name>/client.js`) so more mini-games plug in without touching core room/connection code. First game live: shared drawing canvas. Future extensions: an `.io`-style movement game, a turn-based board game (tic-tac-toe/connect4) — both slot into the existing plugin seam.
 **Pitch:** A lightweight multiplayer experience where multiple browser tabs/players share live state — a shared drawing canvas, a tiny `.io`-style game, or a synchronized game board.
 
 **Why this one:** The WebGL shooter (`#0`) explicitly scoped out "real" competitive multiplayer as too large solo. This is the achievable version: no anti-cheat, no ranked matchmaking, just shared live state between a handful of clients — a genuinely new category (networking/sync) versus everything else here, which is all single-player/local.
