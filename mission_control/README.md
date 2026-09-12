@@ -28,7 +28,10 @@ Spotify credentials).
 - **Now Playing** uses the Spotify Web API, so it shows playback from any
   device (phone included), not just this computer:
   1. Create an app at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard).
-  2. In its settings, add redirect URI `http://127.0.0.1:8888/callback` exactly.
+  2. In its settings, add redirect URI `http://127.0.0.1:53219/callback` exactly
+     (port chosen to avoid colliding with Jupyter's default 8888 — if 53219
+     is somehow also taken on your machine, change `PORT` at the top of
+     `spotify_auth.py` and update the redirect URI here to match).
   3. Enable the Web API checkbox, save, then grab the app's Client ID and
      Client Secret from Settings.
   4. Run `.venv/bin/python spotify_auth.py`, paste in the Client ID/Secret

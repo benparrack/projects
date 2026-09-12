@@ -1,7 +1,7 @@
 """One-time Spotify OAuth setup for the Now Playing panel.
 
 Create an app at https://developer.spotify.com/dashboard first, with
-redirect URI set to exactly http://127.0.0.1:8888/callback (see
+redirect URI set to exactly http://127.0.0.1:53219/callback (see
 README.md). Then run:
 
     .venv/bin/python spotify_auth.py
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import http.server
 import re
+import sys
 import urllib.parse
 import webbrowser
 from pathlib import Path
@@ -22,26 +23,47 @@ from pathlib import Path
 import requests
 
 HERE = Path(__file__).resolve().parent
-REDIRECT_URI = "http://127.0.0.1:8888/callback"
+PORT = 53219
+REDIRECT_URI = f"http://127.0.0.1:{PORT}/callback"
 SCOPE = "user-read-playback-state"
 
 
 class _CallbackHandler(http.server.BaseHTTPRequestHandler):
     code: str | None = None
+    error: str | None = None
 
     def do_GET(self) -> None:
-        query = urllib.parse.urlparse(self.path).query
-        _CallbackHandler.code = urllib.parse.parse_qs(query).get("code", [None])[0]
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        _CallbackHandler.code = params.get("code", [None])[0]
+        _CallbackHandler.error = params.get("error", [None])[0]
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
         self.end_headers()
-        self.wfile.write(b"<html><body>Authorized - you can close this tab.</body></html>")
+        message = (
+            f"Authorization failed: {_CallbackHandler.error}"
+            if _CallbackHandler.error
+            else "Authorized - you can close this tab."
+        )
+        self.wfile.write(f"<html><body>{message}</body></html>".encode())
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002 - silence default logging
         pass
 
 
 def main() -> None:
+    try:
+        server = http.server.HTTPServer(("127.0.0.1", PORT), _CallbackHandler)
+    except OSError as err:
+        print(
+            f"Could not start the local callback server on port {PORT}: {err}\n"
+            f"Something else is already listening on that port (check with "
+            f"`ss -ltn | grep {PORT}`). Pick a different PORT at the top of "
+            f"spotify_auth.py, update the redirect URI to match in both "
+            f"places (here and in your Spotify app's dashboard settings), "
+            f"and try again."
+        )
+        sys.exit(1)
+
     client_id = input("Spotify Client ID: ").strip()
     client_secret = input("Spotify Client Secret: ").strip()
 
@@ -56,10 +78,13 @@ def main() -> None:
     print(f"\nOpening your browser to authorize. If it doesn't open, visit:\n{auth_url}\n")
     webbrowser.open(auth_url)
 
-    server = http.server.HTTPServer(("127.0.0.1", 8888), _CallbackHandler)
     print("Waiting for authorization...")
-    while _CallbackHandler.code is None:
+    while _CallbackHandler.code is None and _CallbackHandler.error is None:
         server.handle_request()
+
+    if _CallbackHandler.error:
+        print(f"Spotify returned an error: {_CallbackHandler.error}")
+        sys.exit(1)
     code = _CallbackHandler.code
 
     print("Got authorization code, exchanging for a refresh token...")
