@@ -51,7 +51,10 @@ class NowPlayingPanel(Panel):
 
         lines = [f"{icon}  {data['artist']} - {data['title']}{device}"]
         if upcoming:
-            lines.append("[dim]Up next: " + "  ·  ".join(upcoming) + "[/dim]")
+            lines.append("")
+            lines.append("[dim]Up next:[/dim]")
+            for track in upcoming:
+                lines.append(f"[dim]  {track}[/dim]")
         self.update("\n".join(lines))
 
     # ---- playback controls (p/n/b in app.py) ----
@@ -163,7 +166,7 @@ class NowPlayingPanel(Panel):
             "device": device.get("name"),
         }
 
-    def _fetch_queue(self, limit: int = 2) -> list[str]:
+    def _fetch_queue(self, limit: int = 5) -> list[str]:
         token = self._get_access_token()
         resp = requests.get(
             "https://api.spotify.com/v1/me/player/queue",
@@ -176,7 +179,10 @@ class NowPlayingPanel(Panel):
         upcoming = []
         for item in body.get("queue", [])[:limit]:
             artist = item["artists"][0]["name"] if item.get("artists") else ""
-            upcoming.append(f"{item['name']} - {artist}" if artist else item["name"])
+            track = f"{item['name']} - {artist}" if artist else item["name"]
+            # Keep each queue entry to one line regardless of panel width -
+            # predictable line count matters more here than seeing full titles.
+            upcoming.append(track if len(track) <= 24 else track[:23] + "…")
         return upcoming
 
     def _get_access_token(self) -> str:
