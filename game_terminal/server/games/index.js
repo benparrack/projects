@@ -2,7 +2,9 @@
 // plus a matching public/games/<name>/client.js and a menu entry in public/hub.js — nothing else
 // in server/ needs to change.
 const drawing = require('./drawing');
+const hangman = require('./hangman');
 
 module.exports = {
   [drawing.type]: drawing,
+  [hangman.type]: hangman,
 };

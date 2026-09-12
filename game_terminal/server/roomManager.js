@@ -75,6 +75,9 @@ class RoomManager {
   joinRoom(room, clientId, ws, nickname) {
     if (room.emptySince) room.emptySince = null; // cancel pending cleanup
     room.clients.set(clientId, { ws, nickname });
+    if (typeof room.plugin.onJoin === 'function') {
+      room.plugin.onJoin(room, { clientId, nickname });
+    }
   }
 
   leaveRoom(room, clientId) {

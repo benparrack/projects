@@ -43,7 +43,7 @@ function joinAndAck(ws, session, room) {
     gameType: room.gameType,
     isPublic: room.isPublic,
     roster: room.roster(),
-    stateSnapshot: room.plugin.serializeSnapshot(room),
+    stateSnapshot: room.plugin.serializeSnapshot(room, { clientId: session.clientId, nickname: session.nickname }),
   });
   room.broadcast(
     makeEnvelope(ServerMessage.ROOM_PRESENCE, { roster: room.roster(), joined: session.clientId }),

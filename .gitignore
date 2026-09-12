@@ -11,6 +11,9 @@ venv/
 # Node
 node_modules/
 
+# Playwright MCP browser automation traces
+.playwright-mcp/
+
 # Logs / runtime state
 logs/
 *.log

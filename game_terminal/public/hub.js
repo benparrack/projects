@@ -4,6 +4,7 @@ import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode } from './pr
 // plus a public/games/<type>/client.js module — nothing else in hub.js changes.
 const GAMES = [
   { type: 'drawing', label: 'SHARED DRAWING CANVAS' },
+  { type: 'hangman', label: 'HANGMAN' },
 ];
 
 const SESSION_KEY = 'game_terminal.session';
@@ -131,7 +132,7 @@ function handleServerMessage(type, payload) {
       els.roomCodeLabel.textContent = payload.isPublic ? `${payload.code} (public)` : payload.code;
       renderRoster(payload.roster);
       showScreen('room');
-      mountGame(payload.gameType, payload.stateSnapshot);
+      mountGame(payload.gameType, payload.stateSnapshot, payload.roster);
       break;
     }
 
@@ -145,6 +146,9 @@ function handleServerMessage(type, payload) {
 
     case ServerMessage.ROOM_PRESENCE: {
       renderRoster(payload.roster);
+      if (state.activeGameHandle && typeof state.activeGameHandle.applyRoster === 'function') {
+        state.activeGameHandle.applyRoster(payload.roster);
+      }
       break;
     }
 
@@ -198,7 +202,7 @@ function renderRoster(roster) {
   }
 }
 
-async function mountGame(gameType, snapshot) {
+async function mountGame(gameType, snapshot, roster) {
   unmountGame();
   els.gameMount.innerHTML = '';
   try {
@@ -208,6 +212,7 @@ async function mountGame(gameType, snapshot) {
       getClientId: () => state.clientId,
     });
     if (snapshot && typeof handle.applySnapshot === 'function') handle.applySnapshot(snapshot);
+    if (roster && typeof handle.applyRoster === 'function') handle.applyRoster(roster);
     state.activeGameHandle = handle;
   } catch (err) {
     console.error('Failed to load game module', gameType, err);
