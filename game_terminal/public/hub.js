@@ -5,6 +5,7 @@ import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode } from './pr
 const GAMES = [
   { type: 'drawing', label: 'SHARED DRAWING CANVAS' },
   { type: 'hangman', label: 'HANGMAN' },
+  { type: 'checkers', label: 'CHECKERS' },
 ];
 
 const SESSION_KEY = 'game_terminal.session';

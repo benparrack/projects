@@ -3,8 +3,10 @@
 // in server/ needs to change.
 const drawing = require('./drawing');
 const hangman = require('./hangman');
+const checkers = require('./checkers');
 
 module.exports = {
   [drawing.type]: drawing,
   [hangman.type]: hangman,
+  [checkers.type]: checkers,
 };
