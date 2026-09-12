@@ -240,7 +240,7 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 14. Audio-Reactive Music Visualizer
 
-**Status:** Stocked, not started.
+**Status:** Done — see `music_visualizer/`. File upload + microphone input, three modes (frequency bars, radial spokes, particle burst), bass-driven beat detection with a flash effect, sensitivity control. Fixed a launch bug where `URL.createObjectURL()` blob URLs never resolve when the page is opened directly as a local `file://` document (opaque origin) — switched file loading to `FileReader` → data URL, which works from any origin.
 **Pitch:** A visualizer that reacts live to actual audio (an uploaded file or microphone input) — bars, particles, or generative shapes pulsing/moving with the music's frequency and amplitude in real time.
 
 **Why this one:** Complements the algorithmic sequencer (`#6`), which generates audio, with the reverse: consuming and responding to it. A genuinely different technical skill (Web Audio API's analyser/FFT data) from anything else on this list, and immediately satisfying with a song you actually like.
@@ -314,7 +314,7 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 19. Raytracer From Scratch
 
-**Status:** Stocked, not started.
+**Status:** Done — see `raytracer/`.
 **Pitch:** A from-scratch raytracer — rays cast per-pixel into a 3D scene, intersecting spheres/planes, with real lighting, shadows, and reflections.
 
 **Why this one:** Distinct from the WebGL/Three.js work in `#0` — that uses a rendering engine; this builds the render pipeline itself (ray-sphere intersection math, shading, recursive reflection). A deeper, more foundational graphics exercise.
