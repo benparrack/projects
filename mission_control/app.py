@@ -68,7 +68,7 @@ class MissionControlApp(App):
             yield CalendarPanel(self.config, id="calendar")
             yield GitStatusPanel(self.config, id="git")
             yield UpNextPanel(self.config, id="upnext")
-            yield NowPlayingPanel(id="nowplaying")
+            yield NowPlayingPanel(self.config, id="nowplaying")
         yield Footer()
 
     def action_refresh_all(self) -> None:

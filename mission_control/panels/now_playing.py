@@ -1,47 +1,88 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
-import subprocess
+import time
+
+import requests
 
 from .base import Panel
 
-_FORMAT = "{{status}}\t{{artist}}\t{{title}}"
-
 
 class NowPlayingPanel(Panel):
-    def __init__(self, **kwargs):
-        super().__init__(title="Now Playing", refresh_interval=3.0, **kwargs)
+    """Shows account-wide Spotify playback (any device, phone included)
+    via the Web API, rather than local MPRIS/playerctl - see spotify_auth.py.
+    """
+
+    def __init__(self, config, **kwargs):
+        super().__init__(title="Now Playing", refresh_interval=10.0, **kwargs)
+        self._spotify = config.spotify
+        self._access_token: str | None = None
+        self._token_expiry = 0.0
 
     async def refresh_data(self) -> None:
-        if shutil.which("playerctl") is None:
-            self.update("[dim]playerctl not installed - see README[/dim]")
+        if not self._spotify.refresh_token:
+            self.update(
+                "[dim]not configured[/dim]\n"
+                "Run spotify_auth.py once to connect your\n"
+                "Spotify account (see README)"
+            )
             return
 
-        status, artist, title = await asyncio.to_thread(self._query)
-        if status is None:
+        try:
+            data = await asyncio.to_thread(self._fetch_current)
+        except Exception as err:  # noqa: BLE001 - surface any failure in-panel
+            self.show_error(f"spotify unavailable: {err}")
+            return
+
+        if data is None:
             self.update("[dim]Nothing playing[/dim]")
             return
 
-        icon = "▶" if status == "Playing" else "⏸"
-        who = f"{artist} - {title}" if artist else title
-        self.update(f"{icon}  {who}")
+        icon = "▶" if data["is_playing"] else "⏸"
+        device = f"  ({data['device']})" if data["device"] else ""
+        self.update(f"{icon}  {data['artist']} - {data['title']}{device}")
 
-    def _query(self) -> tuple[str | None, str | None, str | None]:
-        try:
-            result = subprocess.run(
-                ["playerctl", "metadata", "--format", _FORMAT],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-        except (OSError, subprocess.SubprocessError):
-            return None, None, None
+    def _fetch_current(self) -> dict | None:
+        token = self._get_access_token()
+        resp = requests.get(
+            "https://api.spotify.com/v1/me/player",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
+        if resp.status_code == 204 or not resp.content:
+            return None
+        resp.raise_for_status()
+        body = resp.json()
 
-        if result.returncode != 0 or not result.stdout.strip():
-            return None, None, None
+        item = body.get("item")
+        if not item:
+            return None
 
-        parts = result.stdout.strip("\n").split("\t")
-        if len(parts) < 3:
-            return None, None, None
-        return parts[0], parts[1], parts[2]
+        device = body.get("device") or {}
+        return {
+            "is_playing": bool(body.get("is_playing")),
+            "title": item["name"],
+            "artist": ", ".join(a["name"] for a in item["artists"]),
+            "device": device.get("name"),
+        }
+
+    def _get_access_token(self) -> str:
+        if self._access_token and time.monotonic() < self._token_expiry:
+            return self._access_token
+
+        resp = requests.post(
+            "https://accounts.spotify.com/api/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": self._spotify.refresh_token,
+                "client_id": self._spotify.client_id,
+                "client_secret": self._spotify.client_secret,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+
+        self._access_token = payload["access_token"]
+        self._token_expiry = time.monotonic() + payload.get("expires_in", 3600) - 60
+        return self._access_token

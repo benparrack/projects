@@ -17,10 +17,18 @@ class WeatherConfig:
 
 
 @dataclass
+class SpotifyConfig:
+    client_id: str
+    client_secret: str
+    refresh_token: str
+
+
+@dataclass
 class Config:
     calendar_ics_url: str
     weather: WeatherConfig
     projects_dir: Path
+    spotify: SpotifyConfig
 
 
 def _load_raw() -> dict:
@@ -37,6 +45,7 @@ def load() -> Config:
     calendar = raw.get("calendar", {})
     weather = raw.get("weather", {})
     projects = raw.get("projects", {})
+    spotify = raw.get("spotify", {})
 
     lat_raw = weather.get("latitude", "")
     lon_raw = weather.get("longitude", "")
@@ -51,4 +60,9 @@ def load() -> Config:
             label=weather.get("label", "") or "",
         ),
         projects_dir=Path(projects_dir).expanduser() if projects_dir else HERE.parent,
+        spotify=SpotifyConfig(
+            client_id=spotify.get("client_id", "") or "",
+            client_secret=spotify.get("client_secret", "") or "",
+            refresh_token=spotify.get("refresh_token", "") or "",
+        ),
     )

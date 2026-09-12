@@ -1,6 +1,5 @@
 # Copy this file to config.toml (same directory) and fill in your own
-# values. config.toml is gitignored since it can contain a private
-# calendar URL.
+# values. config.toml is gitignored since it can contain private tokens.
 
 [calendar]
 # Google Calendar -> Settings -> pick your calendar -> "Integrate calendar"
@@ -20,3 +19,14 @@ label = ""
 # Directory containing your project folders, each checked for git status.
 # Leave blank to default to the parent of this mission_control/ directory.
 dir = ""
+
+[spotify]
+# Powers the Now Playing panel via the Spotify Web API (shows playback
+# from any device, phone included - not just this computer). Don't fill
+# these in by hand: create an app at developer.spotify.com/dashboard
+# with redirect URI http://127.0.0.1:8888/callback, then run
+# `.venv/bin/python spotify_auth.py` and it will write this section for
+# you. Leave blank to show the panel as "not configured".
+client_id = ""
+client_secret = ""
+refresh_token = ""
