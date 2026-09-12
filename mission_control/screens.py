@@ -110,4 +110,4 @@ class StackedScreen(Screen):
         yield Footer()
 
 
-LAYOUTS = [GridScreen, SidebarScreen, StackedScreen]
+LAYOUTS = [SidebarScreen, GridScreen, StackedScreen]
