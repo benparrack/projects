@@ -1,0 +1,21 @@
+Screen {
+    background: $surface;
+}
+
+#grid {
+    grid-size: 3 2;
+    grid-gutter: 1 1;
+    grid-rows: 1fr 1fr;
+    padding: 1;
+}
+
+Panel {
+    border: round $primary;
+    padding: 1 2;
+    background: $panel;
+    overflow: hidden;
+}
+
+#git {
+    column-span: 2;
+}

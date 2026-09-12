@@ -1,0 +1,22 @@
+# Copy this file to config.toml (same directory) and fill in your own
+# values. config.toml is gitignored since it can contain a private
+# calendar URL.
+
+[calendar]
+# Google Calendar -> Settings -> pick your calendar -> "Integrate calendar"
+# -> "Secret address in iCal format". Read-only, no OAuth needed.
+# Leave blank to show the calendar panel as "not configured".
+ics_url = ""
+
+[weather]
+# Leave latitude/longitude blank to auto-detect location via IP
+# geolocation on startup. Set them explicitly to override (useful on a
+# VPN, or while travelling).
+latitude = ""
+longitude = ""
+label = ""
+
+[projects]
+# Directory containing your project folders, each checked for git status.
+# Leave blank to default to the parent of this mission_control/ directory.
+dir = ""

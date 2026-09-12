@@ -1,0 +1,5 @@
+textual>=0.58
+psutil>=5.9
+requests>=2.31
+icalendar>=5.0
+recurring-ical-events>=2.1

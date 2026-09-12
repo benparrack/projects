@@ -330,7 +330,16 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 20. Terminal "Mission Control" Dashboard
 
-**Status:** Stocked, not started.
+**Status:** Done — see `mission_control/`. Python + Textual, five panels in a
+grid: system stats (CPU/mem/disk/net via `psutil`), weather (IP-geolocated by
+default, or overridden in `config.toml`, via Open-Meteo), calendar (Google
+Calendar's read-only secret iCal URL, parsed with `icalendar` +
+`recurring-ical-events` to expand recurring events correctly), git/project
+status (this repo is one monorepo of project folders rather than
+one-repo-per-project, so the panel reports overall repo status plus which
+folder was touched most recently), and an "Up Next" panel that reads
+`TODO_FIRST.md`/`IDEAS.md` directly. Each panel refreshes independently via a
+background worker so a slow network call never blocks the others.
 **Pitch:** A glanceable terminal dashboard (a TUI) showing live system stats, weather, calendar, and whatever else is useful, all in one view.
 
 **Why this one:** A genuinely different interaction surface (terminal UI, not a browser page) from almost everything else on this list, and practical enough that Ben might actually open it daily if it's good — unlike most of the purely-for-fun entries.
