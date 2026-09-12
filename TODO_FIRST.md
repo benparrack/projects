@@ -1,8 +1,9 @@
 # Up Next
 
-Everything picked in the last round is done (see below) — nothing queued
-yet. Pick fresh top picks from `IDEAS.md`'s remaining stocked ideas, or
-from `mission_control/FUTURE.md` for dashboard-specific follow-ups.
+Queued for tomorrow:
+
+- [ ] **Mission Control** — update/improve the terminal dashboard further. See `mission_control/FUTURE.md` for brainstormed options (Now Playing progress bar/volume/device-switcher, a "needs attention" digest panel, theme cycling, and more).
+- [ ] **Game Terminal** — add more games to / improve `game_terminal/`. See `game_terminal/FUTURE.md` — a slither.io-style game is the biggest one flagged (needs a real-time server tick loop, unlike the event-driven games shipped so far).
 
 ## Done
 - **Real-Time Multiplayer Shared Canvas / Mini Game** (`IDEAS.md` #11) — `game_terminal/` — https://game-terminal.onrender.com — four games live: shared drawing canvas, Hangman, Checkers, Chess
