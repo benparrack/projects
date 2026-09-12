@@ -1,21 +1,71 @@
 Screen {
+    background: $background;
+}
+
+TopBar {
+    height: 1;
+    padding: 0 2;
     background: $surface;
 }
 
+TopBar #title {
+    width: 1fr;
+    color: $primary;
+    text-style: bold;
+}
+
+TopBar #clock {
+    width: 1fr;
+    color: $secondary;
+    text-align: right;
+}
+
 #grid {
-    grid-size: 3 2;
+    grid-size: 3 3;
     grid-gutter: 1 1;
-    grid-rows: 1fr 1fr;
+    grid-rows: 1fr 1fr auto;
     padding: 1;
 }
 
-Panel {
+Panel, LivePanel {
     border: round $primary;
     padding: 1 2;
     background: $panel;
     overflow: hidden;
 }
 
+#system {
+    border: round $primary;
+}
+
+#weather {
+    border: round $warning;
+}
+
+#calendar {
+    border: round $accent;
+}
+
 #git {
     column-span: 2;
+    border: round $success;
+}
+
+#upnext {
+    border: round $panel-pink;
+}
+
+#nowplaying {
+    column-span: 3;
+    height: 5;
+    border: round $panel-teal;
+}
+
+SystemPanel Label {
+    height: 1;
+}
+
+SystemPanel Sparkline {
+    height: 1;
+    margin-bottom: 1;
 }

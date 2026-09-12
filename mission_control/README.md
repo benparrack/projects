@@ -1,7 +1,8 @@
 # Mission Control
 
-A glanceable terminal dashboard: system stats, weather, calendar, git/project
-status across `../` (this repo), and what's next on `TODO_FIRST.md`.
+A glanceable terminal dashboard: system stats (with rolling CPU/memory
+history sparklines), weather, calendar, git/project status across `../`
+(this repo), what's next on `TODO_FIRST.md`, and what's currently playing.
 
 ## Setup
 
@@ -23,6 +24,10 @@ cp config.example.toml config.toml   # then fill in your calendar URL, etc.
 - **Projects/Git panel** assumes `../` is a single git repo containing
   project folders (as this repo is) and reports overall repo status plus
   which folder was touched most recently.
+- **Now Playing** shells out to `playerctl` (Linux media-player control via
+  MPRIS/dbus — works with Spotify, browsers, VLC, etc.). Install it with
+  `sudo apt install playerctl` (or your distro's equivalent); the panel
+  shows "not installed" until then.
 
 ## Run
 
