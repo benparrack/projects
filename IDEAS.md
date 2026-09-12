@@ -196,7 +196,7 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 11. Real-Time Multiplayer Shared Canvas / Mini Game
 
-**Status:** Done (first game) — see `game_terminal/`, deployed at https://game-terminal.onrender.com. A "game terminal" hub: Node + `ws` server, public rooms + private rooms via short codes, and a per-game plugin interface (`server/games/<name>.js` + `public/games/<name>/client.js`) so more mini-games plug in without touching core room/connection code. First game live: shared drawing canvas. Future extensions: an `.io`-style movement game, a turn-based board game (tic-tac-toe/connect4) — both slot into the existing plugin seam.
+**Status:** Done — see `game_terminal/`, deployed at https://game-terminal.onrender.com. A "game terminal" hub: Node + `ws` server, public rooms + private rooms via short codes, and a per-game plugin interface (`server/games/<name>.js` + `public/games/<name>/client.js`) so more mini-games plug in without touching core room/connection code. Four games live: shared drawing canvas, Hangman (picker sets a word, per-recipient masked views so the secret never reaches guessers), Checkers (standard American rules, mandatory capture/multi-jump/kinging, rules engine covered by a standalone unit test), and Chess. Next up per the game_terminal memory notes: a slither.io-style game, which needs a real-time tick loop rather than the turn-based model the board games use.
 **Pitch:** A lightweight multiplayer experience where multiple browser tabs/players share live state — a shared drawing canvas, a tiny `.io`-style game, or a synchronized game board.
 
 **Why this one:** The WebGL shooter (`#0`) explicitly scoped out "real" competitive multiplayer as too large solo. This is the achievable version: no anti-cheat, no ranked matchmaking, just shared live state between a handful of clients — a genuinely new category (networking/sync) versus everything else here, which is all single-player/local.
@@ -210,7 +210,7 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 12. Generative Art Gallery
 
-**Status:** In progress — see `generative_art_gallery/` (noise-driven flow field renderer with multiple field shapes/color strategies, seeded PRNG, curated palettes). A recursive branching-fractal renderer was tried and dropped — looked worse than the flow field.
+**Status:** Done — see `generative_art_gallery/` (noise-driven flow field renderer with multiple field shapes/color strategies, seeded PRNG, curated palettes, a black hole renderer, dark-mode and animate-forever toggles). A recursive branching-fractal renderer was tried and dropped — looked worse than the flow field.
 **Pitch:** A page that generates an endless stream of unique visual art pieces algorithmically — flow fields, L-systems, Perlin-noise compositions, recursive/fractal patterns — no two alike, purely from code and randomness.
 
 **Why this one:** Distinct from the falling-sand (`#2`) and ACO (`#9`) projects — this is aesthetic output for its own sake rather than simulating a physical/optimization process. A good showcase of how much visual richness comes from a few well-chosen math primitives.
@@ -330,17 +330,45 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 20. Terminal "Mission Control" Dashboard
 
-**Status:** Done — see `mission_control/`. Python + Textual, five panels in a
-grid: system stats (CPU/mem/disk/net via `psutil`), weather (IP-geolocated by
-default, or overridden in `config.toml`, via Open-Meteo), calendar (Google
-Calendar's read-only secret iCal URL, parsed with `icalendar` +
-`recurring-ical-events` to expand recurring events correctly), git/project
-status (this repo is one monorepo of project folders rather than
-one-repo-per-project, so the panel reports overall repo status plus which
-folder was touched most recently), and an "Up Next" panel that reads
-`TODO_FIRST.md`/`IDEAS.md` directly. Each panel refreshes independently via a
-background worker so a slow network call never blocks the others.
+**Status:** Done — see `mission_control/`. Python + Textual. Seven panels:
+system stats (CPU/mem/disk/net via `psutil`, with rolling Sparkline history
+for CPU/memory), weather (IP-geolocated by default, or overridden in
+`config.toml`, via Open-Meteo), calendar (Google Calendar's read-only secret
+iCal URL, parsed with `icalendar` + `recurring-ical-events` to expand
+recurring events correctly), a Clock panel (local time plus home/Eastern
+time side by side), Now Playing (Spotify Web API — shows playback from any
+device including a phone, not just this computer; `p`/`n`/`b` keybindings
+for play-pause/next/previous, with a device-reactivation retry since a
+paused device can drop out of Spotify's "active device" session almost
+immediately; a 5-track queue peek), git/project status (this repo is one
+monorepo of project folders rather than one-repo-per-project, so the panel
+reports overall repo status plus which folder was touched most recently),
+and an "Up Next" panel that reads `TODO_FIRST.md`/`IDEAS.md` directly. Three
+switchable layouts (`l` to cycle) — grid, sidebar (the preferred default),
+and a scrolling single-column stack for narrow terminals. Each panel
+refreshes independently via a background worker so a slow network call
+never blocks the others. Setup requires a one-time OAuth script
+(`spotify_auth.py`) for the Spotify integration and a Google Calendar
+secret-URL paste into `config.toml` (gitignored). Further ideas brainstormed
+but not yet built are tracked in `mission_control/FUTURE.md` (progress
+bar/volume/device-switcher for Now Playing, a "needs attention" digest
+panel, theme cycling, and more).
 **Pitch:** A glanceable terminal dashboard (a TUI) showing live system stats, weather, calendar, and whatever else is useful, all in one view.
+
+---
+
+## 21. Webcam Hand-Tracking Paintbrush
+
+**Status:** Done — see `hand_paintbrush/`. Watercolor-style painting driven
+by webcam hand tracking rather than mouse/touch input.
+**Pitch:** Paint on a canvas using hand position/gesture tracked live from
+a webcam feed, rendered with a soft watercolor-style brush rather than a
+hard cursor line.
+
+**Why this one:** A different input modality than anything else in this
+repo (computer-vision-driven interaction instead of mouse/keyboard/touch),
+paired with a generative-art-style rendering approach rather than a literal
+1:1 cursor line.
 
 **Why this one:** A genuinely different interaction surface (terminal UI, not a browser page) from almost everything else on this list, and practical enough that Ben might actually open it daily if it's good — unlike most of the purely-for-fun entries.
 
