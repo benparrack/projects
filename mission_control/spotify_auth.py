@@ -6,9 +6,13 @@ README.md). Then run:
 
     .venv/bin/python spotify_auth.py
 
-It opens your browser to authorize this dashboard to read your Spotify
-playback state, catches the redirect locally, exchanges it for a
-refresh token, and writes that into config.toml.
+It opens your browser to authorize this dashboard to read AND control
+your Spotify playback, catches the redirect locally, exchanges it for
+a refresh token, and writes that into config.toml.
+
+Re-run this any time SCOPE below changes - a refresh token only carries
+the scopes it was originally granted, so widening SCOPE requires a
+fresh authorization even if you've already run this once before.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ import requests
 HERE = Path(__file__).resolve().parent
 PORT = 53219
 REDIRECT_URI = f"http://127.0.0.1:{PORT}/callback"
-SCOPE = "user-read-playback-state"
+SCOPE = "user-read-playback-state user-modify-playback-state"
 
 
 class _CallbackHandler(http.server.BaseHTTPRequestHandler):

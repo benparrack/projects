@@ -53,6 +53,9 @@ class MissionControlApp(App):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("r", "refresh_all", "Refresh"),
+        ("p", "play_pause", "Play/Pause"),
+        ("n", "next_track", "Next"),
+        ("b", "prev_track", "Prev"),
     ]
 
     def __init__(self):
@@ -76,6 +79,18 @@ class MissionControlApp(App):
     def action_refresh_all(self) -> None:
         for panel in list(self.query(Panel)) + list(self.query(LivePanel)):
             panel._trigger_refresh()
+
+    def action_play_pause(self) -> None:
+        panel = self.query_one(NowPlayingPanel)
+        panel.run_worker(panel.toggle_play_pause(), exclusive=True)
+
+    def action_next_track(self) -> None:
+        panel = self.query_one(NowPlayingPanel)
+        panel.run_worker(panel.skip_next(), exclusive=True)
+
+    def action_prev_track(self) -> None:
+        panel = self.query_one(NowPlayingPanel)
+        panel.run_worker(panel.skip_previous(), exclusive=True)
 
 
 if __name__ == "__main__":
