@@ -22,6 +22,7 @@ class NowPlayingPanel(Panel):
         self._access_token: str | None = None
         self._token_expiry = 0.0
         self._is_playing = False
+        self._last_device_id: str | None = None
         self.border_subtitle = "p play/pause  n next  b prev"
 
     async def refresh_data(self) -> None:
@@ -90,12 +91,15 @@ class NowPlayingPanel(Panel):
         except Exception as err:  # noqa: BLE001
             return f"auth error: {err}"
 
-        resp = requests.request(
-            method,
-            f"https://api.spotify.com/v1/me/player/{endpoint}",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10,
-        )
+        resp = self._request(method, endpoint, token)
+
+        if resp.status_code == 404 and endpoint == "play" and self._last_device_id:
+            # A paused device (phones especially) can drop out of Spotify's
+            # "active device" session within moments of pausing, even
+            # though the device itself is still open and reachable -
+            # explicitly targeting its device_id can wake it back up.
+            resp = self._request(method, endpoint, token, body={"device_id": self._last_device_id})
+
         if resp.status_code == 204:
             return None
         if resp.status_code == 404:
@@ -111,6 +115,15 @@ class NowPlayingPanel(Panel):
         except requests.HTTPError as err:
             return str(err)
         return None
+
+    def _request(self, method: str, endpoint: str, token: str, body: dict | None = None):
+        return requests.request(
+            method,
+            f"https://api.spotify.com/v1/me/player/{endpoint}",
+            headers={"Authorization": f"Bearer {token}"},
+            json=body,
+            timeout=10,
+        )
 
     # ---- data fetching ----
 
@@ -141,6 +154,8 @@ class NowPlayingPanel(Panel):
             return None
 
         device = body.get("device") or {}
+        if device.get("id"):
+            self._last_device_id = device["id"]
         return {
             "is_playing": bool(body.get("is_playing")),
             "title": item["name"],
