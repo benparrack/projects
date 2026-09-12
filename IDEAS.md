@@ -166,7 +166,7 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 9. City/Ant-Colony Optimization Visualizer
 
-**Status:** Stocked, not started.
+**Status:** Done — see `ant_colony_optimization/`. Ants build closed TSP tours over a random scatter of cities; pheromone-weighted roulette selection with evaporation and elitist reinforcement, animated per-edge, with a live convergence chart and sliders for city/ant count, α/β, evaporation rate, and speed.
 **Pitch:** Visualize agents solving a real optimization problem live — e.g. ant colony optimization finding shortest paths (pheromone trails converging over iterations), or simple traffic-flow simulation on a road grid — so you watch an algorithm converge in real time.
 
 **Why this one:** Makes an abstract optimization algorithm tangible; satisfying to watch chaotic initial exploration resolve into an efficient solution.
