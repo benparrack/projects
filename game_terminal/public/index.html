@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GAME TERMINAL</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="crt">
+  <header class="titlebar">
+    <span>GAME TERMINAL v0.1</span>
+    <span id="status" class="status status-connecting">CONNECTING&hellip;</span>
+  </header>
+
+  <section id="screen-nickname" class="screen">
+    <p class="prompt">&gt; ENTER HANDLE TO CONTINUE_</p>
+    <form id="nickname-form">
+      <input id="nickname-input" type="text" maxlength="24" autocomplete="off" placeholder="handle" required>
+      <button type="submit">CONNECT</button>
+    </form>
+  </section>
+
+  <section id="screen-menu" class="screen" hidden>
+    <p class="prompt">&gt; WELCOME, <span id="menu-nickname"></span>_</p>
+    <p class="prompt">&gt; SELECT GAME:</p>
+    <ul id="game-list" class="game-list"></ul>
+
+    <div class="room-controls">
+      <button id="btn-join-public">JOIN PUBLIC ROOM</button>
+      <div class="room-row">
+        <button id="btn-create-private">CREATE PRIVATE ROOM</button>
+      </div>
+      <div class="room-row">
+        <input id="join-code-input" type="text" maxlength="10" autocomplete="off" placeholder="ROOM CODE">
+        <button id="btn-join-code">JOIN BY CODE</button>
+      </div>
+    </div>
+    <p id="menu-error" class="error" hidden></p>
+  </section>
+
+  <section id="screen-room" class="screen" hidden>
+    <div class="room-header">
+      <span>ROOM: <strong id="room-code-label"></strong></span>
+      <button id="btn-leave-room">LEAVE</button>
+    </div>
+    <div class="room-body">
+      <div id="game-mount" class="game-mount"></div>
+      <aside class="roster">
+        <p class="prompt">&gt; PLAYERS ONLINE</p>
+        <ul id="roster-list"></ul>
+      </aside>
+    </div>
+  </section>
+</div>
+
+<script type="module" src="hub.js"></script>
+</body>
+</html>

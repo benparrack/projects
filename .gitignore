@@ -8,6 +8,9 @@ __pycache__/
 venv/
 .pytest_cache/
 
+# Node
+node_modules/
+
 # Logs / runtime state
 logs/
 *.log

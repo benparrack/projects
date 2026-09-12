@@ -1,0 +1,126 @@
+:root {
+  --bg: #05080a;
+  --fg: #39ff14;
+  --fg-dim: #1f8f0c;
+  --accent: #ffb000;
+  --error: #ff4d4d;
+  --border: #1f8f0c;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Courier New", ui-monospace, Menlo, Consolas, monospace;
+  min-height: 100%;
+}
+
+.crt {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  min-height: 100vh;
+}
+
+.titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  letter-spacing: 1px;
+}
+
+.status { font-size: 0.85em; }
+.status-connecting { color: var(--accent); }
+.status-connected { color: var(--fg); }
+.status-error { color: var(--error); }
+
+.screen { animation: none; }
+
+.prompt {
+  margin: 0.6em 0;
+}
+
+input[type="text"] {
+  background: #000;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 1em;
+  padding: 8px 10px;
+  outline: none;
+}
+input[type="text"]:focus { border-color: var(--fg); }
+
+button {
+  background: #000;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 0.95em;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+button:hover { background: var(--fg-dim); color: #000; }
+button:disabled { opacity: 0.4; cursor: default; }
+
+#nickname-form { display: flex; gap: 8px; }
+
+.game-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5em 0 1.2em;
+}
+.game-list li {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.game-list li.selected { background: var(--fg-dim); color: #000; }
+
+.room-controls { display: flex; flex-direction: column; gap: 10px; margin-top: 1em; }
+.room-row { display: flex; gap: 8px; }
+
+.error { color: var(--error); }
+
+.room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.room-body {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.game-mount {
+  flex: 1 1 480px;
+  border: 1px solid var(--border);
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roster {
+  flex: 0 0 180px;
+}
+.roster ul { list-style: none; padding: 0; margin: 0.5em 0; }
+.roster li { padding: 4px 0; }
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.cursor-blink { animation: blink 1s step-start infinite; }
