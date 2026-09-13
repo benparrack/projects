@@ -284,6 +284,8 @@ function buildPublicState(room) {
     inCheck: st.inCheck,
     winner: st.winner,
     winReason: st.winReason,
+    moveHistory: st.moveHistory,
+    legalMoves: st.phase === 'playing' ? getLegalMoves(st.board, st.turn, st) : [],
   };
 }
 
@@ -299,6 +301,7 @@ function resetBoard(st) {
   st.inCheck = null;
   st.winner = null;
   st.winReason = null;
+  st.moveHistory = [];
 }
 
 module.exports = {
@@ -409,8 +412,21 @@ module.exports = {
         promotionChoice = PROMOTION_TYPES.includes(data.promotion) ? data.promotion : 'queen';
       }
 
+      const movingPiece = st.board[from.r][from.c];
+      const capturedPiece = match.enPassant ? st.board[match.from.r][match.to.c] : st.board[to.r][to.c];
+
       applyMove(st.board, st, match, promotionChoice);
       st.turn = opponent(seatColor);
+
+      st.moveHistory.push({
+        from: { r: from.r, c: from.c },
+        to: { r: to.r, c: to.c },
+        piece: movingPiece.type,
+        color: seatColor,
+        captured: capturedPiece ? capturedPiece.type : null,
+        promotion: promotionChoice,
+        castle: match.castle || null,
+      });
 
       const nextLegal = getLegalMoves(st.board, st.turn, st);
       const kingPos = findKing(st.board, st.turn);

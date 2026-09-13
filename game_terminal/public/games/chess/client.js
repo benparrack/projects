@@ -37,6 +37,24 @@ export function mount(container, api) {
     return null;
   }
 
+  function squareName(r, c) {
+    return `${String.fromCharCode(97 + c)}${8 - r}`;
+  }
+
+  function moveText(m) {
+    if (m.castle === 'king') return 'O-O';
+    if (m.castle === 'queen') return 'O-O-O';
+    const sep = m.captured ? 'x' : '→';
+    let txt = `${squareName(m.from.r, m.from.c)}${sep}${squareName(m.to.r, m.to.c)}`;
+    if (m.promotion) txt += `=${m.promotion[0].toUpperCase()}`;
+    return txt;
+  }
+
+  function legalDestinations() {
+    if (!selected || !view.legalMoves) return [];
+    return view.legalMoves.filter((m) => m.from.r === selected.r && m.from.c === selected.c);
+  }
+
   function isPromotionAttempt(from, to) {
     const piece = view.board[from.r][from.c];
     if (!piece || piece.type !== 'pawn') return false;
@@ -134,6 +152,8 @@ export function mount(container, api) {
     board.style.gridTemplateRows = `repeat(8, ${CELL}px)`;
     board.style.border = '1px solid #1f8f0c';
 
+    const destMoves = legalDestinations();
+
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
         const cell = document.createElement('div');
@@ -143,6 +163,7 @@ export function mount(container, api) {
         cell.style.width = `${CELL}px`;
         cell.style.height = `${CELL}px`;
         cell.style.background = dark ? '#2a2a2a' : '#0a0a0a';
+        cell.style.position = 'relative';
         cell.style.display = 'flex';
         cell.style.alignItems = 'center';
         cell.style.justifyContent = 'center';
@@ -155,14 +176,66 @@ export function mount(container, api) {
         cell.addEventListener('click', () => onSquareClick(r, c));
         const piece = view.board[r][c];
         if (piece) {
-          cell.textContent = GLYPHS[piece.color][piece.type];
-          cell.style.color = piece.color === 'white' ? '#f5f5f5' : '#1a1a1a';
-          cell.style.textShadow = piece.color === 'white' ? '0 0 2px #000' : '0 0 2px #999';
+          const glyph = document.createElement('span');
+          glyph.textContent = GLYPHS[piece.color][piece.type];
+          glyph.style.color = piece.color === 'white' ? '#f5f5f5' : '#1a1a1a';
+          glyph.style.textShadow = piece.color === 'white' ? '0 0 2px #000' : '0 0 2px #999';
+          cell.appendChild(glyph);
+        }
+        const destMove = destMoves.find((m) => m.to.r === r && m.to.c === c);
+        if (destMove) {
+          const marker = document.createElement('div');
+          marker.style.position = 'absolute';
+          marker.style.boxSizing = 'border-box';
+          if (piece) {
+            marker.style.width = `${CELL - 6}px`;
+            marker.style.height = `${CELL - 6}px`;
+            marker.style.border = '3px solid rgba(57,255,20,0.65)';
+            marker.style.borderRadius = '50%';
+          } else {
+            marker.style.width = '14px';
+            marker.style.height = '14px';
+            marker.style.background = 'rgba(57,255,20,0.55)';
+            marker.style.borderRadius = '50%';
+          }
+          cell.appendChild(marker);
         }
         board.appendChild(cell);
       }
     }
-    root.appendChild(board);
+
+    const boardRow = document.createElement('div');
+    boardRow.style.display = 'flex';
+    boardRow.style.gap = '12px';
+    boardRow.style.alignItems = 'flex-start';
+    boardRow.appendChild(board);
+
+    const historyPanel = document.createElement('div');
+    historyPanel.style.width = '150px';
+    historyPanel.style.maxHeight = `${CELL * 8}px`;
+    historyPanel.style.overflowY = 'auto';
+    historyPanel.style.border = '1px solid #1f8f0c';
+    historyPanel.style.padding = '6px';
+    historyPanel.style.fontSize = '13px';
+    historyPanel.style.color = '#39ff14';
+    historyPanel.style.boxSizing = 'border-box';
+    const historyTitle = document.createElement('div');
+    historyTitle.textContent = 'MOVES';
+    historyTitle.style.opacity = '0.7';
+    historyTitle.style.marginBottom = '4px';
+    historyPanel.appendChild(historyTitle);
+    const history = view.moveHistory || [];
+    for (let i = 0; i < history.length; i += 2) {
+      const row = document.createElement('div');
+      const num = i / 2 + 1;
+      const whiteText = moveText(history[i]);
+      const blackText = history[i + 1] ? moveText(history[i + 1]) : '';
+      row.textContent = `${num}. ${whiteText}  ${blackText}`;
+      historyPanel.appendChild(row);
+    }
+    boardRow.appendChild(historyPanel);
+    root.appendChild(boardRow);
+    historyPanel.scrollTop = historyPanel.scrollHeight;
 
     if (pendingPromotion) {
       const picker = document.createElement('div');

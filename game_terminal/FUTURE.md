@@ -21,14 +21,8 @@ regardless of whether anyone just sent a message.
 - Boost included: hold click or Space to move at 2x speed while draining length down to a
   floor (`MIN_BOOST_LENGTH`), dropping food behind as you go.
 - Reuses the existing public-room / private-room-code model, same as the other four games.
-- Self-collision: looping your head back into your own body kills you, same as hitting another
-  snake. A distance-based grace buffer near the head (`SELF_COLLISION_SKIP_DIST`, in
-  `server/games/slither.js`) exempts the body immediately behind the head so an ordinary turn
-  (bounded by `TURN_RATE` anyway) can never clip your own neck — only a real tight loop back
-  into your own trailing body counts. Distance-based rather than a fixed point count because
-  points end up spaced by however far the snake moves per tick (`BASE_SPEED`, faster while
-  boosting), not by the `POINT_SPACING` used only for the initial spawn tail — a point-count
-  skip would give an inconsistent grace radius depending on speed.
+- ~~Self-collision~~ — originally shipped (looping your head back into your own body killed you,
+  same as hitting another snake), later removed per playtest feedback; see below.
 - Shrink-to-zoom: the client (`public/games/slither/client.js`, `computeZoom`) zooms the camera
   out as your own snake's length grows past `START_LENGTH`, down to a floor (`ZOOM_MIN`), so a
   huge snake can still see threats coming instead of only ever seeing a tiny sliver of the
@@ -38,10 +32,9 @@ regardless of whether anyone just sent a message.
   killing another snake is immediately rewarding.
 - Snake body is stored as a full point-path per snake, trimmed to arc length each tick
   (`trimToLength`) rather than a fixed segment count — growth just raises the target length.
-- Client renders every state broadcast directly (no client-side interpolation/prediction) —
-  at 20Hz this reads as reasonably smooth for a casual game; revisit if it ever looks choppy
-  under real network latency (Render free tier, phone on wifi, etc.) rather than the loopback
-  testing done so far.
+- ~~Client renders every state broadcast directly (no interpolation/prediction)~~ — later found
+  to read as jittery in real play; client now runs a `requestAnimationFrame` loop with
+  tick-to-tick interpolation, see the fixed playtest feedback below.
 
 **Player-readiness polish pass (done):**
 - **Bandwidth:** tick broadcasts now send a food add/remove delta (`foodAdded`/`foodRemoved`)
@@ -78,29 +71,20 @@ regardless of whether anyone just sent a message.
   continuous boost across a death in a live two-tab test — see the "boost held across a death"
   test in the standalone verification script for the regression test this produced.
 
-**Playtest feedback — needs fixing:**
-- **Self-collision feels bad and should be disabled.** Ben's own playtesting verdict: it's "a
-  step in the wrong direction" — kill it rather than tune it. Revert to the original design
-  (only walls and other snakes kill you; your own tail is harmless), i.e. remove the
-  self-collision check block in `server/games/slither.js`'s `tick()` (the one that calls
-  `selfCollisionStartIndex` and checks `a`'s own points) while leaving the separate
-  other-snake-collision check intact. `SELF_COLLISION_SKIP_DIST`/`selfCollisionStartIndex` and
-  their unit tests (self-collision kill + grace-buffer-survives-normal-turn, in the standalone
-  verification script) should come out too rather than leaving dead code around.
-- **Gameplay reads as laggy/jittery in real play** (loopback dev testing during the build didn't
-  surface this). Prime suspect worth checking first: the client only redraws when a network
-  message actually arrives (`applyTickView`/`applySnapshotView` call `draw()` directly — there's
-  no separate `requestAnimationFrame` loop), so rendering smoothness is directly at the mercy of
-  WebSocket delivery timing, not just the server's own steady 20Hz tick. Real network delivery
-  isn't perfectly evenly spaced the way the local dev-server loopback testing was, so this could
-  read as jitter even though the server ticks on time. Two independent things worth trying:
-  (1) decouple rendering from message arrival — a `requestAnimationFrame` loop that redraws from
-  whatever the latest received state is, so a late/bunched-up network message doesn't directly
-  stall a frame; (2) actual client-side interpolation between the last two received snapshots
-  (already flagged as not done in the original design notes above) so movement looks continuous
-  between the 50ms server ticks instead of snapping. Worth measuring on the real deployed Render
-  instance (not loopback) before assuming which of these actually matters — might be one, both,
-  or something else (e.g. actual tick-timer drift under server load) entirely.
+**Playtest feedback — fixed:**
+- **Self-collision removed.** Ben's playtesting verdict was that it was "a step in the wrong
+  direction" — reverted to the original design (only walls and other snakes kill you; your own
+  tail is harmless). Removed the self-collision check block from `tick()` in
+  `server/games/slither.js` along with `SELF_COLLISION_SKIP_DIST`/`selfCollisionStartIndex`
+  (dead code, no persisted tests referenced them).
+- **Jitter/lag fixed.** `public/games/slither/client.js` now runs a `requestAnimationFrame` loop
+  that redraws every frame from the latest state (`currentRenderView()`), decoupled from
+  WebSocket message arrival, and interpolates each live snake's points between the last two tick
+  views (`interpolateSnakes`) so motion reads continuous between the server's 50ms ticks instead
+  of snapping. A distance-based teleport guard (`TELEPORT_DIST_SQ`) skips interpolation across a
+  respawn jump. Verified live: sampling `window.__slitherDebug.getRenderView()` across animation
+  frames showed smooth fractional-unit sub-tick movement (e.g. head.x advancing 2082.24 →
+  2082.96 → 2083.64 → … every frame rather than only on tick boundaries).
 
 **Remaining gaps / possible follow-ups:**
 - Snake body point arrays are still sent in full every tick (not delta-encoded like food) —
@@ -142,40 +126,33 @@ naive "checkerboard" full-board pattern turns out to still contain 4-in-a-row on
 backtracks a fill that's verified 4-in-a-row-free in all four directions before handing it to
 the real plugin logic for the actual draw check.
 
-**Known bug (found via playtesting): the column drop arrows don't line up with the board.**
-Root cause: `public/games/connect4/client.js`'s `colRow` (the row of ↓ buttons) is styled with
-just `gridTemplateColumns: repeat(COLS, CELL)` and no gap/padding, while `board` right below it
-uses the same column template *plus* `gap: 4px` and `padding: 4px`. That extra 4px-per-column
-gap and 4px edge padding on the board (but not on the button row above it) means button N and
-board column N drift further apart the further right you go — button 0 is close but not exact,
-and by column 6 the offset has compounded across 6 gaps. Fix: give `colRow` the same `gap`/
-`padding` the board uses (or wrap both in a shared grid container with one column template
-covering both rows, which would also structurally guarantee they can't drift apart again).
+**Fixed (found via playtesting): the column drop arrows didn't line up with the board.** Root
+cause was `colRow` (the row of ↓ buttons) missing the `gap`/`padding` that `board` had, so the
+offset compounded further right across the 7 columns. Fix: gave `colRow` the same `gap: 4px` /
+`padding: 0 4px` the board uses. Verified live (two-tab Playwright/Firefox session) — a dropped
+piece lands exactly under its arrow in every column, including column 7.
 
 ---
 
-## Chess — playtest feedback, two feature requests
+## Chess — playtest feedback, shipped
 
-Both found via playtesting; neither is a correctness bug, just missing UX polish.
+Two UX requests from playtesting, both done:
 
-- **Move history, shown to the right of the board.** Nothing tracks this today —
-  `server/games/chess.js`'s state has no history array at all. Needs: a `st.moveHistory` list,
-  appended to on every successful move in the `move` handler (alongside the existing board
-  mutation), included in `buildPublicState`/`broadcastState` like every other field. Simplest
-  first pass: record `{from, to, piece, captured, promotion, castle}` per move and render it
-  client-side as plain coordinate notation ("e2 → e4"); full SAN (`Nf3`, `O-O`, `exd5`, check/
-  mate suffixes) is a nice stretch goal but real work (disambiguation when two pieces of the
-  same type can reach the same square, etc.) — don't block the first version on it.
-- **Legal-move dots when a piece is selected.** The client (`public/games/chess/client.js`)
-  currently just tracks `selected = {r, c}` and fires the move directly on the second click —
-  it has no idea which destination squares are actually legal, so it can't highlight them. The
-  server already computes exactly this via `getLegalMoves(board, color, st)` in
-  `server/games/chess.js` (used today only to validate a submitted move) — reuse it rather than
-  porting move generation to the client: have `buildPublicState` include the legal moves for
-  whichever color's turn it currently is (both players receive the same shared broadcast
-  already, same as Checkers/Connect 4, so this is just one more field), and have the client
-  filter that list by `selected` to get the destination squares to render a dot on. Avoids ever
-  needing chess rules duplicated client-side.
+- **Move history**, shown to the right of the board. `st.moveHistory` in `server/games/chess.js`
+  records `{from, to, piece, color, captured, promotion, castle}` per move, included in
+  `buildPublicState`. Client (`public/games/chess/client.js`) renders it as plain coordinate
+  notation ("e2→e4", "f3xe5" for captures, "O-O"/"O-O-O" for castling) in a scrolling panel next
+  to the board. Full SAN (disambiguation, check/mate suffixes) stayed a non-goal per the original
+  plan.
+- **Legal-move dots when a piece is selected.** `buildPublicState` now includes `legalMoves` for
+  whichever color's turn it is (via the existing `getLegalMoves`), and the client filters that by
+  the selected square to render a dot on empty destinations or a ring around a capturable piece —
+  no move generation duplicated client-side.
+
+Verified with a standalone script (scholar's mate move-by-move: history entries, capture
+recording, checkmate detection, legal-move count/ownership at the opening position) plus a live
+two-tab Playwright/Firefox session confirming the dots, capture ring, and history panel render
+correctly during real play.
 
 ---
 

@@ -98,6 +98,9 @@ export function mount(container, api) {
     const colRow = document.createElement('div');
     colRow.style.display = 'grid';
     colRow.style.gridTemplateColumns = `repeat(${COLS}, ${CELL}px)`;
+    colRow.style.gap = '4px';
+    colRow.style.padding = '0 4px';
+    colRow.style.boxSizing = 'content-box';
     for (let c = 0; c < COLS; c++) {
       const btn = document.createElement('button');
       btn.textContent = '↓';

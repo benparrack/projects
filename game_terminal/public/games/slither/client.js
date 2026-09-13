@@ -10,6 +10,14 @@ const FOOD_RADIUS = 6;
 const STEER_SEND_MS = 70;
 const STEER_EPSILON = 0.02;
 
+// Must match server TICK_MS (server/games/slither.js) — no shared module in this repo, kept in
+// sync by hand like START_LENGTH below. Used to time client-side interpolation between ticks.
+const SERVER_TICK_MS = 50;
+// A per-tick head displacement past this is a teleport (respawn), not real movement — even
+// boosted top speed is a few units/tick, nowhere close to this, so skip interpolating across it
+// rather than drawing a false streak from the old death spot to the new spawn point.
+const TELEPORT_DIST_SQ = 50 ** 2;
+
 // Shrink-to-zoom: camera zooms out as your own snake grows, so a huge snake can still see
 // threats coming instead of only ever seeing a tiny sliver of the arena around its head.
 // START_LENGTH kept in sync by hand with server/games/slither.js (no shared module in this repo).
@@ -104,7 +112,11 @@ export function mount(container, api) {
   wrap.appendChild(body);
   container.appendChild(wrap);
 
-  let lastView = null;
+  // Two most recent tick views plus when the latest one arrived, so rendering can interpolate
+  // snake positions between them instead of snapping — see draw()/currentRenderView() below.
+  let previousView = null;
+  let currentView = null;
+  let lastTickAt = 0;
   // The server sends the full food list only once (on join/snapshot); every tick after that
   // sends just an add/remove delta (foodAdded/foodRemoved) to keep the 20x/second broadcast
   // small, so this client maintains its own running copy keyed by food id.
@@ -113,7 +125,8 @@ export function mount(container, api) {
   // Debug hook for automated verification — harmless to leave mounted, mirrors the
   // convention set by the drawing game's window.__debugSegmentCount.
   window.__slitherDebug = {
-    getLastView: () => lastView,
+    getLastView: () => currentView,
+    getRenderView: () => currentRenderView(),
     getMyId: () => api.getClientId(),
     computeZoom,
   };
@@ -127,14 +140,14 @@ export function mount(container, api) {
     return view.snakes.find((s) => s.clientId === id) || null;
   }
 
-  function draw() {
+  function draw(view) {
     ctx.fillStyle = '#05080a';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    if (!lastView) return;
+    if (!view) return;
 
-    const own = findOwnSnake(lastView);
-    const camX = own ? own.points[0].x : lastView.arenaSize / 2;
-    const camY = own ? own.points[0].y : lastView.arenaSize / 2;
+    const own = findOwnSnake(view);
+    const camX = own ? own.points[0].x : view.arenaSize / 2;
+    const camY = own ? own.points[0].y : view.arenaSize / 2;
     const zoom = computeZoom(own ? own.length : START_LENGTH);
     const toScreen = (x, y) => [CANVAS_WIDTH / 2 + (x - camX) * zoom, CANVAS_HEIGHT / 2 + (y - camY) * zoom];
 
@@ -142,11 +155,11 @@ export function mount(container, api) {
     const [bx, by] = toScreen(0, 0);
     ctx.strokeStyle = '#1f8f0c';
     ctx.lineWidth = 2;
-    ctx.strokeRect(bx, by, lastView.arenaSize * zoom, lastView.arenaSize * zoom);
+    ctx.strokeRect(bx, by, view.arenaSize * zoom, view.arenaSize * zoom);
 
     // food
     ctx.fillStyle = '#ffb000';
-    for (const f of lastView.food) {
+    for (const f of view.food) {
       const [x, y] = toScreen(f.x, f.y);
       if (x < -20 || x > CANVAS_WIDTH + 20 || y < -20 || y > CANVAS_HEIGHT + 20) continue;
       ctx.beginPath();
@@ -155,7 +168,7 @@ export function mount(container, api) {
     }
 
     // snakes
-    for (const s of lastView.snakes) {
+    for (const s of view.snakes) {
       if (!s.alive || s.points.length < 2) continue;
       ctx.strokeStyle = s.color;
       ctx.lineWidth = SNAKE_RADIUS * 2 * zoom;
@@ -197,7 +210,11 @@ export function mount(container, api) {
   function applySnapshotView(snapshot) {
     foodMap.clear();
     for (const f of snapshot.food || []) foodMap.set(f.id, f);
-    applyView({ ...snapshot, food: [...foodMap.values()] });
+    const view = { ...snapshot, food: [...foodMap.values()] };
+    previousView = view;
+    currentView = view;
+    lastTickAt = performance.now();
+    renderLeaderboard(view);
   }
 
   function applyTickView(view) {
@@ -206,13 +223,43 @@ export function mount(container, api) {
     // nets out to "removed", matching what the server actually still has.
     for (const f of view.foodAdded || []) foodMap.set(f.id, f);
     for (const id of view.foodRemoved || []) foodMap.delete(id);
-    applyView({ ...view, food: [...foodMap.values()] });
+    previousView = currentView || view;
+    currentView = { ...view, food: [...foodMap.values()] };
+    lastTickAt = performance.now();
+    renderLeaderboard(currentView);
   }
 
-  function applyView(view) {
-    lastView = view;
-    draw();
-    renderLeaderboard(view);
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  // Interpolates each live snake's points toward its current position from where it was last
+  // tick, so movement reads as continuous between the server's 50ms ticks instead of snapping —
+  // network delivery isn't perfectly evenly spaced, so rendering strictly on message arrival
+  // (the old behavior) could read as jitter even when the server itself ticks on time.
+  function interpolateSnakes(t) {
+    const prevById = new Map(previousView.snakes.map((s) => [s.clientId, s]));
+    return currentView.snakes.map((s) => {
+      if (!s.alive) return s;
+      const prev = prevById.get(s.clientId);
+      if (!prev || !prev.alive) return s;
+      const dx = s.points[0].x - prev.points[0].x;
+      const dy = s.points[0].y - prev.points[0].y;
+      if (dx * dx + dy * dy > TELEPORT_DIST_SQ) return s;
+      const n = Math.min(prev.points.length, s.points.length);
+      const points = s.points.map((p, i) => (i < n ? { x: lerp(prev.points[i].x, p.x, t), y: lerp(prev.points[i].y, p.y, t) } : p));
+      return { ...s, points };
+    });
+  }
+
+  // What to actually draw this animation frame: interpolated between the last two tick views if
+  // we have both, otherwise whatever's current (or nothing, before the first snapshot arrives).
+  function currentRenderView() {
+    if (!currentView) return null;
+    if (!previousView || previousView === currentView) return currentView;
+    const t = Math.min(1, (performance.now() - lastTickAt) / SERVER_TICK_MS);
+    if (t >= 1) return currentView;
+    return { ...currentView, snakes: interpolateSnakes(t) };
   }
 
   // --- input: mouse/touch position (relative to canvas center) steers; click or Space boosts ---
@@ -299,6 +346,14 @@ export function mount(container, api) {
     }
   }, STEER_SEND_MS);
 
+  // Redraws every animation frame from whatever the latest (interpolated) state is, rather than
+  // only when a network message happens to arrive — decouples render smoothness from WebSocket
+  // delivery timing, which isn't perfectly evenly spaced under real network conditions.
+  let rafHandle = requestAnimationFrame(function renderLoop() {
+    draw(currentRenderView());
+    rafHandle = requestAnimationFrame(renderLoop);
+  });
+
   return {
     applySnapshot(snapshot) {
       applySnapshotView(snapshot);
@@ -308,6 +363,7 @@ export function mount(container, api) {
     },
     unmount() {
       clearInterval(steerHandle);
+      cancelAnimationFrame(rafHandle);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
