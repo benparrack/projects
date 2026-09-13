@@ -10,6 +10,18 @@ const FOOD_RADIUS = 6;
 const STEER_SEND_MS = 70;
 const STEER_EPSILON = 0.02;
 
+// Shrink-to-zoom: camera zooms out as your own snake grows, so a huge snake can still see
+// threats coming instead of only ever seeing a tiny sliver of the arena around its head.
+// START_LENGTH kept in sync by hand with server/games/slither.js (no shared module in this repo).
+const START_LENGTH = 120;
+const ZOOM_MIN = 0.45;
+const ZOOM_SHRINK_RATE = 500; // length growth (beyond start) over which zoom roughly halves
+
+function computeZoom(length) {
+  const grown = Math.max(0, length - START_LENGTH);
+  return Math.max(ZOOM_MIN, 1 / (1 + grown / ZOOM_SHRINK_RATE));
+}
+
 function angleDiff(a, b) {
   let d = a - b;
   while (d > Math.PI) d -= Math.PI * 2;
@@ -86,6 +98,7 @@ export function mount(container, api) {
   window.__slitherDebug = {
     getLastView: () => lastView,
     getMyId: () => api.getClientId(),
+    computeZoom,
   };
 
   function myClientId() {
@@ -105,13 +118,14 @@ export function mount(container, api) {
     const own = findOwnSnake(lastView);
     const camX = own ? own.points[0].x : lastView.arenaSize / 2;
     const camY = own ? own.points[0].y : lastView.arenaSize / 2;
-    const toScreen = (x, y) => [CANVAS_WIDTH / 2 + (x - camX), CANVAS_HEIGHT / 2 + (y - camY)];
+    const zoom = computeZoom(own ? own.length : START_LENGTH);
+    const toScreen = (x, y) => [CANVAS_WIDTH / 2 + (x - camX) * zoom, CANVAS_HEIGHT / 2 + (y - camY) * zoom];
 
     // arena border
     const [bx, by] = toScreen(0, 0);
     ctx.strokeStyle = '#1f8f0c';
     ctx.lineWidth = 2;
-    ctx.strokeRect(bx, by, lastView.arenaSize, lastView.arenaSize);
+    ctx.strokeRect(bx, by, lastView.arenaSize * zoom, lastView.arenaSize * zoom);
 
     // food
     ctx.fillStyle = '#ffb000';
@@ -119,7 +133,7 @@ export function mount(container, api) {
       const [x, y] = toScreen(f.x, f.y);
       if (x < -20 || x > CANVAS_WIDTH + 20 || y < -20 || y > CANVAS_HEIGHT + 20) continue;
       ctx.beginPath();
-      ctx.arc(x, y, FOOD_RADIUS, 0, Math.PI * 2);
+      ctx.arc(x, y, FOOD_RADIUS * zoom, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -127,7 +141,7 @@ export function mount(container, api) {
     for (const s of lastView.snakes) {
       if (!s.alive || s.points.length < 2) continue;
       ctx.strokeStyle = s.color;
-      ctx.lineWidth = SNAKE_RADIUS * 2;
+      ctx.lineWidth = SNAKE_RADIUS * 2 * zoom;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.beginPath();
@@ -140,9 +154,9 @@ export function mount(container, api) {
 
       const [hx, hy] = toScreen(s.points[0].x, s.points[0].y);
       ctx.fillStyle = '#fff';
-      ctx.font = '11px monospace';
+      ctx.font = `${Math.max(9, 11 * zoom)}px monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText(s.nickname, hx, hy - 16);
+      ctx.fillText(s.nickname, hx, hy - 16 * zoom);
     }
 
     overlay.hidden = !own || own.alive;

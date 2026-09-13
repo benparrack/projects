@@ -20,6 +20,11 @@ const MIN_BOOST_LENGTH = 60; // below START_LENGTH so a fresh spawn can boost im
 const RESPAWN_MS = 1200;
 const DEATH_FOOD_STRIDE = 4; // drop one food pellet every N corpse points
 const LEADERBOARD_SIZE = 5;
+// Path-length (not point count) ignored near the head for self-collision — points end up
+// spaced by however far the snake moves per tick (BASE_SPEED, faster while boosting), not by
+// POINT_SPACING (which only describes the initial spawn tail), so the buffer has to be
+// distance-based to give a consistent grace radius regardless of speed.
+const SELF_COLLISION_SKIP_DIST = SNAKE_RADIUS * 4;
 const COLLIDE_DIST_SQ = (SNAKE_RADIUS * 1.6) ** 2;
 const EAT_DIST_SQ = (SNAKE_RADIUS + FOOD_RADIUS) ** 2;
 
@@ -85,6 +90,19 @@ function trimToLength(snake) {
       return;
     }
   }
+}
+
+// First point index at least SELF_COLLISION_SKIP_DIST of path length away from the head —
+// everything before it is exempt from self-collision.
+function selfCollisionStartIndex(points) {
+  let dist = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    dist += Math.hypot(b.x - a.x, b.y - a.y);
+    if (dist >= SELF_COLLISION_SKIP_DIST) return i;
+  }
+  return points.length;
 }
 
 function stepSnake(snake) {
@@ -200,18 +218,38 @@ module.exports = {
     for (const a of st.snakes.values()) {
       if (!a.alive) continue;
       const head = a.points[0];
-      outer: for (const b of st.snakes.values()) {
-        if (a === b || !b.alive) continue;
-        for (let i = 0; i < b.points.length; i += 2) {
-          const p = b.points[i];
-          const dx = head.x - p.x;
-          const dy = head.y - p.y;
-          if (dx * dx + dy * dy < COLLIDE_DIST_SQ) {
-            killSnake(st, a);
-            break outer;
+      let died = false;
+
+      // Self-collision: skip a buffer of points near the head so a normal turn (bounded by
+      // TURN_RATE anyway) never clips your own neck — only a tight loop back into your own
+      // body further back kills you.
+      const selfSkipIdx = selfCollisionStartIndex(a.points);
+      for (let i = selfSkipIdx; i < a.points.length; i += 2) {
+        const p = a.points[i];
+        const dx = head.x - p.x;
+        const dy = head.y - p.y;
+        if (dx * dx + dy * dy < COLLIDE_DIST_SQ) {
+          died = true;
+          break;
+        }
+      }
+
+      if (!died) {
+        outer: for (const b of st.snakes.values()) {
+          if (a === b || !b.alive) continue;
+          for (let i = 0; i < b.points.length; i += 2) {
+            const p = b.points[i];
+            const dx = head.x - p.x;
+            const dy = head.y - p.y;
+            if (dx * dx + dy * dy < COLLIDE_DIST_SQ) {
+              died = true;
+              break outer;
+            }
           }
         }
       }
+
+      if (died) killSnake(st, a);
     }
 
     for (const snake of st.snakes.values()) {

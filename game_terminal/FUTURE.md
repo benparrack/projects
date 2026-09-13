@@ -21,8 +21,19 @@ regardless of whether anyone just sent a message.
 - Boost included: hold click or Space to move at 2x speed while draining length down to a
   floor (`MIN_BOOST_LENGTH`), dropping food behind as you go.
 - Reuses the existing public-room / private-room-code model, same as the other four games.
-- No self-collision in v1 (only wall and other-snake-body kill you) — turning into your own
-  tail is harmless. Could be added later with a grace buffer near the head if it's missed.
+- Self-collision: looping your head back into your own body kills you, same as hitting another
+  snake. A distance-based grace buffer near the head (`SELF_COLLISION_SKIP_DIST`, in
+  `server/games/slither.js`) exempts the body immediately behind the head so an ordinary turn
+  (bounded by `TURN_RATE` anyway) can never clip your own neck — only a real tight loop back
+  into your own trailing body counts. Distance-based rather than a fixed point count because
+  points end up spaced by however far the snake moves per tick (`BASE_SPEED`, faster while
+  boosting), not by the `POINT_SPACING` used only for the initial spawn tail — a point-count
+  skip would give an inconsistent grace radius depending on speed.
+- Shrink-to-zoom: the client (`public/games/slither/client.js`, `computeZoom`) zooms the camera
+  out as your own snake's length grows past `START_LENGTH`, down to a floor (`ZOOM_MIN`), so a
+  huge snake can still see threats coming instead of only ever seeing a tiny sliver of the
+  arena around its head. Zoom scales the camera transform, snake/food radii, and nickname text
+  together so everything stays visually consistent, not just spread out.
 - Death drops the corpse as a trail of food pellets (every 4th body point becomes a pellet) so
   killing another snake is immediately rewarding.
 - Snake body is stored as a full point-path per snake, trimmed to arc length each tick
@@ -31,17 +42,16 @@ regardless of whether anyone just sent a message.
   at 20Hz this reads as reasonably smooth for a casual game; revisit if it ever looks choppy
   under real network latency (Render free tier, phone on wifi, etc.) rather than the loopback
   testing done so far.
-- Camera follows the player's own head at 1:1 zoom, no minimap.
 
 **Known gaps / possible follow-ups:**
-- No self-collision (see above) — could be a difficulty toggle later.
-- No shrink-to-zoom-out as you grow (classic slither.io does this so huge snakes can still see
-  threats coming) — arena is small enough at 3000x3000 that it's not critical yet.
 - Bandwidth: every tick broadcasts every snake's full point array and the full food list. Fine
   at hobby-project player counts; would need delta-encoding or spatial culling (only send
   what's near each viewer) to scale further.
 - No mobile/touch-specific control affordance beyond the generic pointer events (should mostly
   work via touch already since input is pointer-event-based, but untested on an actual phone).
+- No minimap — with shrink-to-zoom now in, a huge snake can see a wide radius around itself but
+  still has no whole-arena overview. Could be added as a small corner inset if it turns out to
+  matter at real playtime lengths.
 
 **Architecture note:** `server/roomManager.js`'s `Room` constructor now supports an optional
 `tick(room, ctx)` + `tickIntervalMs` on a plugin — `RoomManager`/`Room` calls it on that
