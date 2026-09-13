@@ -8,6 +8,7 @@ const GAMES = [
   { type: 'checkers', label: 'CHECKERS' },
   { type: 'chess', label: 'CHESS' },
   { type: 'slither', label: 'SLITHER' },
+  { type: 'connect4', label: 'CONNECT 4' },
 ];
 
 const SESSION_KEY = 'game_terminal.session';

@@ -16,6 +16,7 @@ something in the middle.
 - **Slither** — real-time multiplayer snake: steer with the mouse, hold click/Space to boost,
   eat food to grow, avoid walls and other snakes. The first game driven by a server-side tick
   loop rather than only reacting to player messages (see `FUTURE.md`).
+- **Connect 4** — standard rules, 7x6 grid, click a column to drop a piece.
 
 More games plug into the same hub without touching the core server/room code — see
 `server/games/index.js` and the `GAMES` array in `public/hub.js`.

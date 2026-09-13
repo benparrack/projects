@@ -3,10 +3,10 @@
 Queued for tomorrow:
 
 - [ ] **Mission Control** — update/improve the terminal dashboard further. See `mission_control/FUTURE.md` for brainstormed options (Now Playing progress bar/volume/device-switcher, a "needs attention" digest panel, theme cycling, and more).
-- [ ] **Game Terminal** — add more games to / improve `game_terminal/`. Slither is now shipped (see below); see `game_terminal/FUTURE.md` for remaining ideas (tic-tac-toe/Connect4 as a lighter-weight addition, slither follow-ups like self-collision and shrink-to-zoom).
+- [ ] **Game Terminal** — add more games to / improve `game_terminal/`. Slither and Connect 4 are now shipped (see below); see `game_terminal/FUTURE.md` for remaining ideas (no game currently queued — next is whatever comes up).
 
 ## Done
-- **Real-Time Multiplayer Shared Canvas / Mini Game** (`IDEAS.md` #11) — `game_terminal/` — https://game-terminal.onrender.com — five games live: shared drawing canvas, Hangman, Checkers, Chess, and Slither (the first real-time tick-loop game in the hub, vs. the event-driven first four)
+- **Real-Time Multiplayer Shared Canvas / Mini Game** (`IDEAS.md` #11) — `game_terminal/` — https://game-terminal.onrender.com — six games live: shared drawing canvas, Hangman, Checkers, Chess, Slither (the first real-time tick-loop game in the hub, vs. the event-driven others), and Connect 4
 - **Ant Colony Optimization Visualizer** (`IDEAS.md` #9) — `ant_colony_optimization/`
 - **Physics Sandbox** (falling-sand, `IDEAS.md` #2) — `physics_sandbox/`
 - **Generative Art Gallery** (`IDEAS.md` #12) — `generative_art_gallery/`

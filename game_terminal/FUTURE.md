@@ -3,8 +3,8 @@
 Backlog and design notes for what comes next in this project. See `README.md` for how to run
 and deploy it, and `IDEAS.md` #11 (repo root) for where this project originated.
 
-**Shipped so far:** Shared Drawing Canvas, Hangman, Checkers, Chess, Slither — all live at
-https://game-terminal.onrender.com.
+**Shipped so far:** Shared Drawing Canvas, Hangman, Checkers, Chess, Slither, Connect 4 — all
+live at https://game-terminal.onrender.com.
 
 ---
 
@@ -98,13 +98,30 @@ real-time game plugs into it the same way slither does, without another core cha
 
 ---
 
+## Connect 4 — shipped
+
+See `server/games/connect4.js` + `public/games/connect4/client.js`. Standard rules: 7x6 grid,
+gravity-drop columns, first to 4-in-a-row (horizontal/vertical/either diagonal) wins, a full
+board with no winner is a draw. Reuses the Checkers/Chess two-seat plugin pattern directly
+(`sit`/`leaveSeat`/`resetGame`, a `moveRejected` event for illegal drops) — the only new
+interaction is a row of column "drop" buttons above the board instead of click-to-select on the
+board itself, since Connect 4's only real decision is "which column", not "which cell". Board
+cells stay purely visual (plus `data-row`/`data-col`, per this hub's grid-game convention) so
+automated tests can still read placed pieces directly.
+
+Verified with a standalone-script test suite (seat/turn flow, gravity stacking, out-of-turn and
+full-column rejection, horizontal/diagonal win detection, draw detection, leave/reset flow) plus
+a live two-tab Playwright/Firefox session playing a full game to a win and a reset. Notably, the
+draw-detection test needed a real constructed fixture rather than a quick hand-built one — a
+naive "checkerboard" full-board pattern turns out to still contain 4-in-a-row on the diagonals
+(the (r+c) parity is invariant along one of the two diagonal directions), so the test instead
+backtracks a fill that's verified 4-in-a-row-free in all four directions before handing it to
+the real plugin logic for the actual draw check.
+
 ## Other game ideas mentioned
 
-- **Tic-tac-toe / Connect4-style board game** — called out in `IDEAS.md` #11's original pitch
-  as a lighter-weight "synchronized game board" alternative. Would reuse the same turn-based,
-  two-seat plugin pattern as Checkers/Chess almost directly (seat/turn model, click-to-place,
-  win detection). Good candidate for a quick, low-effort addition if we want something small
-  between bigger builds.
+None currently queued — `IDEAS.md` #11's original "lighter-weight synchronized game board"
+alternative (tic-tac-toe/Connect4) is now done via Connect 4 above.
 
 ---
 
