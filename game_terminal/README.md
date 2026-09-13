@@ -10,6 +10,12 @@ something in the middle.
 ## Games
 
 - **Shared Drawing Canvas** — everyone in a room draws on the same canvas in real time.
+- **Hangman** — one player picks a word, everyone else guesses letters.
+- **Checkers** — standard American rules, mandatory capture/multi-jump/kinging.
+- **Chess** — standard rules.
+- **Slither** — real-time multiplayer snake: steer with the mouse, hold click/Space to boost,
+  eat food to grow, avoid walls and other snakes. The first game driven by a server-side tick
+  loop rather than only reacting to player messages (see `FUTURE.md`).
 
 More games plug into the same hub without touching the core server/room code — see
 `server/games/index.js` and the `GAMES` array in `public/hub.js`.

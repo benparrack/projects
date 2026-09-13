@@ -3,44 +3,51 @@
 Backlog and design notes for what comes next in this project. See `README.md` for how to run
 and deploy it, and `IDEAS.md` #11 (repo root) for where this project originated.
 
-**Shipped so far:** Shared Drawing Canvas, Hangman, Checkers, Chess — all live at
+**Shipped so far:** Shared Drawing Canvas, Hangman, Checkers, Chess, Slither — all live at
 https://game-terminal.onrender.com.
 
 ---
 
-## Next up: Slither.io-style game
+## Slither.io-style game — shipped
 
-The biggest remaining lift. Unlike the four games shipped so far — which are all
-**event-driven** (the server only broadcasts in response to a player action: a stroke, a
-letter guess, a move) — a slither.io-style game needs the server to drive updates on its own
-schedule, independent of player input. That's a genuinely different core pattern, not just
-another plugin file:
+See `server/games/slither.js` + `public/games/slither/client.js`. The first **real-time
+tick-loop** game in the hub — unlike the four event-driven games (which only broadcast in
+response to a player action), the server advances the world on its own schedule at 20Hz
+regardless of whether anyone just sent a message.
 
-- **Server tick loop**: something like `setInterval` at ~20-30Hz advancing every snake's
-  position, checking collisions, and broadcasting the current world state each tick — rather
-  than reacting only to incoming messages.
-- **Client input model**: players send steering direction (e.g. mouse position or turn angle)
-  continuously or on change; the server is authoritative on where snakes actually end up.
-- **Client-side interpolation**: smooth rendering between server ticks so movement doesn't
-  look choppy at the tick rate.
-- **Collision detection**: snake-vs-wall (or wrap-around?), snake-vs-snake body, snake-vs-food.
-- **Growth mechanic**: eating food (and/or defeated snakes' remains) makes you longer.
-- **Arena**: fixed bounds vs a larger scrollable world with a camera/viewport.
+**Design decisions made (see conversation that built this for the full discussion):**
+- Bounded box arena (3000x3000 world units) — hitting the wall kills you, no wraparound.
+- Instant respawn ~1.2s after death, at a fresh random spot with base length.
+- Boost included: hold click or Space to move at 2x speed while draining length down to a
+  floor (`MIN_BOOST_LENGTH`), dropping food behind as you go.
+- Reuses the existing public-room / private-room-code model, same as the other four games.
+- No self-collision in v1 (only wall and other-snake-body kill you) — turning into your own
+  tail is harmless. Could be added later with a grace buffer near the head if it's missed.
+- Death drops the corpse as a trail of food pellets (every 4th body point becomes a pellet) so
+  killing another snake is immediately rewarding.
+- Snake body is stored as a full point-path per snake, trimmed to arc length each tick
+  (`trimToLength`) rather than a fixed segment count — growth just raises the target length.
+- Client renders every state broadcast directly (no client-side interpolation/prediction) —
+  at 20Hz this reads as reasonably smooth for a casual game; revisit if it ever looks choppy
+  under real network latency (Render free tier, phone on wifi, etc.) rather than the loopback
+  testing done so far.
+- Camera follows the player's own head at 1:1 zoom, no minimap.
 
-**Design questions to resolve when we start building this:**
-- Arena shape/size — bounded box (die at the wall) or wraparound?
-- What happens on death — respawn fresh, or removed until you rejoin?
-- Boost mechanic (classic slither.io lets you speed up at the cost of shrinking) — include it?
-- Leaderboard / current-length display?
-- Does this fit the existing public-room-plus-private-room-code model, or does a free-for-all
-  game want just one shared arena per room regardless of code?
+**Known gaps / possible follow-ups:**
+- No self-collision (see above) — could be a difficulty toggle later.
+- No shrink-to-zoom-out as you grow (classic slither.io does this so huge snakes can still see
+  threats coming) — arena is small enough at 3000x3000 that it's not critical yet.
+- Bandwidth: every tick broadcasts every snake's full point array and the full food list. Fine
+  at hobby-project player counts; would need delta-encoding or spatial culling (only send
+  what's near each viewer) to scale further.
+- No mobile/touch-specific control affordance beyond the generic pointer events (should mostly
+  work via touch already since input is pointer-event-based, but untested on an actual phone).
 
-**Architecture implication:** this will likely need a small, deliberate addition to the core
-(`server/roomManager.js` / `server/index.js`) — e.g. an optional `tick(room, ctx)` hook that
-`RoomManager` calls on an interval for rooms whose game plugin defines one — rather than
-being purely self-contained the way the plugin interface has worked for the first four games.
-Worth designing that hook generically enough that a future real-time game doesn't need its own
-bespoke core change again.
+**Architecture note:** `server/roomManager.js`'s `Room` constructor now supports an optional
+`tick(room, ctx)` + `tickIntervalMs` on a plugin — `RoomManager`/`Room` calls it on that
+interval for as long as the room has ≥1 client, and cleans up the interval when a private room
+is destroyed. This is the generic hook the original design note below asked for; any future
+real-time game plugs into it the same way slither does, without another core change.
 
 ---
 
@@ -60,6 +67,10 @@ bespoke core change again.
   `public/games/<name>/client.js`, one line in `server/games/index.js`, one entry in
   `public/hub.js`'s `GAMES` array. Core room/connection code
   (`server/roomManager.js`, `server/protocol.js`, `server/index.js`) shouldn't need to change.
+- **Adding a real-time tick-loop game** (like slither): same plugin/registry/hub wiring as
+  above, plus export `tickIntervalMs` (ms between ticks) and `tick(room, ctx)` from the plugin.
+  `Room` (in `server/roomManager.js`) calls it on that interval automatically whenever the room
+  has at least one client — no other core change needed, this hook already exists.
 - **Optional plugin hooks available:** `onJoin(room, client)` / `onLeave(room, client)` for
   seat/roster bookkeeping, `serializeSnapshot(room, client)` for per-recipient hidden state
   (Hangman uses this to hide the secret word from guessers while showing it to the picker;

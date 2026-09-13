@@ -5,10 +5,12 @@ const drawing = require('./drawing');
 const hangman = require('./hangman');
 const checkers = require('./checkers');
 const chess = require('./chess');
+const slither = require('./slither');
 
 module.exports = {
   [drawing.type]: drawing,
   [hangman.type]: hangman,
   [checkers.type]: checkers,
   [chess.type]: chess,
+  [slither.type]: slither,
 };

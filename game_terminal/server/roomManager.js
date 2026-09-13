@@ -11,6 +11,29 @@ class Room {
     this.clients = new Map(); // clientId -> { ws, nickname }
     this.state = plugin.createInitialState(this);
     this.emptySince = null;
+    this.tickHandle = null;
+
+    // Optional real-time hook: a plugin that defines both `tickIntervalMs` and `tick(room, ctx)`
+    // gets its tick called on that interval for as long as the room has at least one client —
+    // for games (like slither) whose world advances on its own schedule rather than only in
+    // response to incoming messages, unlike the event-driven games (drawing/hangman/checkers/chess).
+    if (typeof plugin.tick === 'function' && plugin.tickIntervalMs) {
+      const ctx = {
+        broadcast: (envelope, excludeClientId) => this.broadcast(envelope, excludeClientId),
+        sendTo: (clientId, envelope) => this.sendTo(clientId, envelope),
+      };
+      this.tickHandle = setInterval(() => {
+        if (this.clients.size === 0) return;
+        plugin.tick(this, ctx);
+      }, plugin.tickIntervalMs);
+    }
+  }
+
+  destroy() {
+    if (this.tickHandle) {
+      clearInterval(this.tickHandle);
+      this.tickHandle = null;
+    }
   }
 
   roster() {
@@ -92,6 +115,7 @@ class RoomManager {
       setTimeout(() => {
         const current = this.rooms.get(code);
         if (current && current.clients.size === 0 && current.emptySince) {
+          current.destroy();
           this.rooms.delete(code);
         }
       }, PRIVATE_ROOM_GRACE_MS);
