@@ -64,17 +64,8 @@ forever as more ideas ship.
 
 ## 2. Falling-Sand / Cellular Automaton Playground
 
-**Status:** Stocked, not started.
+**Status:** Done — see `physics_sandbox/` (sand, water, stone, wood, fire, smoke, paint-to-place UI).
 **Pitch:** A pixel-grid physics sandbox in the style of "Sandspiel" — sand, water, fire, smoke, stone — each cell type follows a simple local update rule, and the emergent behavior (sand piling, water flowing, fire spreading/consuming) comes for free from those rules interacting.
-
-**Why this one:** Highly visual and immediately satisfying to interact with; a good demo of emergent complexity from simple rules.
-
-**What it needs when resumed:**
-- A 2D grid (canvas-backed), updated once per frame, each cell processed bottom-to-top (or with randomized scan order to avoid directional bias).
-- Per-material update rules: sand falls down/diagonally if empty below; water falls and spreads sideways; fire spreads to flammable neighbors and burns out; smoke rises and dissipates.
-- Mouse/touch input to "paint" materials onto the grid, a material picker UI, adjustable brush size.
-- Performance note: naive full-grid scan is fine at small resolution (e.g. 150x100 cells) rendered scaled-up; keep cell count modest to stay smooth in-browser.
-- Build as an HTML/JS artifact (canvas + requestAnimationFrame loop).
 
 ---
 
@@ -95,17 +86,8 @@ forever as more ideas ship.
 
 ## 4. Procedural Dungeon Crawler
 
-**Status:** Stocked, not started.
+**Status:** Done — see `dungeon_crawler/` (BSP room/corridor generation, enemies, items, combat, line-of-sight/visibility, leveling). Predates the IDEAS.md tracking convention (came in with the repo's initial commit), so it went unlogged until now.
 **Pitch:** Randomly generate a playable dungeon (rooms, corridors, loot, enemies) each run, with real keyboard-driven movement and combat — not just a generator, an actually playable mini-game.
-
-**Why this one:** Combines a generation algorithm (interesting on its own) with a full interactive game loop (state, input, rendering) — bigger scope than the others, good "flagship" candidate.
-
-**What it needs when resumed:**
-- Generation approach: pick one — BSP (binary space partition) room splitting, random room placement + corridor connection via minimum spanning tree, or cellular-automaton cave generation. BSP is easiest to get "proper rooms + corridors" from.
-- Game state: player position/stats, tile grid (floor/wall/door), entity list (enemies, items), simple turn-based or real-time movement.
-- Combat: minimal — bump-to-attack or a small stat-based resolution.
-- Rendering: could be ASCII/tile-based in a canvas or styled divs; keep art simple (colored tiles/emoji) rather than sprites.
-- Scope discipline: get "generate + walk around + pick up items" solid before adding combat/progression depth.
 
 ---
 
@@ -209,16 +191,8 @@ forever as more ideas ship.
 
 ## 13. Procedural Terrain / World Map Generator
 
-**Status:** Stocked, not started.
+**Status:** Done — see `terrain_generator/`. Layered Perlin fbm for elevation (with a radial island mask) and moisture, latitude+elevation-derived temperature, a Whittaker-style biome lookup (14 biomes), steepest-descent rivers to the coast, and procedurally-named settlements biased toward coasts/riverbanks. Seed + sliders (sea level, island strength, moisture, river count) fully reproducible per seed.
 **Pitch:** Generate a full fantasy-style or realistic world map from scratch — elevation via noise functions, then derived biomes, rivers, and coastlines — rendered as a colored, readable map, not just a heightmap.
-
-**Why this one:** A different generation problem than the dungeon crawler (`#4`) — continuous terrain and biome logic instead of discrete rooms/corridors. The "rivers flow downhill to the sea" and "biome depends on elevation + moisture" rules are satisfying emergent-from-simple-rules territory, visually distinct from the other simulations on this list.
-
-**What it needs when resumed:**
-- Layered noise (Perlin/simplex at multiple octaves) for elevation.
-- A second noise layer for moisture/temperature to derive biomes (desert, forest, tundra, etc. via a Whittaker-diagram-style lookup).
-- River generation by tracing steepest-descent paths from high-elevation points down to the sea/lowest neighbor.
-- Rendering as a colored canvas map with a legend. Stretch goal: name generation for regions/settlements.
 
 ---
 

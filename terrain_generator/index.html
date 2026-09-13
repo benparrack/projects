@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Terrain Generator</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #14161a;
+    color: #e8e8e8;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 12px;
+    color: #f0f0f0;
+    letter-spacing: 0.02em;
+  }
+  #toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    max-width: 900px;
+  }
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #b8b8b8;
+    padding: 0 8px;
+    border-left: 1px solid #33373f;
+  }
+  .control-group:first-child { border-left: none; padding-left: 0; }
+  .control-group label { white-space: nowrap; }
+  .control-group input[type="range"] { width: 90px; }
+  .control-group input[type="number"] {
+    width: 64px;
+    background: #23262c;
+    border: 1px solid #33373f;
+    border-radius: 4px;
+    color: #e8e8e8;
+    padding: 4px 6px;
+    font-size: 13px;
+  }
+  .control-group output { font-variant-numeric: tabular-nums; color: #888; min-width: 28px; display: inline-block; }
+  button.action {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: none;
+    background: #3a3040;
+    color: #e8e8e8;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button.action:hover { background: #4a3d54; }
+  #canvasWrap {
+    border: 1px solid #33373f;
+    border-radius: 8px;
+    overflow: hidden;
+    line-height: 0;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    position: relative;
+  }
+  canvas { display: block; }
+  #legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    justify-content: center;
+    max-width: 900px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: #b8b8b8;
+  }
+  #legend .item { display: flex; align-items: center; gap: 5px; }
+  #legend .sw { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+  #hint {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #777;
+    text-align: center;
+    max-width: 700px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Procedural Terrain Generator</h1>
+
+<div id="toolbar">
+  <div class="control-group">
+    <label for="seed">Seed</label>
+    <input type="number" id="seed" value="1">
+    <button class="action" id="randSeedBtn">Random Seed</button>
+  </div>
+  <div class="control-group">
+    <label for="seaLevel">Sea Level</label>
+    <input type="range" id="seaLevel" min="0.3" max="0.7" step="0.01" value="0.47">
+    <output id="seaLevelOut"></output>
+  </div>
+  <div class="control-group">
+    <label for="island">Island</label>
+    <input type="range" id="island" min="0" max="1" step="0.05" value="0.55">
+    <output id="islandOut"></output>
+  </div>
+  <div class="control-group">
+    <label for="moisture">Moisture</label>
+    <input type="range" id="moisture" min="-0.3" max="0.3" step="0.02" value="0">
+    <output id="moistureOut"></output>
+  </div>
+  <div class="control-group">
+    <label for="rivers">Rivers</label>
+    <input type="range" id="rivers" min="0" max="16" step="1" value="8">
+    <output id="riversOut"></output>
+  </div>
+  <div class="control-group">
+    <label><input type="checkbox" id="settlements" checked> Settlements</label>
+  </div>
+  <button class="action" id="generateBtn">Generate</button>
+</div>
+
+<div id="canvasWrap">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="legend"></div>
+
+<div id="hint">Same seed + settings always reproduces the same map. Rivers trace steepest descent from mountain sources to the sea; settlements favor coastlines and riverbanks.</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Grid / canvas setup ----
+  const COLS = 200, ROWS = 130, SCALE = 4;
+  const canvas = document.getElementById("c");
+  canvas.width = COLS * SCALE;
+  canvas.height = ROWS * SCALE;
+  const ctx = canvas.getContext("2d");
+
+  const buffer = document.createElement("canvas");
+  buffer.width = COLS;
+  buffer.height = ROWS;
+  const bctx = buffer.getContext("2d");
+  const imgData = bctx.createImageData(COLS, ROWS);
+
+  function idx(x, y) { return y * COLS + x; }
+
+  // ---- Seeded RNG (mulberry32) ----
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---- Perlin noise (classic, permutation-table based) ----
+  function buildPermutation(rng) {
+    const p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    for (let i = 255; i > 0; i--) {
+      const j = (rng() * (i + 1)) | 0;
+      const tmp = p[i]; p[i] = p[j]; p[j] = tmp;
+    }
+    const perm = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+    return perm;
+  }
+
+  function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  function lerp(a, b, t) { return a + t * (b - a); }
+  function grad(hash, x, y) {
+    const h = hash & 7;
+    const u = h < 4 ? x : y;
+    const v = h < 4 ? y : x;
+    return ((h & 1) ? -u : u) + ((h & 2) ? -2 * v : 2 * v);
+  }
+
+  function perlin2(perm, x, y) {
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+    x -= Math.floor(x); y -= Math.floor(y);
+    const u = fade(x), v = fade(y);
+    const A = perm[X] + Y, AA = perm[A], AB = perm[A + 1];
+    const B = perm[X + 1] + Y, BA = perm[B], BB = perm[B + 1];
+    return lerp(
+      lerp(grad(perm[AA], x, y), grad(perm[BA], x - 1, y), u),
+      lerp(grad(perm[AB], x, y - 1), grad(perm[BB], x - 1, y - 1), u),
+      v
+    );
+  }
+
+  function fbm(perm, x, y, octaves, persistence, lacunarity) {
+    let total = 0, freq = 1, amp = 1, maxAmp = 0;
+    for (let i = 0; i < octaves; i++) {
+      total += perlin2(perm, x * freq, y * freq) * amp;
+      maxAmp += amp;
+      amp *= persistence;
+      freq *= lacunarity;
+    }
+    return total / maxAmp; // ~[-1, 1]
+  }
+
+  // ---- Biome palette ----
+  const BIOMES = {
+    deepOcean:   { name: "Deep Ocean",   color: [12, 44, 92] },
+    shallowOcean:{ name: "Shallow Ocean",color: [32, 92, 162] },
+    beach:       { name: "Beach",        color: [231, 214, 162] },
+    desert:      { name: "Desert",       color: [222, 188, 112] },
+    savanna:     { name: "Savanna",      color: [189, 176, 92] },
+    grassland:   { name: "Grassland",    color: [140, 179, 92] },
+    steppe:      { name: "Steppe",       color: [176, 181, 122] },
+    forest:      { name: "Forest",       color: [56, 120, 62] },
+    tempRain:    { name: "Rainforest (temperate)", color: [32, 96, 66] },
+    tropicalRain:{ name: "Rainforest (tropical)",  color: [20, 108, 58] },
+    taiga:       { name: "Taiga",        color: [69, 110, 92] },
+    tundra:      { name: "Tundra",       color: [190, 196, 172] },
+    rock:        { name: "Bare Rock",    color: [118, 112, 106] },
+    snow:        { name: "Snow Peak",    color: [246, 246, 250] },
+  };
+
+  function classifyBiome(elevation, moisture, temperature, seaLevel) {
+    if (elevation < seaLevel) {
+      const depth = (seaLevel - elevation) / seaLevel;
+      return depth > 0.35 ? BIOMES.deepOcean : BIOMES.shallowOcean;
+    }
+    const h = (elevation - seaLevel) / (1 - seaLevel); // normalized land height
+    if (h < 0.03) return BIOMES.beach;
+
+    if (h > 0.82) return temperature < 0.4 ? BIOMES.snow : BIOMES.rock;
+    if (h > 0.6) {
+      if (temperature < 0.3) return BIOMES.snow;
+      if (temperature < 0.45) return BIOMES.tundra;
+      return BIOMES.rock;
+    }
+
+    if (temperature < 0.25) return BIOMES.tundra;
+    if (temperature < 0.45) return moisture < 0.35 ? BIOMES.steppe : BIOMES.taiga;
+    if (temperature < 0.7) {
+      if (moisture < 0.25) return BIOMES.grassland;
+      if (moisture < 0.55) return BIOMES.forest;
+      return BIOMES.tempRain;
+    }
+    if (moisture < 0.25) return BIOMES.desert;
+    if (moisture < 0.5) return BIOMES.savanna;
+    return BIOMES.tropicalRain;
+  }
+
+  // ---- Map state ----
+  let elevation, moisture, temperature, biomeIdx, seaLevel;
+  let rivers = []; // array of {path:[i,...]}
+  let settlements = []; // array of {x,y,name}
+
+  function generate() {
+    const seed = (parseInt(document.getElementById("seed").value, 10) >>> 0) || 1;
+    seaLevel = parseFloat(document.getElementById("seaLevel").value);
+    const islandStrength = parseFloat(document.getElementById("island").value);
+    const moistureBias = parseFloat(document.getElementById("moisture").value);
+    const riverCount = parseInt(document.getElementById("rivers").value, 10);
+    const wantSettlements = document.getElementById("settlements").checked;
+
+    const rng = mulberry32(seed);
+    const elevPerm = buildPermutation(rng);
+    const moistPerm = buildPermutation(rng);
+
+    elevation = new Float32Array(COLS * ROWS);
+    moisture = new Float32Array(COLS * ROWS);
+    temperature = new Float32Array(COLS * ROWS);
+    biomeIdx = new Array(COLS * ROWS);
+
+    const ELEV_FREQ = 3.2, MOIST_FREQ = 2.4;
+    let minE = Infinity, maxE = -Infinity;
+
+    for (let y = 0; y < ROWS; y++) {
+      const ny = y / ROWS, cy = (ny - 0.5) * 2;
+      for (let x = 0; x < COLS; x++) {
+        const i = idx(x, y);
+        const nx = x / COLS, cx = (nx - 0.5) * 2 * (COLS / ROWS); // aspect-correct
+
+        let e = fbm(elevPerm, nx * ELEV_FREQ, ny * ELEV_FREQ, 5, 0.5, 2.0);
+        e = (e + 1) / 2;
+        const d = Math.min(1, Math.sqrt(cx * cx + cy * cy) / 1.3);
+        e -= d * d * islandStrength;
+
+        elevation[i] = e;
+        if (e < minE) minE = e;
+        if (e > maxE) maxE = e;
+
+        let m = fbm(moistPerm, nx * MOIST_FREQ + 500, ny * MOIST_FREQ + 500, 4, 0.5, 2.0);
+        m = (m + 1) / 2 + moistureBias;
+        moisture[i] = Math.max(0, Math.min(1, m));
+      }
+    }
+
+    // Normalize elevation to [0,1] so sea level slider behaves consistently.
+    const range = (maxE - minE) || 1;
+    for (let i = 0; i < elevation.length; i++) {
+      elevation[i] = (elevation[i] - minE) / range;
+    }
+
+    // Temperature: warm at the equator (map's vertical center), cooler toward
+    // the poles (top/bottom edges) and at higher elevation.
+    for (let y = 0; y < ROWS; y++) {
+      // Quadratic falloff keeps a wide temperate/tropical band and confines
+      // cold poles to the outer edge rows (a linear falloff made ~25% of the
+      // map tundra regardless of elevation).
+      const d = Math.abs((y / ROWS) - 0.5) * 2;
+      const latitude = 1 - d * d;
+      for (let x = 0; x < COLS; x++) {
+        const i = idx(x, y);
+        const landHeight = Math.max(0, elevation[i] - seaLevel) / (1 - seaLevel);
+        temperature[i] = Math.max(0, Math.min(1, latitude - landHeight * 0.6));
+      }
+    }
+
+    for (let i = 0; i < elevation.length; i++) {
+      biomeIdx[i] = classifyBiome(elevation[i], moisture[i], temperature[i], seaLevel);
+    }
+
+    generateRivers(rng, riverCount);
+    settlements = wantSettlements ? generateSettlements(rng, 8) : [];
+
+    render();
+  }
+
+  // ---- Rivers: trace steepest descent from mountain sources to the sea ----
+  function generateRivers(rng, count) {
+    rivers = [];
+    if (count <= 0) return;
+
+    const riverCells = new Uint8Array(COLS * ROWS);
+    const NEI8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+    const sourceThreshold = seaLevel + (1 - seaLevel) * 0.45;
+
+    // Weighted-by-elevation candidate source list.
+    const candidates = [];
+    for (let y = 1; y < ROWS - 1; y++) {
+      for (let x = 1; x < COLS - 1; x++) {
+        const i = idx(x, y);
+        if (elevation[i] > sourceThreshold) candidates.push(i);
+      }
+    }
+    if (candidates.length === 0) return;
+
+    const usedSources = [];
+    let attempts = 0;
+    while (rivers.length < count && attempts < count * 20) {
+      attempts++;
+      const i0 = candidates[(rng() * candidates.length) | 0];
+      const sx = i0 % COLS, sy = (i0 / COLS) | 0;
+      const tooClose = usedSources.some(([ux, uy]) => Math.hypot(ux - sx, uy - sy) < 12);
+      if (tooClose) continue;
+      usedSources.push([sx, sy]);
+
+      const path = [];
+      let x = sx, y = sy, reachedEnd = false;
+      for (let step = 0; step < COLS + ROWS; step++) {
+        const i = idx(x, y);
+        path.push(i);
+        if (elevation[i] < seaLevel) { reachedEnd = true; break; }
+
+        // Strictly-lower-neighbor descent guarantees termination; a
+        // candidate that happens to already be part of another river is
+        // preferred only when it's still a legitimate descent step (a
+        // natural tributary merge), never as a forced jump.
+        let bestNx = -1, bestNy = -1, bestE = elevation[i], mergesRiver = false;
+        for (const [dx, dy] of NEI8) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
+          const ni = idx(nx, ny);
+          if (elevation[ni] < bestE) {
+            bestE = elevation[ni]; bestNx = nx; bestNy = ny;
+            mergesRiver = riverCells[ni] === 1;
+          }
+        }
+        if (bestNx === -1) { reachedEnd = true; break; } // local minimum (lake) — stop here
+        x = bestNx; y = bestNy;
+        if (mergesRiver) { path.push(idx(x, y)); reachedEnd = true; break; }
+      }
+
+      if (reachedEnd && path.length > 4) {
+        path.forEach(i => riverCells[i] = 1);
+        rivers.push(path);
+      }
+    }
+  }
+
+  // ---- Settlements: placed on land, biased toward coast/river, named procedurally ----
+  const SYLL_A = ["bel","dor","kar","mor","tal","ven","bri","fen","gor","ash","wyn","sel","thal","ora","nim"];
+  const SYLL_B = ["an","ir","or","eth","ale","wick","ton","mere","holm","ford","vale","gard","ley","mont"];
+
+  function genName(rng) {
+    const a = SYLL_A[(rng() * SYLL_A.length) | 0];
+    const b = SYLL_B[(rng() * SYLL_B.length) | 0];
+    const name = a + b;
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  function generateSettlements(rng, count) {
+    const result = [];
+    let attempts = 0;
+    while (result.length < count && attempts < count * 40) {
+      attempts++;
+      const x = 4 + ((rng() * (COLS - 8)) | 0);
+      const y = 4 + ((rng() * (ROWS - 8)) | 0);
+      const i = idx(x, y);
+      if (elevation[i] < seaLevel) continue;
+      const h = (elevation[i] - seaLevel) / (1 - seaLevel);
+      if (h > 0.55) continue; // no cities on mountains
+
+      const nearWater = isNearWaterOrRiver(x, y, 5);
+      if (!nearWater && rng() > 0.15) continue; // strongly prefer coast/river
+
+      const tooClose = result.some(s => Math.hypot(s.x - x, s.y - y) < 18);
+      if (tooClose) continue;
+
+      result.push({ x, y, name: genName(rng) });
+    }
+    return result;
+  }
+
+  function isNearWaterOrRiver(x, y, r) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
+        const ni = idx(nx, ny);
+        if (elevation[ni] < seaLevel) return true;
+      }
+    }
+    return false;
+  }
+
+  // ---- Rendering ----
+  function render() {
+    const data = imgData.data;
+    for (let i = 0; i < COLS * ROWS; i++) {
+      const [r, g, b] = biomeIdx[i].color;
+      const jitter = (Math.sin(i * 12.9898) * 43758.5453 % 1) * 10 - 5;
+      const o = i * 4;
+      data[o] = Math.max(0, Math.min(255, r + jitter));
+      data[o + 1] = Math.max(0, Math.min(255, g + jitter));
+      data[o + 2] = Math.max(0, Math.min(255, b + jitter));
+      data[o + 3] = 255;
+    }
+    bctx.putImageData(imgData, 0, 0);
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(buffer, 0, 0, COLS, ROWS, 0, 0, canvas.width, canvas.height);
+
+    // Rivers
+    ctx.strokeStyle = "#3d7fc4";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const path of rivers) {
+      ctx.beginPath();
+      for (let k = 0; k < path.length; k++) {
+        const i = path[k];
+        const x = (i % COLS) * SCALE + SCALE / 2;
+        const y = ((i / COLS) | 0) * SCALE + SCALE / 2;
+        ctx.lineWidth = 1 + Math.min(k, 40) * 0.06;
+        if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Settlements
+    ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.textBaseline = "middle";
+    for (const s of settlements) {
+      const px = s.x * SCALE + SCALE / 2, py = s.y * SCALE + SCALE / 2;
+      ctx.fillStyle = "#1a1a1a";
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#f2e6c9";
+      ctx.beginPath();
+      ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(10,10,12,0.75)";
+      ctx.strokeText(s.name, px + 7, py);
+      ctx.fillStyle = "#f5f0e0";
+      ctx.fillText(s.name, px + 7, py);
+    }
+  }
+
+  function buildLegend() {
+    const legend = document.getElementById("legend");
+    legend.innerHTML = "";
+    Object.values(BIOMES).forEach(b => {
+      const el = document.createElement("div");
+      el.className = "item";
+      const sw = document.createElement("span");
+      sw.className = "sw";
+      sw.style.background = `rgb(${b.color[0]},${b.color[1]},${b.color[2]})`;
+      const label = document.createElement("span");
+      label.textContent = b.name;
+      el.appendChild(sw);
+      el.appendChild(label);
+      legend.appendChild(el);
+    });
+  }
+
+  // ---- UI wiring ----
+  function bindOutput(inputId, outputId, fmt) {
+    const input = document.getElementById(inputId);
+    const output = document.getElementById(outputId);
+    const update = () => { output.textContent = fmt ? fmt(input.value) : input.value; };
+    input.addEventListener("input", update);
+    update();
+  }
+  bindOutput("seaLevel", "seaLevelOut");
+  bindOutput("island", "islandOut");
+  bindOutput("moisture", "moistureOut");
+  bindOutput("rivers", "riversOut");
+
+  document.getElementById("generateBtn").addEventListener("click", generate);
+  document.getElementById("randSeedBtn").addEventListener("click", () => {
+    document.getElementById("seed").value = (Math.random() * 1e9) | 0;
+    generate();
+  });
+  ["seaLevel", "island", "moisture", "rivers", "settlements"].forEach(id => {
+    document.getElementById(id).addEventListener("change", generate);
+  });
+  document.getElementById("seed").addEventListener("change", generate);
+
+  buildLegend();
+  generate();
+})();
+</script>
+</body>
+</html>
