@@ -15,6 +15,7 @@ from textual.widgets import Footer
 from panels.calendar_panel import CalendarPanel
 from panels.clock import ClockPanel
 from panels.git_status import GitStatusPanel
+from panels.notes import NotesPanel
 from panels.now_playing import NowPlayingPanel
 from panels.system import SystemPanel
 from panels.top_bar import TopBar
@@ -30,6 +31,7 @@ def _fresh_panels(config) -> dict:
         "nowplaying": NowPlayingPanel(config, id="nowplaying"),
         "clock": ClockPanel(id="clock"),
         "upnext": UpNextPanel(config, id="upnext"),
+        "notes": NotesPanel(id="notes"),
         "git": GitStatusPanel(config, id="git"),
     }
 
@@ -82,6 +84,7 @@ class SidebarScreen(Screen):
                     yield p["system"]
                     yield p["weather"]
                     yield p["calendar"]
+                yield p["notes"]
                 yield p["git"]
         yield Footer()
 
@@ -104,6 +107,7 @@ class StackedScreen(Screen):
             yield p["nowplaying"]
             yield p["system"]
             yield p["weather"]
+            yield p["notes"]
             yield p["calendar"]
             yield p["upnext"]
             yield p["git"]

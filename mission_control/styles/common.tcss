@@ -13,11 +13,17 @@ TopBar {
     text-style: bold;
 }
 
-Panel, LivePanel {
+Panel, LivePanel, NotesPanel {
     border: round $primary;
     padding: 1 2;
     background: $panel;
     overflow: hidden;
+}
+
+/* Utility: hide a widget without unmounting it (e.g. Notes' add-item
+   Input when the user isn't actively adding). */
+.hidden {
+    display: none;
 }
 
 #system {
@@ -46,6 +52,10 @@ Panel, LivePanel {
 
 #git {
     border: round $success;
+}
+
+#notes {
+    border: round $error;
 }
 
 SystemPanel Label {
