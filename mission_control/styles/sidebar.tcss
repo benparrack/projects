@@ -19,23 +19,49 @@
     height: 15;
 }
 
+#upnext {
+    height: 12;
+}
+
 #main {
     width: 1fr;
     padding: 1;
 }
 
-#top_grid {
-    grid-size: 3 1;
-    grid-gutter: 1 1;
-    height: 1fr;
+#top_area {
+    height: 24;
     margin-bottom: 1;
+}
+
+#top_left {
+    width: 2fr;
+}
+
+#sys_weather_row {
+    height: 11;
+    margin-bottom: 1;
+}
+
+#sys_weather_row #system {
+    width: 1fr;
+}
+
+#sys_weather_row #weather {
+    width: 1fr;
+    height: 11;
+    margin-left: 1;
+}
+
+#top_area #calendar {
+    width: 1fr;
+    height: 1fr;
+    margin-left: 1;
 }
 
 #notes {
     height: 12;
-    margin-bottom: 1;
 }
 
 #git {
-    height: 16;
+    height: 12;
 }

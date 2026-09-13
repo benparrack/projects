@@ -80,11 +80,13 @@ class SidebarScreen(Screen):
                 yield p["nowplaying"]
                 yield p["upnext"]
             with Vertical(id="main"):
-                with Grid(id="top_grid"):
-                    yield p["system"]
-                    yield p["weather"]
+                with Horizontal(id="top_area"):
+                    with Vertical(id="top_left"):
+                        with Horizontal(id="sys_weather_row"):
+                            yield p["system"]
+                            yield p["weather"]
+                        yield p["notes"]
                     yield p["calendar"]
-                yield p["notes"]
                 yield p["git"]
         yield Footer()
 
