@@ -2,6 +2,13 @@
 
 Backlog of self-directed project ideas. Each entry has enough context to pick back up cold in a future session.
 
+**Shipped entries stay short:** once an idea is Done, its "Why this one" and "What it needs when
+resumed" sections get cut — that planning context no longer matters once built, and any lasting
+architecture/status detail belongs in the project's own README/FUTURE.md instead of duplicated
+here. This file is read in full at the start of every session (see the root `CLAUDE.md`), so
+keeping shipped entries to a one-line pointer keeps that fixed per-session cost from growing
+forever as more ideas ship.
+
 ---
 
 ## 0. 3D-Rendered Games (WebGL / Three.js)
@@ -166,16 +173,8 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 9. City/Ant-Colony Optimization Visualizer
 
-**Status:** Done — see `ant_colony_optimization/`. Ants build closed TSP tours over a random scatter of cities; pheromone-weighted roulette selection with evaporation and elitist reinforcement, animated per-edge, with a live convergence chart and sliders for city/ant count, α/β, evaporation rate, and speed.
+**Status:** Done — see `ant_colony_optimization/`.
 **Pitch:** Visualize agents solving a real optimization problem live — e.g. ant colony optimization finding shortest paths (pheromone trails converging over iterations), or simple traffic-flow simulation on a road grid — so you watch an algorithm converge in real time.
-
-**Why this one:** Makes an abstract optimization algorithm tangible; satisfying to watch chaotic initial exploration resolve into an efficient solution.
-
-**What it needs when resumed:**
-- Pick one problem to focus on: ant colony optimization (ACO) on a graph (e.g. shortest path or small TSP instance) is the most classic/well-documented choice.
-- ACO core loop: ants probabilistically choose paths weighted by pheromone strength + heuristic (e.g. inverse distance); after each ant completes a path, deposit pheromone proportional to path quality; apply evaporation each iteration so bad paths fade.
-- Visualization: render the graph/grid, animate ants moving, show pheromone trail strength as line thickness/opacity, show convergence over iterations (e.g. best-path-length-so-far chart).
-- UI: iteration speed control, reset/re-randomize graph, parameter sliders (evaporation rate, pheromone weight vs heuristic weight).
 
 ---
 
@@ -196,30 +195,15 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 11. Real-Time Multiplayer Shared Canvas / Mini Game
 
-**Status:** Done — see `game_terminal/`, deployed at https://game-terminal.onrender.com. A "game terminal" hub: Node + `ws` server, public rooms + private rooms via short codes, and a per-game plugin interface (`server/games/<name>.js` + `public/games/<name>/client.js`) so more mini-games plug in without touching core room/connection code. Six games live: shared drawing canvas, Hangman (picker sets a word, per-recipient masked views so the secret never reaches guessers), Checkers (standard American rules, mandatory capture/multi-jump/kinging, rules engine covered by a standalone unit test), Chess, Slither (real-time multiplayer snake — steer + boost, eat food, avoid walls/other snakes, self-collision, shrink-to-zoom; the first game driven by a server-side tick loop via an optional `tick(room, ctx)`/`tickIntervalMs` hook on `RoomManager`'s `Room`, rather than only reacting to player messages like the others), and Connect 4 (standard rules, gravity-drop columns, reuses the Checkers/Chess two-seat plugin pattern). See `game_terminal/FUTURE.md` for further ideas — nothing currently queued.
+**Status:** Done — see `game_terminal/README.md` and `game_terminal/FUTURE.md`, deployed at https://game-terminal.onrender.com. Six games live: drawing, Hangman, Checkers, Chess, Slither, Connect 4.
 **Pitch:** A lightweight multiplayer experience where multiple browser tabs/players share live state — a shared drawing canvas, a tiny `.io`-style game, or a synchronized game board.
-
-**Why this one:** The WebGL shooter (`#0`) explicitly scoped out "real" competitive multiplayer as too large solo. This is the achievable version: no anti-cheat, no ranked matchmaking, just shared live state between a handful of clients — a genuinely new category (networking/sync) versus everything else here, which is all single-player/local.
-
-**What it needs when resumed:**
-- A lightweight realtime transport (a small WebSocket server, since browser tabs can't talk to each other directly).
-- An authoritative-server model (server holds true state, clients send inputs, server broadcasts updates) to avoid classic peer-to-peer desync issues.
-- Keep the shared mechanic simple (drawing strokes, or basic position broadcasting) rather than full networked hit detection, which reintroduces the netcode complexity `#0` deliberately avoided.
 
 ---
 
 ## 12. Generative Art Gallery
 
-**Status:** Done — see `generative_art_gallery/` (noise-driven flow field renderer with multiple field shapes/color strategies, seeded PRNG, curated palettes, a black hole renderer, dark-mode and animate-forever toggles). A recursive branching-fractal renderer was tried and dropped — looked worse than the flow field.
+**Status:** Done — see `generative_art_gallery/`.
 **Pitch:** A page that generates an endless stream of unique visual art pieces algorithmically — flow fields, L-systems, Perlin-noise compositions, recursive/fractal patterns — no two alike, purely from code and randomness.
-
-**Why this one:** Distinct from the falling-sand (`#2`) and ACO (`#9`) projects — this is aesthetic output for its own sake rather than simulating a physical/optimization process. A good showcase of how much visual richness comes from a few well-chosen math primitives.
-
-**What it needs when resumed:**
-- Pick 2-3 generative techniques to start — flow fields via Perlin/simplex noise are the most reliably beautiful and least finicky to tune.
-- A canvas render loop or SVG output, plus a "regenerate" button using a new random seed each time.
-- Optional export (`canvas.toDataURL`) to save a piece you like.
-- Color palette choice matters as much as the algorithm — deliberate palette curation beats random RGB.
 
 ---
 
@@ -240,16 +224,8 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 
 ## 14. Audio-Reactive Music Visualizer
 
-**Status:** Done — see `music_visualizer/`. File upload + microphone input, three modes (frequency bars, radial spokes, particle burst), bass-driven beat detection with a flash effect, sensitivity control. Fixed a launch bug where `URL.createObjectURL()` blob URLs never resolve when the page is opened directly as a local `file://` document (opaque origin) — switched file loading to `FileReader` → data URL, which works from any origin.
+**Status:** Done — see `music_visualizer/`.
 **Pitch:** A visualizer that reacts live to actual audio (an uploaded file or microphone input) — bars, particles, or generative shapes pulsing/moving with the music's frequency and amplitude in real time.
-
-**Why this one:** Complements the algorithmic sequencer (`#6`), which generates audio, with the reverse: consuming and responding to it. A genuinely different technical skill (Web Audio API's analyser/FFT data) from anything else on this list, and immediately satisfying with a song you actually like.
-
-**What it needs when resumed:**
-- Web Audio API `AnalyserNode` for real-time frequency-domain (FFT) and time-domain data from an audio source.
-- A canvas render loop mapping frequency bins to visual elements (bar heights, particle sizes/colors, radial patterns).
-- Two source modes: file upload (`<input type="file">` → `AudioContext.decodeAudioData`) and live microphone (`getUserMedia`).
-- Start with a simple frequency-bar visualization before attempting particle systems or 3D reactive scenes.
 
 ---
 
@@ -317,63 +293,18 @@ Backlog of self-directed project ideas. Each entry has enough context to pick ba
 **Status:** Done — see `raytracer/`.
 **Pitch:** A from-scratch raytracer — rays cast per-pixel into a 3D scene, intersecting spheres/planes, with real lighting, shadows, and reflections.
 
-**Why this one:** Distinct from the WebGL/Three.js work in `#0` — that uses a rendering engine; this builds the render pipeline itself (ray-sphere intersection math, shading, recursive reflection). A deeper, more foundational graphics exercise.
-
-**What it needs when resumed:**
-- Basic scene representation: spheres/planes with material properties (color, reflectivity, diffuse/specular).
-- A camera model casting one ray per pixel through a virtual image plane.
-- Ray-object intersection math (ray-sphere is simplest to start).
-- A shading model (Phong/Blinn-Phong is the standard starting point) plus shadow rays cast toward each light, checking for occlusion.
-- Recursive reflection rays as a stretch goal. Renders directly to a canvas pixel-by-pixel — no WebGL needed, slower but that's the whole point.
-
 ---
 
 ## 20. Terminal "Mission Control" Dashboard
 
-**Status:** Done — see `mission_control/`. Python + Textual. Seven panels:
-system stats (CPU/mem/disk/net via `psutil`, with rolling Sparkline history
-for CPU/memory), weather (IP-geolocated by default, or overridden in
-`config.toml`, via Open-Meteo), calendar (Google Calendar's read-only secret
-iCal URL, parsed with `icalendar` + `recurring-ical-events` to expand
-recurring events correctly), a Clock panel (local time plus home/Eastern
-time side by side), Now Playing (Spotify Web API — shows playback from any
-device including a phone, not just this computer; `p`/`n`/`b` keybindings
-for play-pause/next/previous, with a device-reactivation retry since a
-paused device can drop out of Spotify's "active device" session almost
-immediately; a 5-track queue peek), git/project status (this repo is one
-monorepo of project folders rather than one-repo-per-project, so the panel
-reports overall repo status plus which folder was touched most recently),
-and an "Up Next" panel that reads `TODO_FIRST.md`/`IDEAS.md` directly. Three
-switchable layouts (`l` to cycle) — grid, sidebar (the preferred default),
-and a scrolling single-column stack for narrow terminals. Each panel
-refreshes independently via a background worker so a slow network call
-never blocks the others. Setup requires a one-time OAuth script
-(`spotify_auth.py`) for the Spotify integration and a Google Calendar
-secret-URL paste into `config.toml` (gitignored). Further ideas brainstormed
-but not yet built are tracked in `mission_control/FUTURE.md` (progress
-bar/volume/device-switcher for Now Playing, a "needs attention" digest
-panel, theme cycling, and more).
+**Status:** Done — see `mission_control/README.md` and `mission_control/FUTURE.md`.
 **Pitch:** A glanceable terminal dashboard (a TUI) showing live system stats, weather, calendar, and whatever else is useful, all in one view.
 
 ---
 
 ## 21. Webcam Hand-Tracking Paintbrush
 
-**Status:** Done — see `hand_paintbrush/`. Watercolor-style painting driven
-by webcam hand tracking rather than mouse/touch input.
+**Status:** Done — see `hand_paintbrush/`.
 **Pitch:** Paint on a canvas using hand position/gesture tracked live from
 a webcam feed, rendered with a soft watercolor-style brush rather than a
 hard cursor line.
-
-**Why this one:** A different input modality than anything else in this
-repo (computer-vision-driven interaction instead of mouse/keyboard/touch),
-paired with a generative-art-style rendering approach rather than a literal
-1:1 cursor line.
-
-**Why this one:** A genuinely different interaction surface (terminal UI, not a browser page) from almost everything else on this list, and practical enough that Ben might actually open it daily if it's good — unlike most of the purely-for-fun entries.
-
-**What it needs when resumed:**
-- A TUI framework/library (e.g. `blessed`/`ink` for Node, or Python's `rich`/`textual`) rather than hand-rolled ANSI escape codes.
-- Data sources per panel: system stats via OS calls, weather via a public API, calendar via a local `.ics` file or an API.
-- A refresh loop redrawing on an interval, laid out as a grid of panels rather than one long scroll.
-- Scope discipline: start with 2-3 panels that are genuinely useful daily, not a kitchen-sink dashboard nobody reads.
