@@ -43,15 +43,52 @@ regardless of whether anyone just sent a message.
   under real network latency (Render free tier, phone on wifi, etc.) rather than the loopback
   testing done so far.
 
-**Known gaps / possible follow-ups:**
-- Bandwidth: every tick broadcasts every snake's full point array and the full food list. Fine
-  at hobby-project player counts; would need delta-encoding or spatial culling (only send
-  what's near each viewer) to scale further.
-- No mobile/touch-specific control affordance beyond the generic pointer events (should mostly
-  work via touch already since input is pointer-event-based, but untested on an actual phone).
+**Player-readiness polish pass (done):**
+- **Bandwidth:** tick broadcasts now send a food add/remove delta (`foodAdded`/`foodRemoved`)
+  instead of resending the full ~220-440-item food list every tick — the client
+  (`public/games/slither/client.js`) keeps a local `foodMap` built from the one-time full list
+  in the join snapshot, then applies deltas. Order matters: added is applied before removed,
+  since a corpse-drop pellet and its being eaten can both happen within the same tick, and
+  applying removed-first would leave it dangling as "still there" on the client when the server
+  no longer has it. All point/food coordinates are also rounded to whole world units on the
+  wire (`roundPoint`) — sub-pixel precision doesn't matter at this render scale, and shrinking
+  the numbers cuts JSON size further. Snake body point arrays are still sent in full every tick
+  (not delta-encoded) — see below.
+- **Spawn fairness:** both initial spawn and respawn now pick a point that's clear of other live
+  snakes' heads where possible (`pickSpawnPoint`, checks heads only, not full bodies, as a cheap
+  approximation — retries `SPAWN_ATTEMPTS` times, falls back to the last attempt if the arena is
+  too crowded). Before this fix, respawning directly into another snake's body — an instant,
+  no-fault-of-your-own second death — was possible.
+- **Mobile/touch:** canvas `pointerdown` no longer always engages boost. Touch has no "hover"
+  state — every touch is a pointerdown just to steer-by-drag — so tying boost to canvas
+  pointerdown made it impossible for a touch player to steer without also constantly boosting
+  (draining length nonstop). Boost via canvas click-and-hold is now mouse-only
+  (`ev.pointerType === 'mouse'`); a dedicated on-screen BOOST button (bottom-right of the
+  canvas) works for touch (and mouse, and is also just a more discoverable affordance than
+  "hold click" alone).
+- **Respawn countdown:** the death overlay now shows "YOU DIED — RESPAWNING IN Ns…" using a new
+  `respawnAt` field exposed per-snake in the broadcast view, instead of a static message.
+- **Real bug caught by this pass, live in the browser (not by unit tests):** `respawn()` used to
+  force `snake.boosting = false`. But the client only resends its boost message when the input
+  *state changes* (edge-triggered) — so a player still holding boost across a death would have
+  boost silently stop working after respawn, since from the client's point of view nothing
+  changed. Fixed by simply not touching `snake.boosting` in `respawn()` — it should keep
+  reflecting whatever the client's last message said, same as it does the rest of the time.
+  Caught by noticing a boosted snake's length wasn't draining after what should have been a
+  continuous boost across a death in a live two-tab test — see the "boost held across a death"
+  test in the standalone verification script for the regression test this produced.
+
+**Remaining gaps / possible follow-ups:**
+- Snake body point arrays are still sent in full every tick (not delta-encoded like food) —
+  the natural delta would be "new head point + tail points dropped" since a snake's path only
+  changes at the head/tail each tick, but wasn't done this pass: more complex (needs to handle
+  respawn as a full reset, a snake's first appearance to a new joiner, etc.) for what's likely a
+  smaller win than the food delta at hobby-project player counts. Revisit if it ever matters.
 - No minimap — with shrink-to-zoom now in, a huge snake can see a wide radius around itself but
   still has no whole-arena overview. Could be added as a small corner inset if it turns out to
   matter at real playtime lengths.
+- No self-collision difficulty toggle, no boost cooldown/regeneration mechanic beyond the simple
+  floor — both are fine as-is but are the kind of thing a real playtest might reveal wanting.
 
 **Architecture note:** `server/roomManager.js`'s `Room` constructor now supports an optional
 `tick(room, ctx)` + `tickIntervalMs` on a plugin — `RoomManager`/`Room` calls it on that

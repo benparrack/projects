@@ -37,7 +37,7 @@ export function mount(container, api) {
   wrap.style.alignItems = 'center';
 
   const hint = document.createElement('p');
-  hint.textContent = 'MOVE MOUSE TO STEER — HOLD CLICK OR SPACE TO BOOST';
+  hint.textContent = 'MOVE MOUSE / DRAG TO STEER — CLICK, SPACE, OR THE BOOST BUTTON TO BOOST';
   hint.style.margin = '0';
   hint.style.fontSize = '0.8em';
   hint.style.opacity = '0.8';
@@ -70,8 +70,21 @@ export function mount(container, api) {
   overlay.hidden = true;
   overlay.textContent = 'YOU DIED — RESPAWNING…';
 
+  // Dedicated boost control — mainly for touch, where the canvas itself has to be free for
+  // steer-by-drag without every touch also engaging boost (see onPointerDown below).
+  const boostBtn = document.createElement('button');
+  boostBtn.textContent = 'BOOST';
+  boostBtn.style.position = 'absolute';
+  boostBtn.style.bottom = '10px';
+  boostBtn.style.right = '10px';
+  boostBtn.style.padding = '10px 16px';
+  boostBtn.style.opacity = '0.85';
+  boostBtn.style.touchAction = 'none';
+  boostBtn.style.userSelect = 'none';
+
   canvasWrap.appendChild(canvas);
   canvasWrap.appendChild(overlay);
+  canvasWrap.appendChild(boostBtn);
 
   const side = document.createElement('div');
   side.style.minWidth = '140px';
@@ -92,6 +105,10 @@ export function mount(container, api) {
   container.appendChild(wrap);
 
   let lastView = null;
+  // The server sends the full food list only once (on join/snapshot); every tick after that
+  // sends just an add/remove delta (foodAdded/foodRemoved) to keep the 20x/second broadcast
+  // small, so this client maintains its own running copy keyed by food id.
+  const foodMap = new Map();
 
   // Debug hook for automated verification — harmless to leave mounted, mirrors the
   // convention set by the drawing game's window.__debugSegmentCount.
@@ -159,7 +176,13 @@ export function mount(container, api) {
       ctx.fillText(s.nickname, hx, hy - 16 * zoom);
     }
 
-    overlay.hidden = !own || own.alive;
+    if (!own || own.alive) {
+      overlay.hidden = true;
+    } else {
+      overlay.hidden = false;
+      const remainingSec = own.respawnAt ? Math.max(0, Math.ceil((own.respawnAt - Date.now()) / 1000)) : 0;
+      overlay.textContent = `YOU DIED — RESPAWNING IN ${remainingSec}…`;
+    }
   }
 
   function renderLeaderboard(view) {
@@ -169,6 +192,21 @@ export function mount(container, api) {
       li.textContent = entry.clientId === myClientId() ? `${entry.nickname} (you) — ${entry.length}` : `${entry.nickname} — ${entry.length}`;
       leaderboardEl.appendChild(li);
     }
+  }
+
+  function applySnapshotView(snapshot) {
+    foodMap.clear();
+    for (const f of snapshot.food || []) foodMap.set(f.id, f);
+    applyView({ ...snapshot, food: [...foodMap.values()] });
+  }
+
+  function applyTickView(view) {
+    // Added before removed: an item can be added (e.g. dropped from a corpse) and eaten again
+    // within the same tick, appearing in both lists — applying added first means that case
+    // nets out to "removed", matching what the server actually still has.
+    for (const f of view.foodAdded || []) foodMap.set(f.id, f);
+    for (const id of view.foodRemoved || []) foodMap.delete(id);
+    applyView({ ...view, food: [...foodMap.values()] });
   }
 
   function applyView(view) {
@@ -206,13 +244,28 @@ export function mount(container, api) {
     try {
       canvas.setPointerCapture(ev.pointerId);
     } catch {
-      // Some pointer types/browsers can reject capture; boost should still engage.
+      // Some pointer types/browsers can reject capture; steering should still work.
     }
-    boostSources.add('pointer');
-    sendBoost();
+    // Mouse click-and-hold on the canvas is a deliberate boost gesture. Touch has no separate
+    // "hover" state though — every touch is a pointerdown just to steer-by-drag — so tying
+    // boost to canvas pointerdown for touch would make it impossible to steer without also
+    // draining length the whole time. Touch/pen boost instead via the dedicated button below.
+    if (ev.pointerType === 'mouse') {
+      boostSources.add('pointer');
+      sendBoost();
+    }
   }
   function onPointerUp() {
     boostSources.delete('pointer');
+    sendBoost();
+  }
+  function onBoostBtnDown(ev) {
+    ev.preventDefault();
+    boostSources.add('button');
+    sendBoost();
+  }
+  function onBoostBtnUp() {
+    boostSources.delete('button');
     sendBoost();
   }
   function onKeyDown(ev) {
@@ -233,6 +286,9 @@ export function mount(container, api) {
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointerleave', onPointerUp);
+  boostBtn.addEventListener('pointerdown', onBoostBtnDown);
+  boostBtn.addEventListener('pointerup', onBoostBtnUp);
+  boostBtn.addEventListener('pointerleave', onBoostBtnUp);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
 
@@ -245,10 +301,10 @@ export function mount(container, api) {
 
   return {
     applySnapshot(snapshot) {
-      applyView(snapshot);
+      applySnapshotView(snapshot);
     },
     applyEvent(data) {
-      if (data && data.kind === 'state') applyView(data.view);
+      if (data && data.kind === 'state') applyTickView(data.view);
     },
     unmount() {
       clearInterval(steerHandle);
@@ -256,6 +312,9 @@ export function mount(container, api) {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerUp);
+      boostBtn.removeEventListener('pointerdown', onBoostBtnDown);
+      boostBtn.removeEventListener('pointerup', onBoostBtnUp);
+      boostBtn.removeEventListener('pointerleave', onBoostBtnUp);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       delete window.__slitherDebug;
