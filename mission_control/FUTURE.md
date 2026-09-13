@@ -29,9 +29,6 @@ Pick whatever sounds fun for a future session, ignore the rest.
   ("will it be dark when I'm done").
 - **Pomodoro/focus timer** — start/stop keybinding, panel counts down,
   notifies when done. Actually useful daily, not just decorative.
-- **Editable scratch to-do list** — press a key, type a line, it's saved
-  locally. Up Next currently only *reads* TODO_FIRST.md; this would be a
-  separate quick-capture list you can add to without leaving the dashboard.
 - **"On this day"** — git commits from N days/months ago in this repo.
   This is literally `IDEAS.md` #18 in the parent repo, already scoped there.
 - **Repo stats** — total lines of code, number of projects, longest daily
@@ -39,6 +36,20 @@ Pick whatever sounds fun for a future session, ignore the rest.
 - **Launcher** — press a key to open one of the other projects
   (physics_sandbox, generative_art_gallery, etc.) in Chromium directly
   from the dashboard, turning it into an actual front door to the repo.
+
+## Multiple pages/screens
+
+- **Cycle through different screens for different use cases** — distinct
+  from the existing `l` layout cycle (grid/sidebar/stacked), which just
+  rearranges the *same* fixed panel set. This would be multiple different
+  *pages*, each with its own chosen subset/arrangement of panels for a
+  different purpose (e.g. a "focus" page with just Clock/Pomodoro/Up
+  Next/Notes, a "full status" page with everything, maybe a "media" page
+  built around Now Playing) — cycled with their own key, independent of
+  the layout cycle. Needs: a page definition (which panels, what
+  arrangement) separate from the current fixed `LAYOUTS` list in
+  `screens.py`, and a second keybinding/indicator distinct from `l` so the
+  two cycles (layout shape vs. page content) don't collide in the UI.
 
 ## Visual/aesthetic
 

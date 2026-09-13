@@ -2,7 +2,6 @@
 
 Queued for tomorrow:
 
-- [ ] **Mission Control** — update/improve the terminal dashboard further. See `mission_control/FUTURE.md` for brainstormed options (Now Playing progress bar/volume/device-switcher, a "needs attention" digest panel, theme cycling, and more).
 - [ ] **Game Terminal** — add more games to / improve `game_terminal/`. Slither and Connect 4 are now shipped (see below); see `game_terminal/FUTURE.md` for remaining ideas (no game currently queued — next is whatever comes up).
 
 ## Done
@@ -13,4 +12,4 @@ Queued for tomorrow:
 - **Webcam Hand-Tracking Paintbrush** (`IDEAS.md` #21) — `hand_paintbrush/`
 - **Raytracer From Scratch** (`IDEAS.md` #19) — `raytracer/`
 - **Audio-Reactive Music Visualizer** (`IDEAS.md` #14) — `music_visualizer/`
-- **Terminal "Mission Control" Dashboard** (`IDEAS.md` #20) — `mission_control/` — system/weather/calendar/clock/git/up-next panels plus a full Spotify Web API integration (now-playing, playback controls, queue peek), three switchable layouts (grid/sidebar/stacked), sidebar as default. Further ideas logged in `mission_control/FUTURE.md`.
+- **Terminal "Mission Control" Dashboard** (`IDEAS.md` #20) — `mission_control/` — system/weather/calendar/clock/git/up-next panels plus a full Spotify Web API integration (now-playing, playback controls, queue peek), an editable notes/to-do panel, three switchable layouts (grid/sidebar/stacked), sidebar as default, sidebar panels tiled to fit the screen exactly with no gaps/overflow/cutoff. Further ideas logged in `mission_control/FUTURE.md`.
