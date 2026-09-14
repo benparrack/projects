@@ -9,6 +9,7 @@ const GAMES = [
   { type: 'chess', label: 'CHESS' },
   { type: 'slither', label: 'SLITHER' },
   { type: 'connect4', label: 'CONNECT 4' },
+  { type: 'shooter', label: 'ARENA DUEL (1V1 FPS)' },
 ];
 
 const SESSION_KEY = 'game_terminal.session';
@@ -214,6 +215,7 @@ async function mountGame(gameType, snapshot, roster) {
     const handle = mod.mount(els.gameMount, {
       sendAction: (data) => send(ClientMessage.GAME_ACTION, { gameType, data }),
       getClientId: () => state.clientId,
+      leaveRoom,
     });
     if (snapshot && typeof handle.applySnapshot === 'function') handle.applySnapshot(snapshot);
     if (roster && typeof handle.applyRoster === 'function') handle.applyRoster(roster);
@@ -257,13 +259,17 @@ els.btnJoinCode.addEventListener('click', () => {
   send(ClientMessage.ROOM_JOIN, { code });
 });
 
-els.btnLeaveRoom.addEventListener('click', () => {
+// Factored out (not just an inline listener) so game modules that take over the full viewport
+// (hiding the normal LEAVE button) can still trigger it — passed into mount() as `api.leaveRoom`.
+function leaveRoom() {
   send(ClientMessage.ROOM_LEAVE, {});
   unmountGame();
   state.currentRoom = null;
   saveSession();
   showScreen('menu');
-});
+}
+
+els.btnLeaveRoom.addEventListener('click', leaveRoom);
 
 // Bootstrap: restore a prior session (nickname/room) from this tab if present, so a
 // reconnect after a Render free-tier cold start can silently rejoin.

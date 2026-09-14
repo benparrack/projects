@@ -7,7 +7,7 @@ Queued for tomorrow:
 ## Done
 - **Daily Learning** (`IDEAS.md` #22) — `daily_learning/` — a random Wikipedia deep-dive each day, cached per-day with a history log and streak counter. Started as a cloud-scheduled-routine idea but pivoted to a local sandbox page (matching this repo's pattern) after hitting a cloud/GitHub-connection blocker.
 - **Procedural Terrain / World Map Generator** (`IDEAS.md` #13) — `terrain_generator/` — noise-based elevation/moisture/temperature, Whittaker-style biomes, steepest-descent rivers, named settlements, seeded + reproducible.
-- **Real-Time Multiplayer Shared Canvas / Mini Game** (`IDEAS.md` #11) — `game_terminal/` — https://game-terminal.onrender.com — six games live: shared drawing canvas, Hangman, Checkers, Chess, Slither (the first real-time tick-loop game in the hub, vs. the event-driven others), and Connect 4
+- **Real-Time Multiplayer Shared Canvas / Mini Game** (`IDEAS.md` #11) — `game_terminal/` — https://game-terminal.onrender.com — seven games live: shared drawing canvas, Hangman, Checkers, Chess, Slither (the first real-time tick-loop game in the hub, vs. the event-driven others), Connect 4, and Arena Duel (1v1 3D shooter — ported movement/camera/weapon math from the single-player `3dgames/shooter/` prototype onto server-authoritative tick-loop netcode + a new full-viewport takeover layout; round-based best-of-5 with real per-round health bars)
 - **Procedural Dungeon Crawler** (`IDEAS.md` #4) — `dungeon_crawler/` — predates the tracking convention, discovered already-complete and logged 2026-09-13.
 - **Ant Colony Optimization Visualizer** (`IDEAS.md` #9) — `ant_colony_optimization/`
 - **Physics Sandbox** (falling-sand, `IDEAS.md` #2) — `physics_sandbox/`

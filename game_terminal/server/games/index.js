@@ -7,6 +7,7 @@ const checkers = require('./checkers');
 const chess = require('./chess');
 const slither = require('./slither');
 const connect4 = require('./connect4');
+const shooter = require('./shooter');
 
 module.exports = {
   [drawing.type]: drawing,
@@ -15,4 +16,5 @@ module.exports = {
   [chess.type]: chess,
   [slither.type]: slither,
   [connect4.type]: connect4,
+  [shooter.type]: shooter,
 };

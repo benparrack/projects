@@ -27,11 +27,13 @@ native messaging host can't reach the extension). For any browser automation or
 testing of a web-based project in here, use the **`playwright` MCP server**
 (configured with `--browser firefox`), not `claude-in-chrome`.
 
-**Exception — pointer-lock / mouse-look games:** Firefox has a confirmed
-Firefox+X11 bug where the pointer-lock cursor gets stuck at a screen edge after a
-direction reversal (hit in `3dgames/shooter/`; not reproducible in Chromium on the
-same machine). For any project using `requestPointerLock` (FPS-style mouselook,
-etc.), default to testing/playing in **Chromium** instead, and mention this
+**Exception — pointer-lock / mouse-look / 3D shooter games:** Firefox has a
+confirmed Firefox+X11 bug where the pointer-lock cursor gets stuck at a screen
+edge after a direction reversal (hit in `3dgames/shooter/`; not reproducible in
+Chromium-family browsers on the same machine). For any project using
+`requestPointerLock` (FPS-style mouselook, etc.) or 3D shooter games generally,
+default to testing/playing in **actual Google Chrome** (not Chromium — Ben has it
+installed and it's worked best in practice across these games), and mention this
 tradeoff if the user hasn't already made the call for that project. See IDEAS.md
 entry "0. 3D-Rendered Games" for the full writeup.
 
