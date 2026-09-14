@@ -1,5 +1,5 @@
 // Checkers (American/English draughts rules): mandatory capture, multi-jump,
-// men capture in any direction but only move forward, kings move/capture any direction.
+// men move and capture forward only, kings move/capture any direction.
 
 const BOARD_SIZE = 8;
 
@@ -43,8 +43,11 @@ function getMovesForPiece(board, r, c) {
   const forwardDr = piece.color === 'black' ? 1 : -1;
   const stepDirs = piece.king ? ALL_DIAGONALS : [[forwardDr, 1], [forwardDr, -1]];
 
+  // Standard American/English rules: a man captures only in the same forward directions it
+  // moves in — backward captures are a king-only privilege (real bug caught by playtest: this
+  // used to check ALL_DIAGONALS regardless of king status, letting men capture backward).
   const captures = [];
-  for (const [dr, dc] of ALL_DIAGONALS) {
+  for (const [dr, dc] of stepDirs) {
     const midR = r + dr;
     const midC = c + dc;
     const toR = r + dr * 2;

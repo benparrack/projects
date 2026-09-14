@@ -13,6 +13,11 @@ const MAX_PAYLOAD = 64 * 1024;
 const roomManager = new RoomManager(gameRegistry);
 
 const server = http.createServer(handleStaticRequest);
+// Nagle's algorithm is on by default for Node TCP sockets and batches small writes for up to
+// ~40ms waiting to coalesce them — fine for bulk HTTP responses, but real-time game traffic here
+// is a steady stream of tiny messages (30Hz state broadcasts, per-frame move/look) where that
+// batching reads directly as input/render lag. Disabling it per-connection removes that delay.
+server.on('connection', (socket) => socket.setNoDelay(true));
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_PAYLOAD });
 
 // Per-connection session state, keyed by the ws instance.

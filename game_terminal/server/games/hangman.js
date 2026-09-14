@@ -1,5 +1,21 @@
+const fs = require('fs');
+const path = require('path');
+
 const MAX_WRONG_GUESSES = 6;
 const MAX_WORD_LENGTH = 40;
+
+// Server-authoritative word validation ("spellcheck") — a fixed English wordlist loaded once at
+// startup (~73k words, from this repo's own server/games/data/hangman_words.txt so it's portable
+// across hosts rather than relying on an OS dictionary that may not exist on the deploy target).
+// A picked word/phrase is accepted only if every space-separated token is a real dictionary word.
+const DICTIONARY = new Set(
+  fs.readFileSync(path.join(__dirname, 'data', 'hangman_words.txt'), 'utf8').split('\n').filter(Boolean)
+);
+
+function isValidWordOrPhrase(cleaned) {
+  const tokens = cleaned.toLowerCase().split(' ').filter(Boolean);
+  return tokens.length > 0 && tokens.every((tok) => DICTIONARY.has(tok));
+}
 
 function buildView(room, forClientId) {
   const st = room.state;
@@ -95,9 +111,17 @@ module.exports = {
       if (st.phase !== 'waiting') return;
       if (ctx.senderId !== st.pickerClientId) return;
       const raw = typeof data.word === 'string' ? data.word.trim().toUpperCase() : '';
-      const cleaned = raw.replace(/[^A-Z ]/g, '');
+      const cleaned = raw.replace(/[^A-Z ]/g, '').replace(/ {2,}/g, ' ');
       if (!cleaned.replace(/ /g, '').length) return;
       if (cleaned.length > MAX_WORD_LENGTH) return;
+      if (!isValidWordOrPhrase(cleaned)) {
+        ctx.sendTo(ctx.senderId, {
+          v: 1,
+          type: 'game.event',
+          payload: { gameType: 'hangman', data: { kind: 'wordRejected' } },
+        });
+        return;
+      }
       st.word = cleaned;
       st.guessedLetters = [];
       st.wrongGuesses = 0;

@@ -16,6 +16,38 @@ const GALLOWS = [
 export function mount(container, api) {
   let view = null;
   let roster = [];
+  let wordRejectedFlash = false;
+
+  function renderLetterGrid(interactive) {
+    const guessed = new Set(view.guessedLetters);
+    const wrongLetters = new Set(view.guessedLetters.filter((l) => !view.mask.includes(l)));
+    const grid = document.createElement('div');
+    grid.style.display = 'flex';
+    grid.style.flexWrap = 'wrap';
+    grid.style.gap = '4px';
+    grid.style.maxWidth = '420px';
+    grid.style.justifyContent = 'center';
+    for (const letter of LETTERS) {
+      const btn = document.createElement('button');
+      btn.textContent = letter;
+      btn.style.width = '32px';
+      btn.style.fontWeight = 'bold';
+      const used = guessed.has(letter);
+      btn.disabled = used || !interactive;
+      // Strong color-coded state instead of the previous subtle opacity-only dimming (playtest
+      // feedback: correct guesses "don't stand out ... needs to be a lot more obvious").
+      if (used) {
+        const wrong = wrongLetters.has(letter);
+        btn.style.background = wrong ? '#4a1414' : '#0f4d1a';
+        btn.style.color = wrong ? '#ff6b6b' : '#39ff14';
+        btn.style.borderColor = wrong ? '#ff4d4d' : '#39ff14';
+        btn.style.opacity = '1';
+      }
+      if (interactive) btn.addEventListener('click', () => api.sendAction({ kind: 'guessLetter', letter }));
+      grid.appendChild(btn);
+    }
+    return grid;
+  }
 
   const root = document.createElement('div');
   root.style.display = 'flex';
@@ -64,6 +96,8 @@ export function mount(container, api) {
         input.placeholder = 'secret word';
         input.maxLength = 40;
         input.autocomplete = 'off';
+        input.spellcheck = true;
+        input.lang = 'en';
         const submit = document.createElement('button');
         submit.type = 'submit';
         submit.textContent = 'SET WORD';
@@ -76,6 +110,12 @@ export function mount(container, api) {
           api.sendAction({ kind: 'setWord', word });
         });
         root.appendChild(form);
+        if (wordRejectedFlash) {
+          const err = document.createElement('div');
+          err.textContent = "Not a real word/phrase — try again (multi-word phrases are OK, e.g. \"STAR WARS\").";
+          err.style.color = '#ff4d4d';
+          root.appendChild(err);
+        }
         const hint = document.createElement('div');
         hint.textContent = 'You are picking this round — enter a word for everyone else to guess.';
         root.appendChild(hint);
@@ -86,29 +126,15 @@ export function mount(container, api) {
       }
     } else if (view.phase === 'guessing') {
       if (view.isPicker) {
+        // The picker used to only see "Others are guessing your word" with no letter feedback at
+        // all — playtest report: "can't see other person's guesses as word-maker". Now shows the
+        // same letter grid the guessers see (read-only: pickers can't click to guess).
         const hint = document.createElement('div');
-        hint.textContent = 'Others are guessing your word.';
+        hint.textContent = 'Others are guessing your word:';
         root.appendChild(hint);
+        root.appendChild(renderLetterGrid(false));
       } else {
-        const guessed = new Set(view.guessedLetters);
-        const wrongLetters = new Set(view.guessedLetters.filter((l) => !view.mask.includes(l)));
-        const grid = document.createElement('div');
-        grid.style.display = 'flex';
-        grid.style.flexWrap = 'wrap';
-        grid.style.gap = '4px';
-        grid.style.maxWidth = '420px';
-        grid.style.justifyContent = 'center';
-        for (const letter of LETTERS) {
-          const btn = document.createElement('button');
-          btn.textContent = letter;
-          btn.style.width = '32px';
-          const used = guessed.has(letter);
-          btn.disabled = used;
-          if (used) btn.style.opacity = wrongLetters.has(letter) ? '0.4' : '0.8';
-          btn.addEventListener('click', () => api.sendAction({ kind: 'guessLetter', letter }));
-          grid.appendChild(btn);
-        }
-        root.appendChild(grid);
+        root.appendChild(renderLetterGrid(true));
       }
     } else if (view.phase === 'round_over') {
       const result = document.createElement('div');
@@ -138,8 +164,13 @@ export function mount(container, api) {
       render();
     },
     applyEvent(data) {
-      if (data && data.kind === 'state') {
+      if (!data) return;
+      if (data.kind === 'state') {
         view = data.view;
+        wordRejectedFlash = false;
+        render();
+      } else if (data.kind === 'wordRejected') {
+        wordRejectedFlash = true;
         render();
       }
     },

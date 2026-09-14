@@ -6,6 +6,8 @@
 const CANVAS_WIDTH = 640;
 const CANVAS_HEIGHT = 480;
 const FOOD_RADIUS = 6;
+const MINIMAP_SIZE = 128;
+const MINIMAP_MARGIN = 10;
 const STEER_SEND_MS = 70;
 const STEER_EPSILON = 0.02;
 
@@ -100,9 +102,24 @@ export function mount(container, api) {
   boostBtn.style.touchAction = 'none';
   boostBtn.style.userSelect = 'none';
 
+  // Minimap: shows every visible snake's head on the full arena, so a huge/zoomed-out arena
+  // doesn't leave players unable to tell where threats or open food-rich space are relative to
+  // their own position (playtest request: "add minimap").
+  const minimap = document.createElement('canvas');
+  minimap.width = MINIMAP_SIZE;
+  minimap.height = MINIMAP_SIZE;
+  minimap.style.position = 'absolute';
+  minimap.style.top = `${MINIMAP_MARGIN}px`;
+  minimap.style.right = `${MINIMAP_MARGIN}px`;
+  minimap.style.background = 'rgba(5, 8, 10, 0.75)';
+  minimap.style.border = '1px solid #1f8f0c';
+  minimap.style.pointerEvents = 'none';
+  const minimapCtx = minimap.getContext('2d');
+
   canvasWrap.appendChild(canvas);
   canvasWrap.appendChild(overlay);
   canvasWrap.appendChild(boostBtn);
+  canvasWrap.appendChild(minimap);
 
   const side = document.createElement('div');
   side.style.minWidth = '140px';
@@ -206,6 +223,42 @@ export function mount(container, api) {
       overlay.hidden = false;
       const remainingSec = own.respawnAt ? Math.max(0, Math.ceil((own.respawnAt - Date.now()) / 1000)) : 0;
       overlay.textContent = `YOU DIED — RESPAWNING IN ${remainingSec}…`;
+    }
+
+    drawMinimap(view, own, camX, camY, zoom);
+  }
+
+  function drawMinimap(view, own, camX, camY, zoom) {
+    minimapCtx.fillStyle = 'rgba(5, 8, 10, 0.75)';
+    minimapCtx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+    if (!view) return;
+    const scale = MINIMAP_SIZE / view.arenaSize;
+    const myId = myClientId();
+
+    for (const s of view.snakes) {
+      if (!s.alive || !s.points.length) continue;
+      const head = s.points[0];
+      const isMe = s.clientId === myId;
+      const x = head.x * scale;
+      const y = head.y * scale;
+      minimapCtx.beginPath();
+      minimapCtx.arc(x, y, isMe ? 4 : 2.5, 0, Math.PI * 2);
+      minimapCtx.fillStyle = s.color;
+      minimapCtx.fill();
+      if (isMe) {
+        minimapCtx.lineWidth = 1.5;
+        minimapCtx.strokeStyle = '#fff';
+        minimapCtx.stroke();
+      }
+    }
+
+    // Viewport rectangle: what the main camera currently shows, mapped onto the minimap.
+    if (own) {
+      const halfW = (CANVAS_WIDTH / zoom / 2) * scale;
+      const halfH = (CANVAS_HEIGHT / zoom / 2) * scale;
+      minimapCtx.strokeStyle = 'rgba(255,255,255,0.5)';
+      minimapCtx.lineWidth = 1;
+      minimapCtx.strokeRect(camX * scale - halfW, camY * scale - halfH, halfW * 2, halfH * 2);
     }
   }
 

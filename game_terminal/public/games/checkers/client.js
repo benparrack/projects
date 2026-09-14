@@ -3,6 +3,64 @@
 
 const CELL = 44;
 
+// Client-side mirror of server/games/checkers.js's pure move-generation rules, used only to
+// highlight legal destinations after selecting a piece. Safe to duplicate here (unlike Hangman's
+// hidden word) because the checkers board is fully public — every client already sees the whole
+// board state, so this can't leak anything the server wouldn't already show. The server remains
+// the sole authority on whether a move is actually accepted; this is purely a UI aid and must be
+// kept in sync with server/games/checkers.js's own getMovesForPiece/getAllMovesForColor if the
+// rules ever change there.
+const BOARD_SIZE = 8;
+const ALL_DIAGONALS = [
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+];
+function inBounds(r, c) {
+  return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
+}
+function getMovesForPiece(board, r, c) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const forwardDr = piece.color === 'black' ? 1 : -1;
+  const stepDirs = piece.king ? ALL_DIAGONALS : [[forwardDr, 1], [forwardDr, -1]];
+  const captures = [];
+  for (const [dr, dc] of stepDirs) {
+    const midR = r + dr, midC = c + dc, toR = r + dr * 2, toC = c + dc * 2;
+    if (!inBounds(toR, toC)) continue;
+    const midPiece = board[midR][midC];
+    if (midPiece && midPiece.color !== piece.color && !board[toR][toC]) {
+      captures.push({ from: { r, c }, to: { r: toR, c: toC }, isCapture: true });
+    }
+  }
+  if (captures.length > 0) return captures;
+  const simple = [];
+  for (const [dr, dc] of stepDirs) {
+    const toR = r + dr, toC = c + dc;
+    if (inBounds(toR, toC) && !board[toR][toC]) simple.push({ from: { r, c }, to: { r: toR, c: toC }, isCapture: false });
+  }
+  return simple;
+}
+function getAllMovesForColor(board, color) {
+  const all = [];
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      const piece = board[r][c];
+      if (!piece || piece.color !== color) continue;
+      all.push(...getMovesForPiece(board, r, c));
+    }
+  }
+  return all.some((m) => m.isCapture) ? all.filter((m) => m.isCapture) : all;
+}
+function legalDestinationsFrom(board, from) {
+  const piece = board[from.r][from.c];
+  if (!piece) return [];
+  return getAllMovesForColor(board, piece.color)
+    .filter((m) => m.from.r === from.r && m.from.c === from.c)
+    .map((m) => m.to);
+}
+
 export function mount(container, api) {
   let view = null;
   let roster = [];
@@ -104,6 +162,8 @@ export function mount(container, api) {
     board.style.gridTemplateRows = `repeat(8, ${CELL}px)`;
     board.style.border = '1px solid #1f8f0c';
 
+    const legalTargets = selected ? legalDestinationsFrom(view.board, selected) : [];
+
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
         const cell = document.createElement('div');
@@ -119,6 +179,13 @@ export function mount(container, api) {
         cell.style.boxSizing = 'border-box';
         if (selected && selected.r === r && selected.c === c) {
           cell.style.border = '2px solid #ffb000';
+        } else if (legalTargets.some((t) => t.r === r && t.c === c)) {
+          const dot = document.createElement('div');
+          dot.style.width = '14px';
+          dot.style.height = '14px';
+          dot.style.borderRadius = '50%';
+          dot.style.background = 'rgba(255, 176, 0, 0.65)';
+          cell.appendChild(dot);
         }
         if (dark) {
           cell.style.cursor = 'pointer';
@@ -129,11 +196,17 @@ export function mount(container, api) {
             disc.style.width = `${CELL - 12}px`;
             disc.style.height = `${CELL - 12}px`;
             disc.style.borderRadius = '50%';
-            disc.style.background = piece.color === 'red' ? '#ff4d4d' : '#ffb000';
+            // Actual black (not the amber previously used here) so the disc color matches the
+            // "BLACK"/"PLAY BLACK" seat label — needs a visible border since a truly flat black
+            // disc would otherwise disappear against the board's near-black dark squares.
+            const isBlack = piece.color === 'black';
+            disc.style.background = isBlack ? '#1a1a1a' : '#ff4d4d';
+            disc.style.border = isBlack ? '2px solid #999' : '2px solid #7a1414';
+            disc.style.boxSizing = 'border-box';
             disc.style.display = 'flex';
             disc.style.alignItems = 'center';
             disc.style.justifyContent = 'center';
-            disc.style.color = '#000';
+            disc.style.color = isBlack ? '#fff' : '#000';
             disc.style.fontWeight = 'bold';
             if (piece.king) disc.textContent = 'K';
             cell.appendChild(disc);

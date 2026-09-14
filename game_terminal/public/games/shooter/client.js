@@ -983,10 +983,12 @@ export function mount(container, api) {
   }
 
   let zoomed = false;
+  let lastZoomChangeAt = 0;
   function setZoomed(on) {
     const nextOn = on && currentView && currentView.players[mySeat] && currentView.players[mySeat].weapon === 'sniper';
     if (nextOn === zoomed) return;
     zoomed = nextOn;
+    lastZoomChangeAt = performance.now();
     if (arena) {
       arena.camera.fov = zoomed ? BASE_FOV * SNIPER_ZOOM_FOV_MULT : BASE_FOV;
       arena.camera.updateProjectionMatrix();
@@ -1450,7 +1452,11 @@ export function mount(container, api) {
         // player still has the right mouse button physically held down, there's no event to
         // trigger the corresponding client-side un-zoom — only correcting false-positive "still
         // zoomed" here, never forcing a zoom on, to avoid fighting an in-progress zoom-in.
-        if (zoomed && !me.zoomed) setZoomed(false);
+        // The 300ms floor (matching the slide safety valve above) avoids trusting a stale
+        // "not zoomed yet" broadcast that predates the server having processed our own aimZoom
+        // message — under real network latency this raced constantly and instantly snapped the
+        // scope back off right after zooming in ("sniper keeps unscoping" playtest report).
+        if (zoomed && !me.zoomed && performance.now() - lastZoomChangeAt >= 300) setZoomed(false);
       }
     }
 

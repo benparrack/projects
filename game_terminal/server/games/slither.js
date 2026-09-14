@@ -4,7 +4,7 @@
 
 const TICK_MS = 50; // 20Hz
 const ARENA_SIZE = 3000;
-const BASE_SPEED = 2.6; // world units per tick
+const BASE_SPEED = 3.3; // world units per tick — bumped from 2.6, playtest feedback: "go faster naturally"
 const BOOST_MULT = 2.0;
 const TURN_RATE = 0.15; // max radians the heading can change per tick
 const START_LENGTH = 120;
@@ -19,7 +19,7 @@ const FOOD_RADIUS = 6;
 const FOOD_COUNT = 220;
 const FOOD_VALUE = 14;
 const FOOD_REFILL_PER_TICK = 5;
-const BOOST_DRAIN_PER_TICK = 1.4;
+const BOOST_DRAIN_PER_TICK = 0.7; // halved from 1.4 — playtest feedback: "make boost eat up less"
 const MIN_BOOST_LENGTH = 60; // below START_LENGTH so a fresh spawn can boost immediately
 const RESPAWN_MS = 1200;
 const DEATH_FOOD_STRIDE = 4; // drop one food pellet every N corpse points

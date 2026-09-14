@@ -1,6 +1,8 @@
 // Chess — click a piece, then a destination. Server validates fully (check, castling,
-// en passant, promotion); illegal attempts flash a rejection. Board orientation is fixed
-// (white at the bottom) for both players, matching this project's Checkers implementation.
+// en passant, promotion); illegal attempts flash a rejection. Board orientation defaults to
+// each seated player's own perspective (black sees themselves on the bottom) with a manual
+// FLIP BOARD override; `flipped` only ever changes what's rendered where — board coordinates
+// (dataset.row/col, onSquareClick args) always stay in the server's own r/c space.
 
 const CELL = 44;
 const GLYPHS = {
@@ -15,6 +17,7 @@ export function mount(container, api) {
   let selected = null;
   let flashError = false;
   let pendingPromotion = null; // { from, to }
+  let manualFlip = null; // null = auto (flip for black seat), true/false = explicit user override
 
   const root = document.createElement('div');
   root.style.display = 'flex';
@@ -56,9 +59,17 @@ export function mount(container, api) {
   }
 
   function isPromotionAttempt(from, to) {
-    const piece = view.board[from.r][from.c];
-    if (!piece || piece.type !== 'pawn') return false;
-    return to.r === 0 || to.r === 7;
+    // Must actually be one of this pawn's legal moves, not just "any click landing on the back
+    // rank while a pawn is selected" — the latter used to also fire when a player clicked one of
+    // their OWN OTHER pieces sitting on the back rank (e.g. a rook) hoping to switch selection,
+    // popping an unrelated promotion picker and then silently eating every further click (since
+    // onSquareClick bails out early whenever pendingPromotion is set) until the easy-to-miss
+    // picker was noticed and its move got rejected as illegal. Matched a real playtest report of
+    // pieces randomly becoming unresponsive.
+    if (!view.legalMoves) return false;
+    return view.legalMoves.some(
+      (m) => m.from.r === from.r && m.from.c === from.c && m.to.r === to.r && m.to.c === to.c && m.promotion
+    );
   }
 
   function onSquareClick(r, c) {
@@ -119,6 +130,7 @@ export function mount(container, api) {
     seatRow.style.display = 'flex';
     seatRow.style.gap = '12px';
     const seat = mySeat();
+    const flipped = manualFlip !== null ? manualFlip : seat === 'black';
 
     for (const color of ['white', 'black']) {
       const label = document.createElement('div');
@@ -144,6 +156,13 @@ export function mount(container, api) {
         seatRow.appendChild(resignBtn);
       }
     }
+    const flipBtn = document.createElement('button');
+    flipBtn.textContent = 'FLIP BOARD';
+    flipBtn.addEventListener('click', () => {
+      manualFlip = !flipped;
+      render();
+    });
+    seatRow.appendChild(flipBtn);
     root.appendChild(seatRow);
 
     const board = document.createElement('div');
@@ -154,8 +173,12 @@ export function mount(container, api) {
 
     const destMoves = legalDestinations();
 
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
+    for (let vr = 0; vr < 8; vr++) {
+      for (let vc = 0; vc < 8; vc++) {
+        // `r`/`c` stay in the server's own board coordinate space regardless of orientation;
+        // only which (vr, vc) screen slot a given (r, c) square lands in changes with `flipped`.
+        const r = flipped ? 7 - vr : vr;
+        const c = flipped ? 7 - vc : vc;
         const cell = document.createElement('div');
         cell.dataset.row = String(r);
         cell.dataset.col = String(c);

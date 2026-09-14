@@ -39,6 +39,30 @@ module.exports = {
     if (data.kind === 'clear') {
       room.state.history = [];
       ctx.broadcast({ type: 'game.event', v: 1, payload: { gameType: 'drawing', data: { kind: 'clear' } } }, ctx.senderId);
+      return;
+    }
+
+    // Scoped to the sender's own segments only — a shared canvas where one player's CLEAR wiped
+    // everyone's work was a real playtest complaint ("clear should only clear the work each
+    // individual has done"). Broadcast to everyone (sender included, unlike the other handlers
+    // here) since every client needs to replay its own local segment history minus this client's
+    // strokes to reproduce the same result.
+    if (data.kind === 'clearMine') {
+      room.state.history = room.state.history.filter((s) => s.clientId !== ctx.senderId);
+      ctx.broadcast({ type: 'game.event', v: 1, payload: { gameType: 'drawing', data: { kind: 'clearMine', clientId: ctx.senderId } } });
+      return;
+    }
+
+    if (data.kind === 'undoStroke') {
+      const strokeId = String(data.strokeId || '');
+      if (!strokeId) return;
+      const before = room.state.history.length;
+      // Ownership check: a client can only undo strokes it drew itself, even though strokeIds are
+      // visible to everyone via broadcast 'segment' events — otherwise anyone could undo anyone's
+      // stroke just by having seen its id go by.
+      room.state.history = room.state.history.filter((s) => !(s.strokeId === strokeId && s.clientId === ctx.senderId));
+      if (room.state.history.length === before) return;
+      ctx.broadcast({ type: 'game.event', v: 1, payload: { gameType: 'drawing', data: { kind: 'undoStroke', strokeId } } });
     }
   },
 };
