@@ -10,7 +10,11 @@ const TURN_RATE = 0.15; // max radians the heading can change per tick
 const START_LENGTH = 120;
 const MAX_LENGTH = 3000;
 const POINT_SPACING = 6; // approx distance between stored path points
-const SNAKE_RADIUS = 9;
+const BASE_SNAKE_RADIUS = 9;
+// Girth grows a bit alongside length, not just the tail getting longer — capped well short of
+// silly so it stays a subtle "fatter as you grow" effect rather than a snake ballooning in size.
+const MAX_SNAKE_RADIUS = 13;
+const RADIUS_GROWTH_LENGTH = 1800; // length gained (beyond START_LENGTH) to reach MAX_SNAKE_RADIUS
 const FOOD_RADIUS = 6;
 const FOOD_COUNT = 220;
 const FOOD_VALUE = 14;
@@ -23,8 +27,13 @@ const LEADERBOARD_SIZE = 5;
 const SPAWN_MARGIN = 300; // keep spawns away from arena walls
 const SPAWN_SAFE_RADIUS = 150; // keep new spawns clear of other snakes' heads by roughly this much
 const SPAWN_ATTEMPTS = 8;
-const COLLIDE_DIST_SQ = (SNAKE_RADIUS * 1.6) ** 2;
-const EAT_DIST_SQ = (SNAKE_RADIUS + FOOD_RADIUS) ** 2;
+
+// Same formula the client mirrors by hand (public/games/slither/client.js, radiusFor) to size
+// its rendered stroke width — kept in sync like START_LENGTH/computeZoom already are.
+function radiusFor(snake) {
+  const t = Math.min(1, Math.max(0, (snake.length - START_LENGTH) / RADIUS_GROWTH_LENGTH));
+  return BASE_SNAKE_RADIUS + (MAX_SNAKE_RADIUS - BASE_SNAKE_RADIUS) * t;
+}
 
 const COLOR_PALETTE = ['#39ff14', '#ffb000', '#00e5ff', '#ff4dd2', '#ff4d4d', '#c792ff', '#ffee58'];
 
@@ -278,15 +287,19 @@ module.exports = {
     for (const a of st.snakes.values()) {
       if (!a.alive) continue;
       const head = a.points[0];
+      const aRadius = radiusFor(a);
       let died = false;
 
       outer: for (const b of st.snakes.values()) {
         if (a === b || !b.alive) continue;
+        // Collision distance scales with both snakes' current girth (matches the old fixed
+        // SNAKE_RADIUS*1.6 exactly when both are still at BASE_SNAKE_RADIUS).
+        const collideDistSq = ((aRadius + radiusFor(b)) * 0.8) ** 2;
         for (let i = 0; i < b.points.length; i += 2) {
           const p = b.points[i];
           const dx = head.x - p.x;
           const dy = head.y - p.y;
-          if (dx * dx + dy * dy < COLLIDE_DIST_SQ) {
+          if (dx * dx + dy * dy < collideDistSq) {
             died = true;
             break outer;
           }
@@ -299,11 +312,12 @@ module.exports = {
     for (const snake of st.snakes.values()) {
       if (!snake.alive) continue;
       const head = snake.points[0];
+      const eatDistSq = (radiusFor(snake) + FOOD_RADIUS) ** 2;
       for (let i = st.food.length - 1; i >= 0; i--) {
         const f = st.food[i];
         const dx = head.x - f.x;
         const dy = head.y - f.y;
-        if (dx * dx + dy * dy < EAT_DIST_SQ) {
+        if (dx * dx + dy * dy < eatDistSq) {
           snake.length = Math.min(MAX_LENGTH, snake.length + f.value);
           st.food.splice(i, 1);
           st.tickFoodRemoved.push(f.id);

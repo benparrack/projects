@@ -32,6 +32,17 @@ regardless of whether anyone just sent a message.
   killing another snake is immediately rewarding.
 - Snake body is stored as a full point-path per snake, trimmed to arc length each tick
   (`trimToLength`) rather than a fixed segment count — growth just raises the target length.
+- **Girth grows with length, not just the tail.** Eating used to only extend length at a fixed
+  radius; a `radiusFor(snake)` formula in `server/games/slither.js` now scales each snake's
+  radius from `BASE_SNAKE_RADIUS` (9) up to `MAX_SNAKE_RADIUS` (13) over `RADIUS_GROWTH_LENGTH`
+  (1800) length gained past `START_LENGTH`, then caps — "slightly larger, nothing insane" per
+  Ben's ask. Collision distance between two snakes now scales with both snakes' current radii
+  (`(aRadius + bRadius) * 0.8`, matching the old fixed `SNAKE_RADIUS * 1.6` exactly at base
+  radius) and a snake's own eating reach scales with its own radius, so hitbox and reach stay
+  consistent with the rendered size rather than a fatter snake looking bigger but hitting like a
+  thin one. Client (`public/games/slither/client.js`) mirrors the same formula by hand
+  (`computeRadius`) to size the rendered stroke width — same pattern as `START_LENGTH`/
+  `computeZoom` already being kept in sync by hand (no shared module in this repo).
 - ~~Client renders every state broadcast directly (no interpolation/prediction)~~ — later found
   to read as jittery in real play; client now runs a `requestAnimationFrame` loop with
   tick-to-tick interpolation, see the fixed playtest feedback below.

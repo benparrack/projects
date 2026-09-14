@@ -5,7 +5,6 @@
 
 const CANVAS_WIDTH = 640;
 const CANVAS_HEIGHT = 480;
-const SNAKE_RADIUS = 9;
 const FOOD_RADIUS = 6;
 const STEER_SEND_MS = 70;
 const STEER_EPSILON = 0.02;
@@ -28,6 +27,17 @@ const ZOOM_SHRINK_RATE = 500; // length growth (beyond start) over which zoom ro
 function computeZoom(length) {
   const grown = Math.max(0, length - START_LENGTH);
   return Math.max(ZOOM_MIN, 1 / (1 + grown / ZOOM_SHRINK_RATE));
+}
+
+// Girth grows a bit alongside length too, not just the tail getting longer. Same formula as
+// server/games/slither.js's radiusFor — kept in sync by hand like START_LENGTH above.
+const BASE_SNAKE_RADIUS = 9;
+const MAX_SNAKE_RADIUS = 13;
+const RADIUS_GROWTH_LENGTH = 1800;
+
+function computeRadius(length) {
+  const t = Math.min(1, Math.max(0, (length - START_LENGTH) / RADIUS_GROWTH_LENGTH));
+  return BASE_SNAKE_RADIUS + (MAX_SNAKE_RADIUS - BASE_SNAKE_RADIUS) * t;
 }
 
 function angleDiff(a, b) {
@@ -129,6 +139,7 @@ export function mount(container, api) {
     getRenderView: () => currentRenderView(),
     getMyId: () => api.getClientId(),
     computeZoom,
+    computeRadius,
   };
 
   function myClientId() {
@@ -171,7 +182,7 @@ export function mount(container, api) {
     for (const s of view.snakes) {
       if (!s.alive || s.points.length < 2) continue;
       ctx.strokeStyle = s.color;
-      ctx.lineWidth = SNAKE_RADIUS * 2 * zoom;
+      ctx.lineWidth = computeRadius(s.length) * 2 * zoom;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.beginPath();
