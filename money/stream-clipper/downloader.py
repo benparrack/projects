@@ -29,7 +29,12 @@ def _canonical_url(platform: str, entry: dict) -> str:
     if platform == "youtube" and video_id:
         return f"https://www.youtube.com/watch?v={video_id}"
     if platform == "twitch" and video_id:
-        return f"https://www.twitch.tv/videos/{video_id}"
+        # yt-dlp's flat-playlist IDs for Twitch VODs carry a "v" prefix
+        # (e.g. "v2872697283") that isn't part of the actual public URL,
+        # which takes the bare numeric ID (twitch.tv/videos/2872697283) —
+        # confirmed live, a "v"-prefixed URL 404s via the wrong extractor path.
+        numeric_id = video_id[1:] if video_id.startswith("v") else video_id
+        return f"https://www.twitch.tv/videos/{numeric_id}"
     return entry.get("url") or entry.get("webpage_url")
 
 

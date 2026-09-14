@@ -23,7 +23,18 @@ ALLOW_AUTO_POST = os.getenv("ALLOW_AUTO_POST", "false").strip().lower() == "true
 # --- Sources to pull VODs from. Fill in with channels you have the right to
 # clip (your own content, or a channel that has explicitly OK'd clipping) ---
 # Each entry: {"platform": "youtube"|"twitch", "channel_url": "..."}
-SOURCE_CHANNELS = []
+#
+# NOTE: Kai Cenat and Speed have not given any known general clipping
+# permission — see this project's README Disclaimer. Ben chose to point this
+# at them anyway (2026-09-14), fully aware of the DMCA/strike risk against
+# the posting account; nothing here should be read as implying they've
+# consented.
+SOURCE_CHANNELS = [
+    {"platform": "twitch", "channel_url": "https://www.twitch.tv/kaicenat/videos"},
+    {"platform": "youtube", "channel_url": "https://www.youtube.com/@KaiCenatLive/videos"},
+    {"platform": "twitch", "channel_url": "https://www.twitch.tv/ishowspeed/videos"},
+    {"platform": "youtube", "channel_url": "https://www.youtube.com/@IShowSpeed/videos"},
+]
 
 REQUEST_TIMEOUT = 15
 
