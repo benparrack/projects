@@ -1,8 +1,10 @@
 """Orchestrates one full run: for each configured source channel, find new
 VODs, download them, score highlight windows from chat/audio/transcript
-signals, render each selected window to a vertical clip with burned-in
-captions, and write it to staging/<date>/pending/ with a manifest entry.
-No posting happens here — see poster.py, which is gated separately.
+signals, render each selected window to a vertical clip — with a
+silence-trim pacing pass, face-tracking dynamic crop, kinetic captions, and
+a transcript-derived title (see pacing.py, face_track.py, transcribe.py,
+titling.py) — and write it to staging/<date>/pending/ with a manifest
+entry. No posting happens here — see poster.py, which is gated separately.
 """
 
 import os
@@ -15,9 +17,12 @@ import chat_client
 import clipper
 import config
 import downloader
+import face_track
 import highlights
 import manifest
+import pacing
 import state
+import titling
 import transcribe
 
 
@@ -60,7 +65,76 @@ def _probe_duration(video_path: str) -> float:
     return float(result.stdout.strip())
 
 
-def process_video(platform: str, video_id: str, video_url: str, logger) -> list:
+def _compute_keep_segments(window, audio_times, audio_values, logger, clip_id) -> list:
+    """Returns the pacing keep-segments for `window`, or just [(window.start,
+    window.end)] unchanged if pacing is disabled or there's no silence
+    worth trimming."""
+    if not config.ENABLE_PACING_TRIM:
+        return [(window.start, window.end)]
+
+    window_values = [v for t, v in zip(audio_times, audio_values) if window.start <= t < window.end]
+    if not window_values:
+        return [(window.start, window.end)]
+
+    threshold = max(window_values) * config.SILENCE_RELATIVE_THRESHOLD
+    gaps = pacing.find_silence_gaps(
+        audio_times, audio_values, window.start, window.end, threshold, config.MIN_SILENCE_GAP_SECONDS
+    )
+    keep_segments = pacing.keep_segments_from_gaps(
+        window.start, window.end, gaps,
+        min_segment_seconds=config.MIN_KEPT_SEGMENT_SECONDS,
+        gap_padding_seconds=config.SILENCE_GAP_PADDING_SECONDS,
+    )
+    if len(keep_segments) > 1:
+        logger.info(f"Pacing: trimming {len(keep_segments) - 1} silence gap(s) out of {clip_id}")
+    return keep_segments
+
+
+def _resolve_crop(render_input, detect_start, detect_end, width, height, logger, clip_id) -> str:
+    crop_w, crop_h, static_x, static_y = clipper.compute_crop_box(width, height)
+    if config.ENABLE_FACE_TRACKING:
+        try:
+            return face_track.dynamic_crop_for_clip(render_input, detect_start, detect_end, width, height, crop_w, crop_h)
+        except Exception as e:
+            logger.warning(f"Face tracking failed for {clip_id}, falling back to a static crop: {e}")
+    return f"crop={crop_w}:{crop_h}:{static_x}:{static_y}"
+
+
+def render_window(window, video_path, audio_times, audio_values, transcript, width, height, work_dir, pending_dir, clip_id, source_label, logger) -> str:
+    """Renders one selected highlight window to a finished clip file and
+    returns (filename, title, caption). Handles the pacing/no-pacing branch
+    (see module docstring) so process_video itself stays about
+    orchestration, not rendering mechanics."""
+    keep_segments = _compute_keep_segments(window, audio_times, audio_values, logger, clip_id)
+    trimmed = len(keep_segments) > 1
+
+    if trimmed:
+        render_input = os.path.join(work_dir, f"{clip_id}_paced.mp4")
+        clipper.render_trimmed_clip(video_path, keep_segments, render_input)
+        detect_start, detect_end = 0.0, pacing.total_duration(keep_segments)
+        caption_words = pacing.remap_words(transcript["words"], keep_segments)
+    else:
+        render_input = video_path
+        detect_start, detect_end = window.start, window.end
+        caption_words = transcript["words"]
+
+    crop_filter = _resolve_crop(render_input, detect_start, detect_end, width, height, logger, clip_id)
+
+    title = titling.title_from_transcript(caption_words, detect_start, detect_end, source_label=source_label)
+    caption = titling.caption_text(title, source_label=source_label)
+
+    subtitles_path = os.path.join(work_dir, f"{clip_id}.ass")
+    with open(subtitles_path, "w") as f:
+        f.write(transcribe.build_ass_subtitles(caption_words, detect_start, detect_end))
+
+    filename = f"{clip_id}.mp4"
+    output_path = os.path.join(pending_dir, filename)
+    clipper.render_clip(render_input, detect_start, detect_end, output_path, crop_filter=crop_filter, subtitles_path=subtitles_path)
+
+    return filename, title, caption
+
+
+def process_video(platform: str, video_id: str, video_url: str, logger, source_label: str = None) -> list:
     """Downloads one VOD, scores it, renders its selected clips, and returns
     the list of ClipResult produced (possibly empty, e.g. a very short or
     low-signal VOD)."""
@@ -110,7 +184,6 @@ def process_video(platform: str, video_id: str, video_url: str, logger) -> list:
     )
     windows = [highlights.snap_to_segment_boundaries(w, transcript["segments"]) for w in windows]
 
-    crop_filter = clipper.build_crop_filter(width, height)
     date_dir = _today_dir()
     pending_dir = os.path.join(date_dir, "pending")
     os.makedirs(pending_dir, exist_ok=True)
@@ -118,20 +191,16 @@ def process_video(platform: str, video_id: str, video_url: str, logger) -> list:
     results = []
     for window in windows:
         clip_id = _clip_id(platform, video_id, window)
-        filename = f"{clip_id}.mp4"
-        output_path = os.path.join(pending_dir, filename)
-        subtitles_path = os.path.join(work_dir, f"{clip_id}.ass")
+        logger.info(f"Rendering clip {clip_id} ({window.start:.1f}-{window.end:.1f}, score={window.score:.2f})")
 
-        with open(subtitles_path, "w") as f:
-            f.write(transcribe.build_ass_subtitles(transcript["words"], window.start, window.end))
-
-        logger.info(
-            f"Rendering clip {clip_id} ({window.start:.1f}-{window.end:.1f}, score={window.score:.2f})"
-        )
-        clipper.render_clip(
-            video_path, window.start, window.end, output_path,
-            crop_filter=crop_filter, subtitles_path=subtitles_path,
-        )
+        try:
+            filename, title, caption = render_window(
+                window, video_path, audio_times, audio_values, transcript,
+                width, height, work_dir, pending_dir, clip_id, source_label, logger,
+            )
+        except Exception as e:
+            logger.error(f"Failed rendering {clip_id}, skipping this clip: {e}")
+            continue
 
         manifest.append_entry(date_dir, {
             "clip_id": clip_id,
@@ -141,8 +210,8 @@ def process_video(platform: str, video_id: str, video_url: str, logger) -> list:
             "end": window.end,
             "score": window.score,
             "filename": filename,
-            "title": f"{video_id} highlight #Shorts",
-            "caption": f"Highlight from {video_id} #Shorts #Reels",
+            "title": title,
+            "caption": caption,
             "target_platforms": ["youtube"],
             "posted": {},
         })
@@ -161,6 +230,7 @@ def run_cycle(logger, limit_per_source: int = 3) -> RunSummary:
     for source in config.SOURCE_CHANNELS:
         platform = source["platform"]
         channel_url = source["channel_url"]
+        source_label = source.get("label")
         try:
             videos = downloader.list_recent_videos(platform, channel_url, limit=limit_per_source)
         except downloader.DownloadError as e:
@@ -174,7 +244,7 @@ def run_cycle(logger, limit_per_source: int = 3) -> RunSummary:
             if state.is_video_processed(platform, video_id):
                 continue
             try:
-                results = process_video(platform, video_id, video["url"], logger)
+                results = process_video(platform, video_id, video["url"], logger, source_label=source_label)
                 summary.clips_rendered += len(results)
                 summary.videos_processed += 1
                 state.mark_video_processed(platform, video_id)

@@ -85,10 +85,28 @@ starting in parallel with everything else:
    of the VOD on a composite of chat-spike + audio-spike + transcript-density
    z-scores (`highlights.py`), picks the top few non-overlapping ~15s windows,
    snaps their edges to the nearest transcript sentence boundary so cuts
-   land cleanly, and renders each to a vertical 9:16 clip with burned-in
-   word-by-word captions (`clipper.py`). Output lands in
-   `staging/<date>/pending/`, plus a `manifest.json` with each clip's
-   metadata. **Nothing is posted at this stage.**
+   land cleanly, then for each window (`pipeline.render_window`):
+   - **Pacing** (`pacing.py`) — finds long internal silences in the window
+     (using the same audio-loudness signal, relative to that clip's own
+     peak) and, if any qualify, renders a trim+concat pass first
+     (`clipper.build_trimmed_clip_command`) that cuts the dead air out
+     before anything else happens, so caption timing and face-tracking both
+     work against the *paced* timeline.
+   - **Face-tracking crop** (`face_track.py`) — samples the (possibly
+     already-paced) clip every 0.5s with MediaPipe's face detector and pans
+     a 9:16 crop window to follow the speaker (with a deadzone so it doesn't
+     jitter on small head movement), falling back to a static center crop
+     if no face is ever detected or MediaPipe/OpenCV aren't installed.
+   - **Kinetic captions** (`transcribe.py`) — burns in short multi-word
+     phrases using ASS's native `\k` karaoke tags, so each word highlights
+     yellow the instant it's spoken rather than one plain word at a time.
+   - **Title/caption text** (`titling.py`) — built from what's actually said
+     in the clip (not a placeholder), prefixed with the source's `label`
+     from `config.SOURCE_CHANNELS` (e.g. "Kai Cenat: ...") since that's real
+     click-through value a generic channel name can't provide on its own.
+   
+   Output lands in `staging/<date>/pending/`, plus a `manifest.json` with
+   each clip's metadata. **Nothing is posted at this stage.**
 2. **Review** — look at what's in `staging/<date>/pending/`, and **move**
    (not copy) any clip you're happy with into `staging/<date>/approved/`.
    This is a deliberately plain filesystem convention rather than a UI —
@@ -119,16 +137,22 @@ starting in parallel with everything else:
   per-video errors and keeps going; a bad *source* (e.g. a dead channel URL)
   is logged and skipped too.
 
-## Known limitations (v1)
+## Known limitations
 
 - VOD-based only — doesn't clip a stream while it's still live.
-- Vertical reframe is a static center crop, not face-tracking (a natural v2:
-  see `IDEAS.md`/plan notes on MediaPipe-based dynamic crop).
 - Highlight scoring is a heuristic, not a quality judgment — expect false
   positives (hype-chat over nothing, a loud noise breaking silence); this is
   exactly why the review-before-post gate exists.
 - Instagram posting needs a hosting step for the video URL this project
   doesn't provide (see Setup above).
+- Face-tracking downloads a ~1MB MediaPipe model to `models/` on first use
+  (gitignored) — needs a network connection the first time a clip renders.
+- faster-whisper's word-level timestamps aren't perfectly reproducible
+  run-to-run on CPU (confirmed live: re-transcribing the same audio file
+  twice picked slightly different words/boundaries) — expect small
+  differences in exactly which windows/captions a re-run of the same VOD
+  produces. Doesn't affect correctness, just means results aren't bit-for-bit
+  repeatable.
 
 ## CLI reference
 
@@ -157,8 +181,12 @@ pytest
 
 Unit tests cover `highlights.py` (scoring/window-selection), `state.py`
 (processed-video tracking, daily caps, spacing), `clipper.py` (ffmpeg command
-construction), and `transcribe.py` (`.ass` caption building) — all pure
-functions, no network, no real ffmpeg/whisper/yt-dlp invocation.
+construction, incl. the pacing trim+concat command), `transcribe.py` (`.ass`
+kinetic-karaoke caption building), `pacing.py` (silence-gap detection, time
+remapping), `face_track.py` (deadzone smoothing, crop-expression building),
+`titling.py` (transcript-derived titles), and `downloader.py`'s pure URL
+logic — all pure functions, no network, no real ffmpeg/whisper/yt-dlp/
+mediapipe invocation.
 
 ## Manual end-to-end verification
 

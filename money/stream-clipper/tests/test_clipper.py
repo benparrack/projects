@@ -69,3 +69,41 @@ def test_build_clip_command_never_uses_shell_string():
     cmd = clipper.build_clip_command("in.mp4", 0.0, 1.0, "out.mp4")
     assert isinstance(cmd, list)
     assert all(isinstance(part, str) for part in cmd)
+
+
+def test_build_trimmed_clip_command_seeks_to_first_segment_start():
+    cmd = clipper.build_trimmed_clip_command("in.mp4", [(100.0, 110.0), (115.0, 120.0)], "out.mp4")
+    assert cmd[cmd.index("-ss") + 1] == "100.000"
+
+
+def test_build_trimmed_clip_command_trims_are_relative_to_seek_offset():
+    cmd = clipper.build_trimmed_clip_command("in.mp4", [(100.0, 110.0), (115.0, 120.0)], "out.mp4")
+    filter_complex = cmd[cmd.index("-filter_complex") + 1]
+    # first segment relative to itself starts at 0, second starts 15s later (115-100)
+    assert "trim=start=0.000:end=10.000" in filter_complex
+    assert "trim=start=15.000:end=20.000" in filter_complex
+
+
+def test_build_trimmed_clip_command_concat_filter_matches_segment_count():
+    cmd = clipper.build_trimmed_clip_command("in.mp4", [(0.0, 5.0), (8.0, 12.0), (20.0, 25.0)], "out.mp4")
+    filter_complex = cmd[cmd.index("-filter_complex") + 1]
+    assert "concat=n=3:v=1:a=1" in filter_complex
+    assert "[v0][a0][v1][a1][v2][a2]" in filter_complex
+
+
+def test_build_trimmed_clip_command_maps_named_outputs():
+    cmd = clipper.build_trimmed_clip_command("in.mp4", [(0.0, 5.0)], "out.mp4")
+    assert "-map" in cmd
+    map_indices = [i for i, part in enumerate(cmd) if part == "-map"]
+    mapped = {cmd[i + 1] for i in map_indices}
+    assert mapped == {"[vout]", "[aout]"}
+
+
+def test_build_trimmed_clip_command_rejects_empty_segments():
+    with pytest.raises(ValueError):
+        clipper.build_trimmed_clip_command("in.mp4", [], "out.mp4")
+
+
+def test_build_trimmed_clip_command_rejects_invalid_segment():
+    with pytest.raises(ValueError):
+        clipper.build_trimmed_clip_command("in.mp4", [(10.0, 5.0)], "out.mp4")

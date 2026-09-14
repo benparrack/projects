@@ -22,7 +22,10 @@ ALLOW_AUTO_POST = os.getenv("ALLOW_AUTO_POST", "false").strip().lower() == "true
 
 # --- Sources to pull VODs from. Fill in with channels you have the right to
 # clip (your own content, or a channel that has explicitly OK'd clipping) ---
-# Each entry: {"platform": "youtube"|"twitch", "channel_url": "..."}
+# Each entry: {"platform": "youtube"|"twitch", "channel_url": "...", "label": "..."}
+# `label` is a human-readable source name (e.g. "Kai Cenat") used to prefix
+# generated titles and build a hashtag — see titling.py. Optional; falls
+# back to no prefix/tag if omitted.
 #
 # NOTE: Kai Cenat and Speed have not given any known general clipping
 # permission — see this project's README Disclaimer. Ben chose to point this
@@ -30,10 +33,10 @@ ALLOW_AUTO_POST = os.getenv("ALLOW_AUTO_POST", "false").strip().lower() == "true
 # the posting account; nothing here should be read as implying they've
 # consented.
 SOURCE_CHANNELS = [
-    {"platform": "twitch", "channel_url": "https://www.twitch.tv/kaicenat/videos"},
-    {"platform": "youtube", "channel_url": "https://www.youtube.com/@KaiCenatLive/videos"},
-    {"platform": "twitch", "channel_url": "https://www.twitch.tv/ishowspeed/videos"},
-    {"platform": "youtube", "channel_url": "https://www.youtube.com/@IShowSpeed/videos"},
+    {"platform": "twitch", "channel_url": "https://www.twitch.tv/kaicenat/videos", "label": "Kai Cenat"},
+    {"platform": "youtube", "channel_url": "https://www.youtube.com/@KaiCenatLive/videos", "label": "Kai Cenat"},
+    {"platform": "twitch", "channel_url": "https://www.twitch.tv/ishowspeed/videos", "label": "Speed"},
+    {"platform": "youtube", "channel_url": "https://www.youtube.com/@IShowSpeed/videos", "label": "Speed"},
 ]
 
 REQUEST_TIMEOUT = 15
@@ -60,6 +63,27 @@ WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 OUTPUT_WIDTH = 1080
 OUTPUT_HEIGHT = 1920
 TARGET_ASPECT = (9, 16)
+
+# --- Face-tracking dynamic crop (falls back to a static center crop if
+# mediapipe/opencv aren't installed, or no face is ever detected in a clip) ---
+ENABLE_FACE_TRACKING = True
+FACE_TRACK_SAMPLE_INTERVAL = 0.5  # seconds between face-detection samples
+FACE_TRACK_DEADZONE_FRAC = 0.15  # min face-center drift (as a frame-size fraction) before the camera re-centers
+# "full_range" (not "short_range") — confirmed live against a real 1920x1080
+# clip frame: short_range found 0 faces on a normal wide/medium shot (it's
+# tuned for close-up selfie-camera distance, <~2m), full_range found the
+# actual on-screen face at a real streamer-footage framing distance.
+FACE_TRACK_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_full_range/float16/1/blaze_face_full_range.tflite"
+FACE_TRACK_MIN_CONFIDENCE = 0.3  # full_range's real scores run lower than short_range's; tested working at 0.3
+MODELS_DIR = "models"
+
+# --- Pacing (silence-trim) — cuts long dead air out of a clip instead of
+# keeping every pause verbatim ---
+ENABLE_PACING_TRIM = True
+SILENCE_RELATIVE_THRESHOLD = 0.15  # fraction of the clip's own peak loudness that counts as "silence"
+MIN_SILENCE_GAP_SECONDS = 0.6  # only trim a gap at least this long
+SILENCE_GAP_PADDING_SECONDS = 0.15  # loudness kept on each side of a cut, so speech isn't clipped
+MIN_KEPT_SEGMENT_SECONDS = 0.3  # drop a keep-segment shorter than this rather than cut around it
 
 # --- Posting caps (per platform, enforced via state.py) ---
 # youtube: 30-minute spacing per Ben's request (2026-09-14). Raised the daily
