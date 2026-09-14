@@ -9,6 +9,15 @@ or difficulty is — not just the pitch.
   but hard to capitalize on without accounts/banking in the right countries.
 - **`alpaca-paper-trader/`** — SMA-crossover paper trading bot on Alpaca,
   running on a schedule. Track record still TBD.
+- **`stream-clipper/`** — automated highlight-clip pipeline: finds ~15s
+  moments in YouTube/Twitch VODs (chat-spike + audio-energy + transcript
+  scoring), renders vertical clips with burned-in captions, posts to YouTube
+  Shorts once a human approves them (Instagram Reels needs a one-time Meta
+  app-review process first — not yet cleared). The real risk here isn't
+  technical, it's legal/ToS: reposting someone else's stream footage without
+  permission risks DMCA strikes against the posting account, so this is only
+  as durable as whichever source channels it's pointed at have actually
+  agreed to being clipped.
 
 ---
 

@@ -1,0 +1,11 @@
+yt-dlp
+chat-downloader
+faster-whisper
+librosa
+scipy
+numpy
+google-api-python-client
+google-auth-oauthlib
+requests
+python-dotenv
+pytest
