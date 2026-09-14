@@ -54,6 +54,10 @@
   }
   button.action:hover { background: #4a3d54; }
   button.action:disabled { opacity: 0.5; cursor: default; }
+  button.action.recording { background: #5a2a2a; }
+  button.action.recording:hover { background: #6a3232; }
+  button.action.secondary { background: #23262c; border: 1px solid #33373f; }
+  button.action.secondary:hover { background: #2b2e35; }
   #topicCard {
     background: #1c1e24;
     border: 1px solid #33373f;
@@ -86,6 +90,30 @@
     text-decoration: none;
   }
   #wikiLink:hover { text-decoration: underline; }
+  #relatedSection {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #33373f;
+  }
+  #relatedSection h3 { font-size: 14px; color: #b8b8b8; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  #relatedList { list-style: none; margin: 0; padding: 0; }
+  #relatedList li { margin-bottom: 8px; font-size: 14px; line-height: 1.5; }
+  #relatedList a { color: #b8a0d0; text-decoration: none; }
+  #relatedList a:hover { text-decoration: underline; }
+  .relatedDesc { color: #888; }
+  #reflectionCard {
+    background: #1c1e24;
+    border: 1px solid #33373f;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-top: 16px;
+  }
+  #reflectionCard h3 { font-size: 14px; color: #b8b8b8; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  #recordRow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #recordTimer { font-size: 13px; color: #a8a0b8; font-variant-numeric: tabular-nums; }
+  #recordStatus { font-size: 13px; color: #888; margin-top: 8px; min-height: 16px; }
+  #recordingPlayer { width: 100%; margin-top: 12px; }
+  #noRecordingNote { font-size: 13px; color: #666; margin-top: 4px; }
   #historyPanel {
     margin-top: 20px;
     background: #1c1e24;
@@ -117,9 +145,21 @@
     padding: 6px 8px;
     border-radius: 4px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   button.historyItem:hover { background: #23262c; color: #f0f0f0; }
-  #historyList .hdate { color: #888; margin-right: 8px; font-variant-numeric: tabular-nums; }
+  #historyList .hdate { color: #888; font-variant-numeric: tabular-nums; }
+  #historyList .hdot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #a06060;
+    flex: none;
+    visibility: hidden;
+  }
+  #historyList .hdot.has-recording { visibility: visible; }
   footer {
     margin-top: 20px;
     font-size: 12px;
@@ -136,6 +176,7 @@
   </header>
   <div id="controls">
     <button class="action" id="newTopicBtn">New random topic</button>
+    <button class="action secondary" id="backToTodayBtn" hidden>Back to today</button>
   </div>
   <div id="topicCard">
     <div id="loading">Loading a new topic…</div>
@@ -145,7 +186,21 @@
       <p id="description"></p>
       <div id="extract"></div>
       <a id="wikiLink" target="_blank" rel="noopener">Read the full article on Wikipedia →</a>
+      <div id="relatedSection" hidden>
+        <h3>Go deeper</h3>
+        <ul id="relatedList"></ul>
+      </div>
     </div>
+  </div>
+  <div id="reflectionCard">
+    <h3>Talk about what you learned</h3>
+    <div id="recordRow">
+      <button class="action" id="recordBtn">Record reflection</button>
+      <span id="recordTimer"></span>
+    </div>
+    <div id="recordStatus"></div>
+    <audio id="recordingPlayer" controls hidden></audio>
+    <div id="noRecordingNote">No reflection recorded for this day yet.</div>
   </div>
   <details id="historyPanel">
     <summary>History (<span id="historyCount">0</span> <span id="historyDayWord">days</span> learned)</summary>
@@ -154,24 +209,37 @@
   <footer>A new random topic each day, pulled from Wikipedia. Revisits show the same topic until you ask for a new one.</footer>
 </div>
 <script>
-  const STORAGE_KEY = 'dailyLearning:history';
+  let history = {};
+  let viewingDate = todayKey();
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recordStartMs = null;
+  let recordTimerHandle = null;
 
   function todayKey() {
     return new Date().toISOString().slice(0, 10);
   }
 
-  function loadHistory() {
+  async function loadHistoryFromServer() {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+      const res = await fetch('/api/history');
+      if (!res.ok) throw new Error('bad response');
+      history = await res.json();
     } catch (e) {
-      return {};
+      history = {};
+      document.getElementById('loading').textContent =
+        'Could not reach the local server — run "npm start" in daily_learning/ and open this page via its http://localhost address.';
     }
   }
 
-  function saveHistory(history) {
+  async function saveTopicToServer(date, topic) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-    } catch (e) { /* storage full or unavailable — carry on without persistence */ }
+      await fetch('/api/topic/' + encodeURIComponent(date), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(topic)
+      });
+    } catch (e) { /* best-effort — topic still renders from memory */ }
   }
 
   async function fetchFullExtract(title) {
@@ -187,6 +255,31 @@
     }
   }
 
+  function cleanSnippet(snippet) {
+    const stripped = (snippet || '').replace(/<[^>]+>/g, '');
+    const el = document.createElement('textarea');
+    el.innerHTML = stripped;
+    return el.value;
+  }
+
+  async function fetchRelated(title) {
+    try {
+      const url = 'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
+        encodeURIComponent('morelike:' + title) + '&srlimit=4&format=json&origin=*';
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const results = (data.query && data.query.search) || [];
+      return results.map(r => ({
+        title: r.title,
+        description: cleanSnippet(r.snippet),
+        url: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(r.title.replace(/ /g, '_'))
+      }));
+    } catch (e) {
+      return [];
+    }
+  }
+
   async function fetchRandomTopic() {
     for (let i = 0; i < 6; i++) {
       try {
@@ -195,21 +288,73 @@
         const data = await res.json();
         if (data.type !== 'standard') continue;
         if (!data.extract || data.extract.length < 200) continue;
-        const full = await fetchFullExtract(data.title);
+        const [full, related] = await Promise.all([
+          fetchFullExtract(data.title),
+          fetchRelated(data.title)
+        ]);
         return {
           date: todayKey(),
           title: data.title,
           description: data.description || '',
           extract: full || data.extract,
           thumbnail: (data.thumbnail && data.thumbnail.source) || (data.originalimage && data.originalimage.source) || null,
-          url: (data.content_urls && data.content_urls.desktop && data.content_urls.desktop.page) || null
+          url: (data.content_urls && data.content_urls.desktop && data.content_urls.desktop.page) || null,
+          related
         };
       } catch (e) { /* try again */ }
     }
     throw new Error('Could not find a topic after several tries');
   }
 
+  function renderRelated(related) {
+    const section = document.getElementById('relatedSection');
+    const list = document.getElementById('relatedList');
+    list.innerHTML = '';
+    if (!related || !related.length) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    related.forEach(r => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = r.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = r.title;
+      li.appendChild(a);
+      if (r.description) {
+        const span = document.createElement('span');
+        span.className = 'relatedDesc';
+        span.textContent = ' — ' + r.description;
+        li.appendChild(span);
+      }
+      list.appendChild(li);
+    });
+  }
+
+  function renderReflection() {
+    const isToday = viewingDate === todayKey();
+    document.getElementById('recordRow').hidden = !isToday;
+    document.getElementById('backToTodayBtn').hidden = isToday;
+    document.getElementById('recordStatus').textContent = '';
+    const rec = history[viewingDate] && history[viewingDate].recording;
+    const player = document.getElementById('recordingPlayer');
+    const note = document.getElementById('noRecordingNote');
+    if (rec) {
+      player.src = '/api/recording/' + encodeURIComponent(viewingDate) + '?t=' + encodeURIComponent(rec.recordedAt);
+      player.hidden = false;
+      note.hidden = true;
+    } else {
+      player.hidden = true;
+      player.removeAttribute('src');
+      note.hidden = false;
+      note.textContent = isToday ? 'No reflection recorded yet today.' : 'No reflection recorded for this day.';
+    }
+  }
+
   function render(topic) {
+    viewingDate = topic.date;
     document.getElementById('title').textContent = topic.title;
     document.getElementById('description').textContent = topic.description;
     const thumb = document.getElementById('thumb');
@@ -238,6 +383,8 @@
     });
     const link = document.getElementById('wikiLink');
     link.href = topic.url || ('https://en.wikipedia.org/wiki/' + encodeURIComponent(topic.title.replace(/ /g, '_')));
+    renderRelated(topic.related);
+    renderReflection();
     document.getElementById('content').hidden = false;
     document.getElementById('loading').hidden = true;
   }
@@ -247,7 +394,7 @@
     const cursor = new Date();
     for (;;) {
       const key = cursor.toISOString().slice(0, 10);
-      if (history[key]) {
+      if (history[key] && history[key].topic) {
         streak++;
         cursor.setUTCDate(cursor.getUTCDate() - 1);
       } else {
@@ -258,7 +405,7 @@
   }
 
   function renderHistory(history) {
-    const dates = Object.keys(history).sort().reverse();
+    const dates = Object.keys(history).filter(d => history[d] && history[d].topic).sort().reverse();
     document.getElementById('historyCount').textContent = dates.length;
     document.getElementById('historyDayWord').textContent = dates.length === 1 ? 'day' : 'days';
     const streak = computeStreak(history);
@@ -266,28 +413,29 @@
     const list = document.getElementById('historyList');
     list.innerHTML = '';
     dates.forEach(d => {
-      const item = history[d];
+      const entry = history[d];
       const li = document.createElement('li');
       const btn = document.createElement('button');
       btn.className = 'historyItem';
+      const dot = document.createElement('span');
+      dot.className = 'hdot' + (entry.recording ? ' has-recording' : '');
+      dot.title = entry.recording ? 'Reflection recorded' : '';
       const dateSpan = document.createElement('span');
       dateSpan.className = 'hdate';
       dateSpan.textContent = d;
+      btn.appendChild(dot);
       btn.appendChild(dateSpan);
-      btn.appendChild(document.createTextNode(item.title));
-      btn.addEventListener('click', () => render(item));
+      btn.appendChild(document.createTextNode(entry.topic.title));
+      btn.addEventListener('click', () => render(entry.topic));
       li.appendChild(btn);
       list.appendChild(li);
     });
   }
 
-  let history = loadHistory();
-
   async function loadToday(force) {
     const key = todayKey();
-    if (!force && history[key]) {
-      render(history[key]);
-      renderHistory(history);
+    if (!force && history[key] && history[key].topic) {
+      render(history[key].topic);
       return;
     }
     const btn = document.getElementById('newTopicBtn');
@@ -297,8 +445,8 @@
     document.getElementById('content').hidden = true;
     try {
       const topic = await fetchRandomTopic();
-      history[key] = topic;
-      saveHistory(history);
+      history[key] = Object.assign({}, history[key], { topic });
+      await saveTopicToServer(key, topic);
       render(topic);
       renderHistory(history);
     } catch (e) {
@@ -308,9 +456,84 @@
     }
   }
 
+  function formatTimer(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  function setRecordStatus(text) {
+    document.getElementById('recordStatus').textContent = text;
+  }
+
+  async function startRecording() {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      setRecordStatus('Could not access the microphone: ' + e.message);
+      return;
+    }
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      clearInterval(recordTimerHandle);
+      document.getElementById('recordTimer').textContent = '';
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      await uploadRecording(viewingDate, blob);
+    };
+    mediaRecorder.start();
+    recordStartMs = Date.now();
+    recordTimerHandle = setInterval(() => {
+      document.getElementById('recordTimer').textContent = formatTimer(Date.now() - recordStartMs);
+    }, 250);
+    const btn = document.getElementById('recordBtn');
+    btn.textContent = 'Stop recording';
+    btn.classList.add('recording');
+    setRecordStatus('');
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    const btn = document.getElementById('recordBtn');
+    btn.textContent = 'Record reflection';
+    btn.classList.remove('recording');
+  }
+
+  async function uploadRecording(date, blob) {
+    setRecordStatus('Saving reflection…');
+    try {
+      const res = await fetch('/api/recording/' + encodeURIComponent(date), { method: 'POST', body: blob });
+      if (!res.ok) throw new Error('upload failed');
+      const data = await res.json();
+      history[date] = Object.assign({}, history[date], { recording: data.recording });
+      if (viewingDate === date) renderReflection();
+      renderHistory(history);
+      setRecordStatus('Saved.');
+    } catch (e) {
+      setRecordStatus('Could not save the recording.');
+    }
+  }
+
   document.getElementById('newTopicBtn').addEventListener('click', () => loadToday(true));
-  renderHistory(history);
-  loadToday(false);
+  document.getElementById('backToTodayBtn').addEventListener('click', () => {
+    const today = history[todayKey()];
+    if (today && today.topic) render(today.topic);
+    else loadToday(false);
+  });
+  document.getElementById('recordBtn').addEventListener('click', () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
+    else startRecording();
+  });
+
+  (async function init() {
+    await loadHistoryFromServer();
+    renderHistory(history);
+    await loadToday(false);
+  })();
 </script>
 </body>
 </html>
