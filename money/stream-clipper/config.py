@@ -62,12 +62,17 @@ OUTPUT_HEIGHT = 1920
 TARGET_ASPECT = (9, 16)
 
 # --- Posting caps (per platform, enforced via state.py) ---
+# youtube: 30-minute spacing per Ben's request (2026-09-14). Raised the daily
+# cap alongside it — at the old cap of 3/day, 30-minute spacing would've been
+# moot after the first 3 posts (all landing within 1.5 hours). 20/day still
+# keeps a hard ceiling so a stuck loop or a big approved backlog can't post
+# unboundedly, while leaving real room for the faster cadence.
 MAX_POSTS_PER_DAY = {
-    "youtube": 3,
+    "youtube": 20,
     "instagram": 3,
 }
 MIN_SECONDS_BETWEEN_POSTS = {
-    "youtube": 4 * 3600,
+    "youtube": 30 * 60,
     "instagram": 4 * 3600,
 }
 
