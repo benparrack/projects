@@ -282,3 +282,15 @@ forever as more ideas ship.
 **Pitch:** Paint on a canvas using hand position/gesture tracked live from
 a webcam feed, rendered with a soft watercolor-style brush rather than a
 hard cursor line.
+
+---
+
+## 22. Daily Learning (Random Topic Deep-Dive)
+
+**Status:** Done — see `daily_learning/`. Fetches a random Wikipedia article
+each day (validated non-disambiguation, filtered for stub-length extracts),
+shows the full plain-text article with section headings restored, and caches
+it in `localStorage` so revisits show the same topic until you ask for a new
+one. Tracks a per-day history log and a consecutive-day streak counter.
+**Pitch:** A daily-habit page for learning something new — one random topic a
+day, read in real depth rather than a one-line trivia fact.
