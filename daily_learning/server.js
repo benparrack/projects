@@ -7,6 +7,8 @@ const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, 'data');
 const RECORDINGS_DIR = path.join(DATA_DIR, 'recordings');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
+const CATEGORIES_FILE = path.join(DATA_DIR, 'categories.json');
+const DEFAULT_CATEGORIES = ['Science', 'History', 'Technology', 'Art', 'Nature', 'Space', 'Mythology', 'Music', 'Geography', 'Sports'];
 
 fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
 
@@ -27,6 +29,18 @@ function loadHistory() {
 
 function saveHistory(history) {
   fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+}
+
+function loadCategories() {
+  try {
+    return JSON.parse(fs.readFileSync(CATEGORIES_FILE, 'utf8'));
+  } catch (e) {
+    return DEFAULT_CATEGORIES.slice();
+  }
+}
+
+function saveCategories(categories) {
+  fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(categories, null, 2));
 }
 
 function readBody(req) {
@@ -117,6 +131,28 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'audio/webm' });
       res.end(data);
     });
+    return;
+  }
+
+  if (url.pathname === '/api/categories' && req.method === 'GET') {
+    sendJSON(res, 200, loadCategories());
+    return;
+  }
+
+  if (url.pathname === '/api/categories' && req.method === 'POST') {
+    let categories;
+    try {
+      categories = JSON.parse((await readBody(req)).toString('utf8'));
+    } catch (e) {
+      sendJSON(res, 400, { error: 'bad json' });
+      return;
+    }
+    if (!Array.isArray(categories) || !categories.every(c => typeof c === 'string' && c.trim())) {
+      sendJSON(res, 400, { error: 'categories must be a non-empty string array' });
+      return;
+    }
+    saveCategories(categories);
+    sendJSON(res, 200, { ok: true });
     return;
   }
 

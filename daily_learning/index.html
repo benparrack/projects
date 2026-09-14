@@ -58,6 +58,85 @@
   button.action.recording:hover { background: #6a3232; }
   button.action.secondary { background: #23262c; border: 1px solid #33373f; }
   button.action.secondary:hover { background: #2b2e35; }
+  #categoryPanel {
+    margin-bottom: 16px;
+    background: #1c1e24;
+    border: 1px solid #33373f;
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
+  #categoryPanel summary { cursor: pointer; font-size: 13px; color: #b8b8b8; outline: none; }
+  #categoryList { list-style: none; margin: 12px 0 0; padding: 0; }
+  #categoryList li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    font-size: 13px;
+    color: #ddd;
+    border-bottom: 1px solid #262a30;
+  }
+  #categoryList li:last-child { border-bottom: none; }
+  .removeCategoryBtn {
+    background: none;
+    border: none;
+    color: #a06060;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1;
+  }
+  .removeCategoryBtn:hover { color: #d08080; }
+  #addCategoryRow { display: flex; gap: 8px; margin-top: 12px; }
+  #newCategoryInput {
+    flex: 1;
+    min-width: 0;
+    background: #14161a;
+    border: 1px solid #33373f;
+    border-radius: 6px;
+    color: #e8e8e8;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  #categoryHint { font-size: 12px; color: #666; margin-top: 10px; }
+  #wheelSection { margin-bottom: 20px; text-align: center; }
+  #wheelStage {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    margin: 0 auto 16px;
+  }
+  #wheelCanvas {
+    display: block;
+    width: 280px;
+    height: 280px;
+    border-radius: 50%;
+    transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+  }
+  #wheelPointer {
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 16px solid #e8dcf0;
+    z-index: 2;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.4));
+  }
+  #wheelResult { font-size: 15px; color: #d8c8ea; min-height: 20px; margin-top: 4px; }
+  #categoryBadge {
+    display: inline-block;
+    font-size: 12px;
+    color: #d8c8ea;
+    background: #2a2035;
+    border: 1px solid #4a3d5c;
+    border-radius: 999px;
+    padding: 3px 10px;
+    margin-bottom: 10px;
+  }
   #topicCard {
     background: #1c1e24;
     border: 1px solid #33373f;
@@ -175,12 +254,31 @@
     <div id="streak">— day streak</div>
   </header>
   <div id="controls">
-    <button class="action" id="newTopicBtn">New random topic</button>
+    <button class="action" id="newTopicBtn">Spin for new topic</button>
+    <button class="action secondary" id="manageCategoriesBtn">Manage categories</button>
     <button class="action secondary" id="backToTodayBtn" hidden>Back to today</button>
+  </div>
+  <details id="categoryPanel">
+    <summary>Categories</summary>
+    <ul id="categoryList"></ul>
+    <div id="addCategoryRow">
+      <input id="newCategoryInput" placeholder="Add a category…" maxlength="40">
+      <button class="action secondary" id="addCategoryBtn">Add</button>
+    </div>
+    <div id="categoryHint">Keep at least 2 categories so the wheel has something to spin.</div>
+  </details>
+  <div id="wheelSection" hidden>
+    <div id="wheelStage">
+      <div id="wheelPointer"></div>
+      <canvas id="wheelCanvas" width="280" height="280"></canvas>
+    </div>
+    <button class="action" id="spinBtn">Spin the wheel</button>
+    <div id="wheelResult"></div>
   </div>
   <div id="topicCard">
     <div id="loading">Loading a new topic…</div>
     <div id="content" hidden>
+      <div id="categoryBadge" hidden></div>
       <img id="thumb" hidden>
       <h2 id="title"></h2>
       <p id="description"></p>
@@ -206,10 +304,12 @@
     <summary>History (<span id="historyCount">0</span> <span id="historyDayWord">days</span> learned)</summary>
     <ul id="historyList"></ul>
   </details>
-  <footer>A new random topic each day, pulled from Wikipedia. Revisits show the same topic until you ask for a new one.</footer>
+  <footer>Spin the wheel once a day to pick a category, then a random Wikipedia topic from it. Revisits show the same topic until you spin again.</footer>
 </div>
 <script>
   let history = {};
+  let categories = [];
+  let wheelRotation = 0;
   let viewingDate = todayKey();
   let mediaRecorder = null;
   let recordedChunks = [];
@@ -240,6 +340,152 @@
         body: JSON.stringify(topic)
       });
     } catch (e) { /* best-effort — topic still renders from memory */ }
+  }
+
+  async function loadCategoriesFromServer() {
+    try {
+      const res = await fetch('/api/categories');
+      if (!res.ok) throw new Error('bad response');
+      const data = await res.json();
+      if (Array.isArray(data) && data.length) categories = data;
+    } catch (e) { /* fall back to whatever is already in memory */ }
+  }
+
+  async function saveCategoriesToServer() {
+    try {
+      await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(categories)
+      });
+    } catch (e) { /* best-effort — categories still work from memory */ }
+  }
+
+  function renderCategoryList() {
+    const list = document.getElementById('categoryList');
+    list.innerHTML = '';
+    categories.forEach((cat, i) => {
+      const li = document.createElement('li');
+      const span = document.createElement('span');
+      span.textContent = cat;
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '×';
+      removeBtn.className = 'removeCategoryBtn';
+      removeBtn.title = 'Remove category';
+      removeBtn.addEventListener('click', () => removeCategory(i));
+      li.appendChild(span);
+      li.appendChild(removeBtn);
+      list.appendChild(li);
+    });
+  }
+
+  function removeCategory(index) {
+    if (categories.length <= 2) {
+      document.getElementById('categoryHint').textContent = 'Keep at least 2 categories so the wheel has something to spin.';
+      return;
+    }
+    categories.splice(index, 1);
+    saveCategoriesToServer();
+    renderCategoryList();
+    drawWheel();
+  }
+
+  function addCategory() {
+    const input = document.getElementById('newCategoryInput');
+    const val = input.value.trim();
+    if (!val) return;
+    if (categories.some(c => c.toLowerCase() === val.toLowerCase())) { input.value = ''; return; }
+    categories.push(val);
+    saveCategoriesToServer();
+    input.value = '';
+    renderCategoryList();
+    drawWheel();
+  }
+
+  function colorForSlice(i, n) {
+    const hue = Math.round((360 / n) * i);
+    return 'hsl(' + hue + ', 55%, 42%)';
+  }
+
+  function drawWheel() {
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+    const size = canvas.width;
+    const cx = size / 2, cy = size / 2, r = size / 2 - 4;
+    ctx.clearRect(0, 0, size, size);
+    const n = categories.length;
+    if (!n) return;
+    const sliceAngle = (2 * Math.PI) / n;
+    categories.forEach((cat, i) => {
+      const start = -Math.PI / 2 + i * sliceAngle;
+      const end = start + sliceAngle;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, start, end);
+      ctx.closePath();
+      ctx.fillStyle = colorForSlice(i, n);
+      ctx.fill();
+      ctx.strokeStyle = '#14161a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(start + sliceAngle / 2);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#fff';
+      ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText(cat, r - 10, 4);
+      ctx.restore();
+    });
+  }
+
+  function showWheel() {
+    document.getElementById('wheelSection').hidden = false;
+    document.getElementById('topicCard').hidden = true;
+    document.getElementById('reflectionCard').hidden = true;
+    document.getElementById('wheelResult').textContent = '';
+    drawWheel();
+  }
+
+  function hideWheel() {
+    document.getElementById('wheelSection').hidden = true;
+    document.getElementById('topicCard').hidden = false;
+    document.getElementById('reflectionCard').hidden = false;
+  }
+
+  function spinWheel() {
+    if (categories.length < 2) {
+      document.getElementById('wheelResult').textContent = 'Add at least 2 categories to spin.';
+      return;
+    }
+    const spinBtn = document.getElementById('spinBtn');
+    spinBtn.disabled = true;
+    document.getElementById('wheelResult').textContent = '';
+    const n = categories.length;
+    const chosenIndex = Math.floor(Math.random() * n);
+    const sliceAngleDeg = 360 / n;
+    const centerDeg = chosenIndex * sliceAngleDeg + sliceAngleDeg / 2;
+    const extraSpins = 5 + Math.floor(Math.random() * 3);
+    const targetMod = (360 - centerDeg) % 360;
+    const baseFull = Math.floor(wheelRotation / 360) * 360;
+    let finalRotation = baseFull + extraSpins * 360 + targetMod;
+    if (finalRotation <= wheelRotation) finalRotation += 360;
+    wheelRotation = finalRotation;
+    const canvas = document.getElementById('wheelCanvas');
+    canvas.style.transform = 'rotate(' + wheelRotation + 'deg)';
+    const onEnd = () => {
+      canvas.removeEventListener('transitionend', onEnd);
+      const chosenCategory = categories[chosenIndex];
+      document.getElementById('wheelResult').textContent = 'Landed on: ' + chosenCategory;
+      spinBtn.disabled = false;
+      finishSpin(chosenCategory);
+    };
+    canvas.addEventListener('transitionend', onEnd);
+  }
+
+  async function finishSpin(category) {
+    hideWheel();
+    await loadToday(category);
   }
 
   async function fetchFullExtract(title) {
@@ -306,6 +552,72 @@
     throw new Error('Could not find a topic after several tries');
   }
 
+  async function searchWikipedia(params) {
+    const url = 'https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&' + params;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('search failed');
+    return res.json();
+  }
+
+  async function fetchPageSummary(title) {
+    try {
+      const res = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title.replace(/ /g, '_')));
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.type !== 'standard') return null;
+      if (!data.extract || data.extract.length < 200) return null;
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function pickTitleFromCategory(category) {
+    const inCategoryQuery = 'srsearch=' + encodeURIComponent('incategory:"' + category + '"');
+    const countData = await searchWikipedia(inCategoryQuery + '&srlimit=1');
+    const total = (countData.query && countData.query.searchinfo && countData.query.searchinfo.totalhits) || 0;
+    if (total > 0) {
+      const offset = Math.floor(Math.random() * Math.min(total, 500));
+      const pickData = await searchWikipedia(inCategoryQuery + '&srlimit=1&sroffset=' + offset);
+      const results = (pickData.query && pickData.query.search) || [];
+      if (results[0]) return results[0].title;
+    }
+    // Fallback for categories with no direct Wikipedia category page: plain keyword search.
+    const kwData = await searchWikipedia('srsearch=' + encodeURIComponent(category) + '&srlimit=20');
+    const kwResults = (kwData.query && kwData.query.search) || [];
+    if (kwResults.length) return kwResults[Math.floor(Math.random() * kwResults.length)].title;
+    return null;
+  }
+
+  async function fetchTopicForCategory(category) {
+    for (let i = 0; i < 6; i++) {
+      try {
+        const title = await pickTitleFromCategory(category);
+        if (!title) break;
+        const summary = await fetchPageSummary(title);
+        if (!summary) continue;
+        const [full, related] = await Promise.all([
+          fetchFullExtract(summary.title),
+          fetchRelated(summary.title)
+        ]);
+        return {
+          date: todayKey(),
+          title: summary.title,
+          description: summary.description || '',
+          extract: full || summary.extract,
+          thumbnail: (summary.thumbnail && summary.thumbnail.source) || (summary.originalimage && summary.originalimage.source) || null,
+          url: (summary.content_urls && summary.content_urls.desktop && summary.content_urls.desktop.page) || null,
+          related,
+          category
+        };
+      } catch (e) { /* try again */ }
+    }
+    // Last resort: fall back to a fully random topic, still tagged with the spun category.
+    const fallback = await fetchRandomTopic();
+    fallback.category = category;
+    return fallback;
+  }
+
   function renderRelated(related) {
     const section = document.getElementById('relatedSection');
     const list = document.getElementById('relatedList');
@@ -355,6 +667,13 @@
 
   function render(topic) {
     viewingDate = topic.date;
+    const badge = document.getElementById('categoryBadge');
+    if (topic.category) {
+      badge.textContent = topic.category;
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
     document.getElementById('title').textContent = topic.title;
     document.getElementById('description').textContent = topic.description;
     const thumb = document.getElementById('thumb');
@@ -425,26 +744,25 @@
       dateSpan.textContent = d;
       btn.appendChild(dot);
       btn.appendChild(dateSpan);
-      btn.appendChild(document.createTextNode(entry.topic.title));
+      const label = entry.topic.title + (entry.topic.category ? ' · ' + entry.topic.category : '');
+      btn.appendChild(document.createTextNode(label));
       btn.addEventListener('click', () => render(entry.topic));
       li.appendChild(btn);
       list.appendChild(li);
     });
   }
 
-  async function loadToday(force) {
+  async function loadToday(category) {
     const key = todayKey();
-    if (!force && history[key] && history[key].topic) {
-      render(history[key].topic);
-      return;
-    }
     const btn = document.getElementById('newTopicBtn');
     btn.disabled = true;
     document.getElementById('loading').hidden = false;
-    document.getElementById('loading').textContent = 'Loading a new topic…';
+    document.getElementById('loading').textContent = category
+      ? 'Finding a ' + category + ' topic…'
+      : 'Loading a new topic…';
     document.getElementById('content').hidden = true;
     try {
-      const topic = await fetchRandomTopic();
+      const topic = category ? await fetchTopicForCategory(category) : await fetchRandomTopic();
       history[key] = Object.assign({}, history[key], { topic });
       await saveTopicToServer(key, topic);
       render(topic);
@@ -518,21 +836,37 @@
     }
   }
 
-  document.getElementById('newTopicBtn').addEventListener('click', () => loadToday(true));
+  document.getElementById('newTopicBtn').addEventListener('click', () => showWheel());
   document.getElementById('backToTodayBtn').addEventListener('click', () => {
     const today = history[todayKey()];
-    if (today && today.topic) render(today.topic);
-    else loadToday(false);
+    if (today && today.topic) { hideWheel(); render(today.topic); }
+    else showWheel();
   });
   document.getElementById('recordBtn').addEventListener('click', () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
     else startRecording();
   });
+  document.getElementById('spinBtn').addEventListener('click', spinWheel);
+  document.getElementById('manageCategoriesBtn').addEventListener('click', () => {
+    const panel = document.getElementById('categoryPanel');
+    panel.open = !panel.open;
+  });
+  document.getElementById('addCategoryBtn').addEventListener('click', addCategory);
+  document.getElementById('newCategoryInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addCategory();
+  });
 
   (async function init() {
-    await loadHistoryFromServer();
+    await Promise.all([loadHistoryFromServer(), loadCategoriesFromServer()]);
     renderHistory(history);
-    await loadToday(false);
+    renderCategoryList();
+    drawWheel();
+    const key = todayKey();
+    if (history[key] && history[key].topic) {
+      render(history[key].topic);
+    } else {
+      showWheel();
+    }
   })();
 </script>
 </body>
