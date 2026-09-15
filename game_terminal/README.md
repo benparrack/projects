@@ -1,6 +1,6 @@
 # Game Terminal
 
-**Play now: https://game-terminal.onrender.com** (free-tier hosting — the first load after a
+**Play now: https://gameterminal.onrender.com** (free-tier hosting — the first load after a
 period of inactivity can take 30-60 seconds to cold-start, see note below).
 
 A retro terminal-styled hub for real-time multiplayer mini-games. Pick a game, join the
