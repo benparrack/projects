@@ -28,6 +28,11 @@ const DECEL_RATE = 22; // 1/s blend rate coasting to a stop with no input — sn
 const AIR_DECEL_RATE = 1.5; // much gentler than DECEL_RATE — real air control, not an air brake
 const SLIDE_SPEED = 15;
 const SLIDE_STEER_RATE = 6; // 1/s rate the slide's direction (not speed) can be redirected
+// How far a fire action's claimed origin may be trusted past the server's own tracked position
+// (see the 'fire' handler below) — generous enough to cover real client-side-prediction lead
+// even under real network latency (MOVE_SPEED*~0.3s, with slack for SLIDE_SPEED bursts), while
+// still bounding how far a client could claim to be firing from if it lied outright.
+const MAX_FIRE_POSITION_DRIFT = 3.5;
 // Velocity holds exactly at SLIDE_SPEED for the whole slide (no in-slide decay) — playtest
 // feedback: continuous friction during the slide itself read as "the character slows down,"
 // which fought against the point of a slide. Momentum still isn't an instant cutoff afterward:
@@ -404,7 +409,26 @@ module.exports = {
       const firePitch = Number(data.pitch);
       if (Number.isFinite(fireYaw)) player.yaw = fireYaw;
       if (Number.isFinite(firePitch)) player.pitch = clamp(firePitch, -Math.PI / 2 + 0.05, Math.PI / 2 - 0.05);
-      resolveFire(room, ctx, seat, player);
+      // Same staleness problem as yaw/pitch above, but for position: the tick loop only applies
+      // movement input server-side, so while a player is actively moving, their server-tracked
+      // x/z always lags slightly behind what the client is already rendering (client-side
+      // prediction). Resolving the shot from the server's stale position while the client's
+      // crosshair/camera reflect its own ahead-of-server position caused shots to land visibly
+      // left/right of the crosshair specifically during movement (playtest report, only surfaced
+      // clearly once the Frankfurt migration made everything else feel accurate enough to notice
+      // it). Trust the client's claimed position for just this shot's ray origin, clamped to a
+      // bounded drift from the server's own tracked position so a client can't claim to be firing
+      // from somewhere wildly untrue.
+      const fireX = Number(data.x);
+      const fireZ = Number(data.z);
+      let originOverride = null;
+      if (Number.isFinite(fireX) && Number.isFinite(fireZ)) {
+        const dx = fireX - player.x, dz = fireZ - player.z;
+        const dist = Math.hypot(dx, dz);
+        const clampScale = dist > MAX_FIRE_POSITION_DRIFT ? MAX_FIRE_POSITION_DRIFT / dist : 1;
+        originOverride = { x: player.x + dx * clampScale, z: player.z + dz * clampScale };
+      }
+      resolveFire(room, ctx, seat, player, originOverride);
       return;
     }
   },
@@ -501,7 +525,7 @@ module.exports = {
   },
 };
 
-function resolveFire(room, ctx, seat, shooter) {
+function resolveFire(room, ctx, seat, shooter, originOverride) {
   const st = room.state;
   const id = shooter.weapon;
   const w = WEAPONS[id];
@@ -518,7 +542,8 @@ function resolveFire(room, ctx, seat, shooter) {
 
   const targetSeat = otherSeat(seat);
   const target = st.players[targetSeat];
-  const originX = shooter.x, originZ = shooter.z;
+  const originX = originOverride ? originOverride.x : shooter.x;
+  const originZ = originOverride ? originOverride.z : shooter.z;
   // Sliding gives the same low profile as crouching (a fast-moving player should also be a
   // harder target, matching the "slide should make you crouch a little" request) — for both the
   // shooter's own eye height and a target's hitbox height.

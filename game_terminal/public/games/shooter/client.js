@@ -1015,7 +1015,14 @@ export function mount(container, api) {
       // was still moving upward onto a target at the moment of the click. In third person this is
       // additionally corrected for camera/eye offset — see computeEffectiveAim.
       const aim = computeEffectiveAim();
-      api.sendAction({ kind: 'fire', yaw: aim.yaw, pitch: aim.pitch });
+      // Also send our own current predicted position: the server's tracked x/z only advances on
+      // its own tick loop, so while actively moving it's always a bit behind what's actually
+      // being rendered here (client-side prediction). Resolving the shot from the server's stale
+      // position while aiming from our own ahead-of-server position caused shots to visibly land
+      // left/right of the crosshair during movement — the server clamps how far this can be
+      // trusted, this just avoids using its own known-stale fallback whenever we have something
+      // fresher to offer.
+      api.sendAction({ kind: 'fire', yaw: aim.yaw, pitch: aim.pitch, x: predicted.x, z: predicted.z });
     } else if (ev.button === 2) {
       setZoomed(true);
     }
