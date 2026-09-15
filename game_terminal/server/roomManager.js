@@ -67,16 +67,27 @@ class RoomManager {
     return this.gameRegistry[gameType] || null;
   }
 
+  // Finds the first public instance of this game type with room for another active player,
+  // opening a new numbered instance (PUBLIC-<TYPE>-2, -3, ...) once earlier ones fill up, instead
+  // of always handing everyone the same base room where extras beyond a 2-seat game's capacity
+  // could only ever spectate (real playtest ask: "more than two people should get put into a new
+  // lobby waiting for another person"). A plugin without `isRoomFull` (drawing/hangman — no seat
+  // cap, everyone actually participates) always matches the very first instance, unchanged from
+  // before this existed.
   getOrCreatePublicRoom(gameType) {
-    const code = publicRoomCode(gameType);
-    let room = this.rooms.get(code);
-    if (!room) {
-      const plugin = this.getPlugin(gameType);
-      if (!plugin) return null;
-      room = new Room(code, gameType, true, plugin);
-      this.rooms.set(code, room);
+    const plugin = this.getPlugin(gameType);
+    if (!plugin) return null;
+    const isFull = typeof plugin.isRoomFull === 'function' ? (r) => plugin.isRoomFull(r) : () => false;
+    for (let n = 1; ; n++) {
+      const code = n === 1 ? publicRoomCode(gameType) : `${publicRoomCode(gameType)}-${n}`;
+      let room = this.rooms.get(code);
+      if (!room) {
+        room = new Room(code, gameType, true, plugin);
+        this.rooms.set(code, room);
+        return room;
+      }
+      if (!isFull(room)) return room;
     }
-    return room;
   }
 
   createPrivateRoom(gameType) {

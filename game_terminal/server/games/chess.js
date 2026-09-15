@@ -313,6 +313,13 @@ module.exports = {
     return st;
   },
 
+  // Both seats taken — RoomManager uses this to route extra public-lobby joiners into a fresh
+  // instance instead of dumping them all into one game as permanent spectators (real playtest
+  // request: "more than two people should get put into a new lobby waiting for another person").
+  isRoomFull(room) {
+    return !!(room.state.players.white && room.state.players.black);
+  },
+
   serializeSnapshot(room) {
     return buildPublicState(room);
   },

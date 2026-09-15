@@ -103,12 +103,11 @@ wss.on('connection', (ws) => {
           send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.INVALID_CODE });
           return;
         }
-        let room = roomManager.getRoom(code);
-        if (!room) {
-          // Lazily create the well-known public room the first time anyone asks for it.
-          const matchGameType = Object.keys(gameRegistry).find((gt) => publicRoomCode(gt) === code);
-          if (matchGameType) room = roomManager.getOrCreatePublicRoom(matchGameType);
-        }
+        // The canonical public-room code always goes through matchmaking (not a plain lookup) so
+        // that a full existing public instance routes the joiner into a fresh one instead of
+        // handing them the same already-full room every time — see RoomManager.getOrCreatePublicRoom.
+        const matchGameType = Object.keys(gameRegistry).find((gt) => publicRoomCode(gt) === code);
+        const room = matchGameType ? roomManager.getOrCreatePublicRoom(matchGameType) : roomManager.getRoom(code);
         if (!room) {
           send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.NOT_FOUND });
           return;

@@ -89,6 +89,11 @@ module.exports = {
     };
   },
 
+  // See chess.js's isRoomFull for why this exists — routes public-lobby overflow into a new room.
+  isRoomFull(room) {
+    return !!(room.state.players.red && room.state.players.yellow);
+  },
+
   serializeSnapshot(room) {
     return buildPublicState(room);
   },
