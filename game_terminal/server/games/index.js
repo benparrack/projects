@@ -8,6 +8,11 @@ const chess = require('./chess');
 const slither = require('./slither');
 const connect4 = require('./connect4');
 const shooter = require('./shooter');
+const war = require('./war');
+const crazyeights = require('./crazyeights');
+const bs = require('./bs');
+const poker = require('./poker');
+const garticphone = require('./garticphone');
 
 module.exports = {
   [drawing.type]: drawing,
@@ -17,4 +22,9 @@ module.exports = {
   [slither.type]: slither,
   [connect4.type]: connect4,
   [shooter.type]: shooter,
+  [war.type]: war,
+  [crazyeights.type]: crazyeights,
+  [bs.type]: bs,
+  [poker.type]: poker,
+  [garticphone.type]: garticphone,
 };

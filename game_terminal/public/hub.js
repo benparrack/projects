@@ -10,6 +10,11 @@ const GAMES = [
   { type: 'slither', label: 'SLITHER' },
   { type: 'connect4', label: 'CONNECT 4' },
   { type: 'shooter', label: 'ARENA DUEL (1V1 FPS)' },
+  { type: 'war', label: 'WAR (CARDS)' },
+  { type: 'crazyeights', label: 'CRAZY EIGHTS' },
+  { type: 'bs', label: 'BS (CHEAT)' },
+  { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
+  { type: 'garticphone', label: 'DRAWING PHONE' },
 ];
 
 const SESSION_KEY = 'game_terminal.session';
