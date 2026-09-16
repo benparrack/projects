@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cosmic Forge</title>
+<style>
+  :root {
+    --bg: #05050a;
+    --panel: rgba(12, 10, 26, 0.72);
+    --panel-border: rgba(123, 44, 191, 0.35);
+    --purple: #9d4edd;
+    --purple-dim: #7b2cbf;
+    --cyan: #48cae4;
+    --cyan-dim: #00b4d8;
+    --gold: #ffd166;
+    --text: #e8e6f5;
+    --text-dim: #9a94b8;
+    --danger: #ff6b6b;
+    --good: #6bff9e;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+  #backdrop {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: block; z-index: 0;
+  }
+  #particleLayer {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: block; z-index: 5; pointer-events: none;
+  }
+  #ui {
+    position: relative; z-index: 10; width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    padding: 14px; gap: 10px;
+    pointer-events: none;
+  }
+  #ui > * { pointer-events: auto; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 0 24px rgba(123,44,191,0.08);
+  }
+  /* ---- Top bar ---- */
+  #topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px;
+    flex-shrink: 0;
+  }
+  #topbar .title {
+    font-size: 15px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--text-dim); font-weight: 600;
+  }
+  #resources { display: flex; gap: 26px; align-items: baseline; }
+  .resource-block { text-align: center; }
+  .resource-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); }
+  .resource-value { font-size: 22px; font-weight: 700; color: var(--gold); text-shadow: 0 0 12px rgba(255,209,102,0.35); font-variant-numeric: tabular-nums; }
+  .resource-value.matter { color: var(--cyan); text-shadow: 0 0 12px rgba(72,202,228,0.35); }
+  #rate { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  #topControls { display: flex; gap: 8px; align-items: center; }
+  .icon-btn {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--panel-border);
+    color: var(--text); border-radius: 8px; width: 36px; height: 36px;
+    cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,0.1); }
+
+  /* ---- Main layout ---- */
+  #mainRow { flex: 1; display: flex; gap: 10px; min-height: 0; }
+  #centerCol { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; min-width: 0; }
+  #sidePanel { width: 380px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; }
+
+  #igniteWrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #igniteBtn {
+    width: 168px; height: 168px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffe9a8, #ffb703 35%, #e85d04 62%, #6a040f 100%);
+    border: 3px solid rgba(255,209,102,0.6);
+    box-shadow: 0 0 40px rgba(255,183,3,0.45), inset 0 0 30px rgba(255,255,255,0.25);
+    cursor: pointer;
+    font-size: 15px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    color: #3a0d00; text-shadow: 0 1px 2px rgba(255,255,255,0.3);
+    transition: transform 0.06s ease-out;
+    position: relative;
+  }
+  #igniteBtn:active { transform: scale(0.93); }
+  #ignitePower { font-size: 13px; color: var(--text-dim); }
+  #ignitePower b { color: var(--gold); }
+
+  #buffChips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; min-height: 26px; }
+  .buff-chip {
+    font-size: 11px; padding: 5px 10px; border-radius: 20px;
+    background: rgba(157,78,221,0.18); border: 1px solid var(--purple);
+    color: var(--purple); display: flex; align-items: center; gap: 6px;
+  }
+  .buff-chip.good { border-color: var(--good); color: var(--good); background: rgba(107,255,158,0.12); }
+  .buff-chip.bad { border-color: var(--danger); color: var(--danger); background: rgba(255,107,107,0.12); }
+
+  #stageLabel { text-align: center; }
+  #stageLabel .stage-name { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: 1px; }
+  #stageLabel .stage-flavor { font-size: 12px; color: var(--text-dim); max-width: 420px; margin-top: 3px; }
+
+  /* ---- Side panel tabs ---- */
+  #tabs { display: flex; gap: 4px; padding: 8px 8px 0 8px; flex-shrink: 0; }
+  .tab-btn {
+    flex: 1; background: none; border: none; color: var(--text-dim);
+    padding: 8px 4px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+    cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600;
+  }
+  .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+  #tabContent { flex: 1; overflow-y: auto; padding: 10px; min-height: 0; }
+  #tabContent::-webkit-scrollbar { width: 6px; }
+  #tabContent::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 3px; }
+
+  .shop-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(157,78,221,0.18);
+    border-radius: 8px; padding: 9px 10px; margin-bottom: 7px;
+    cursor: pointer; transition: background 0.15s, border-color 0.15s;
+  }
+  .shop-row:hover { background: rgba(157,78,221,0.08); border-color: var(--purple-dim); }
+  .shop-row.unaffordable { opacity: 0.5; cursor: default; }
+  .shop-row.unaffordable:hover { background: rgba(255,255,255,0.03); border-color: rgba(157,78,221,0.18); }
+  .shop-row.maxed { opacity: 0.55; }
+  .shop-icon {
+    width: 38px; height: 38px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+    background: linear-gradient(135deg, var(--purple-dim), var(--cyan-dim));
+  }
+  .shop-info { flex: 1; min-width: 0; }
+  .shop-name { font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; }
+  .shop-owned { color: var(--gold); font-size: 12px; }
+  .shop-flavor { font-size: 10.5px; color: var(--text-dim); margin-top: 1px; }
+  .shop-stats { font-size: 10.5px; color: var(--cyan); margin-top: 2px; }
+  .shop-cost { font-size: 12px; font-weight: 700; color: var(--gold); white-space: nowrap; text-align: right; }
+  .shop-cost.matter { color: var(--cyan); }
+
+  #buyModeRow { display: flex; gap: 6px; padding: 0 10px 8px 10px; flex-shrink: 0; }
+  .buy-mode-btn {
+    flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--panel-border);
+    color: var(--text-dim); border-radius: 6px; padding: 5px 0; font-size: 11px; cursor: pointer;
+  }
+  .buy-mode-btn.active { background: rgba(157,78,221,0.25); color: var(--text); border-color: var(--purple); }
+
+  .section-title { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin: 12px 0 6px 0; }
+  .section-title:first-child { margin-top: 0; }
+
+  #prestigeSummary { padding: 10px; text-align: center; }
+  #prestigeSummary .sg-count { font-size: 26px; font-weight: 800; color: var(--purple); text-shadow: 0 0 14px rgba(157,78,221,0.5); }
+  #collapseBtn {
+    width: 100%; margin-top: 8px; padding: 12px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--purple-dim), #3c096c);
+    border: 1px solid var(--purple); color: #fff; font-weight: 700; letter-spacing: 1px;
+    cursor: pointer; text-transform: uppercase; font-size: 12px;
+  }
+  #collapseBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+  #collapseBtn:not(:disabled):hover { box-shadow: 0 0 18px rgba(157,78,221,0.5); }
+  #collapseGainPreview { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
+  .ach-row { display: flex; gap: 8px; align-items: center; padding: 7px 6px; border-radius: 6px; margin-bottom: 3px; }
+  .ach-row.locked { opacity: 0.35; }
+  .ach-icon { font-size: 15px; width: 22px; text-align: center; }
+  .ach-name { font-size: 12px; font-weight: 600; }
+  .ach-desc { font-size: 10px; color: var(--text-dim); }
+
+  /* ---- Toast log ---- */
+  #toastLog {
+    position: fixed; bottom: 14px; right: 14px; z-index: 20;
+    display: flex; flex-direction: column-reverse; gap: 6px;
+    width: 300px; pointer-events: none;
+  }
+  .toast {
+    background: var(--panel); border: 1px solid var(--panel-border); border-left: 3px solid var(--purple);
+    border-radius: 6px; padding: 8px 12px; font-size: 12px;
+    backdrop-filter: blur(6px); animation: toastIn 0.25s ease-out;
+    opacity: 0.96;
+  }
+  .toast.event { border-left-color: var(--cyan); }
+  .toast.achievement { border-left-color: var(--gold); }
+  .toast.prestige { border-left-color: var(--purple); background: rgba(60,9,108,0.5); }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 0.96; transform: translateX(0); } }
+
+  /* ---- Floating number popups ---- */
+  .float-pop {
+    position: fixed; z-index: 15; pointer-events: none; font-weight: 700; font-size: 14px;
+    color: var(--gold); text-shadow: 0 0 6px rgba(0,0,0,0.8);
+    animation: floatUp 0.9s ease-out forwards;
+  }
+  .float-pop.crit { color: var(--danger); font-size: 18px; }
+  @keyframes floatUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-60px); } }
+
+  /* ---- Modals ---- */
+  #modalOverlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 50;
+    display: none; align-items: center; justify-content: center;
+  }
+  #modalOverlay.show { display: flex; }
+  .modal-box {
+    background: #0d0b1f; border: 1px solid var(--purple); border-radius: 12px;
+    padding: 26px 30px; max-width: 420px; width: 90%;
+    box-shadow: 0 0 60px rgba(157,78,221,0.3);
+    text-align: center;
+  }
+  .modal-box h2 { margin: 0 0 12px 0; color: var(--gold); font-size: 20px; letter-spacing: 1px; }
+  .modal-box p { color: var(--text-dim); font-size: 13px; line-height: 1.6; }
+  .modal-stat-row { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .modal-btn-row { display: flex; gap: 10px; margin-top: 18px; }
+  .modal-btn {
+    flex: 1; padding: 11px; border-radius: 8px; border: 1px solid var(--purple);
+    background: var(--purple-dim); color: #fff; font-weight: 700; cursor: pointer; font-size: 13px;
+  }
+  .modal-btn.secondary { background: transparent; color: var(--text-dim); border-color: var(--panel-border); }
+
+  /* ---- Supernova decision banner ---- */
+  #supernovaBanner {
+    position: fixed; top: 90px; left: 50%; transform: translateX(-50%);
+    z-index: 40; background: #1a0b0b; border: 1px solid var(--danger); border-radius: 10px;
+    padding: 14px 20px; text-align: center; display: none; width: 360px;
+    box-shadow: 0 0 30px rgba(255,107,107,0.3);
+  }
+  #supernovaBanner.show { display: block; }
+  #supernovaBanner h3 { margin: 0 0 4px 0; color: var(--danger); font-size: 14px; }
+  #supernovaBanner p { margin: 0 0 10px 0; font-size: 11px; color: var(--text-dim); }
+  #supernovaTimerBar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin-bottom: 10px; }
+  #supernovaTimerFill { height: 100%; background: var(--danger); width: 100%; }
+  #supernovaBanner .modal-btn-row { margin-top: 0; }
+
+  @media (max-width: 900px) {
+    #mainRow { flex-direction: column; }
+    #sidePanel { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="backdrop"></canvas>
+<canvas id="particleLayer"></canvas>
+
+<div id="ui">
+  <div id="topbar" class="panel">
+    <div class="title">✦ Cosmic Forge</div>
+    <div id="resources">
+      <div class="resource-block">
+        <div class="resource-label">Energy</div>
+        <div class="resource-value" id="energyVal">0</div>
+        <div id="rate">+0/s</div>
+      </div>
+      <div class="resource-block">
+        <div class="resource-label">Matter</div>
+        <div class="resource-value matter" id="matterVal">0</div>
+      </div>
+    </div>
+    <div id="topControls">
+      <button class="icon-btn" id="muteBtn" title="Toggle sound">🔊</button>
+      <button class="icon-btn" id="saveBtn" title="Save now">💾</button>
+      <button class="icon-btn" id="resetBtn" title="Erase save">🗑</button>
+    </div>
+  </div>
+
+  <div id="mainRow">
+    <div id="centerCol">
+      <div id="stageLabel">
+        <div class="stage-name" id="stageName">The Spark</div>
+        <div class="stage-flavor" id="stageFlavor">A single ember of primordial energy, waiting to become everything.</div>
+      </div>
+      <div id="buffChips"></div>
+      <div id="igniteWrap">
+        <button id="igniteBtn">Ignite</button>
+        <div id="ignitePower">Click power: <b id="clickPowerVal">1</b> · Crit chance <b id="critChanceVal">5%</b></div>
+      </div>
+    </div>
+
+    <div id="sidePanel" class="panel">
+      <div id="tabs">
+        <button class="tab-btn active" data-tab="generators">Generators</button>
+        <button class="tab-btn" data-tab="monuments">Monuments</button>
+        <button class="tab-btn" data-tab="prestige">Collapse</button>
+        <button class="tab-btn" data-tab="achievements">Feats</button>
+      </div>
+      <div id="buyModeRow">
+        <button class="buy-mode-btn" data-buy="1">x1</button>
+        <button class="buy-mode-btn active" data-buy="10">x10</button>
+        <button class="buy-mode-btn" data-buy="25">x25</button>
+        <button class="buy-mode-btn" data-buy="max">Max</button>
+      </div>
+      <div id="tabContent"></div>
+    </div>
+  </div>
+</div>
+
+<div id="supernovaBanner">
+  <h3>⚠ Supernova Imminent</h3>
+  <p>Trigger a collapse for an instant burst of Energy, at the cost of reduced production afterward. Decide fast.</p>
+  <div id="supernovaTimerBar"><div id="supernovaTimerFill"></div></div>
+  <div class="modal-btn-row">
+    <button class="modal-btn" id="supernovaTrigger">Trigger Burst</button>
+    <button class="modal-btn secondary" id="supernovaDecline">Let it Pass</button>
+  </div>
+</div>
+
+<div id="toastLog"></div>
+
+<div id="modalOverlay">
+  <div class="modal-box" id="modalBox"></div>
+</div>
+
+<script>
+'use strict';
+
+/* =========================================================================
+   GAME DATA
+   ========================================================================= */
+
+const SUFFIXES = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
+
+const GENERATORS = [
+  { id: 'dust',         name: 'Dust Collectors',     icon: '·',  flavor: 'Sweep stray matter into swirling clouds.',              baseCost: 10,         growth: 1.12, baseProd: 0.1,   unlock: null },
+  { id: 'protostar',    name: 'Protostar Igniters',  icon: '◦',  flavor: 'Coax dust clouds to collapse under their own gravity.', baseCost: 150,        growth: 1.13, baseProd: 1.2,   unlock: { gen: 'dust', count: 10 } },
+  { id: 'fusion',       name: 'Fusion Cores',        icon: '✷',  flavor: 'Spark true nuclear fusion — the birth of stars.',       baseCost: 2000,       growth: 1.13, baseProd: 10,    unlock: { gen: 'protostar', count: 10 } },
+  { id: 'forge',        name: 'Planetary Forges',    icon: '◉',  flavor: 'Cool stellar ejecta into rock and ice — worlds form.',  baseCost: 30000,      growth: 1.14, baseProd: 80,    unlock: { gen: 'fusion', count: 10 } },
+  { id: 'galactic',     name: 'Galactic Cores',      icon: '✺',  flavor: 'Bind billions of stars into a single spiral.',          baseCost: 500000,     growth: 1.14, baseProd: 650,   unlock: { gen: 'forge', count: 10 } },
+  { id: 'supercluster', name: 'Supercluster Looms',  icon: '❖',  flavor: 'Weave galaxies into vast cosmic filaments.',            baseCost: 9000000,    growth: 1.15, baseProd: 5200,  unlock: { gen: 'galactic', count: 10 } },
+  { id: 'webWeaver',    name: 'Cosmic Web Weavers',  icon: '✹',  flavor: 'Stretch the filaments into the skeleton of everything.',baseCost: 175000000,  growth: 1.16, baseProd: 42000, unlock: { gen: 'supercluster', count: 10 } },
+];
+
+const STAGE_NAMES = ['The Spark', 'Age of Dust', 'Age of Protostars', 'Age of Stars', 'Age of Worlds', 'Age of Galaxies', 'Age of Superclusters', 'The Cosmic Web'];
+const STAGE_FLAVOR = [
+  'A single ember of primordial energy, waiting to become everything.',
+  'Motes of matter drift and gather in the dark.',
+  'Gravity wins. The first protostars begin to glow.',
+  'Fusion ignites. True stars burn across the void.',
+  'Rock and ice settle into orbit. Worlds take shape.',
+  'Billions of stars bind into spiraling galaxies.',
+  'Galaxies cluster into filaments that stretch light-years wide.',
+  'The cosmic web is complete — a universe, fully woven.',
+];
+
+const MONUMENTS = [
+  { id: 'ember_monument',  name: 'Monument of Embers',      flavor: '+10% all production, permanently.',            cost: 5,  effect: { type: 'globalProdPct', value: 0.10 } },
+  { id: 'echo_monument',   name: 'Monument of Echoes',      flavor: '+50% click power, permanently.',                cost: 8,  effect: { type: 'clickPowerPct', value: 0.50 } },
+  { id: 'crit_mastery_1',  name: 'Crit Mastery I',          flavor: '+2% crit chance, +2x crit multiplier.',         cost: 12, effect: { type: 'crit', chance: 0.02, mult: 2 } },
+  { id: 'dust_reliquary',  name: 'Reliquary of Dust',       flavor: '+25% Dust Collector production.',               cost: 15, effect: { type: 'genProdPct', gen: 'dust', value: 0.25 } },
+  { id: 'crit_mastery_2',  name: 'Crit Mastery II',         flavor: '+2% crit chance, +2x crit multiplier.',         cost: 20, effect: { type: 'crit', chance: 0.02, mult: 2 } },
+  { id: 'fusion_obelisk',  name: 'Obelisk of Fusion',       flavor: '+25% Fusion Core production.',                  cost: 24, effect: { type: 'genProdPct', gen: 'fusion', value: 0.25 } },
+  { id: 'ancient_archive', name: 'Archive of the Ancients', flavor: '+8% chance for crits to drop Matter.',          cost: 30, effect: { type: 'matterDropPct', value: 0.08 } },
+  { id: 'crit_mastery_3',  name: 'Crit Mastery III',        flavor: '+2% crit chance, +2x crit multiplier.',         cost: 35, effect: { type: 'crit', chance: 0.02, mult: 2 } },
+  { id: 'patience_sundial',name: 'Sundial of Patience',     flavor: '+1 hour offline progress cap.',                 cost: 40, effect: { type: 'offlineCapHours', value: 1 } },
+  { id: 'web_beacon',      name: 'Beacon of the Cosmic Web',flavor: '+15% all production, permanently.',             cost: 60, effect: { type: 'globalProdPct', value: 0.15 } },
+];
+
+const PRESTIGE_UPGRADES = [
+  { id: 'stellarMemory',     name: 'Stellar Memory',        flavor: '+10% all production per level.',                    max: 20, baseCost: 3, costGrowth: 1.5 },
+  { id: 'compressedMatter',  name: 'Compressed Matter',     flavor: '−0.2% generator cost growth per level.',           max: 5,  baseCost: 5, costGrowth: 1.8 },
+  { id: 'echoesOfBigBang',   name: 'Echoes of the Big Bang',flavor: 'Start next cycle with +1 free Dust Collector/level.',max: 25, baseCost: 2, costGrowth: 1.3 },
+  { id: 'temporalAnchor',    name: 'Temporal Anchor',       flavor: '+2h offline progress cap per level.',               max: 5,  baseCost: 4, costGrowth: 2.0 },
+  { id: 'resonantIgnition',  name: 'Resonant Ignition',     flavor: '+1% of production/sec added to click power/level.',max: 10, baseCost: 6, costGrowth: 1.6 },
+  { id: 'eventHorizonMastery',name:'Event Horizon Mastery', flavor: '+10% event frequency & duration per level.',        max: 5,  baseCost: 5, costGrowth: 1.7 },
+];
+
+const ACHIEVEMENTS = [
+  { id: 'first_click',    name: 'First Spark',        desc: 'Click Ignite for the first time.',        check: s => s.stats.totalClicks >= 1 },
+  { id: 'click_1000',     name: 'Steady Hand',        desc: 'Click 1,000 times.',                       check: s => s.stats.totalClicks >= 1000 },
+  { id: 'click_10000',    name: 'Relentless',         desc: 'Click 10,000 times.',                      check: s => s.stats.totalClicks >= 10000 },
+  { id: 'first_crit',     name: 'Critical Moment',    desc: 'Land your first critical Ignite.',         check: s => s.stats.totalCrits >= 1 },
+  { id: 'crit_100',       name: 'Crit Master',        desc: 'Land 100 critical Ignites.',                check: s => s.stats.totalCrits >= 100 },
+  { id: 'own_dust_1',     name: 'Let There Be Dust',  desc: 'Own a Dust Collector.',                     check: s => ownedOf(s,'dust') >= 1 },
+  { id: 'own_protostar_1',name: 'A Star is Born',     desc: 'Own a Protostar Igniter.',                  check: s => ownedOf(s,'protostar') >= 1 },
+  { id: 'own_fusion_1',   name: 'Ignition',           desc: 'Own a Fusion Core.',                        check: s => ownedOf(s,'fusion') >= 1 },
+  { id: 'own_forge_1',    name: 'New Worlds',         desc: 'Own a Planetary Forge.',                    check: s => ownedOf(s,'forge') >= 1 },
+  { id: 'own_galactic_1', name: 'Galactic Dawn',      desc: 'Own a Galactic Core.',                      check: s => ownedOf(s,'galactic') >= 1 },
+  { id: 'own_supercluster_1', name: 'Web of Giants',  desc: 'Own a Supercluster Loom.',                  check: s => ownedOf(s,'supercluster') >= 1 },
+  { id: 'own_webweaver_1',name: 'Weaver of Worlds',   desc: 'Own a Cosmic Web Weaver.',                  check: s => ownedOf(s,'webWeaver') >= 1 },
+  { id: 'own_dust_100',   name: 'Dust Storm',         desc: 'Own 100 Dust Collectors.',                  check: s => ownedOf(s,'dust') >= 100 },
+  { id: 'own_fusion_50',  name: 'Stellar Nursery',    desc: 'Own 50 Fusion Cores.',                      check: s => ownedOf(s,'fusion') >= 50 },
+  { id: 'energy_1k',      name: 'First Thousand',     desc: 'Earn 1,000 lifetime Energy.',               check: s => s.stats.lifetimeEnergyEarned >= 1e3 },
+  { id: 'energy_1m',      name: 'Millionaire of the Void', desc: 'Earn 1,000,000 lifetime Energy.',       check: s => s.stats.lifetimeEnergyEarned >= 1e6 },
+  { id: 'energy_1b',      name: 'Billion Suns',       desc: 'Earn 1B lifetime Energy.',                  check: s => s.stats.lifetimeEnergyEarned >= 1e9 },
+  { id: 'energy_1t',      name: 'Trillion-fold',      desc: 'Earn 1T lifetime Energy.',                  check: s => s.stats.lifetimeEnergyEarned >= 1e12 },
+  { id: 'energy_1qa',     name: 'Quadrillion Reach',  desc: 'Earn 1Qa lifetime Energy.',                 check: s => s.stats.lifetimeEnergyEarned >= 1e15 },
+  { id: 'prestige_1',     name: 'The First Collapse', desc: 'Trigger your first Big Collapse.',          check: s => s.stats.totalPrestiges >= 1 },
+  { id: 'prestige_5',     name: 'Cycles of Rebirth',  desc: 'Trigger 5 Big Collapses.',                  check: s => s.stats.totalPrestiges >= 5 },
+  { id: 'prestige_25',    name: 'Eternal Return',     desc: 'Trigger 25 Big Collapses.',                 check: s => s.stats.totalPrestiges >= 25 },
+  { id: 'supernova_survive', name: 'Danced with Destruction', desc: 'Trigger a Supernova burst.',        check: s => s.stats.supernovasTriggered >= 1 },
+  { id: 'wormhole_trigger', name: 'Shortcut Through Spacetime', desc: 'Experience a Wormhole event.',    check: s => s.stats.wormholesSeen >= 1 },
+];
+
+const EVENT_TYPES = [
+  { id: 'solarFlare',   weight: 40, duration: 20 },
+  { id: 'meteorShower', weight: 35, duration: 15 },
+  { id: 'supernova',    weight: 20, duration: 10 },
+  { id: 'wormhole',     weight: 5,  duration: 0 },
+];
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+
+function defaultState() {
+  return {
+    version: 1,
+    savedAt: Date.now(),
+    settings: { muted: false },
+    stats: {
+      totalClicks: 0, totalCrits: 0,
+      lifetimeEnergyEarned: 0, lifetimeEnergyThisCycle: 0,
+      totalPrestiges: 0, playTimeSeconds: 0,
+      supernovasTriggered: 0, wormholesSeen: 0,
+    },
+    resources: { energy: 0, matter: 0 },
+    generators: GENERATORS.map(g => ({ id: g.id, owned: 0 })),
+    clickUpgrades: { ignitionFocusLevel: 0 },
+    monuments: { purchased: [] },
+    achievements: { unlocked: [] },
+    prestige: {
+      singularities: 0,
+      upgrades: { stellarMemory: 0, compressedMatter: 0, echoesOfBigBang: 0, temporalAnchor: 0, resonantIgnition: 0, eventHorizonMastery: 0 },
+    },
+    meta: { highestTierUnlocked: -1, highestTierEverAcrossCycles: -1 },
+  };
+}
+
+let state = defaultState();
+
+// runtime-only (not saved): active event, particle systems, UI tween values, etc.
+const runtime = {
+  displayedEnergy: 0,
+  displayedMatter: 0,
+  activeEvent: null,       // { type, endsAt }
+  eventCountdown: 0,       // seconds until next event roll
+  supernovaDecisionEndsAt: 0,
+  supernovaPending: false,
+  buyMode: 10,
+  activeTab: 'generators',
+  lastTs: 0,
+  accumulator: 0,
+  particles: [],           // click/purchase burst particles (foreground layer)
+  backdropObjs: { dust: [], protostars: [], stars: [], planets: [], galaxySeed: null, clusters: [], webSeed: null },
+  audioCtx: null,
+};
+
+function ownedOf(s, genId) {
+  const g = s.generators.find(x => x.id === genId);
+  return g ? g.owned : 0;
+}
+
+/* =========================================================================
+   NUMBER FORMATTING
+   ========================================================================= */
+
+function formatNum(n) {
+  if (n === null || n === undefined || isNaN(n)) return '0';
+  const neg = n < 0;
+  n = Math.abs(n);
+  if (n < 1000) {
+    const str = Number.isInteger(n) ? n.toString() : n.toFixed(n < 10 ? 2 : 1);
+    return (neg ? '-' : '') + str;
+  }
+  let tier = Math.floor(Math.log10(n) / 3);
+  if (tier >= SUFFIXES.length) {
+    return (neg ? '-' : '') + n.toExponential(2).replace('e+', 'e');
+  }
+  let scale = Math.pow(1000, tier);
+  let mantissa = n / scale;
+  let decimals = mantissa < 10 ? 2 : (mantissa < 100 ? 1 : 0);
+  let str = mantissa.toFixed(decimals);
+  if (parseFloat(str) >= 1000) {
+    tier++;
+    if (tier >= SUFFIXES.length) return (neg ? '-' : '') + n.toExponential(2).replace('e+', 'e');
+    scale = Math.pow(1000, tier);
+    mantissa = n / scale;
+    decimals = mantissa < 10 ? 2 : (mantissa < 100 ? 1 : 0);
+    str = mantissa.toFixed(decimals);
+  }
+  return (neg ? '-' : '') + str + SUFFIXES[tier];
+}
+
+function formatInt(n) {
+  return Math.floor(n).toLocaleString('en-US');
+}
+
+/* =========================================================================
+   ECONOMY MATH
+   ========================================================================= */
+
+function effectiveGrowth(gen) {
+  const reduction = 0.002 * state.prestige.upgrades.compressedMatter;
+  return Math.max(1.01, gen.growth - reduction);
+}
+
+function generatorCost(gen, owned, buyCount) {
+  const g = effectiveGrowth(gen);
+  const start = gen.baseCost * Math.pow(g, owned);
+  if (buyCount === 1) return start;
+  return start * (Math.pow(g, buyCount) - 1) / (g - 1);
+}
+
+function maxAffordable(gen, owned, budget) {
+  const g = effectiveGrowth(gen);
+  const start = gen.baseCost * Math.pow(g, owned);
+  if (budget < start) return 0;
+  const n = Math.floor(Math.log(1 + (budget * (g - 1)) / start) / Math.log(g));
+  let buy = Math.max(0, n);
+  // guard against floating point edge cases
+  while (buy > 0 && generatorCost(gen, owned, buy) > budget) buy--;
+  while (generatorCost(gen, owned, buy + 1) <= budget) buy++;
+  return buy;
+}
+
+function monumentPurchased(id) {
+  return state.monuments.purchased.includes(id);
+}
+
+function unlockedAchievementCount() {
+  return state.achievements.unlocked.length;
+}
+
+function achievementBonusMultiplier() {
+  return 1 + 0.01 * unlockedAchievementCount();
+}
+
+function globalProductionMultiplier() {
+  let mult = 1;
+  mult *= achievementBonusMultiplier();
+  mult *= (1 + 0.10 * state.prestige.upgrades.stellarMemory);
+  for (const m of MONUMENTS) {
+    if (m.effect.type === 'globalProdPct' && monumentPurchased(m.id)) mult *= (1 + m.effect.value);
+  }
+  if (runtime.activeEvent) {
+    if (runtime.activeEvent.type === 'solarFlare') mult *= 3;
+    if (runtime.activeEvent.type === 'supernovaDebuff') mult *= 0.5;
+  }
+  return mult;
+}
+
+function generatorSpecificMultiplier(genId) {
+  let mult = 1;
+  for (const m of MONUMENTS) {
+    if (m.effect.type === 'genProdPct' && m.effect.gen === genId && monumentPurchased(m.id)) mult *= (1 + m.effect.value);
+  }
+  return mult;
+}
+
+function totalProductionPerSecond() {
+  let total = 0;
+  const global = globalProductionMultiplier();
+  for (const gen of GENERATORS) {
+    const owned = ownedOf(state, gen.id);
+    if (owned <= 0) continue;
+    total += owned * gen.baseProd * generatorSpecificMultiplier(gen.id) * global;
+  }
+  return total;
+}
+
+function critStats() {
+  let chance = 0.05, mult = 10;
+  for (const m of MONUMENTS) {
+    if (m.effect.type === 'crit' && monumentPurchased(m.id)) { chance += m.effect.chance; mult += m.effect.mult; }
+  }
+  if (runtime.activeEvent && runtime.activeEvent.type === 'meteorShower') {
+    chance = Math.min(1, chance + 0.5);
+    mult *= 2;
+  }
+  return { chance: Math.min(1, chance), mult };
+}
+
+function matterDropChance() {
+  let chance = 0.10;
+  for (const m of MONUMENTS) {
+    if (m.effect.type === 'matterDropPct' && monumentPurchased(m.id)) chance += m.effect.value;
+  }
+  return chance;
+}
+
+function clickPower() {
+  const base = 1 * Math.pow(2, state.clickUpgrades.ignitionFocusLevel);
+  let power = base;
+  for (const m of MONUMENTS) {
+    if (m.effect.type === 'clickPowerPct' && monumentPurchased(m.id)) power *= (1 + m.effect.value);
+  }
+  const resonance = 0.01 * state.prestige.upgrades.resonantIgnition;
+  const resonancePower = totalProductionPerSecond() * resonance;
+  power = Math.max(power, resonancePower);
+  return power * globalProductionMultiplier();
+}
+
+function offlineCapHours() {
+  let cap = 2 + 2 * state.prestige.upgrades.temporalAnchor;
+  for (const m of MONUMENTS) {
+    if (m.effect.type === 'offlineCapHours' && monumentPurchased(m.id)) cap += m.effect.value;
+  }
+  return cap;
+}
+
+function ignitionFocusCost(level) {
+  return 50 * Math.pow(6, level);
+}
+
+function prestigeUpgradeCost(upg, level) {
+  return upg.baseCost * Math.pow(upg.costGrowth, level);
+}
+
+function isGeneratorUnlocked(gen) {
+  if (!gen.unlock) return true;
+  return ownedOf(state, gen.unlock.gen) >= gen.unlock.count;
+}
+
+function highestOwnedTierIndex() {
+  let idx = -1;
+  GENERATORS.forEach((g, i) => { if (ownedOf(state, g.id) >= 1) idx = i; });
+  return idx;
+}
+
+function canCollapse() {
+  return ownedOf(state, 'webWeaver') >= 1 || state.stats.lifetimeEnergyThisCycle >= 1e12;
+}
+
+function singularitiesOnCollapse() {
+  return Math.floor(10 * Math.sqrt(state.stats.lifetimeEnergyThisCycle / 1e12));
+}
+
+/* =========================================================================
+   ACTIONS
+   ========================================================================= */
+
+function doIgnite(clientX, clientY) {
+  const { chance, mult } = critStats();
+  const isCrit = Math.random() < chance;
+  const power = clickPower();
+  const gained = isCrit ? power * mult : power;
+  addEnergy(gained);
+  state.stats.totalClicks++;
+  if (isCrit) {
+    state.stats.totalCrits++;
+    if (Math.random() < matterDropChance()) {
+      const matterGain = 1 + Math.floor((highestOwnedTierIndex() + 1) / 2);
+      state.resources.matter += matterGain;
+      spawnFloatPop(clientX, clientY - 18, '+' + formatInt(matterGain) + ' Matter', false, '#48cae4');
+    }
+  }
+  spawnFloatPop(clientX, clientY, '+' + formatNum(gained), isCrit);
+  spawnClickParticles(clientX, clientY, isCrit);
+  playTone(isCrit ? 660 : 440, isCrit ? 0.14 : 0.06, isCrit ? 'triangle' : 'sine', isCrit ? 0.11 : 0.05);
+  checkAchievements();
+  renderResources();
+}
+
+function addEnergy(amount) {
+  state.resources.energy += amount;
+  state.stats.lifetimeEnergyEarned += amount;
+  state.stats.lifetimeEnergyThisCycle += amount;
+}
+
+function buyGenerator(genId) {
+  const gen = GENERATORS.find(g => g.id === genId);
+  const owned = ownedOf(state, genId);
+  let buyCount = runtime.buyMode;
+  if (buyCount === 'max') {
+    buyCount = maxAffordable(gen, owned, state.resources.energy);
+    if (buyCount <= 0) return;
+  } else {
+    const cost = generatorCost(gen, owned, buyCount);
+    if (cost > state.resources.energy) return;
+  }
+  const totalCost = generatorCost(gen, owned, buyCount);
+  if (totalCost > state.resources.energy || buyCount <= 0) return;
+  state.resources.energy -= totalCost;
+  const record = state.generators.find(g => g.id === genId);
+  const wasUnlockedBefore = {};
+  GENERATORS.forEach(g => wasUnlockedBefore[g.id] = isGeneratorUnlocked(g));
+  record.owned += buyCount;
+  playTone(300, 0.08, 'square', 0.07);
+  checkNewUnlocks(wasUnlockedBefore);
+  checkAchievements();
+  renderAll();
+}
+
+function checkNewUnlocks(wasUnlockedBefore) {
+  for (const g of GENERATORS) {
+    if (!wasUnlockedBefore[g.id] && isGeneratorUnlocked(g)) {
+      logToast(`New generator unlocked: ${g.name}`, 'event');
+    }
+  }
+  const tierIdx = highestOwnedTierIndex();
+  if (tierIdx > state.meta.highestTierUnlocked) {
+    state.meta.highestTierUnlocked = tierIdx;
+    if (tierIdx > state.meta.highestTierEverAcrossCycles) state.meta.highestTierEverAcrossCycles = tierIdx;
+    logToast(`${STAGE_NAMES[tierIdx + 1]} begins.`, 'achievement');
+    spawnBigBurst();
+    updateStageLabel();
+  }
+}
+
+function buyIgnitionFocus() {
+  const level = state.clickUpgrades.ignitionFocusLevel;
+  if (level >= 8) return;
+  const cost = ignitionFocusCost(level);
+  if (cost > state.resources.energy) return;
+  state.resources.energy -= cost;
+  state.clickUpgrades.ignitionFocusLevel++;
+  playTone(500, 0.1, 'sine', 0.08);
+  renderAll();
+}
+
+function buyMonument(id) {
+  const m = MONUMENTS.find(x => x.id === id);
+  if (!m || monumentPurchased(id)) return;
+  if (state.resources.matter < m.cost) return;
+  state.resources.matter -= m.cost;
+  state.monuments.purchased.push(id);
+  playTone(550, 0.16, 'triangle', 0.1);
+  logToast(`Monument built: ${m.name}`, 'achievement');
+  checkAchievements();
+  renderAll();
+}
+
+function buyPrestigeUpgrade(id) {
+  const upg = PRESTIGE_UPGRADES.find(x => x.id === id);
+  const level = state.prestige.upgrades[id];
+  if (level >= upg.max) return;
+  const cost = prestigeUpgradeCost(upg, level);
+  if (cost > state.prestige.singularities) return;
+  state.prestige.singularities -= cost;
+  state.prestige.upgrades[id]++;
+  playTone(700, 0.12, 'sine', 0.08);
+  renderAll();
+}
+
+function doCollapse() {
+  if (!canCollapse()) return;
+  const gained = singularitiesOnCollapse();
+  state.prestige.singularities += gained;
+  state.stats.totalPrestiges++;
+
+  state.resources.energy = 0;
+  state.resources.matter = state.resources.matter; // Matter survives
+  state.stats.lifetimeEnergyThisCycle = 0;
+  state.generators = GENERATORS.map(g => ({ id: g.id, owned: 0 }));
+  state.clickUpgrades = { ignitionFocusLevel: 0 };
+  state.meta.highestTierUnlocked = -1;
+  runtime.activeEvent = null;
+  runtime.supernovaPending = false;
+
+  const echoLevel = state.prestige.upgrades.echoesOfBigBang;
+  if (echoLevel > 0) {
+    const dustRecord = state.generators.find(g => g.id === 'dust');
+    dustRecord.owned = echoLevel;
+    state.meta.highestTierUnlocked = 0;
+  }
+
+  playCollapseSound();
+  spawnCollapseAnimation();
+  checkAchievements();
+  closeModal();
+  logToast(`The Big Collapse: +${formatInt(gained)} Singularities. A new universe begins.`, 'prestige');
+  renderAll();
+  updateStageLabel();
+}
+
+function checkAchievements() {
+  for (const a of ACHIEVEMENTS) {
+    if (!state.achievements.unlocked.includes(a.id) && a.check(state)) {
+      state.achievements.unlocked.push(a.id);
+      logToast(`Feat unlocked: ${a.name}`, 'achievement');
+      playTone(880, 0.2, 'sine', 0.1);
+    }
+  }
+}
+
+/* =========================================================================
+   EVENTS
+   ========================================================================= */
+
+function eventFrequencyScale() {
+  return 1 - 0.1 * state.prestige.upgrades.eventHorizonMastery;
+}
+
+function scheduleNextEvent() {
+  const min = 60, max = 150;
+  const scale = Math.max(0.3, eventFrequencyScale());
+  runtime.eventCountdown = (min + Math.random() * (max - min)) * scale;
+}
+
+function eventDurationScale() {
+  return 1 + 0.1 * state.prestige.upgrades.eventHorizonMastery;
+}
+
+function pickWeightedEvent() {
+  const totalWeight = EVENT_TYPES.reduce((s, e) => s + e.weight, 0);
+  let r = Math.random() * totalWeight;
+  for (const e of EVENT_TYPES) {
+    if (r < e.weight) return e;
+    r -= e.weight;
+  }
+  return EVENT_TYPES[0];
+}
+
+function triggerRandomEvent() {
+  const evt = pickWeightedEvent();
+  const scale = eventDurationScale();
+  if (evt.id === 'solarFlare') {
+    runtime.activeEvent = { type: 'solarFlare', endsAt: nowSec() + evt.duration * scale };
+    logToast('☀ Solar Flare! Production x3.', 'event');
+  } else if (evt.id === 'meteorShower') {
+    runtime.activeEvent = { type: 'meteorShower', endsAt: nowSec() + evt.duration * scale };
+    logToast('☄ Meteor Shower! Crit chance & power boosted.', 'event');
+  } else if (evt.id === 'supernova') {
+    runtime.supernovaPending = true;
+    runtime.supernovaDecisionEndsAt = nowSec() + evt.duration;
+    showSupernovaBanner();
+  } else if (evt.id === 'wormhole') {
+    const burst = totalProductionPerSecond() * 120;
+    addEnergy(burst);
+    state.stats.wormholesSeen++;
+    logToast(`🌀 Wormhole! Instant +${formatNum(burst)} Energy.`, 'event');
+    spawnBigBurst();
+    checkAchievements();
+  }
+  playTone(evt.id === 'wormhole' ? 900 : 380, 0.2, 'sawtooth', 0.06);
+}
+
+function resolveSupernova(triggered) {
+  runtime.supernovaPending = false;
+  hideSupernovaBanner();
+  if (triggered) {
+    const burst = totalProductionPerSecond() * 60;
+    addEnergy(burst);
+    state.stats.supernovasTriggered++;
+    runtime.activeEvent = { type: 'supernovaDebuff', endsAt: nowSec() + 60 };
+    logToast(`💥 Supernova triggered! +${formatNum(burst)} Energy, production halved for 60s.`, 'event');
+    checkAchievements();
+  } else {
+    logToast('The Supernova passes quietly.', 'event');
+  }
+}
+
+function nowSec() { return performance.now() / 1000; }
+
+/* =========================================================================
+   PERSISTENCE
+   ========================================================================= */
+
+const SAVE_KEY = 'cosmicForgeSave';
+
+function saveGame() {
+  state.savedAt = Date.now();
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  } catch (e) { /* storage unavailable — silently skip */ }
+}
+
+function loadGame() {
+  let raw;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw);
+    if (!data || data.version !== 1) return null;
+    return data;
+  } catch (e) { return null; }
+}
+
+function mergeLoadedState(loaded) {
+  const fresh = defaultState();
+  state = Object.assign(fresh, loaded);
+  state.resources = Object.assign(fresh.resources, loaded.resources);
+  state.stats = Object.assign(fresh.stats, loaded.stats);
+  state.clickUpgrades = Object.assign(fresh.clickUpgrades, loaded.clickUpgrades);
+  state.monuments = Object.assign(fresh.monuments, loaded.monuments);
+  state.achievements = Object.assign(fresh.achievements, loaded.achievements);
+  state.prestige = Object.assign(fresh.prestige, loaded.prestige);
+  state.prestige.upgrades = Object.assign(fresh.prestige.upgrades, loaded.prestige ? loaded.prestige.upgrades : {});
+  state.meta = Object.assign(fresh.meta, loaded.meta);
+  state.settings = Object.assign(fresh.settings, loaded.settings);
+  state.generators = GENERATORS.map(g => {
+    const found = (loaded.generators || []).find(x => x.id === g.id);
+    return { id: g.id, owned: found ? found.owned : 0 };
+  });
+}
+
+function applyOfflineProgress(loaded) {
+  const elapsedMs = Date.now() - (loaded.savedAt || Date.now());
+  if (elapsedMs < 15000) return null;
+  const capMs = offlineCapHours() * 3600 * 1000;
+  const cappedMs = Math.min(elapsedMs, capMs);
+  const seconds = cappedMs / 1000;
+  const rate = totalProductionPerSecond();
+  const gained = rate * seconds;
+  if (gained > 0) addEnergy(gained);
+  return { elapsedMs, cappedMs, gained, wasCapped: elapsedMs > capMs };
+}
+
+/* =========================================================================
+   AUDIO
+   ========================================================================= */
+
+function getAudioCtx() {
+  if (!runtime.audioCtx) {
+    try { runtime.audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+  }
+  return runtime.audioCtx;
+}
+
+function playTone(freq, duration, type, gainVal) {
+  if (state.settings.muted) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(gainVal || 0.08, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + duration);
+}
+
+function playCollapseSound() {
+  if (state.settings.muted) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(80, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 1.2);
+  gain.gain.setValueAtTime(0.15, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.4);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 1.4);
+}
+
+/* =========================================================================
+   UI RENDERING
+   ========================================================================= */
+
+const el = id => document.getElementById(id);
+
+function renderResources() {
+  el('rate').textContent = '+' + formatNum(totalProductionPerSecond()) + '/s';
+  el('clickPowerVal').textContent = formatNum(clickPower());
+  const { chance } = critStats();
+  el('critChanceVal').textContent = Math.round(chance * 100) + '%';
+}
+
+function updateStageLabel() {
+  const idx = state.meta.highestTierUnlocked + 1;
+  el('stageName').textContent = STAGE_NAMES[Math.min(idx, STAGE_NAMES.length - 1)];
+  el('stageFlavor').textContent = STAGE_FLAVOR[Math.min(idx, STAGE_FLAVOR.length - 1)];
+}
+
+function renderBuffChips() {
+  const wrap = el('buffChips');
+  wrap.innerHTML = '';
+  if (runtime.activeEvent) {
+    const remaining = Math.max(0, runtime.activeEvent.endsAt - nowSec());
+    const labelMap = {
+      solarFlare: '☀ Solar Flare x3',
+      meteorShower: '☄ Meteor Shower',
+      supernovaDebuff: '💥 Aftermath (production halved)',
+    };
+    const cls = runtime.activeEvent.type === 'supernovaDebuff' ? 'bad' : 'good';
+    const chip = document.createElement('div');
+    chip.className = 'buff-chip ' + cls;
+    chip.textContent = `${labelMap[runtime.activeEvent.type] || runtime.activeEvent.type} (${Math.ceil(remaining)}s)`;
+    wrap.appendChild(chip);
+  }
+}
+
+function renderGeneratorsTab() {
+  const wrap = el('tabContent');
+  wrap.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'section-title';
+  title.textContent = 'Generators';
+  wrap.appendChild(title);
+
+  for (const gen of GENERATORS) {
+    if (!isGeneratorUnlocked(gen)) continue;
+    const owned = ownedOf(state, gen.id);
+    let buyCount = runtime.buyMode === 'max' ? maxAffordable(gen, owned, state.resources.energy) : runtime.buyMode;
+    if (runtime.buyMode === 'max' && buyCount === 0) buyCount = 1;
+    const cost = generatorCost(gen, owned, buyCount);
+    const affordable = cost <= state.resources.energy && buyCount > 0;
+
+    const row = document.createElement('div');
+    row.className = 'shop-row' + (affordable ? '' : ' unaffordable');
+    row.innerHTML = `
+      <div class="shop-icon">${gen.icon}</div>
+      <div class="shop-info">
+        <div class="shop-name"><span>${gen.name}</span><span class="shop-owned">${formatInt(owned)}</span></div>
+        <div class="shop-flavor">${gen.flavor}</div>
+        <div class="shop-stats">${formatNum(gen.baseProd * generatorSpecificMultiplier(gen.id) * globalProductionMultiplier())} e/s each</div>
+      </div>
+      <div class="shop-cost">${formatNum(cost)}<br><span style="font-weight:400;font-size:10px;color:var(--text-dim)">x${buyCount}</span></div>
+    `;
+    row.addEventListener('click', () => buyGenerator(gen.id));
+    wrap.appendChild(row);
+  }
+
+  const upTitle = document.createElement('div');
+  upTitle.className = 'section-title';
+  upTitle.textContent = 'Click Upgrades';
+  wrap.appendChild(upTitle);
+
+  const level = state.clickUpgrades.ignitionFocusLevel;
+  const maxed = level >= 8;
+  const cost = ignitionFocusCost(level);
+  const affordable = !maxed && cost <= state.resources.energy;
+  const row = document.createElement('div');
+  row.className = 'shop-row' + (maxed ? ' maxed' : (affordable ? '' : ' unaffordable'));
+  row.innerHTML = `
+    <div class="shop-icon">⚡</div>
+    <div class="shop-info">
+      <div class="shop-name"><span>Ignition Focus</span><span class="shop-owned">Lv ${level}/8</span></div>
+      <div class="shop-flavor">Doubles base click power.</div>
+    </div>
+    <div class="shop-cost">${maxed ? 'MAX' : formatNum(cost)}</div>
+  `;
+  if (!maxed) row.addEventListener('click', buyIgnitionFocus);
+  wrap.appendChild(row);
+}
+
+function renderMonumentsTab() {
+  const wrap = el('tabContent');
+  wrap.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'section-title';
+  title.textContent = `Monuments — spend Matter (${formatInt(state.resources.matter)} available)`;
+  wrap.appendChild(title);
+
+  for (const m of MONUMENTS) {
+    const purchased = monumentPurchased(m.id);
+    const affordable = !purchased && state.resources.matter >= m.cost;
+    const row = document.createElement('div');
+    row.className = 'shop-row' + (purchased ? ' maxed' : (affordable ? '' : ' unaffordable'));
+    row.innerHTML = `
+      <div class="shop-icon">◆</div>
+      <div class="shop-info">
+        <div class="shop-name"><span>${m.name}</span></div>
+        <div class="shop-flavor">${m.flavor}</div>
+      </div>
+      <div class="shop-cost matter">${purchased ? 'BUILT' : formatInt(m.cost)}</div>
+    `;
+    if (!purchased) row.addEventListener('click', () => buyMonument(m.id));
+    wrap.appendChild(row);
+  }
+}
+
+function renderPrestigeTab() {
+  const wrap = el('tabContent');
+  wrap.innerHTML = '';
+
+  const summary = document.createElement('div');
+  summary.id = 'prestigeSummary';
+  const eligible = canCollapse();
+  const gainPreview = singularitiesOnCollapse();
+  summary.innerHTML = `
+    <div class="section-title">Singularities</div>
+    <div class="sg-count">${formatInt(state.prestige.singularities)}</div>
+    <button id="collapseBtn" ${eligible ? '' : 'disabled'}>Trigger the Big Collapse</button>
+    <div id="collapseGainPreview">${eligible ? `Would grant +${formatInt(gainPreview)} Singularities` : 'Own a Cosmic Web Weaver, or reach 1T Energy this cycle, to unlock'}</div>
+  `;
+  wrap.appendChild(summary);
+  el2(summary, '#collapseBtn').addEventListener('click', confirmCollapse);
+
+  const title = document.createElement('div');
+  title.className = 'section-title';
+  title.textContent = 'Permanent Upgrades';
+  wrap.appendChild(title);
+
+  for (const upg of PRESTIGE_UPGRADES) {
+    const level = state.prestige.upgrades[upg.id];
+    const maxed = level >= upg.max;
+    const cost = prestigeUpgradeCost(upg, level);
+    const affordable = !maxed && cost <= state.prestige.singularities;
+    const row = document.createElement('div');
+    row.className = 'shop-row' + (maxed ? ' maxed' : (affordable ? '' : ' unaffordable'));
+    row.innerHTML = `
+      <div class="shop-icon">✦</div>
+      <div class="shop-info">
+        <div class="shop-name"><span>${upg.name}</span><span class="shop-owned">Lv ${level}/${upg.max}</span></div>
+        <div class="shop-flavor">${upg.flavor}</div>
+      </div>
+      <div class="shop-cost">${maxed ? 'MAX' : formatInt(Math.ceil(cost))}</div>
+    `;
+    if (!maxed) row.addEventListener('click', () => buyPrestigeUpgrade(upg.id));
+    wrap.appendChild(row);
+  }
+}
+
+function renderAchievementsTab() {
+  const wrap = el('tabContent');
+  wrap.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'section-title';
+  title.textContent = `Feats (${state.achievements.unlocked.length}/${ACHIEVEMENTS.length}) — each grants +1% production`;
+  wrap.appendChild(title);
+  for (const a of ACHIEVEMENTS) {
+    const unlocked = state.achievements.unlocked.includes(a.id);
+    const row = document.createElement('div');
+    row.className = 'ach-row' + (unlocked ? '' : ' locked');
+    row.innerHTML = `
+      <div class="ach-icon">${unlocked ? '★' : '☆'}</div>
+      <div>
+        <div class="ach-name">${a.name}</div>
+        <div class="ach-desc">${a.desc}</div>
+      </div>
+    `;
+    wrap.appendChild(row);
+  }
+}
+
+function el2(root, sel) { return root.querySelector(sel); }
+
+function renderTab() {
+  if (runtime.activeTab === 'generators') renderGeneratorsTab();
+  else if (runtime.activeTab === 'monuments') renderMonumentsTab();
+  else if (runtime.activeTab === 'prestige') renderPrestigeTab();
+  else if (runtime.activeTab === 'achievements') renderAchievementsTab();
+}
+
+function renderAll() {
+  renderResources();
+  renderTab();
+  renderBuffChips();
+}
+
+/* ---- toasts ---- */
+function logToast(msg, kind) {
+  const log = el('toastLog');
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind ? ' ' + kind : '');
+  t.textContent = msg;
+  log.appendChild(t);
+  while (log.children.length > 20) log.removeChild(log.firstChild);
+  setTimeout(() => { t.style.transition = 'opacity 0.5s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 500); }, 6000);
+}
+
+/* ---- floating number pops ---- */
+function spawnFloatPop(x, y, text, isCrit, color) {
+  const p = document.createElement('div');
+  p.className = 'float-pop' + (isCrit ? ' crit' : '');
+  p.textContent = text;
+  if (color) p.style.color = color;
+  p.style.left = (x - 20 + (Math.random() * 30 - 15)) + 'px';
+  p.style.top = (y - 10) + 'px';
+  document.body.appendChild(p);
+  setTimeout(() => p.remove(), 950);
+}
+
+/* =========================================================================
+   MODALS
+   ========================================================================= */
+
+function showModal(html) {
+  el('modalBox').innerHTML = html;
+  el('modalOverlay').classList.add('show');
+}
+function closeModal() {
+  el('modalOverlay').classList.remove('show');
+}
+
+function confirmCollapse() {
+  const gain = singularitiesOnCollapse();
+  showModal(`
+    <h2>Trigger The Big Collapse?</h2>
+    <p>Your universe will end. Energy, Matter production, and all generators reset to zero.
+    Singularities, Monuments, permanent upgrades, and Feats endure into the next cycle.</p>
+    <div class="modal-stat-row"><span>Singularities gained</span><span>+${formatInt(gain)}</span></div>
+    <div class="modal-btn-row">
+      <button class="modal-btn" id="confirmCollapseBtn">Collapse</button>
+      <button class="modal-btn secondary" id="cancelCollapseBtn">Not Yet</button>
+    </div>
+  `);
+  el2(document, '#confirmCollapseBtn').addEventListener('click', doCollapse);
+  el2(document, '#cancelCollapseBtn').addEventListener('click', closeModal);
+}
+
+function showWelcomeBackModal(offline) {
+  if (!offline) return;
+  const hours = (offline.elapsedMs / 3600000).toFixed(1);
+  const cappedHours = (offline.cappedMs / 3600000).toFixed(1);
+  showModal(`
+    <h2>While You Were Away</h2>
+    <p>${hours} hours passed${offline.wasCapped ? ` (capped at ${cappedHours}h)` : ''}.</p>
+    <div class="modal-stat-row"><span>Energy gained</span><span>+${formatNum(offline.gained)}</span></div>
+    <div class="modal-btn-row">
+      <button class="modal-btn" id="welcomeCloseBtn">Continue</button>
+    </div>
+  `);
+  el2(document, '#welcomeCloseBtn').addEventListener('click', closeModal);
+}
+
+function showSupernovaBanner() {
+  el('supernovaBanner').classList.add('show');
+}
+function hideSupernovaBanner() {
+  el('supernovaBanner').classList.remove('show');
+}
+
+/* =========================================================================
+   PARTICLES (foreground burst layer)
+   ========================================================================= */
+
+const particleCanvas = document.getElementById('particleLayer');
+const pctx = particleCanvas.getContext('2d');
+
+function spawnClickParticles(x, y, isCrit) {
+  const count = isCrit ? 18 : 8;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = (isCrit ? 2.5 : 1.4) + Math.random() * (isCrit ? 3 : 1.5);
+    runtime.particles.push({
+      x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 1, decay: 0.02 + Math.random() * 0.02,
+      size: isCrit ? 3 + Math.random() * 2 : 2 + Math.random() * 1.5,
+      color: isCrit ? '255,107,107' : '255,209,102',
+    });
+  }
+}
+
+function spawnBigBurst() {
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  for (let i = 0; i < 60; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 5;
+    runtime.particles.push({
+      x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 1, decay: 0.008 + Math.random() * 0.012,
+      size: 2 + Math.random() * 3,
+      color: '157,78,221',
+    });
+  }
+}
+
+let collapseAnim = null;
+function spawnCollapseAnimation() {
+  collapseAnim = { start: performance.now(), duration: 1400 };
+}
+
+function updateAndDrawParticles(dt) {
+  particleCanvas.width = window.innerWidth;
+  particleCanvas.height = window.innerHeight;
+  pctx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+  for (let i = runtime.particles.length - 1; i >= 0; i--) {
+    const p = runtime.particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.03;
+    p.life -= p.decay;
+    if (p.life <= 0) { runtime.particles.splice(i, 1); continue; }
+    pctx.globalAlpha = Math.max(0, p.life);
+    pctx.fillStyle = `rgba(${p.color},1)`;
+    pctx.beginPath();
+    pctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    pctx.fill();
+  }
+  pctx.globalAlpha = 1;
+
+  if (collapseAnim) {
+    const elapsed = performance.now() - collapseAnim.start;
+    const t = elapsed / collapseAnim.duration;
+    if (t < 1) {
+      const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+      const flashAlpha = t < 0.5 ? t * 2 : (1 - t) * 2;
+      pctx.fillStyle = `rgba(255,255,255,${flashAlpha * 0.85})`;
+      pctx.fillRect(0, 0, particleCanvas.width, particleCanvas.height);
+    } else {
+      collapseAnim = null;
+    }
+  }
+}
+
+/* =========================================================================
+   BACKDROP RENDERER
+   ========================================================================= */
+
+const backdropCanvas = document.getElementById('backdrop');
+const bctx = backdropCanvas.getContext('2d');
+let bTime = 0;
+
+function ensureBackdropObjs() {
+  const b = runtime.backdropObjs;
+  if (b.dust.length === 0) {
+    for (let i = 0; i < 80; i++) {
+      b.dust.push({ x: Math.random(), y: Math.random(), r: 0.5 + Math.random() * 1.5, speed: 0.05 + Math.random() * 0.1, phase: Math.random() * Math.PI * 2 });
+    }
+  }
+  if (b.protostars.length === 0) {
+    for (let i = 0; i < 6; i++) {
+      b.protostars.push({ x: Math.random(), y: Math.random(), r: 20 + Math.random() * 30, phase: Math.random() * Math.PI * 2 });
+    }
+  }
+  if (b.stars.length === 0) {
+    for (let i = 0; i < 220; i++) {
+      b.stars.push({ x: Math.random(), y: Math.random(), r: 0.5 + Math.random() * 1.6, phase: Math.random() * Math.PI * 2, speed: 0.5 + Math.random() * 1.5 });
+    }
+  }
+  if (b.planets.length === 0) {
+    for (let i = 0; i < 2; i++) {
+      b.planets.push({ cx: 0.2 + Math.random() * 0.6, cy: 0.2 + Math.random() * 0.6, orbitR: 40 + i * 25, angle: Math.random() * Math.PI * 2, speed: 0.15 + i * 0.1, color: i === 0 ? '#48cae4' : '#ffb703' });
+    }
+  }
+  if (!b.galaxySeed) {
+    b.galaxySeed = { cx: 0.5, cy: 0.45, arms: 3, rot: 0 };
+  }
+  if (b.clusters.length === 0) {
+    for (let i = 0; i < 5; i++) {
+      b.clusters.push({ x: Math.random(), y: Math.random(), scale: 0.15 + Math.random() * 0.25, rot: Math.random() * Math.PI * 2 });
+    }
+  }
+}
+
+function drawEmber(w, h) {
+  const cx = w / 2, cy = h * 0.42;
+  const pulse = 0.85 + Math.sin(bTime * 2) * 0.15;
+  const grad = bctx.createRadialGradient(cx, cy, 0, cx, cy, 60 * pulse);
+  grad.addColorStop(0, 'rgba(255,236,179,0.9)');
+  grad.addColorStop(0.4, 'rgba(255,183,3,0.5)');
+  grad.addColorStop(1, 'rgba(255,87,34,0)');
+  bctx.fillStyle = grad;
+  bctx.beginPath();
+  bctx.arc(cx, cy, 60 * pulse, 0, Math.PI * 2);
+  bctx.fill();
+}
+
+function drawDust(w, h, alpha) {
+  bctx.save();
+  bctx.globalAlpha = alpha;
+  for (const d of runtime.backdropObjs.dust) {
+    const x = d.x * w + Math.sin(bTime * d.speed + d.phase) * 20;
+    const y = d.y * h + Math.cos(bTime * d.speed * 0.7 + d.phase) * 20;
+    bctx.fillStyle = 'rgba(180,160,220,0.5)';
+    bctx.beginPath();
+    bctx.arc(x, y, d.r, 0, Math.PI * 2);
+    bctx.fill();
+  }
+  bctx.restore();
+}
+
+function drawProtostars(w, h, alpha) {
+  bctx.save();
+  bctx.globalAlpha = alpha;
+  for (const p of runtime.backdropObjs.protostars) {
+    const x = p.x * w, y = p.y * h;
+    const pulse = 0.8 + Math.sin(bTime + p.phase) * 0.2;
+    const grad = bctx.createRadialGradient(x, y, 0, x, y, p.r * pulse);
+    grad.addColorStop(0, 'rgba(255,200,150,0.6)');
+    grad.addColorStop(1, 'rgba(255,100,80,0)');
+    bctx.fillStyle = grad;
+    bctx.beginPath();
+    bctx.arc(x, y, p.r * pulse, 0, Math.PI * 2);
+    bctx.fill();
+  }
+  bctx.restore();
+}
+
+function drawStars(w, h, alpha) {
+  bctx.save();
+  bctx.globalAlpha = alpha;
+  for (const s of runtime.backdropObjs.stars) {
+    const tw = 0.5 + Math.sin(bTime * s.speed + s.phase) * 0.5;
+    bctx.fillStyle = `rgba(255,255,255,${0.3 + tw * 0.7})`;
+    bctx.beginPath();
+    bctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
+    bctx.fill();
+  }
+  bctx.restore();
+}
+
+function drawPlanets(w, h, alpha) {
+  bctx.save();
+  bctx.globalAlpha = alpha;
+  for (const p of runtime.backdropObjs.planets) {
+    const cx = p.cx * w, cy = p.cy * h;
+    p.angle += 0.002 * p.speed;
+    bctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    bctx.beginPath();
+    bctx.arc(cx, cy, p.orbitR, 0, Math.PI * 2);
+    bctx.stroke();
+    const px = cx + Math.cos(p.angle) * p.orbitR;
+    const py = cy + Math.sin(p.angle) * p.orbitR * 0.4;
+    bctx.fillStyle = p.color;
+    bctx.beginPath();
+    bctx.arc(px, py, 4, 0, Math.PI * 2);
+    bctx.fill();
+  }
+  bctx.restore();
+}
+
+function drawGalaxy(w, h, alpha) {
+  bctx.save();
+  bctx.globalAlpha = alpha;
+  const cx = runtime.backdropObjs.galaxySeed.cx * w;
+  const cy = runtime.backdropObjs.galaxySeed.cy * h;
+  const rot = bTime * 0.03;
+  bctx.translate(cx, cy);
+  bctx.rotate(rot);
+  for (let arm = 0; arm < 3; arm++) {
+    const armAngle = (Math.PI * 2 / 3) * arm;
+    for (let i = 0; i < 60; i++) {
+      const t = i / 60;
+      const radius = t * 150;
+      const angle = armAngle + t * 4.5;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius * 0.5;
+      bctx.fillStyle = `rgba(200,180,255,${0.5 * (1 - t)})`;
+      bctx.beginPath();
+      bctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      bctx.fill();
+    }
+  }
+  bctx.restore();
+}
+
+function drawClusters(w, h, alpha) {
+  bctx.save();
+  bctx.globalAlpha = alpha;
+  for (const c of runtime.backdropObjs.clusters) {
+    const x = c.x * w, y = c.y * h;
+    bctx.save();
+    bctx.translate(x, y);
+    bctx.rotate(c.rot + bTime * 0.02);
+    bctx.scale(c.scale, c.scale);
+    for (let i = 0; i < 20; i++) {
+      const t = i / 20;
+      const angle = t * 6;
+      const r = t * 100;
+      bctx.fillStyle = 'rgba(150,200,255,0.35)';
+      bctx.beginPath();
+      bctx.arc(Math.cos(angle) * r, Math.sin(angle) * r * 0.5, 1.2, 0, Math.PI * 2);
+      bctx.fill();
+    }
+    bctx.restore();
+  }
+  bctx.restore();
+}
+
+function drawCosmicWeb(w, h, alpha) {
+  bctx.save();
+  bctx.globalAlpha = alpha * 0.5;
+  bctx.strokeStyle = 'rgba(100,150,255,0.25)';
+  bctx.lineWidth = 1;
+  const cols = 8, rows = 5;
+  const pts = [];
+  for (let i = 0; i <= cols; i++) {
+    pts.push([]);
+    for (let j = 0; j <= rows; j++) {
+      const baseX = (i / cols) * w;
+      const baseY = (j / rows) * h;
+      const jitter = 30;
+      pts[i].push([
+        baseX + Math.sin(bTime * 0.1 + i + j) * jitter,
+        baseY + Math.cos(bTime * 0.1 + i - j) * jitter,
+      ]);
+    }
+  }
+  for (let i = 0; i <= cols; i++) {
+    for (let j = 0; j <= rows; j++) {
+      if (i < cols) { bctx.beginPath(); bctx.moveTo(...pts[i][j]); bctx.lineTo(...pts[i + 1][j]); bctx.stroke(); }
+      if (j < rows) { bctx.beginPath(); bctx.moveTo(...pts[i][j]); bctx.lineTo(...pts[i][j + 1]); bctx.stroke(); }
+    }
+  }
+  bctx.restore();
+}
+
+function drawBackdropEchoStars(w, h) {
+  const cyclesSurvived = state.meta.highestTierEverAcrossCycles;
+  if (cyclesSurvived < 0) return;
+  bctx.save();
+  bctx.globalAlpha = 0.25;
+  const count = Math.min(150, (cyclesSurvived + 1) * 20);
+  bctx.fillStyle = 'rgba(255,255,255,0.6)';
+  for (let i = 0; i < count; i++) {
+    const x = (Math.sin(i * 12.9898) * 43758.5453 % 1 + 1) % 1 * w;
+    const y = (Math.sin(i * 78.233) * 12345.678 % 1 + 1) % 1 * h;
+    bctx.fillRect(x, y, 1, 1);
+  }
+  bctx.restore();
+}
+
+function renderBackdrop(dt) {
+  bTime += dt;
+  const w = backdropCanvas.width = window.innerWidth;
+  const h = backdropCanvas.height = window.innerHeight;
+  bctx.fillStyle = '#05050a';
+  bctx.fillRect(0, 0, w, h);
+
+  ensureBackdropObjs();
+
+  const tier = state.meta.highestTierUnlocked; // -1..6
+
+  drawBackdropEchoStars(w, h);
+  drawEmber(w, h);
+  if (tier >= 0) drawDust(w, h, 1);
+  if (tier >= 1) drawProtostars(w, h, 1);
+  if (tier >= 2) drawStars(w, h, 1);
+  if (tier >= 3) drawPlanets(w, h, 1);
+  if (tier >= 4) drawGalaxy(w, h, 1);
+  if (tier >= 5) drawClusters(w, h, 1);
+  if (tier >= 6) drawCosmicWeb(w, h, 1);
+}
+
+/* =========================================================================
+   MAIN LOOP
+   ========================================================================= */
+
+const SIM_TICK_MS = 100;
+
+function simTick(dtMs) {
+  const dtSec = dtMs / 1000;
+  const rate = totalProductionPerSecond();
+  addEnergy(rate * dtSec);
+  state.stats.playTimeSeconds += dtSec;
+
+  if (runtime.activeEvent && nowSec() >= runtime.activeEvent.endsAt) {
+    runtime.activeEvent = null;
+  }
+  if (runtime.supernovaPending && nowSec() >= runtime.supernovaDecisionEndsAt) {
+    resolveSupernova(false);
+  }
+  runtime.eventCountdown -= dtSec;
+  if (runtime.eventCountdown <= 0 && !runtime.supernovaPending) {
+    triggerRandomEvent();
+    scheduleNextEvent();
+  }
+  checkAchievements();
+}
+
+function tweenDisplayValues() {
+  runtime.displayedEnergy += (state.resources.energy - runtime.displayedEnergy) * 0.25;
+  if (Math.abs(state.resources.energy - runtime.displayedEnergy) < Math.max(0.01, state.resources.energy * 0.0001)) {
+    runtime.displayedEnergy = state.resources.energy;
+  }
+  el('energyVal').textContent = formatNum(runtime.displayedEnergy);
+  el('matterVal').textContent = formatInt(state.resources.matter);
+}
+
+let uiRefreshAccum = 0;
+
+function mainLoop(ts) {
+  if (!runtime.lastTs) runtime.lastTs = ts;
+  const dt = Math.min(0.25, (ts - runtime.lastTs) / 1000); // clamp to avoid huge jumps from tab-throttle
+  runtime.lastTs = ts;
+
+  runtime.accumulator += dt * 1000;
+  let ticks = 0;
+  while (runtime.accumulator >= SIM_TICK_MS && ticks < 50) {
+    simTick(SIM_TICK_MS);
+    runtime.accumulator -= SIM_TICK_MS;
+    ticks++;
+  }
+
+  renderBackdrop(dt);
+  updateAndDrawParticles(dt);
+  tweenDisplayValues();
+
+  uiRefreshAccum += dt;
+  if (uiRefreshAccum > 0.25) {
+    uiRefreshAccum = 0;
+    renderResources();
+    renderBuffChips();
+    renderTab();
+    if (runtime.supernovaPending) {
+      const remaining = Math.max(0, runtime.supernovaDecisionEndsAt - nowSec());
+      el('supernovaTimerFill').style.width = (remaining / 10 * 100) + '%';
+    }
+  }
+
+  requestAnimationFrame(mainLoop);
+}
+
+/* =========================================================================
+   INPUT WIRING
+   ========================================================================= */
+
+function wireInput() {
+  el('igniteBtn').addEventListener('click', (e) => doIgnite(e.clientX, e.clientY));
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      runtime.activeTab = btn.dataset.tab;
+      renderTab();
+    });
+  });
+
+  document.querySelectorAll('.buy-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.buy-mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const v = btn.dataset.buy;
+      runtime.buyMode = v === 'max' ? 'max' : parseInt(v, 10);
+      renderTab();
+    });
+  });
+
+  el('muteBtn').addEventListener('click', () => {
+    state.settings.muted = !state.settings.muted;
+    el('muteBtn').textContent = state.settings.muted ? '🔇' : '🔊';
+    saveGame();
+  });
+
+  el('saveBtn').addEventListener('click', () => { saveGame(); logToast('Game saved.', 'event'); });
+
+  el('resetBtn').addEventListener('click', () => {
+    showModal(`
+      <h2>Erase this universe?</h2>
+      <p>This permanently deletes all saved progress, including Singularities and Feats. This cannot be undone.</p>
+      <div class="modal-btn-row">
+        <button class="modal-btn" id="confirmResetBtn" style="background:#7a1f1f;border-color:#ff6b6b;">Erase Everything</button>
+        <button class="modal-btn secondary" id="cancelResetBtn">Cancel</button>
+      </div>
+    `);
+    el2(document, '#confirmResetBtn').addEventListener('click', () => {
+      try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+      location.reload();
+    });
+    el2(document, '#cancelResetBtn').addEventListener('click', closeModal);
+  });
+
+  el('supernovaTrigger').addEventListener('click', () => resolveSupernova(true));
+  el('supernovaDecline').addEventListener('click', () => resolveSupernova(false));
+
+  el('modalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'modalOverlay') closeModal();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      const rect = el('igniteBtn').getBoundingClientRect();
+      doIgnite(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) saveGame();
+  });
+  window.addEventListener('beforeunload', saveGame);
+}
+
+/* =========================================================================
+   DEBUG HELPERS
+   ========================================================================= */
+
+window.debug = {
+  addEnergy: (n) => { addEnergy(n); renderAll(); },
+  addMatter: (n) => { state.resources.matter += n; renderAll(); },
+  addSingularities: (n) => { state.prestige.singularities += n; renderAll(); },
+  // Writes a save with a backdated `savedAt` directly, bypassing saveGame()'s
+  // own Date.now() stamp, so offline-progress catch-up can be tested on reload.
+  setSavedAtHoursAgo: (h) => {
+    const snapshot = JSON.parse(JSON.stringify(state));
+    snapshot.savedAt = Date.now() - h * 3600000;
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot)); } catch (e) {}
+  },
+  resetSave: () => { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} state = defaultState(); state.meta.highestTierUnlocked = -1; renderAll(); updateStageLabel(); },
+  ownAll: (n) => { state.generators.forEach(g => g.owned = n || 10); state.meta.highestTierUnlocked = highestOwnedTierIndex(); state.meta.highestTierEverAcrossCycles = Math.max(state.meta.highestTierEverAcrossCycles, state.meta.highestTierUnlocked); renderAll(); updateStageLabel(); },
+  triggerEvent: (id) => { const evt = EVENT_TYPES.find(e => e.id === id); if (evt) triggerRandomEventForced(evt); },
+  setTab: (name) => { runtime.activeTab = name; document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name)); renderTab(); },
+  unlockAchievements: (n) => { ACHIEVEMENTS.slice(0, n).forEach(a => { if (!state.achievements.unlocked.includes(a.id)) state.achievements.unlocked.push(a.id); }); renderAll(); },
+  own: (id, n) => { const g = state.generators.find(x => x.id === id); if (g) g.owned = n; state.meta.highestTierUnlocked = highestOwnedTierIndex(); state.meta.highestTierEverAcrossCycles = Math.max(state.meta.highestTierEverAcrossCycles, state.meta.highestTierUnlocked); renderAll(); updateStageLabel(); },
+  clickIgnite: (n) => { for (let i = 0; i < (n || 1); i++) doIgnite(window.innerWidth / 2, window.innerHeight * 0.6); } ,
+  openCollapseConfirm: () => confirmCollapse(),
+  openWelcomeBack: () => showWelcomeBackModal({ elapsedMs: 3 * 3600000, cappedMs: 3 * 3600000, gained: totalProductionPerSecond() * 3 * 3600, wasCapped: false }),
+  forceCollapse: () => doCollapse(),
+  state: () => state,
+};
+
+// Dev-only: driving the game from a URL hash (e.g. #debug=ownAll:20;addEnergy:1e9;setTab:prestige)
+// lets headless/automated screenshots exercise mid/late-game states without manual play.
+function runDebugHash() {
+  if (!location.hash.startsWith('#debug=')) return;
+  const cmds = decodeURIComponent(location.hash.slice(7)).split(';');
+  for (const cmd of cmds) {
+    const [fn, ...args] = cmd.split(':');
+    if (typeof window.debug[fn] === 'function') {
+      const parsed = args.map(a => { const num = parseFloat(a); return isNaN(num) ? a : num; });
+      window.debug[fn](...parsed);
+    }
+  }
+}
+
+function triggerRandomEventForced(evt) {
+  if (evt.id === 'solarFlare') runtime.activeEvent = { type: 'solarFlare', endsAt: nowSec() + evt.duration };
+  else if (evt.id === 'meteorShower') runtime.activeEvent = { type: 'meteorShower', endsAt: nowSec() + evt.duration };
+  else if (evt.id === 'supernova') { runtime.supernovaPending = true; runtime.supernovaDecisionEndsAt = nowSec() + evt.duration; showSupernovaBanner(); }
+  else if (evt.id === 'wormhole') { const burst = totalProductionPerSecond() * 120; addEnergy(burst); state.stats.wormholesSeen++; checkAchievements(); }
+}
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+
+function init() {
+  const loaded = loadGame();
+  let offlineResult = null;
+  if (loaded) {
+    mergeLoadedState(loaded);
+    offlineResult = applyOfflineProgress(loaded);
+  }
+  el('muteBtn').textContent = state.settings.muted ? '🔇' : '🔊';
+  state.meta.highestTierUnlocked = highestOwnedTierIndex();
+  if (state.meta.highestTierUnlocked > state.meta.highestTierEverAcrossCycles) {
+    state.meta.highestTierEverAcrossCycles = state.meta.highestTierUnlocked;
+  }
+  updateStageLabel();
+  wireInput();
+  renderAll();
+  scheduleNextEvent();
+  checkAchievements();
+
+  if (offlineResult && offlineResult.gained > 1) {
+    showWelcomeBackModal(offlineResult);
+  }
+
+  setInterval(saveGame, 20000);
+  requestAnimationFrame(mainLoop);
+
+  runDebugHash();
+}
+
+init();
+</script>
+</body>
+</html>
