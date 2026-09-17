@@ -1,0 +1,11 @@
+# Same noisy paths as .gitignore, kept out of exploration/grep context too.
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+.playwright-mcp/
+logs/
+*.log
+state.json

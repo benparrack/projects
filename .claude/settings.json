@@ -1,0 +1,8 @@
+{
+  "bashOutputMaxChars": 15000,
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y ccstatusline@latest",
+    "padding": 0
+  }
+}

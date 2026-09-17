@@ -7,17 +7,17 @@ one cohesive product.
 
 ## Start of session
 
-Before starting work on anything here, read `IDEAS.md` and `TODO_FIRST.md` in this
-directory to get current on where things stand:
-- `IDEAS.md` — the full backlog of project ideas, each with enough context to pick
-  back up cold. Ideas are numbered; sub-projects reference their originating idea
-  number (e.g. "IDEAS.md #11").
-- `TODO_FIRST.md` — the short list of ideas currently picked from `IDEAS.md` as
-  next up to build, plus a "Done" log of what's shipped so far.
+Before starting work on anything here, read `TODO_FIRST.md` in this directory in
+full — it's short (the current picks from `IDEAS.md`, plus a "Done" log) and gives
+situational awareness across all the sub-projects cheaply.
 
-Skim both fully rather than grepping for a keyword — they're short enough to read
-end-to-end and the point is situational awareness across *all* the sub-projects,
-not just the one you're about to touch.
+For `IDEAS.md` (the full numbered backlog, each entry with enough context to pick
+back up cold — much longer, and grows over time):
+- If Ben already named a sub-project or idea number to work on, don't full-read
+  it — just look up that one entry (grep the number/name) plus anything
+  `TODO_FIRST.md` already told you.
+- If there's no clear target yet (Ben's asking what to work on next, or starting
+  something genuinely new), skim `IDEAS.md` fully — that's what it's for.
 
 ## Browser automation
 
@@ -63,6 +63,26 @@ which closes this race entirely rather than just narrowing it (checking
 `git status` first helps but is not sufficient on its own). Use this for
 every commit in this repo, not just when a collision seems likely.
 
+## Token/context discipline
+
+`ccusage` (`npx ccusage@latest blocks`) usage data from this repo shows the
+dominant cost by far is **cache-read tokens**, not big single file reads or a
+bloated `CLAUDE.md` — one session alone racked up 35.9M cache-read tokens against
+only 158K output tokens. Cache reads scale with *conversation length × number of
+turns*, because every tool-call round-trip resends the whole growing context. The
+fixes that actually move this number:
+- On a long tool-call-heavy stretch (iterative debugging, repeated test/build
+  runs, lots of small Read/Bash calls in a row), run `/compact` proactively
+  well before it's forced — don't wait for auto-compact.
+- Push exploration/research-heavy work into a subagent or fork rather than doing
+  dozens of Read/Grep calls in the main conversation — a subagent's tool calls
+  never get replayed into the parent's growing context, only its final summary
+  does.
+- `/clear` between unrelated sub-projects instead of carrying dead context
+  forward into the next task.
+- Keep `CLAUDE.md` files and always-loaded memory lean — every line in them gets
+  replayed on every single turn of a session, not just paid for once.
+
 ## Working across sub-projects
 
 - Each top-level directory is its own self-contained project (own README/assets/
@@ -70,10 +90,10 @@ every commit in this repo, not just when a collision seems likely.
   across them unless a project explicitly says otherwise.
 - Check a sub-project's own directory for a README or CLAUDE.md before assuming
   how to run/build it; add project-specific instructions there rather than here
-  as new projects gain their own conventions.
-- `game_terminal/` is deployed (Render, see `TODO_FIRST.md`/`IDEAS.md` #11) — treat
-  changes there as touching a live, shared, real-time multiplayer service, not a
-  local-only demo.
+  as new projects gain their own conventions. For notes that only matter when
+  touching one sub-project, prefer a path-scoped rule in `.claude/rules/` (see
+  `.claude/rules/game_terminal.md` for an example) over adding to this file —
+  it only loads into context when that sub-project's files are actually read.
 - When picking up new work, prefer finishing/polishing an in-progress idea from
   `TODO_FIRST.md` over starting something new from `IDEAS.md`, unless Ben asks
   otherwise.
