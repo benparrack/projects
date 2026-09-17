@@ -294,3 +294,153 @@ it in `localStorage` so revisits show the same topic until you ask for a new
 one. Tracks a per-day history log and a consecutive-day streak counter.
 **Pitch:** A daily-habit page for learning something new — one random topic a
 day, read in real depth rather than a one-line trivia fact.
+
+---
+
+## 23. Roguelike Deckbuilder
+
+**Status:** Stocked, not started.
+**Pitch:** Slay the Spire–style single-player card combat — build up a deck over the course of a run, fighting a sequence of enemies with escalating difficulty, ending in a boss.
+
+**Why this one:** A genuinely new genre for this repo — nothing here is card/strategy-based yet. Strategy depth comes from a small, tight rule set (card costs, energy per turn, status effects) rather than raw content volume, so it stays scoped.
+
+**What it needs when resumed:**
+- Card data model: cost, effect(s), targeting (self/single enemy/all enemies).
+- Turn/energy system: fixed energy per turn, cards played from hand until energy runs out, hand refills each turn.
+- Simple enemy AI: telegraphed intents shown before they act (genre convention — e.g. "will attack for 8" shown a turn ahead) rather than hidden logic.
+- Run structure: a branching map with node types (fight, elite fight, shop, rest/heal), ending in a boss node.
+- Starting scope: a small hand-balanced card pool (~20-30 cards) before considering any procedural card generation.
+
+---
+
+## 24. Tower Defense
+
+**Status:** Stocked, not started.
+**Pitch:** Waves of enemies follow a path; place and upgrade towers along it to stop them before they reach the end. Classic escalating-numbers game loop.
+
+**Why this one:** A different core loop than anything else here — economy/placement decisions plus real-time wave pacing — and naturally satisfying: visible upgrade payoff, and a difficulty curve that's easy to tune via wave composition alone.
+
+**What it needs when resumed:**
+- Grid- or path-based tower placement.
+- Tower stats: targeting rule, range, damage, upgrade tiers.
+- Wave spawner with escalating composition (more enemies, tougher types, eventually bosses).
+- Enemy pathfinding: a fixed path is fine for v1; A* only needed later if towers can block/reroute paths.
+- Currency earned from kills to fund new towers/upgrades.
+
+---
+
+## 25. Voxel Mini-Builder (Minecraft-lite, single chunk)
+
+**Status:** Stocked, not started.
+**Pitch:** A small explorable/buildable voxel world — walk around, place/break blocks — scoped to a single chunk (not infinite terrain) to stay achievable.
+
+**Why this one:** A distinct WebGL exercise from the existing `raytracer/` (rasterization + meshing instead of ray-per-pixel) and `3dgames/shooter/` (building/exploration instead of combat). Also a good sandbox for a later survival/crafting extension if it turns out to be fun.
+
+**What it needs when resumed:**
+- Three.js, reusing the vendored pre-module build from `3dgames/` (see idea #0's stack notes) so `file://` double-click-to-play keeps working.
+- A chunk data structure: a 3D typed array of block IDs.
+- Greedy meshing or at minimum naive per-cube-face culling to keep triangle count sane.
+- Raycast-based block placement/removal from the camera.
+- The same hand-rolled pointer-lock camera rig already proven in `3dgames/shooter/` for first-person look — see idea #0's Firefox/X11 pointer-lock caveat (default to Chrome for testing).
+
+---
+
+## 26. Idle/Incremental Game
+
+**Status:** Done — `cosmic_forge/`. A cosmic-growth theme (Spark → Dust → Protostars → Stars → Solar Systems → Galaxies → Superclusters → Cosmic Web) with a narratively-justified prestige reset ("The Big Collapse" / Big Bang), 7 gated generator tiers, a thin secondary Matter currency spent on permanent Monuments, timed random events (Solar Flare/Meteor Shower/Supernova/Wormhole), achievements, and a tier-synced animated canvas backdrop.
+**Pitch:** A clicker that automates itself over time — manual actions early on, automation/upgrades take over, exponential number growth, with a prestige/reset mechanic for meta-progression.
+
+**Why this one:** Deceptively deep design space in balancing growth curves and pacing, for comparatively little rendering work — mostly numbers, timers, and a shop UI.
+
+**What it needs when resumed:**
+- Core resource loop: manual click generates a resource; purchasable generators/automators produce it passively over time.
+- Exponential cost scaling for upgrades (standard idle-game formula: `cost = base * growth_rate^owned`).
+- A prestige mechanic: reset progress for a permanent multiplier/bonus, creating a second, longer-term progression curve.
+- Big-number handling once values exceed normal float precision (scientific notation display, or a bignum library) if growth is left unclamped.
+- UI: resource counter(s), purchase buttons with live cost display; offline-progress calculation on reload is a reasonable stretch goal.
+
+---
+
+## 27. Rhythm Game
+
+**Status:** Done — see `rhythm_game/` ("Pulse Catcher"). Deliberately not a lane-based Guitar Hero clone: a single free-roaming reticle (mouse/pointer, with arrow-key fallback) chases orbs that bloom anywhere across the field. Catching requires both timing *and* position. Heavy juice: particle bursts, screen shake, a synthesized combo-rising chime (no audio assets — oscillators + envelopes), floating score text, a miss-flash vignette, orb anticipation glow, combo-tier color escalation, combo-milestone callouts (10/25/50/...), and a background aura that breathes with the song's live energy via an `AnalyserNode` tap. A "3, 2, 1, Go!" countdown (synced off the real audio clock, not a timer) leads into every round, a live progress bar tracks the song, and results show a letter grade (S/A/B/C/D) plus a locally-persisted best score per track+difficulty. Judging keyed directly off `audioCtx.currentTime`, no scheduler needed. Two track sources: upload any local file (offline amplitude-envelope peak-picking + a zero-crossing-rate timbre estimate sampled from each note's sustain, not its attack transient, for bass/mid/treble color) or pick one of 6 "featured tracks" — original songs procedurally composed and synthesized entirely in Web Audio (`OfflineAudioContext`, no bundled/copyrighted audio at all) across varied genres (synthwave, chiptune, ambient, D&B, ethereal, anthem); since the composer places every note itself, difficulty there gates which instrument layers become catchable (kick only → +snare → +melody) instead of an amplitude threshold. HiDPI-aware and responsive down to phone widths, with a master volume control and an ambient animated backdrop. Full pause/resume (Escape key, on-screen button, or auto-pause on tab-blur — correctly excludes paused wall-clock time from the song clock, and can even pause mid-countdown), and touch taps now aim+catch correctly on the very first touch (a `pointerdown` with no preceding `pointermove`, which touchscreens never send, previously judged against the stale old reticle position).
+**Pitch:** Notes scroll/fall in time with a track; the player hits them on beat, judged on timing accuracy (perfect/good/miss) for a score and combo.
+
+---
+
+## 28. Turn-Based Tactics (Into the Breach–style)
+
+**Status:** Stocked, not started.
+**Pitch:** Small grid, few units per side, every enemy action telegraphed a turn ahead — the player sees exactly what will happen before it does, making it a puzzle of positioning rather than a fog-of-war strategy game.
+
+**Why this one:** The telegraph-everything design makes it fully solvable and satisfying at small scope — no hidden information or randomness to balance, unlike most tactics games.
+
+**What it needs when resumed:**
+- Grid representation, unit stats (HP, movement range, attack pattern).
+- Enemy AI that's deterministic and revealed: each enemy turn, compute and display its intended action (target tile/unit) before the player's turn resolves, then execute it exactly as shown.
+- Player turn: move + one action per unit, resolved simultaneously with enemy intents once confirmed.
+- Terrain/knockback mechanics (a staple of the genre) add depth without adding hidden randomness — worth including even in a small first pass.
+- UI: grid highlighting for movement/attack range, telegraph icons/arrows on threatened tiles.
+
+---
+
+## 29. Maze Generator + Solver Showcase
+
+**Status:** Stocked, not started.
+**Pitch:** Generate mazes with multiple algorithms (DFS backtracker, Prim's, Kruskal's) and race multiple solvers (BFS, A*, wall-follower) against each other, animated step by step.
+
+**Why this one:** A satisfying "watch the algorithm think" visual, cousin to the ant colony optimization visualizer but for deterministic pathfinding/generation instead of stochastic convergence — good side-by-side comparison format.
+
+**What it needs when resumed:**
+- Maze representation: a grid with wall bits per cell (standard for animated generation — easy to draw incrementally).
+- Generation algorithms: randomized DFS (recursive backtracker), Prim's, Kruskal's — each has a visually distinct generation pattern, which is part of the appeal.
+- Solver algorithms: BFS (guaranteed shortest, level-by-level fill is visually satisfying), A* (same but directed), a simple wall-follower (visually shows why it's not always optimal).
+- Animation: step through generation/solving frame by frame rather than computing instantly, with a speed slider.
+- UI: pick generator + solver(s) independently, run side by side on the same maze for direct comparison.
+
+---
+
+## 30. Wave Function Collapse Content Generator
+
+**Status:** Stocked, not started.
+**Pitch:** Constraint-propagation procedural generation — feed it a small example (tilemap or texture), and it generates new, larger output that locally resembles the example by propagating adjacency constraints until every cell "collapses" to a single tile.
+
+**Why this one:** A genuinely different generative technique than the Perlin-noise-based projects already shipped here (`terrain_generator/`, `generative_art_gallery/`) — constraint satisfaction instead of continuous noise fields, with its own distinct failure mode (contradictions requiring backtracking/retry) that's interesting to implement correctly.
+
+**What it needs when resumed:**
+- Input: a small hand-authored example tileset with defined adjacency rules (which tiles can be next to which, in each direction) — simplest to start with a tiny hand-built set rather than deriving rules from a sample image.
+- Core algorithm: each cell starts with all tiles as possible states; repeatedly pick the lowest-entropy uncollapsed cell, collapse it to one tile, propagate the constraint to neighbors (removing now-impossible options), repeat until fully collapsed or a contradiction is hit.
+- Contradiction handling: backtrack or restart when propagation leaves a cell with zero valid options.
+- Visualization: render the in-progress collapse (still-uncertain cells shown as overlapping/faded possibilities) since watching it converge is most of the appeal.
+- Stretch: derive adjacency rules automatically from a sample bitmap instead of hand-authoring them (the more common WFC demo format).
+
+---
+
+## 31. Conway's Game of Life Sandbox with Custom Rule Editor
+
+**Status:** Stocked, not started.
+**Pitch:** The standard Game of Life grid, but with an editable birth/survival ruleset (not just the default B3/S23) — change the rules and watch completely different emergent behaviors appear, from stable oscillators to total chaos.
+
+**Why this one:** Distinct from the falling-sand automaton (`physics_sandbox/`) since the rules themselves are player-authored rather than fixed per-material — same "simple local rule, complex global behavior" appeal as boids (#3), but for a grid automaton instead of continuous agents.
+
+**What it needs when resumed:**
+- Grid simulation: standard 2D cellular automaton with wraparound or bounded edges, editable birth/survival counts (e.g. "B3/S23" notation input, or checkboxes for neighbor counts 0-8 that cause birth/survival).
+- A pattern library of interesting known rulesets/starting patterns (gliders, oscillators for classic B3/S23; other rulesets like HighLife B36/S23 have their own notable patterns) to seed exploration.
+- UI: click/drag to paint live cells, play/pause/step, speed control, rule editor, save/load a pattern.
+- Stretch: pattern detection (recognize and highlight known stable/periodic structures), zoom/pan for large grids.
+
+---
+
+## 32. Match-3 with Cascade Physics
+
+**Status:** Stocked, not started.
+**Pitch:** Bejeweled-style grid — swap adjacent pieces to make lines of 3+, matched pieces clear, everything above falls to fill the gaps (potentially triggering chain-reaction cascades), with combo scoring for chains.
+
+**Why this one:** Simple rules, but the "juice" (falling animation, particle bursts, chain multipliers) is most of what makes the genre satisfying — a good exercise in game feel/polish on top of straightforward grid logic.
+
+**What it needs when resumed:**
+- Grid + piece types, swap validation (must create a match to be a legal move), match detection (3+ in a row/column).
+- Gravity/fill: after a clear, existing pieces fall to fill gaps, new pieces spawn at the top — needs to detect resulting cascades (a fall can create new matches) and keep resolving until stable.
+- Combo scoring: track chain depth per cascade for escalating combo multipliers.
+- Move validation: ensure the board always has at least one possible match (regenerate/shuffle if not) so the player is never stuck.
+- Polish: fall animation timing, clear particle effects, combo popup text — this is genuinely where most of the "fun" lives for this genre.

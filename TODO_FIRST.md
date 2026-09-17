@@ -1,10 +1,10 @@
 # Up Next
 
-Queued for tomorrow:
-
-- [ ] **Game Terminal** — add more games to / improve `game_terminal/`. Slither and Connect 4 are now shipped (see below); see `game_terminal/FUTURE.md` for remaining ideas (no game currently queued — next is whatever comes up). (Being worked on in another concurrent session as of 2026-09-13.)
+Nothing queued right now — pick from `IDEAS.md` or `game_terminal/FUTURE.md`.
 
 ## Done
+- **Idle/Incremental Game — "Cosmic Forge"** (`IDEAS.md` #26) — `cosmic_forge/` — grow a universe (Spark → Dust → Protostars → Stars → Solar Systems → Galaxies → Superclusters → Cosmic Web) with a tier-synced animated canvas backdrop, 7 gated generator tiers, click crits/Matter/Monuments, timed events (Solar Flare/Meteor Shower/Supernova/Wormhole), achievements, offline progress, and a narratively-justified prestige reset ("The Big Collapse") with a permanent Singularity upgrade shop.
+- **Rhythm Game — "Pulse Catcher"** (`IDEAS.md` #27) — `rhythm_game/` — not a lane-based Guitar Hero clone: a single mouse-driven reticle chases orbs, catching requires timing *and* position, heavy juice (particle bursts, screen shake, synthesized combo-rising chimes/milestones, miss-flash, audio-reactive aura), a synced countdown + progress bar, results with a letter grade + persisted best score, and full pause/resume (key, button, or auto on tab-blur). Play any uploaded song, or pick one of 6 original "featured tracks" procedurally composed and synthesized on the fly (Web Audio `OfflineAudioContext`, zero bundled audio/copyright concerns). Touch/mobile play verified working (tap correctly aims+catches on first touch).
 - **Daily Learning** (`IDEAS.md` #22) — `daily_learning/` — a random Wikipedia deep-dive each day, cached per-day with a history log and streak counter. Started as a cloud-scheduled-routine idea but pivoted to a local sandbox page (matching this repo's pattern) after hitting a cloud/GitHub-connection blocker.
 - **Procedural Terrain / World Map Generator** (`IDEAS.md` #13) — `terrain_generator/` — noise-based elevation/moisture/temperature, Whittaker-style biomes, steepest-descent rivers, named settlements, seeded + reproducible.
 - **Real-Time Multiplayer Shared Canvas / Mini Game** (`IDEAS.md` #11) — `game_terminal/` — https://game-terminal.onrender.com — seven games live: shared drawing canvas, Hangman, Checkers, Chess, Slither (the first real-time tick-loop game in the hub, vs. the event-driven others), Connect 4, and Arena Duel (1v1 3D shooter — ported movement/camera/weapon math from the single-player `3dgames/shooter/` prototype onto server-authoritative tick-loop netcode + a new full-viewport takeover layout; round-based best-of-5 with real per-round health bars)
