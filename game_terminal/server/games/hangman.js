@@ -20,7 +20,11 @@ function isValidWordOrPhrase(cleaned) {
 function buildView(room, forClientId) {
   const st = room.state;
   const isPicker = forClientId != null && forClientId === st.pickerClientId;
-  const revealAll = isPicker || st.phase === 'round_over';
+  // Even the picker only sees the shared guess-progress mask (not the full word) during play —
+  // both so their screen shows "current state" progress like everyone else's (playtest ask), and
+  // so it isn't a shoulder-surfing giveaway to guessers sitting next to them. The picker separately
+  // gets `pickerWord` below so their own client can offer a "reveal my word" toggle on demand.
+  const revealAll = st.phase === 'round_over';
   const mask = st.word
     ? st.word.split('').map((ch) => {
         if (ch === ' ') return ' ';
@@ -28,15 +32,18 @@ function buildView(room, forClientId) {
         return null;
       })
     : [];
+  const wordCounts = st.word ? st.word.split(' ').map((w) => w.length) : [];
   return {
     phase: st.phase,
     pickerClientId: st.pickerClientId,
-    wordLength: st.word ? st.word.length : 0,
+    letterCount: st.word ? st.word.replace(/ /g, '').length : 0,
+    wordCounts,
     mask,
     guessedLetters: st.guessedLetters,
     wrongGuesses: st.wrongGuesses,
     maxWrongGuesses: st.maxWrongGuesses,
     isPicker,
+    pickerWord: isPicker ? st.word : null,
     result: st.phase === 'round_over' ? st.lastResult : null,
   };
 }

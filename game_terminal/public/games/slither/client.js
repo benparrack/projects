@@ -31,15 +31,24 @@ function computeZoom(length) {
   return Math.max(ZOOM_MIN, 1 / (1 + grown / ZOOM_SHRINK_RATE));
 }
 
-// Girth grows a bit alongside length too, not just the tail getting longer. Same formula as
-// server/games/slither.js's radiusFor — kept in sync by hand like START_LENGTH above.
+// Girth grows alongside length, not just the tail getting longer — playtest feedback: "make
+// width difference at lots of points bigger". This is now DELIBERATELY more dramatic than the
+// server's own radiusFor (server/games/slither.js), which still drives collision/hit-detection
+// and food-eating range and has to stay balanced for gameplay — the two formulas used to match
+// 1:1 (see the comment there) but no longer do on purpose. This one only ever feeds the client's
+// rendered stroke width (ctx.lineWidth below), never anything sent back to the server, so
+// widening it purely changes how satisfyingly thick a big snake *looks*.
 const BASE_SNAKE_RADIUS = 9;
-const MAX_SNAKE_RADIUS = 13;
-const RADIUS_GROWTH_LENGTH = 1800;
+const MAX_SNAKE_RADIUS = 42; // was 26 — bigger gap between a fresh spawn and a maxed-out snake
+const RADIUS_GROWTH_LENGTH = 2400;
+// >1 = convex: growth stays modest early on and accelerates as length climbs, so the biggest
+// snakes on the board stand out the most instead of the whole range looking evenly "medium".
+const RADIUS_GROWTH_CURVE = 1.35;
 
 function computeRadius(length) {
   const t = Math.min(1, Math.max(0, (length - START_LENGTH) / RADIUS_GROWTH_LENGTH));
-  return BASE_SNAKE_RADIUS + (MAX_SNAKE_RADIUS - BASE_SNAKE_RADIUS) * t;
+  const eased = Math.pow(t, RADIUS_GROWTH_CURVE);
+  return BASE_SNAKE_RADIUS + (MAX_SNAKE_RADIUS - BASE_SNAKE_RADIUS) * eased;
 }
 
 function angleDiff(a, b) {
@@ -56,11 +65,27 @@ export function mount(container, api) {
   wrap.style.gap = '8px';
   wrap.style.alignItems = 'center';
 
+  const hintTitle = document.createElement('p');
+  hintTitle.textContent = '> HOW TO PLAY';
+  hintTitle.style.margin = '0';
+  hintTitle.style.fontSize = '0.85em';
+  hintTitle.style.opacity = '0.9';
+
+  // Rewritten per playtest feedback ("make instructions more clear at top") — was one dense
+  // run-on sentence at low contrast. Now one action per line under a leaderboard-style ">" title
+  // so it reads as a short checklist instead of a paragraph, with STEER/BOOST/GOAL as scannable
+  // labels and a bit more size/opacity so it doesn't fade into the background on first glance.
   const hint = document.createElement('p');
-  hint.textContent = 'MOVE MOUSE / DRAG TO STEER — CLICK, SPACE, OR THE BOOST BUTTON TO BOOST';
-  hint.style.margin = '0';
-  hint.style.fontSize = '0.8em';
-  hint.style.opacity = '0.8';
+  hint.innerHTML =
+    '<strong>STEER</strong> — move the mouse / drag<br>' +
+    '<strong>BOOST</strong> — click, hold Space, or the boost button (costs length)<br>' +
+    '<strong>GOAL</strong> — eat orbs to grow, avoid walls and other snakes';
+  hint.style.margin = '2px 0 0';
+  hint.style.maxWidth = `${CANVAS_WIDTH}px`;
+  hint.style.textAlign = 'center';
+  hint.style.fontSize = '0.85em';
+  hint.style.lineHeight = '1.5';
+  hint.style.opacity = '0.95';
 
   const body = document.createElement('div');
   body.style.display = 'flex';
@@ -135,6 +160,7 @@ export function mount(container, api) {
 
   body.appendChild(canvasWrap);
   body.appendChild(side);
+  wrap.appendChild(hintTitle);
   wrap.appendChild(hint);
   wrap.appendChild(body);
   container.appendChild(wrap);

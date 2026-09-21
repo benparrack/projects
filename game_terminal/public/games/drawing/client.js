@@ -12,6 +12,7 @@ const MIN_SIZE = 1;
 const MAX_SIZE = 30;
 const DEFAULT_SIZE = 3;
 const ERASER_SIZE_MULT = 6; // erasing needs a much fatter stroke to actually feel like erasing
+const FILL_TOLERANCE = 24; // per-channel match tolerance, so anti-aliased stroke edges don't leak
 
 export function mount(container, api) {
   const wrap = document.createElement('div');
@@ -31,11 +32,12 @@ export function mount(container, api) {
   let currentColor = COLORS[0];
   let currentSize = DEFAULT_SIZE;
   let erasing = false;
+  let filling = false;
 
   const swatchEls = [];
   function refreshSwatchBorders() {
     for (const el of swatchEls) {
-      el.style.border = !erasing && el.dataset.color === currentColor ? '2px solid #fff' : '1px solid #333';
+      el.style.border = !erasing && !filling && el.dataset.color === currentColor ? '2px solid #fff' : '1px solid #333';
     }
   }
   for (const color of COLORS) {
@@ -48,8 +50,10 @@ export function mount(container, api) {
     swatch.addEventListener('click', () => {
       currentColor = color;
       erasing = false;
+      filling = false;
       refreshSwatchBorders();
       eraserBtn.style.border = '1px solid #333';
+      fillBtn.style.border = '1px solid #333';
     });
     swatchEls.push(swatch);
     toolbar.appendChild(swatch);
@@ -78,10 +82,24 @@ export function mount(container, api) {
   eraserBtn.style.border = '1px solid #333';
   eraserBtn.addEventListener('click', () => {
     erasing = !erasing;
+    filling = false;
     eraserBtn.style.border = erasing ? '2px solid #fff' : '1px solid #333';
+    fillBtn.style.border = '1px solid #333';
     refreshSwatchBorders();
   });
   toolbar.appendChild(eraserBtn);
+
+  const fillBtn = document.createElement('button');
+  fillBtn.textContent = 'FILL';
+  fillBtn.style.border = '1px solid #333';
+  fillBtn.addEventListener('click', () => {
+    filling = !filling;
+    erasing = false;
+    fillBtn.style.border = filling ? '2px solid #fff' : '1px solid #333';
+    eraserBtn.style.border = '1px solid #333';
+    refreshSwatchBorders();
+  });
+  toolbar.appendChild(fillBtn);
 
   const undoBtn = document.createElement('button');
   undoBtn.textContent = 'UNDO';
@@ -134,13 +152,65 @@ export function mount(container, api) {
     ctx.stroke();
   }
 
-  // Full local mirror of the server's segment history, kept so undo/clear-mine (both of which
-  // remove specific past segments rather than only ever adding new ones) can redraw the canvas
-  // from scratch instead of needing to un-paint pixels.
+  function hexToRgba(hex) {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+    const n = parseInt(full, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+  }
+
+  // Standard stack-based paint-bucket flood fill, run identically by every client against its own
+  // (already-consistent) canvas pixels rather than shipping rasterized pixel data over the wire.
+  function applyFill(fillRec) {
+    const startX = Math.round(fillRec.x);
+    const startY = Math.round(fillRec.y);
+    const w = canvas.width;
+    const h = canvas.height;
+    if (startX < 0 || startY < 0 || startX >= w || startY >= h) return;
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+    const startI = (startY * w + startX) * 4;
+    const tr = data[startI];
+    const tg = data[startI + 1];
+    const tb = data[startI + 2];
+    const ta = data[startI + 3];
+    const [fr, fg, fb, fa] = hexToRgba(fillRec.color);
+    if (tr === fr && tg === fg && tb === fb && ta === fa) return; // already this color
+    const matches = (i) =>
+      Math.abs(data[i] - tr) <= FILL_TOLERANCE &&
+      Math.abs(data[i + 1] - tg) <= FILL_TOLERANCE &&
+      Math.abs(data[i + 2] - tb) <= FILL_TOLERANCE &&
+      Math.abs(data[i + 3] - ta) <= FILL_TOLERANCE;
+    const visited = new Uint8Array(w * h);
+    const stack = [[startX, startY]];
+    while (stack.length) {
+      const [x, y] = stack.pop();
+      if (x < 0 || y < 0 || x >= w || y >= h) continue;
+      const vi = y * w + x;
+      if (visited[vi]) continue;
+      const i = vi * 4;
+      if (!matches(i)) continue;
+      visited[vi] = 1;
+      data[i] = fr;
+      data[i + 1] = fg;
+      data[i + 2] = fb;
+      data[i + 3] = fa;
+      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  // Full local mirror of the server's history (strokes AND fills), kept so undo/clear-mine (both
+  // of which remove specific past records rather than only ever adding new ones) can redraw the
+  // canvas from scratch instead of needing to un-paint pixels.
   let segments = [];
+  function replayRecord(rec) {
+    if (rec.type === 'fill') applyFill(rec);
+    else drawSegment(rec);
+  }
   function redrawAll() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const seg of segments) drawSegment(seg);
+    for (const rec of segments) replayRecord(rec);
   }
 
   let drawing = false;
@@ -159,6 +229,16 @@ export function mount(container, api) {
 
   function onPointerDown(ev) {
     ev.preventDefault();
+    if (filling) {
+      const pos = pointerPos(ev);
+      const fillId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const rec = { type: 'fill', strokeId: fillId, x: pos.x, y: pos.y, color: currentColor };
+      segments.push(rec);
+      applyFill(rec);
+      myStrokes.push(fillId);
+      api.sendAction({ kind: 'fill', fill: { strokeId: fillId, x: pos.x, y: pos.y, color: currentColor } });
+      return;
+    }
     drawing = true;
     strokeHadSegments = false;
     strokeId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -207,6 +287,10 @@ export function mount(container, api) {
       if (data.kind === 'segment') {
         segments.push(data.segment);
         drawSegment(data.segment);
+        window.__debugSegmentCount = (window.__debugSegmentCount || 0) + 1;
+      } else if (data.kind === 'fill') {
+        segments.push(data.fill);
+        applyFill(data.fill);
         window.__debugSegmentCount = (window.__debugSegmentCount || 0) + 1;
       } else if (data.kind === 'clear') {
         segments = [];

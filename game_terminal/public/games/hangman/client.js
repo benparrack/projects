@@ -17,6 +17,7 @@ export function mount(container, api) {
   let view = null;
   let roster = [];
   let wordRejectedFlash = false;
+  let pickerRevealWord = false;
 
   function renderLetterGrid(interactive) {
     const guessed = new Set(view.guessedLetters);
@@ -75,15 +76,45 @@ export function mount(container, api) {
     root.appendChild(gallows);
 
     const wordLine = document.createElement('div');
+    wordLine.style.display = 'flex';
+    wordLine.style.alignItems = 'center';
+    wordLine.style.flexWrap = 'wrap';
+    wordLine.style.justifyContent = 'center';
+    wordLine.style.gap = '14px';
     wordLine.style.fontSize = '1.4em';
-    wordLine.style.letterSpacing = '4px';
-    wordLine.textContent = view.wordLength
-      ? view.mask.map((ch) => (ch === null ? '_' : ch)).join(' ')
-      : '(no word yet)';
+    if (view.letterCount) {
+      // Group blanks per word (splitting on the mask's literal space entries) with a visible
+      // divider between groups, instead of one long run of underscores — playtest feedback: a
+      // multi-word answer didn't make it obvious there even was a space, let alone where.
+      let group = document.createElement('span');
+      group.style.letterSpacing = '4px';
+      wordLine.appendChild(group);
+      for (const ch of view.mask) {
+        if (ch === ' ') {
+          const divider = document.createElement('span');
+          divider.textContent = '/';
+          divider.style.opacity = '0.5';
+          divider.style.fontSize = '0.8em';
+          wordLine.appendChild(divider);
+          group = document.createElement('span');
+          group.style.letterSpacing = '4px';
+          wordLine.appendChild(group);
+        } else {
+          group.textContent += (ch === null ? '_' : ch) + ' ';
+        }
+      }
+    } else {
+      wordLine.textContent = '(no word yet)';
+    }
     root.appendChild(wordLine);
 
     const status = document.createElement('div');
-    status.textContent = `Wrong guesses: ${view.wrongGuesses} / ${view.maxWrongGuesses}`;
+    const countLabel = view.wordCounts.length > 1
+      ? `${view.letterCount} letters across ${view.wordCounts.length} words (${view.wordCounts.join(', ')})`
+      : `${view.letterCount} letters`;
+    status.textContent = view.letterCount
+      ? `Wrong guesses: ${view.wrongGuesses} / ${view.maxWrongGuesses} · ${countLabel}`
+      : `Wrong guesses: ${view.wrongGuesses} / ${view.maxWrongGuesses}`;
     root.appendChild(status);
 
     if (view.phase === 'waiting') {
@@ -133,6 +164,25 @@ export function mount(container, api) {
         hint.textContent = 'Others are guessing your word:';
         root.appendChild(hint);
         root.appendChild(renderLetterGrid(false));
+
+        // The word line above now only shows guess progress (blanks), same as everyone else's
+        // screen — both to mirror the live state for the picker and to avoid it being a
+        // shoulder-surfing giveaway. This toggle lets the picker peek their own word if they
+        // forget it, without leaving it exposed by default.
+        const revealBtn = document.createElement('button');
+        revealBtn.textContent = pickerRevealWord ? 'HIDE MY WORD' : 'SHOW MY WORD';
+        revealBtn.addEventListener('click', () => {
+          pickerRevealWord = !pickerRevealWord;
+          render();
+        });
+        root.appendChild(revealBtn);
+        if (pickerRevealWord && view.pickerWord) {
+          const reveal = document.createElement('div');
+          reveal.textContent = view.pickerWord;
+          reveal.style.letterSpacing = '4px';
+          reveal.style.opacity = '0.85';
+          root.appendChild(reveal);
+        }
       } else {
         root.appendChild(renderLetterGrid(true));
       }

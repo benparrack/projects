@@ -24,7 +24,15 @@ function broadcastState(room, ctx) {
   ctx.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'war', data: { kind: 'state', ...buildPublicState(room) } } });
 }
 
+function clearPendingResolve(st) {
+  if (st.pendingResolveTimeout) {
+    clearTimeout(st.pendingResolveTimeout);
+    st.pendingResolveTimeout = null;
+  }
+}
+
 function resetGame(st) {
+  clearPendingResolve(st);
   const deck = shuffle(createDeck());
   const half = Math.ceil(deck.length / 2);
   st.hands = [deck.slice(0, half), deck.slice(half)];
@@ -143,8 +151,20 @@ module.exports = {
         return;
       }
       st.pendingFlips[seatIdx] = st.hands[seatIdx].shift();
-      if (st.pendingFlips[0] && st.pendingFlips[1]) resolveRound(st);
-      broadcastState(room, ctx);
+      // Hold both flipped cards face-up for a beat before resolving, so the winner is visible
+      // rather than the round snapping straight to the cleared/next state. Clear the previous
+      // round's result first so its stale text doesn't linger under the freshly revealed cards.
+      if (st.pendingFlips[0] && st.pendingFlips[1]) {
+        st.lastResult = null;
+        broadcastState(room, ctx);
+        st.pendingResolveTimeout = setTimeout(() => {
+          st.pendingResolveTimeout = null;
+          resolveRound(st);
+          broadcastState(room, ctx);
+        }, 1000);
+      } else {
+        broadcastState(room, ctx);
+      }
     }
   },
 };

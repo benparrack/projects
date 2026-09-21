@@ -36,6 +36,30 @@ module.exports = {
       return;
     }
 
+    // A flood fill is stored as a compact command (point + color), not raw pixels — every client
+    // replays it by running the same flood-fill algorithm against its own canvas, which stays
+    // consistent across clients because everyone applies history in the same order onto the same
+    // starting blank canvas. Shares the strokeId/clientId shape with 'segment' records on purpose
+    // so it rides along unchanged through the existing undoStroke/clearMine ownership filters below.
+    if (data.kind === 'fill') {
+      const f = data.fill;
+      if (!f || typeof f.x !== 'number' || typeof f.y !== 'number') return;
+      const record = {
+        type: 'fill',
+        strokeId: String(f.strokeId || ''),
+        clientId: ctx.senderId,
+        x: f.x,
+        y: f.y,
+        color: typeof f.color === 'string' ? f.color.slice(0, 20) : '#39ff14',
+      };
+      room.state.history.push(record);
+      if (room.state.history.length > MAX_HISTORY) {
+        room.state.history = room.state.history.slice(-TRIM_TO);
+      }
+      ctx.broadcast({ type: 'game.event', v: 1, payload: { gameType: 'drawing', data: { kind: 'fill', fill: record } } }, ctx.senderId);
+      return;
+    }
+
     if (data.kind === 'clear') {
       room.state.history = [];
       ctx.broadcast({ type: 'game.event', v: 1, payload: { gameType: 'drawing', data: { kind: 'clear' } } }, ctx.senderId);

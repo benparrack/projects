@@ -11,10 +11,10 @@ const START_LENGTH = 120;
 const MAX_LENGTH = 3000;
 const POINT_SPACING = 6; // approx distance between stored path points
 const BASE_SNAKE_RADIUS = 9;
-// Girth grows a bit alongside length, not just the tail getting longer — capped well short of
-// silly so it stays a subtle "fatter as you grow" effect rather than a snake ballooning in size.
-const MAX_SNAKE_RADIUS = 13;
-const RADIUS_GROWTH_LENGTH = 1800; // length gained (beyond START_LENGTH) to reach MAX_SNAKE_RADIUS
+// Girth grows alongside length, not just the tail getting longer — playtest feedback: "make width
+// difference at lots of points bigger", so a long snake reads as visibly thicker, not just longer.
+const MAX_SNAKE_RADIUS = 26;
+const RADIUS_GROWTH_LENGTH = 2400; // length gained (beyond START_LENGTH) to reach MAX_SNAKE_RADIUS
 const FOOD_RADIUS = 6;
 const FOOD_COUNT = 220;
 const FOOD_VALUE = 14;
@@ -28,8 +28,12 @@ const SPAWN_MARGIN = 300; // keep spawns away from arena walls
 const SPAWN_SAFE_RADIUS = 150; // keep new spawns clear of other snakes' heads by roughly this much
 const SPAWN_ATTEMPTS = 8;
 
-// Same formula the client mirrors by hand (public/games/slither/client.js, radiusFor) to size
-// its rendered stroke width — kept in sync like START_LENGTH/computeZoom already are.
+// Drives collision distance (below) and food-eating range — gameplay-critical, so this stays
+// conservative even though public/games/slither/client.js's own computeRadius (used only for
+// the rendered stroke width) now grows much more dramatically per playtest feedback ("make width
+// difference at lots of points bigger"). The two intentionally no longer match 1:1: widening
+// this one too would silently make big snakes easier to hit and able to eat food from farther
+// away, not just look better.
 function radiusFor(snake) {
   const t = Math.min(1, Math.max(0, (snake.length - START_LENGTH) / RADIUS_GROWTH_LENGTH));
   return BASE_SNAKE_RADIUS + (MAX_SNAKE_RADIUS - BASE_SNAKE_RADIUS) * t;

@@ -11,6 +11,7 @@ export function mount(container, api) {
   let view = null;
   let roster = [];
   let raiseAmount = null;
+  let confirmingFold = false; // FOLD sits right next to CALL — this guards against a misclick
 
   const root = document.createElement('div');
   root.style.display = 'flex';
@@ -180,9 +181,30 @@ export function mount(container, api) {
       actions.style.flexWrap = 'wrap';
 
       const foldBtn = document.createElement('button');
-      foldBtn.textContent = 'FOLD';
-      foldBtn.addEventListener('click', () => api.sendAction({ kind: 'fold' }));
-      actions.appendChild(foldBtn);
+      if (confirmingFold) {
+        foldBtn.textContent = 'CONFIRM FOLD?';
+        foldBtn.style.color = '#ff4d4d';
+        foldBtn.style.borderColor = '#ff4d4d';
+        foldBtn.addEventListener('click', () => {
+          confirmingFold = false;
+          api.sendAction({ kind: 'fold' });
+        });
+        actions.appendChild(foldBtn);
+        const cancelFoldBtn = document.createElement('button');
+        cancelFoldBtn.textContent = 'CANCEL';
+        cancelFoldBtn.addEventListener('click', () => {
+          confirmingFold = false;
+          render();
+        });
+        actions.appendChild(cancelFoldBtn);
+      } else {
+        foldBtn.textContent = 'FOLD';
+        foldBtn.addEventListener('click', () => {
+          confirmingFold = true;
+          render();
+        });
+        actions.appendChild(foldBtn);
+      }
 
       const callBtn = document.createElement('button');
       callBtn.textContent = toCall <= 0 ? 'CHECK' : `CALL ${toCall}`;
@@ -197,12 +219,27 @@ export function mount(container, api) {
         raiseInput.value = String(Math.min(raiseAmount, maxRaiseTo));
         raiseInput.addEventListener('input', () => {
           raiseAmount = Number(raiseInput.value);
-          amountLabel.textContent = String(raiseAmount);
+          amountInput.value = String(raiseAmount);
         });
         actions.appendChild(raiseInput);
-        const amountLabel = document.createElement('span');
-        amountLabel.textContent = String(Math.min(raiseAmount, maxRaiseTo));
-        actions.appendChild(amountLabel);
+        const amountInput = document.createElement('input');
+        amountInput.type = 'number';
+        amountInput.min = String(minRaiseTo);
+        amountInput.max = String(maxRaiseTo);
+        amountInput.value = String(Math.min(raiseAmount, maxRaiseTo));
+        amountInput.style.width = '70px';
+        amountInput.addEventListener('input', () => {
+          const typed = Number(amountInput.value);
+          if (!Number.isFinite(typed)) return;
+          raiseAmount = Math.max(minRaiseTo, Math.min(typed, maxRaiseTo));
+          raiseInput.value = String(raiseAmount);
+        });
+        amountInput.addEventListener('blur', () => {
+          // Snap the displayed value back in range once they're done typing (e.g. they typed
+          // "50" then kept typing toward "500" — mid-edit we don't want to fight the field).
+          amountInput.value = String(raiseAmount);
+        });
+        actions.appendChild(amountInput);
         const raiseBtn = document.createElement('button');
         raiseBtn.textContent = raiseAmount >= maxRaiseTo ? 'ALL IN' : 'RAISE TO';
         raiseBtn.addEventListener('click', () => {
@@ -214,6 +251,7 @@ export function mount(container, api) {
       root.appendChild(actions);
     } else {
       raiseAmount = null;
+      confirmingFold = false;
     }
 
     if (view.phase === 'hand_over') {

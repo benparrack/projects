@@ -162,6 +162,13 @@ function startHand(st) {
   h.currentBet = BIG_BLIND;
   h.toAct = nextActiveSeat(st, bbIdx, (i) => !h.folded[i] && !h.allIn[i]);
   st.phase = 'playing';
+  // Blinds alone can force every remaining player all-in (e.g. two short stacks posting SB/BB),
+  // leaving no one able to act — nextActiveSeat then returns -1. Without this, the hand would
+  // sit in phase 'playing' with toAct: -1 forever: every action handler requires
+  // seatIdx === st.hand.toAct, which no real seat index ever satisfies, so the game hangs
+  // permanently with no path to hand_over/nextHand. Resolve straight to showdown instead, same
+  // as the mid-hand case in afterAction.
+  if (h.toAct === -1) fastForwardToShowdown(st);
 }
 
 function isBettingRoundComplete(st) {
