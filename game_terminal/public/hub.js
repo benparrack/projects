@@ -15,6 +15,8 @@ const GAMES = [
   { type: 'bs', label: 'BS (CHEAT)' },
   { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
   { type: 'garticphone', label: 'DRAWING PHONE' },
+  { type: 'spades', label: 'SPADES (CARDS)' },
+  { type: 'hearts', label: 'HEARTS (CARDS)' },
 ];
 
 const SESSION_KEY = 'game_terminal.session';

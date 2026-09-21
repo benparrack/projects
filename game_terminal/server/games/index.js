@@ -13,6 +13,8 @@ const crazyeights = require('./crazyeights');
 const bs = require('./bs');
 const poker = require('./poker');
 const garticphone = require('./garticphone');
+const spades = require('./spades');
+const hearts = require('./hearts');
 
 module.exports = {
   [drawing.type]: drawing,
@@ -27,4 +29,6 @@ module.exports = {
   [bs.type]: bs,
   [poker.type]: poker,
   [garticphone.type]: garticphone,
+  [spades.type]: spades,
+  [hearts.type]: hearts,
 };

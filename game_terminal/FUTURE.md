@@ -290,6 +290,54 @@ play becomes a real usage pattern.
 
 ---
 
+## Spades — shipped
+
+See `server/games/spades.js` + `public/games/spades/client.js`. 4 seats, fixed partnerships
+(NORTH+SOUTH vs EAST+WEST), standard American bidding/scoring: bid 0-13 per player (0 = nil),
+spades always trump, must follow suit, spades can't lead until broken (or the leader's hand is
+all spades). Made bid scores `10*bid + 1/overtrick`, failed bid loses `10*bid`; nil made is a
++100 bonus, nil failed is -100 (independent of the team bid math); every 10 accumulated
+"bag" overtricks costs a team -100 (remainder kept, not reset to 0). First team to 500 wins.
+Doubling and a losing-score cutoff are out of scope for this first version.
+
+Hidden info (each seat's own hand) is handled the same way Hangman hides the secret word: state
+is built per-recipient (`buildPublicStateFor(room, forClientId)`) and broadcast via a per-client
+loop rather than one shared `ctx.broadcast`, since a shared broadcast has no way to vary payload
+per recipient.
+
+**Verified:** a standalone Node script driving all 4 seats through `onMessage` directly —
+bidding transition, follow-suit/spades-broken rejection, trick-winner resolution (including a
+low spade beating a high led-suit card), made/failed-bid scoring, nil bonus/penalty, the 10-bag
+penalty threshold, and a full game reaching 500. Live-verified in a real 4-tab Playwright/Firefox
+session: seating, bidding UI gated to the current bidder only, bid-turn-order, the trick table
+updating live across all 4 tabs, and legal-card highlighting on the current player's hand.
+
+## Hearts — shipped
+
+See `server/games/hearts.js` + `public/games/hearts/client.js`. 4 individual seats (no
+partnerships), standard rules: pass 3 cards each hand (left/right/across/none, cycling every 4
+hands), the 2 of clubs must lead the first trick, hearts can't be led until broken, no
+heart/queen-of-spades may be played on the first trick unless forced. Each heart taken is 1
+point, the queen of spades is 13; lowest cumulative score is best. "Shooting the moon" (taking
+all 26 points in one hand) flips the hand's scoring — the shooter scores 0, everyone else +26.
+Game ends once someone crosses 100 points; the winner is whoever has the *lowest* score at that
+point, not necessarily whoever crossed 100.
+
+Same per-client hidden-hand pattern as Spades (`buildPublicStateFor` + a per-recipient broadcast
+loop). The server also includes a `legalCardsHint` in the current turn-holder's own state
+payload (mirroring Chess's `legalMoves`) so the client can grey out illegal cards without
+duplicating the suit/point rules client-side.
+
+**Verified:** a standalone Node script covering pass-direction cycling through all 4 hands,
+2-of-clubs-must-lead, hearts-not-led-before-broken, no-points-on-first-trick, trick-winner
+resolution, shoot-the-moon point math, and the "lowest score wins once someone crosses 100"
+end condition — including a full 13-trick hand played end-to-end through real `onMessage` calls.
+Live-verified in a real 4-tab Playwright/Firefox session: simultaneous passing (all 4 submit
+before any hand exchanges), the 2-of-clubs-only legal-card restriction on the very first play of
+a hand, and trick display syncing live across tabs.
+
+---
+
 ## Other game ideas mentioned
 
 `IDEAS.md` #11's original "lighter-weight synchronized game board" alternative
