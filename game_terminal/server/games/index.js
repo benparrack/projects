@@ -19,6 +19,7 @@ const backgammon = require('./backgammon');
 const tron = require('./tron');
 const pictionary = require('./pictionary');
 const slope = require('./slope');
+const mazedash = require('./mazedash');
 
 module.exports = {
   [drawing.type]: drawing,
@@ -39,4 +40,5 @@ module.exports = {
   [tron.type]: tron,
   [pictionary.type]: pictionary,
   [slope.type]: slope,
+  [mazedash.type]: mazedash,
 };

@@ -440,6 +440,58 @@ drawer) and the word revealed.
 
 ---
 
+## Maze Dash (speedrun) — shipped
+
+See `server/games/mazedash.js` + `public/games/mazedash/client.js`. The last of the 2026-09-21
+new-games request — Ben deliberately left "speedrun game" open-ended and asked that it be
+thought through rather than assumed, then deferred the final genre pick back to me. Landed on:
+every player in the room races the SAME procedurally-generated maze (shared seed per round,
+15x15, fixed top-left start / bottom-right exit), moving one grid cell at a time from the
+top-left start to the bottom-right exit, fastest finish time wins. Purely event-driven — no tick
+loop, unlike Slither/TRON/Slope — every state change happens synchronously inside `onMessage`.
+
+**Design decisions made:**
+- Maze generation is a randomized recursive backtracker (iterative, stack-based) seeded by a
+  `mulberry32` PRNG — produces a "perfect" maze (exactly one path between any two cells), so it's
+  connected and solvable by construction. Verified algorithmically anyway (an independent BFS
+  solver, not just trusting the generator) as cheap insurance.
+- **Server generates the maze once per round and sends the full wall data to clients**, rather
+  than having clients regenerate it from the shared seed the way `slope.js`'s track math is
+  duplicated client-side — a deliberate deviation from that precedent, since a maze generator has
+  much more surface area to subtly diverge between two hand-kept-in-sync implementations than
+  Slope's small arithmetic formulas did, and sending ~225 cells once per round is trivially cheap.
+  Sidesteps the whole "must match" risk class entirely while keeping the server sole layout
+  authority either way.
+- A room needs just 1+ players — solo speedrunning for a personal best is a legitimate mode here,
+  same call Slope made. Joining mid-race doesn't drop you into a race already in progress: you're
+  added with `racingThisRound: false` and simply wait for the next `startRace`, which resets
+  every currently-present player (including you) at the moment it fires.
+- Live leaderboard: finished racers first (sorted by finish time), then still-racing racers
+  (sorted by BFS distance-from-start, i.e. progress along the maze's one true path — free since
+  the solver already computes it). Round ends when every enrolled racer finishes, or a 3-minute
+  time cap elapses (a re-validated `setTimeout`, same stale-timer defensive pattern this hub's
+  bot-move scheduling already uses, so an old round's timer can't force-end a newer round).
+
+**A real bug caught during code review, not live testing:** `onLeave` gets no `ctx` (unlike
+`onMessage`), so when a departure caused the round to end (the last still-racing player leaves),
+the state mutation happened but nothing was ever broadcast to the remaining clients — they'd be
+stuck on a stale "racing" view with no visible way to start a new race until some other action
+happened to trigger a broadcast. Fixed by broadcasting manually via a `room.sendTo` loop on that
+path, the same pattern `connect4.js`/`checkers.js` already use for their own leave-triggered
+state changes.
+
+**Verified:** a standalone Node script covering maze-generation determinism for a given seed, the
+independent BFS solvability check, illegal-move (wall) rejection, legal-move position updates,
+full-path traversal to the exit recording a finish time, a 2-player round reaching `results` with
+correct leaderboard ordering, and a mid-race joiner correctly sitting out until the next round.
+Live-verified in a real 2-tab Playwright/Firefox session: the maze renders correctly (walls, gold
+exit cell, colored racer dot), arrow-key movement works and is correctly blocked by walls (a
+down-move into a wall silently no-op'd while the following right-move succeeded), the live timer
+counts up, and a second player joining mid-race showed up as a spectator without disrupting the
+first player's in-progress run.
+
+---
+
 ## Other game ideas mentioned
 
 `IDEAS.md` #11's original "lighter-weight synchronized game board" alternative

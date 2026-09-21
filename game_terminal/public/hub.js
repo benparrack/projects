@@ -21,6 +21,7 @@ const GAMES = [
   { type: 'tron', label: 'TRON (LIGHT CYCLES)' },
   { type: 'pictionary', label: 'PICTIONARY' },
   { type: 'slope', label: 'SLOPE (3D RUNNER)' },
+  { type: 'mazedash', label: 'MAZE DASH (SPEEDRUN)' },
 ];
 
 const SESSION_KEY = 'game_terminal.session';
