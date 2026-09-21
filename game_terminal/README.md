@@ -21,6 +21,11 @@ something in the middle.
   loop rather than only reacting to player messages (see `FUTURE.md`).
 - **Connect 4** — standard rules, 7x6 grid, click a column to drop a piece.
 
+Checkers, Chess, and Connect 4 all support a "PLAY VS BOT" seat button for solo play against a
+CPU opponent — see `FUTURE.md`'s "Bot/CPU opponents" section. (This list predates several other
+games already shipped in `server/games/`/`public/games/` — see those directories or
+`TODO_FIRST.md` for the full current roster.)
+
 More games plug into the same hub without touching the core server/room code — see
 `server/games/index.js` and the `GAMES` array in `public/hub.js`.
 

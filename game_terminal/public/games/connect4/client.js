@@ -7,10 +7,16 @@ const CELL = 50;
 const COLS = 7;
 const ROWS = 6;
 
+const REJECT_MESSAGES = {
+  column_full: 'Column is full',
+  not_your_turn: "It's not your turn",
+  invalid_column: 'Invalid move',
+};
+
 export function mount(container, api) {
   let view = null;
   let roster = [];
-  let flashError = false;
+  let flashError = null; // null, or one of REJECT_MESSAGES' keys
 
   const root = document.createElement('div');
   root.style.display = 'flex';
@@ -21,6 +27,7 @@ export function mount(container, api) {
 
   function nicknameFor(clientId) {
     if (!clientId) return null;
+    if (clientId === 'BOT') return '(bot)';
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
   }
@@ -46,12 +53,26 @@ export function mount(container, api) {
       return;
     }
 
+    const seat = mySeat();
+
     const status = document.createElement('div');
+    status.style.fontSize = '18px';
+    status.style.fontWeight = 'bold';
+    status.style.padding = '6px 14px';
+    status.style.borderRadius = '6px';
+    status.style.boxSizing = 'border-box';
     if (view.phase === 'waiting') {
       status.textContent = 'Waiting for both seats to be filled.';
     } else if (view.phase === 'playing') {
-      const turnName = nicknameFor(view.players[view.turn]) || view.turn;
-      status.textContent = `Turn: ${view.turn.toUpperCase()} (${turnName})`;
+      const turnColor = view.turn;
+      const turnName = nicknameFor(view.players[turnColor]) || turnColor;
+      const isMyTurn = seat && seat === turnColor;
+      status.textContent = isMyTurn
+        ? `▶ YOUR TURN (${turnColor.toUpperCase()})`
+        : `${turnColor.toUpperCase()} TO MOVE — ${turnName}`;
+      status.style.color = turnColor === 'red' ? '#ff6b6b' : '#ffee58';
+      status.style.background = isMyTurn ? 'rgba(57, 255, 20, 0.15)' : 'rgba(255, 255, 255, 0.05)';
+      status.style.border = isMyTurn ? '2px solid #39ff14' : '2px solid transparent';
     } else if (view.phase === 'game_over') {
       status.textContent = view.winner ? `${view.winner.toUpperCase()} WINS!` : "IT'S A DRAW!";
     }
@@ -59,7 +80,7 @@ export function mount(container, api) {
 
     if (flashError) {
       const err = document.createElement('div');
-      err.textContent = 'Column is full';
+      err.textContent = REJECT_MESSAGES[flashError] || 'Move rejected';
       err.style.color = '#ff4d4d';
       root.appendChild(err);
     }
@@ -67,18 +88,30 @@ export function mount(container, api) {
     const seatRow = document.createElement('div');
     seatRow.style.display = 'flex';
     seatRow.style.gap = '12px';
-    const seat = mySeat();
 
     for (const color of ['red', 'yellow']) {
       const label = document.createElement('div');
       const occupant = nicknameFor(view.players[color]);
       label.textContent = `${color.toUpperCase()}: ${occupant || '(empty)'}`;
       seatRow.appendChild(label);
-      if (!view.players[color] && !seat) {
-        const btn = document.createElement('button');
-        btn.textContent = `PLAY ${color.toUpperCase()}`;
-        btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color }));
-        seatRow.appendChild(btn);
+      if (!view.players[color]) {
+        if (!seat) {
+          const btn = document.createElement('button');
+          btn.textContent = `PLAY ${color.toUpperCase()}`;
+          btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color }));
+          seatRow.appendChild(btn);
+        }
+        // Shown even when the viewer is already seated — that's the whole point of a bot seat:
+        // a lone human who's already sat down can still fill the other seat without waiting.
+        const botBtn = document.createElement('button');
+        botBtn.textContent = 'PLAY VS BOT';
+        botBtn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color, bot: true }));
+        seatRow.appendChild(botBtn);
+      } else if (view.players[color] === 'BOT') {
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'REMOVE BOT';
+        removeBtn.addEventListener('click', () => api.sendAction({ kind: 'removeBot', seat: color }));
+        seatRow.appendChild(removeBtn);
       }
     }
     if (seat) {
@@ -117,7 +150,10 @@ export function mount(container, api) {
     board.style.gridTemplateColumns = `repeat(${COLS}, ${CELL}px)`;
     board.style.gridTemplateRows = `repeat(${ROWS}, ${CELL}px)`;
     board.style.background = '#0a2a5e';
-    board.style.border = '1px solid #1f8f0c';
+    board.style.border = view.phase === 'playing'
+      ? `3px solid ${view.turn === 'red' ? '#ff6b6b' : '#ffee58'}`
+      : '1px solid #1f8f0c';
+    board.style.boxShadow = canDrop ? '0 0 12px 2px rgba(57, 255, 20, 0.5)' : 'none';
     board.style.gap = '4px';
     board.style.padding = '4px';
     board.style.boxSizing = 'content-box';
@@ -163,10 +199,10 @@ export function mount(container, api) {
       if (!data) return;
       if (data.kind === 'state') {
         view = data;
-        flashError = false;
+        flashError = null;
         render();
       } else if (data.kind === 'moveRejected') {
-        flashError = true;
+        flashError = data.reason || 'column_full';
         render();
       }
     },

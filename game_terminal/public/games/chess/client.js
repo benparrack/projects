@@ -9,7 +9,54 @@ const GLYPHS = {
   white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
   black: { king: '♚', queen: '♛', rook: '♜', bishop: '♝', knight: '♞', pawn: '♟' },
 };
+// Vivid, high-contrast pair instead of the old near-white/near-black (which nearly vanished
+// against the board's own dark squares) — white pieces bright mint-white, black pieces a vivid
+// amber (matches the hub's --accent), both with a hard dark outline so they read clearly against
+// either light or dark squares.
+const GLYPH_COLORS = { white: '#f2fff2', black: '#ffb347' };
+const GLYPH_OUTLINE = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
 const PROMOTION_CHOICES = ['queen', 'rook', 'bishop', 'knight'];
+const PIECE_VALUES = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 };
+const TIME_CONTROLS = [
+  { label: 'NO TIMER', minutes: 0 },
+  { label: '5 MIN', minutes: 5 },
+  { label: '10 MIN', minutes: 10 },
+  { label: '15 MIN', minutes: 15 },
+];
+
+function formatClock(ms) {
+  if (ms == null) return '';
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Running material-captured differential (white total captured value minus black's) after each
+// move — reused for both the live differential readout and the post-game eval bar. Purely a
+// material count, not a real engine evaluation (see chess fix-up notes).
+function materialDiffSeries(history) {
+  let white = 0;
+  let black = 0;
+  const series = [0];
+  for (const m of history || []) {
+    if (m.captured) {
+      const value = PIECE_VALUES[m.captured] || 0;
+      if (m.color === 'white') white += value;
+      else black += value;
+    }
+    if (m.promotion) {
+      // A promotion changes material even with no capture (pawn value 1 -> promoted piece's
+      // value) — without this, a player promoting a pawn to a queen without capturing anything
+      // would show no material swing at all, which is wrong.
+      const gain = (PIECE_VALUES[m.promotion] || 0) - PIECE_VALUES.pawn;
+      if (m.color === 'white') white += gain;
+      else black += gain;
+    }
+    series.push(white - black);
+  }
+  return { white, black, diff: white - black, series };
+}
 
 export function mount(container, api) {
   let view = null;
@@ -18,6 +65,11 @@ export function mount(container, api) {
   let flashError = false;
   let pendingPromotion = null; // { from, to }
   let manualFlip = null; // null = auto (flip for black seat), true/false = explicit user override
+  let premoveSelected = null; // { r, c } — piece chosen while queueing a premove on opponent's turn
+  let premove = null; // { from, to } — queued move, auto-sent the instant it becomes my turn
+  let awaitingPremoveResult = false; // true right after auto-sending a premove; suppresses the
+  // next moveRejected's error flash so a failed premove clears silently instead of alarming
+  let showEvalBar = false; // post-game recap toggle
 
   const root = document.createElement('div');
   root.style.display = 'flex';
@@ -28,6 +80,7 @@ export function mount(container, api) {
 
   function nicknameFor(clientId) {
     if (!clientId) return null;
+    if (clientId === 'BOT') return '(bot)';
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
   }
@@ -74,7 +127,30 @@ export function mount(container, api) {
 
   function onSquareClick(r, c) {
     const seat = mySeat();
-    if (!seat || view.phase !== 'playing' || view.turn !== seat || pendingPromotion) return;
+    if (!seat || view.phase !== 'playing' || pendingPromotion) return;
+
+    if (view.turn !== seat) {
+      // Not my turn yet — queue a premove instead of moving now. No legality check against the
+      // (still-changing) opponent position here; the server validates for real the instant it
+      // actually becomes my turn and this gets auto-sent (see maybeSubmitPremove).
+      const piece = view.board[r][c];
+      if (premoveSelected) {
+        if (premoveSelected.r === r && premoveSelected.c === c) {
+          premoveSelected = null;
+        } else if (piece && piece.color === seat) {
+          premoveSelected = { r, c };
+        } else {
+          premove = { from: premoveSelected, to: { r, c } };
+          premoveSelected = null;
+        }
+      } else if (piece && piece.color === seat) {
+        premove = null; // starting a fresh selection replaces any already-queued premove
+        premoveSelected = { r, c };
+      }
+      render();
+      return;
+    }
+
     const piece = view.board[r][c];
     if (selected) {
       if (selected.r === r && selected.c === c) {
@@ -93,6 +169,27 @@ export function mount(container, api) {
     }
   }
 
+  function maybeSubmitPremove() {
+    const seat = mySeat();
+    if (!premove || !seat || !view || view.phase !== 'playing' || view.turn !== seat) return;
+    const { from, to } = premove;
+    premove = null;
+    // Basic sanity check only — is it still our own piece sitting on the square we queued from?
+    // Anything beyond that (is the move itself still legal on the position as it actually
+    // evolved) is left to the server; if it rejects, the moveRejected handler below drops it
+    // silently rather than flashing "Illegal move" (see awaitingPremoveResult).
+    const piece = view.board[from.r][from.c];
+    if (!piece || piece.color !== seat) return;
+    awaitingPremoveResult = true;
+    api.sendAction({ kind: 'move', from, to });
+  }
+
+  function cancelPremove() {
+    premove = null;
+    premoveSelected = null;
+    render();
+  }
+
   function choosePromotion(type) {
     if (!pendingPromotion) return;
     api.sendAction({ kind: 'move', from: pendingPromotion.from, to: pendingPromotion.to, promotion: type });
@@ -106,6 +203,10 @@ export function mount(container, api) {
       root.textContent = 'Loading...';
       return;
     }
+    if (view.phase !== 'playing') {
+      premove = null;
+      premoveSelected = null;
+    }
 
     const status = document.createElement('div');
     if (view.phase === 'waiting') {
@@ -114,10 +215,49 @@ export function mount(container, api) {
       const turnName = nicknameFor(view.players[view.turn]) || view.turn;
       status.textContent = `Turn: ${view.turn.toUpperCase()} (${turnName})${view.inCheck === view.turn ? ' — CHECK' : ''}`;
     } else if (view.phase === 'game_over') {
-      const reason = view.winReason === 'checkmate' ? 'CHECKMATE' : view.winReason === 'resignation' ? 'RESIGNATION' : 'STALEMATE';
+      const reason =
+        view.winReason === 'checkmate' ? 'CHECKMATE' : view.winReason === 'resignation' ? 'RESIGNATION' : view.winReason === 'timeout' ? 'TIME OUT' : 'STALEMATE';
       status.textContent = view.winner === 'draw' ? `DRAW (${reason})` : `${view.winner.toUpperCase()} WINS (${reason})`;
     }
     root.appendChild(status);
+
+    if (view.timeControlMs && view.clocks && (view.phase === 'playing' || view.phase === 'game_over')) {
+      const clockRow = document.createElement('div');
+      clockRow.style.display = 'flex';
+      clockRow.style.gap = '16px';
+      clockRow.style.fontSize = '1.1em';
+      for (const color of ['white', 'black']) {
+        const c = document.createElement('div');
+        c.textContent = `${color.toUpperCase()}: ${formatClock(view.clocks[color])}`;
+        c.style.color = view.phase === 'playing' && view.turn === color ? '#39ff14' : '#888';
+        c.style.fontWeight = view.phase === 'playing' && view.turn === color ? 'bold' : 'normal';
+        clockRow.appendChild(c);
+      }
+      root.appendChild(clockRow);
+    }
+
+    const material = materialDiffSeries(view.moveHistory);
+    if (material.diff !== 0) {
+      const diffRow = document.createElement('div');
+      const leader = material.diff > 0 ? 'White' : 'Black';
+      diffRow.textContent = `Material: ${leader} +${Math.abs(material.diff)}`;
+      diffRow.style.opacity = '0.8';
+      diffRow.style.fontSize = '0.9em';
+      root.appendChild(diffRow);
+    }
+
+    if (premove) {
+      const pm = document.createElement('div');
+      pm.textContent = `Premove queued: ${squareName(premove.from.r, premove.from.c)}→${squareName(premove.to.r, premove.to.c)} `;
+      pm.style.color = '#ffb000';
+      pm.style.fontSize = '0.9em';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'CANCEL';
+      cancelBtn.style.marginLeft = '6px';
+      cancelBtn.addEventListener('click', cancelPremove);
+      pm.appendChild(cancelBtn);
+      root.appendChild(pm);
+    }
 
     if (flashError) {
       const err = document.createElement('div');
@@ -137,11 +277,24 @@ export function mount(container, api) {
       const occupant = nicknameFor(view.players[color]);
       label.textContent = `${color.toUpperCase()}: ${occupant || '(empty)'}`;
       seatRow.appendChild(label);
-      if (!view.players[color] && !seat) {
-        const btn = document.createElement('button');
-        btn.textContent = `PLAY ${color.toUpperCase()}`;
-        btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color }));
-        seatRow.appendChild(btn);
+      if (!view.players[color]) {
+        if (!seat) {
+          const btn = document.createElement('button');
+          btn.textContent = `PLAY ${color.toUpperCase()}`;
+          btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color }));
+          seatRow.appendChild(btn);
+        }
+        // Shown even when the viewer is already seated — that's the whole point of a bot seat:
+        // a lone human who's already sat down can still fill the other seat without waiting.
+        const botBtn = document.createElement('button');
+        botBtn.textContent = 'PLAY VS BOT';
+        botBtn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color, bot: true }));
+        seatRow.appendChild(botBtn);
+      } else if (view.players[color] === 'BOT') {
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'REMOVE BOT';
+        removeBtn.addEventListener('click', () => api.sendAction({ kind: 'removeBot', seat: color }));
+        seatRow.appendChild(removeBtn);
       }
     }
     if (seat) {
@@ -164,6 +317,30 @@ export function mount(container, api) {
     });
     seatRow.appendChild(flipBtn);
     root.appendChild(seatRow);
+
+    if (view.phase === 'waiting' && seat) {
+      const timeRow = document.createElement('div');
+      timeRow.style.display = 'flex';
+      timeRow.style.gap = '8px';
+      timeRow.style.alignItems = 'center';
+      const label = document.createElement('span');
+      label.textContent = 'Time control:';
+      label.style.fontSize = '0.85em';
+      label.style.opacity = '0.8';
+      timeRow.appendChild(label);
+      for (const tc of TIME_CONTROLS) {
+        const btn = document.createElement('button');
+        btn.textContent = tc.label;
+        const isActive = (tc.minutes === 0 && !view.timeControlMs) || view.timeControlMs === tc.minutes * 60000;
+        if (isActive) {
+          btn.style.background = '#1f8f0c';
+          btn.style.color = '#000';
+        }
+        btn.addEventListener('click', () => api.sendAction({ kind: 'setTimeControl', minutes: tc.minutes }));
+        timeRow.appendChild(btn);
+      }
+      root.appendChild(timeRow);
+    }
 
     const board = document.createElement('div');
     board.style.display = 'grid';
@@ -195,14 +372,18 @@ export function mount(container, api) {
         cell.style.cursor = 'pointer';
         if (selected && selected.r === r && selected.c === c) {
           cell.style.border = '2px solid #ffb000';
+        } else if (premoveSelected && premoveSelected.r === r && premoveSelected.c === c) {
+          cell.style.border = '2px dashed #ff4d4d';
+        } else if (premove && ((premove.from.r === r && premove.from.c === c) || (premove.to.r === r && premove.to.c === c))) {
+          cell.style.border = '2px dashed #ff4d4d';
         }
         cell.addEventListener('click', () => onSquareClick(r, c));
         const piece = view.board[r][c];
         if (piece) {
           const glyph = document.createElement('span');
           glyph.textContent = GLYPHS[piece.color][piece.type];
-          glyph.style.color = piece.color === 'white' ? '#f5f5f5' : '#1a1a1a';
-          glyph.style.textShadow = piece.color === 'white' ? '0 0 2px #000' : '0 0 2px #999';
+          glyph.style.color = GLYPH_COLORS[piece.color];
+          glyph.style.textShadow = GLYPH_OUTLINE;
           cell.appendChild(glyph);
         }
         const destMove = destMoves.find((m) => m.to.r === r && m.to.c === c);
@@ -227,11 +408,52 @@ export function mount(container, api) {
       }
     }
 
+    // Coordinate labels (file letters a-h, rank numbers 1-8), oriented to match `flipped` the
+    // same way the board squares themselves are.
+    const ranksCol = document.createElement('div');
+    ranksCol.style.display = 'flex';
+    ranksCol.style.flexDirection = 'column';
+    for (let vr = 0; vr < 8; vr++) {
+      const r = flipped ? 7 - vr : vr;
+      const rank = document.createElement('div');
+      rank.textContent = String(8 - r);
+      rank.style.width = '16px';
+      rank.style.height = `${CELL}px`;
+      rank.style.display = 'flex';
+      rank.style.alignItems = 'center';
+      rank.style.justifyContent = 'center';
+      rank.style.fontSize = '12px';
+      rank.style.opacity = '0.7';
+      ranksCol.appendChild(rank);
+    }
+    const filesRow = document.createElement('div');
+    filesRow.style.display = 'flex';
+    filesRow.style.marginLeft = '16px';
+    for (let vc = 0; vc < 8; vc++) {
+      const c = flipped ? 7 - vc : vc;
+      const file = document.createElement('div');
+      file.textContent = String.fromCharCode(97 + c);
+      file.style.width = `${CELL}px`;
+      file.style.textAlign = 'center';
+      file.style.fontSize = '12px';
+      file.style.opacity = '0.7';
+      filesRow.appendChild(file);
+    }
+    const boardGridRow = document.createElement('div');
+    boardGridRow.style.display = 'flex';
+    boardGridRow.appendChild(ranksCol);
+    boardGridRow.appendChild(board);
+    const boardWithLabels = document.createElement('div');
+    boardWithLabels.style.display = 'flex';
+    boardWithLabels.style.flexDirection = 'column';
+    boardWithLabels.appendChild(boardGridRow);
+    boardWithLabels.appendChild(filesRow);
+
     const boardRow = document.createElement('div');
     boardRow.style.display = 'flex';
     boardRow.style.gap = '12px';
     boardRow.style.alignItems = 'flex-start';
-    boardRow.appendChild(board);
+    boardRow.appendChild(boardWithLabels);
 
     const historyPanel = document.createElement('div');
     historyPanel.style.width = '150px';
@@ -277,10 +499,72 @@ export function mount(container, api) {
     }
 
     if (view.phase === 'game_over') {
+      const recap = document.createElement('div');
+      recap.style.display = 'flex';
+      recap.style.flexDirection = 'column';
+      recap.style.alignItems = 'center';
+      recap.style.gap = '6px';
+      recap.style.marginTop = '4px';
+
+      const evalToggle = document.createElement('button');
+      evalToggle.textContent = showEvalBar ? 'HIDE EVAL BAR' : 'SHOW EVAL BAR';
+      evalToggle.addEventListener('click', () => {
+        showEvalBar = !showEvalBar;
+        render();
+      });
+      recap.appendChild(evalToggle);
+
+      if (showEvalBar) {
+        const clamp = (v) => Math.max(-10, Math.min(10, v));
+        const barWrap = document.createElement('div');
+        barWrap.style.width = '260px';
+        barWrap.style.height = '18px';
+        barWrap.style.border = '1px solid #1f8f0c';
+        barWrap.style.position = 'relative';
+        barWrap.style.background = '#1a1a1a';
+        const finalDiff = clamp(material.diff);
+        const whitePct = 50 + finalDiff * 5; // each point of material = 5% of the bar width
+        const fill = document.createElement('div');
+        fill.style.position = 'absolute';
+        fill.style.left = '0';
+        fill.style.top = '0';
+        fill.style.bottom = '0';
+        fill.style.width = `${whitePct}%`;
+        fill.style.background = '#f2fff2';
+        barWrap.appendChild(fill);
+        const blackFill = document.createElement('div');
+        blackFill.style.position = 'absolute';
+        blackFill.style.right = '0';
+        blackFill.style.top = '0';
+        blackFill.style.bottom = '0';
+        blackFill.style.width = `${100 - whitePct}%`;
+        blackFill.style.background = '#ffb347';
+        barWrap.appendChild(blackFill);
+        recap.appendChild(barWrap);
+
+        const evalLabel = document.createElement('div');
+        evalLabel.textContent =
+          material.diff === 0 ? 'Material even' : `Final material: ${material.diff > 0 ? 'White' : 'Black'} +${Math.abs(material.diff)}`;
+        evalLabel.style.fontSize = '0.8em';
+        evalLabel.style.opacity = '0.8';
+        recap.appendChild(evalLabel);
+
+        // A simple move-by-move sparkline of the running material diff, in keeping with the
+        // text-mode terminal aesthetic rather than a plotted chart.
+        const spark = document.createElement('div');
+        spark.style.fontSize = '0.75em';
+        spark.style.opacity = '0.6';
+        spark.style.maxWidth = '260px';
+        spark.style.wordBreak = 'break-all';
+        spark.textContent = material.series.map((v) => clamp(v)).join(' ');
+        recap.appendChild(spark);
+      }
+
       const again = document.createElement('button');
       again.textContent = 'NEW GAME';
       again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
-      root.appendChild(again);
+      recap.appendChild(again);
+      root.appendChild(recap);
     }
   }
 
@@ -289,6 +573,7 @@ export function mount(container, api) {
   return {
     applySnapshot(snapshot) {
       view = snapshot;
+      maybeSubmitPremove();
       render();
     },
     applyEvent(data) {
@@ -296,9 +581,15 @@ export function mount(container, api) {
       if (data.kind === 'state') {
         view = data;
         flashError = false;
+        awaitingPremoveResult = false; // the pending move (ours or otherwise) resolved, not rejected
+        maybeSubmitPremove();
         render();
       } else if (data.kind === 'moveRejected') {
-        flashError = true;
+        if (awaitingPremoveResult) {
+          awaitingPremoveResult = false;
+        } else {
+          flashError = true;
+        }
         selected = null;
         pendingPromotion = null;
         render();

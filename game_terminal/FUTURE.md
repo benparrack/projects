@@ -213,57 +213,80 @@ puts multiple people in the same room seeing each other. Two ways to reconcile t
 
 ---
 
-## Bot/CPU opponents — proposed, not started
+## Bot/CPU opponents — shipped (Checkers, Chess, Connect 4)
 
-**Pitch:** Let a solo player fill an empty seat with a bot instead of waiting for a second
-human to show up — "PLAY VS BOT" alongside the existing "PLAY RED"/"PLAY YELLOW" etc. buttons.
-Directly serves this hub's actual biggest usability gap: every game right now needs someone
-else online at the same time, which is a real barrier for a hobby project without a built-in
-player base.
+Lets a solo player fill an empty seat with a bot instead of waiting for a second human — a
+"PLAY VS BOT" button sits alongside each game's existing "PLAY RED"/"PLAY WHITE"/etc. seat
+buttons, visible even once the viewer has already sat down themselves (that's the whole point:
+one lone human should be able to fill the *other* seat without waiting on anyone).
 
-**Why this one:** Ties directly into `IDEAS.md` #5 (Playable Chess/Checkers Engine with AI
-Opponent — minimax + alpha-beta pruning, material + positional eval), which was scoped as a
-separate single-player page — this is the same core algorithm work, just plugged into the
-existing multiplayer hub's seats instead of a standalone page. One AI effort serves both.
+**Design decisions made:**
+- **Sentinel seat value**, exactly as originally proposed: `st.players.red = 'BOT'` instead of a
+  real clientId, in `server/games/{checkers,chess,connect4}.js`. No core room/connection change —
+  entirely inside each plugin's existing `sit`/`onMessage` pattern.
+- **New client action `sit` with `seat` + `bot: true`** (the first of the two options the
+  original writeup considered) — reuses the existing `sit` handler rather than adding a parallel
+  `addBot` action. A second new action, **`removeBot`**, clears a bot back to an empty seat (a
+  human can't "sit" over the sentinel via the normal seat-taken check, so this is the only way to
+  free it — e.g. to sit down there themselves).
+- **Move selection is uniform-random over the legal-move set** (`getAllMovesForColor` /
+  `getLegalMoves`, whichever the game already exposes) — no material-count eval, per the original
+  scope note that a difficulty knob/stronger eval was explicitly out of scope for a first pass.
+  Checkers' bot correctly respects `mustContinueFrom` (filters candidates to the forced piece
+  during a multi-jump chain) rather than picking any capture.
+- **"Thinking" delay** of 400-900ms (randomized) before a bot moves, via `setTimeout` — instant
+  moves read as jarring, matching the original ask. The scheduling function re-validates
+  phase/turn/seat when the timer actually fires rather than trusting state captured at schedule
+  time, so a stale or duplicate schedule (e.g. two actions both landing on the same pending bot
+  turn) harmlessly no-ops instead of double-moving. A capturing multi-jump or a promotion doesn't
+  break the chain — the scheduler reschedules itself for the continuation the same way.
+- **Shared move-application helper per game** (`applyCheckersMove`/`applyChessMove`, Connect 4's
+  `applyDrop`): the existing human `onMessage` 'move' branch was refactored to call the same
+  function a bot move calls, so a bot's move goes through identical post-move bookkeeping (capture
+  chains, kinging, check/checkmate detection, castling rights, clocks) rather than a
+  separately-maintained copy that could drift out of sync.
+- **Chess clocks**: when a time control is active, a bot's "thinking" delay charges its clock the
+  same way a human's move does (`applyClockElapsed` before the bot moves) — a bot can in principle
+  still lose on time, kept consistent rather than special-cased, even though the short delay makes
+  it unlikely in practice.
+- UI: seat label reads e.g. `RED: (bot)` once filled (`nicknameFor` special-cases the `'BOT'`
+  sentinel in each client), plus the `REMOVE BOT` button described above.
 
-**Which games this applies to:**
-- **Checkers, Chess, Connect 4 (recommended first):** the two-seat turn-based games are the
-  natural fit — a bot just occupies the empty seat and moves on its turn. Straightforward to
-  reason about since the plugin already fully validates state; the bot only needs to *choose*
-  a legal move, not enforce rules.
-- **Slither:** a different flavor — not a "seat" to fill, but ambient wandering bot snakes with
-  simple steering (seek nearest food, avoid walls, maybe flee larger snakes) so a public room
-  doesn't feel like an empty arena when nobody else happens to be online. Reuses the existing
-  `tick(room, ctx)` loop: a bot snake is just a `st.snakes` entry whose `targetAngle`/`boosting`
-  get set by a small policy function each tick instead of by a real client's `onMessage`.
-  Different problem from the turn-based games' move-selection bots, so likely a separate,
-  later pass rather than bundled with the first three.
-- **Hangman:** doesn't obviously fit — the core loop needs someone to *pick* a word, and a bot
-  picking from a wordlist is easy but a bot *guessing* letters well is a different, less
-  interesting problem. Low priority, possibly skip entirely.
-- **Drawing canvas:** no opponent concept, doesn't apply.
+**A real bug caught during live verification, not by the logic script:** the first version gated
+the "PLAY VS BOT" button behind the same `!seat` condition as the human "PLAY RED" button (i.e.
+only shown when the viewer isn't seated in *either* seat) — which defeated the entire point, since
+a lone human who'd already sat down had no way to add a bot to the other seat. Fixed by splitting
+the condition: the human "PLAY \<color\>" button still requires `!seat` (can't occupy two seats),
+but "PLAY VS BOT" now shows for any empty seat regardless of whether the viewer is seated. Caught
+by scripting the actual click flow in a live Playwright/Firefox session and noticing the button
+was simply missing after sitting down — not visible from the logic-only tests, which only exercise
+the server plugin directly and never touch the client's render conditionals.
 
-**Architecture question to resolve before starting:** bots aren't real WebSocket clients, so
-they can't just occupy a normal `room.clients` entry (which expects a live `ws` to send to).
-For the turn-based games, the simplest approach is entirely inside the plugin: a seat holds a
-sentinel value (e.g. `players.red = 'BOT'`) instead of a clientId, and when `st.turn` becomes
-the bot's color, the plugin itself computes and applies a move (on a short delay for pacing —
-instant bot moves feel jarring, a human "thinking" delay of even a few hundred ms reads better)
-rather than waiting for an `onMessage` that will never come. Needs one new client action (e.g.
-`sit` with `seat` + a `bot: true` flag, or a dedicated `addBot` action) and a small addition to
-each plugin's `onMessage`/turn-advance logic to trigger the bot's move — no core room/connection
-change anticipated, this stays inside the existing plugin pattern.
+**Verified:** standalone Node scripts (`require()` each plugin directly, fake a minimal
+room/ctx) for bot-vs-human move application and full bot-vs-bot self-play to completion/timeout in
+all three games (Connect 4 played to a real win in self-play; Chess and Checkers self-play run to
+dozens of moves without error — see the remaining-gaps note below on why random-bot Checkers/Chess
+games don't reliably reach game_over in a bounded self-play session). Live-verified in a real
+Playwright/Firefox session for all three: "PLAY VS BOT" appears per empty seat (including once
+already seated), the seat label reads "(bot)", a human move triggers a delayed bot reply (Connect 4
+piece count 1→2 after a human drop; Checkers black's 2,1→3,0 followed by the bot's own 5,2→4,3;
+Chess move history recording `1. e2→e4 a7→a5` after a human opening move).
 
-**What it needs when built:**
-- Move-selection AI per turn-based game: start simple (random legal move, or a shallow
-  minimax + material-count eval per `IDEAS.md` #5) before investing in stronger eval/deeper
-  search — get "a bot that plays legally and isn't trivially dumb" working first.
-- A difficulty knob is a natural stretch goal (search depth is the easy lever for
-  chess/checkers) but not needed for a first pass — one fixed difficulty ships first.
-- UI: a "PLAY VS BOT" button per empty seat, and the seat label should read something like
-  "RED: (bot)" instead of a nickname once filled.
-- Slither's ambient bots (if/when tackled) need their own tuning pass — how many bots per
-  room, how aggressive their steering is, whether they respawn like real players.
+**Scope not built (unchanged from the original proposal, still open):**
+- **Slither's ambient wandering bots** — a different problem (no "seat" to fill, steering policy
+  each tick rather than move-selection per turn) — not attempted this pass.
+- **Hangman** — skipped per the original writeup's own call (a bot *guessing* letters well is a
+  different, less interesting problem than picking a word).
+- **A difficulty knob / stronger eval** (material-count, shallow minimax per `IDEAS.md` #5) — still
+  open; ships as a clear next step on top of the uniform-random move selection now in place.
+
+**Remaining gap surfaced by this work:** two random-move bots left playing each other in Checkers
+or Chess can run for a very long time (observed 50+ ticks / 40+ moves without reaching
+`game_over` in a bounded test) because neither game has draw-by-repetition/move-limit detection —
+a pre-existing gap (chess.js's own file header already notes "No draw-by-repetition/50-move-rule
+detection"), just newly exercisable by bot-vs-bot play where neither side will ever resign or get
+bored. Not fixed here (real scope creep beyond the bot feature itself); worth a look if bot-vs-bot
+play becomes a real usage pattern.
 
 ---
 

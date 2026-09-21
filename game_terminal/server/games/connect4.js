@@ -68,11 +68,64 @@ function broadcastState(room, ctx) {
   });
 }
 
-function resetBoard(st) {
+function resetBoard(st, firstMover) {
   st.board = createInitialBoard();
-  st.turn = 'red';
+  st.turn = firstMover || 'red';
   st.winner = null;
   st.lastMove = null;
+}
+
+// Starts a fresh game and flips which color moves first compared to the previous game, so
+// consecutive games alternate starters instead of the same seat always opening.
+function startNewGame(st) {
+  const firstMover = st.nextFirstMover || 'red';
+  resetBoard(st, firstMover);
+  st.nextFirstMover = opponent(firstMover);
+}
+
+const BOT = 'BOT';
+const BOT_THINK_MS_MIN = 400;
+const BOT_THINK_MS_MAX = 900;
+
+function applyDrop(st, color, col) {
+  const row = dropRow(st.board, col);
+  if (row === -1) return false;
+  st.board[row][col] = color;
+  st.lastMove = { r: row, c: col };
+  if (checkWin(st.board, row, col, color)) {
+    st.phase = 'game_over';
+    st.winner = color;
+  } else if (boardFull(st.board)) {
+    st.phase = 'game_over';
+    st.winner = null;
+  } else {
+    st.turn = opponent(color);
+  }
+  return true;
+}
+
+// Bots are a sentinel seat value ('BOT') rather than a real clientId — see FUTURE.md's
+// "Bot/CPU opponents" writeup. Scheduling re-validates phase/turn/seat when the timer fires
+// rather than trusting the state at schedule time, so a stale/duplicate timer (e.g. two actions
+// both triggering a schedule for the same pending turn) harmlessly no-ops instead of double-moving.
+function maybeScheduleBotMove(room) {
+  const st = room.state;
+  if (st.phase !== 'playing' || st.players[st.turn] !== BOT) return;
+  const delay = BOT_THINK_MS_MIN + Math.random() * (BOT_THINK_MS_MAX - BOT_THINK_MS_MIN);
+  setTimeout(() => {
+    const st2 = room.state;
+    if (st2.phase !== 'playing' || st2.players[st2.turn] !== BOT) return;
+    const color = st2.turn;
+    const openCols = [];
+    for (let c = 0; c < COLS; c++) {
+      if (dropRow(st2.board, c) !== -1) openCols.push(c);
+    }
+    if (openCols.length === 0) return;
+    const col = openCols[Math.floor(Math.random() * openCols.length)];
+    applyDrop(st2, color, col);
+    room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'connect4', data: { kind: 'state', ...buildPublicState(room) } } });
+    maybeScheduleBotMove(room);
+  }, delay);
 }
 
 module.exports = {
@@ -86,6 +139,7 @@ module.exports = {
       turn: 'red',
       winner: null,
       lastMove: null,
+      nextFirstMover: 'red',
     };
   },
 
@@ -126,21 +180,29 @@ module.exports = {
     if (!data || typeof data.kind !== 'string') return;
     const st = room.state;
 
-    function reject() {
-      ctx.sendTo(ctx.senderId, { v: 1, type: 'game.event', payload: { gameType: 'connect4', data: { kind: 'moveRejected' } } });
+    // `reason` lets the client show an accurate message — previously every rejection (wrong
+    // turn, bad column index, or an actually-full column) was reported identically, so players
+    // could be told "Column is full" when the real reason was something else entirely.
+    function reject(reason) {
+      ctx.sendTo(ctx.senderId, { v: 1, type: 'game.event', payload: { gameType: 'connect4', data: { kind: 'moveRejected', reason } } });
     }
 
     if (data.kind === 'sit') {
       const seat = data.seat === 'red' || data.seat === 'yellow' ? data.seat : null;
       if (!seat) return;
       if (st.players[seat]) return;
-      if (st.players.red === ctx.senderId || st.players.yellow === ctx.senderId) return;
-      st.players[seat] = ctx.senderId;
+      if (data.bot) {
+        st.players[seat] = BOT;
+      } else {
+        if (st.players.red === ctx.senderId || st.players.yellow === ctx.senderId) return;
+        st.players[seat] = ctx.senderId;
+      }
       if (st.players.red && st.players.yellow) {
-        resetBoard(st);
+        startNewGame(st);
         st.phase = 'playing';
       }
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
       return;
     }
 
@@ -162,37 +224,37 @@ module.exports = {
       return;
     }
 
+    // Removes a bot from a seat — a human can't "sit" over a BOT sentinel via the normal `sit`
+    // check (seat isn't empty), so this is the only way to clear one, e.g. to sit down themselves.
+    if (data.kind === 'removeBot') {
+      const seat = data.seat === 'red' || data.seat === 'yellow' ? data.seat : null;
+      if (!seat || st.players[seat] !== BOT) return;
+      st.players[seat] = null;
+      st.phase = 'waiting';
+      resetBoard(st);
+      broadcastState(room, ctx);
+      return;
+    }
+
     if (data.kind === 'resetGame') {
       if (st.phase !== 'game_over') return;
-      resetBoard(st);
+      startNewGame(st);
       st.phase = st.players.red && st.players.yellow ? 'playing' : 'waiting';
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
       return;
     }
 
     if (data.kind === 'move') {
       if (st.phase !== 'playing') return;
       const seatColor = st.players.red === ctx.senderId ? 'red' : st.players.yellow === ctx.senderId ? 'yellow' : null;
-      if (!seatColor || seatColor !== st.turn) return reject();
+      if (!seatColor || seatColor !== st.turn) return reject('not_your_turn');
       const col = Number(data.col);
-      if (!Number.isInteger(col) || col < 0 || col >= COLS) return reject();
-      const row = dropRow(st.board, col);
-      if (row === -1) return reject();
-
-      st.board[row][col] = seatColor;
-      st.lastMove = { r: row, c: col };
-
-      if (checkWin(st.board, row, col, seatColor)) {
-        st.phase = 'game_over';
-        st.winner = seatColor;
-      } else if (boardFull(st.board)) {
-        st.phase = 'game_over';
-        st.winner = null; // draw
-      } else {
-        st.turn = opponent(seatColor);
-      }
+      if (!Number.isInteger(col) || col < 0 || col >= COLS) return reject('invalid_column');
+      if (!applyDrop(st, seatColor, col)) return reject('column_full');
 
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
     }
   },
 };

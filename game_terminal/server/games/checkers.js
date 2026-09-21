@@ -96,6 +96,7 @@ function buildPublicState(room) {
     turn: st.turn,
     mustContinueFrom: st.mustContinueFrom,
     winner: st.winner,
+    lastMove: st.lastMove,
   };
 }
 
@@ -112,6 +113,84 @@ function resetBoard(st) {
   st.turn = 'black';
   st.mustContinueFrom = null;
   st.winner = null;
+  st.lastMove = null;
+}
+
+// Applies an already-validated move (from a human or a bot) — mutates st in place. Shared by both
+// paths so bot moves go through exactly the same rules (multi-jump chaining, kinging, win check)
+// as a human's, rather than a separately-maintained copy.
+function applyCheckersMove(st, seatColor, match) {
+  const { from, to } = match;
+  const piece = st.board[from.r][from.c];
+  st.board[from.r][from.c] = null;
+  if (match.isCapture) st.board[match.capture.r][match.capture.c] = null;
+  st.board[to.r][to.c] = piece;
+
+  if (st.mustContinueFrom) {
+    st.lastMove.path.push(to);
+    if (match.isCapture) st.lastMove.captures.push(match.capture);
+  } else {
+    st.lastMove = { path: [from, to], captures: match.isCapture ? [match.capture] : [] };
+  }
+
+  const backRow = piece.color === 'black' ? BOARD_SIZE - 1 : 0;
+  let promoted = false;
+  if (!piece.king && to.r === backRow) {
+    piece.king = true;
+    promoted = true;
+  }
+
+  let continueTurn = false;
+  if (match.isCapture && !promoted) {
+    const further = getMovesForPiece(st.board, to.r, to.c).filter((m) => m.isCapture);
+    if (further.length > 0) {
+      continueTurn = true;
+      st.mustContinueFrom = { r: to.r, c: to.c };
+    }
+  }
+
+  if (!continueTurn) {
+    st.mustContinueFrom = null;
+    st.turn = opponent(seatColor);
+    const oppMoves = getAllMovesForColor(st.board, st.turn);
+    if (oppMoves.length === 0) {
+      st.phase = 'game_over';
+      st.winner = seatColor;
+    }
+  }
+  return continueTurn;
+}
+
+const BOT = 'BOT';
+const BOT_THINK_MS_MIN = 400;
+const BOT_THINK_MS_MAX = 900;
+
+function pickCheckersBotMove(st, color) {
+  let candidates = getAllMovesForColor(st.board, color);
+  if (st.mustContinueFrom) {
+    candidates = candidates.filter((m) => m.from.r === st.mustContinueFrom.r && m.from.c === st.mustContinueFrom.c);
+  }
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+// See connect4.js's maybeScheduleBotMove for the sentinel-seat / re-validate-on-fire pattern this
+// mirrors. A capturing multi-jump chain keeps the same color's turn (mustContinueFrom stays set),
+// so this reschedules itself for the continuation leg the same way it does for a fresh turn.
+function maybeScheduleBotMove(room) {
+  const st = room.state;
+  if (st.phase !== 'playing' || st.players[st.turn] !== BOT) return;
+  const delay = BOT_THINK_MS_MIN + Math.random() * (BOT_THINK_MS_MAX - BOT_THINK_MS_MIN);
+  setTimeout(() => {
+    const st2 = room.state;
+    if (st2.phase !== 'playing' || st2.players[st2.turn] !== BOT) return;
+    const color = st2.turn;
+    const match = pickCheckersBotMove(st2, color);
+    if (!match) return;
+    applyCheckersMove(st2, color, match);
+    room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'checkers', data: { kind: 'state', ...buildPublicState(room) } } });
+    maybeScheduleBotMove(room);
+  }, delay);
 }
 
 module.exports = {
@@ -125,6 +204,7 @@ module.exports = {
       turn: 'black',
       mustContinueFrom: null,
       winner: null,
+      lastMove: null,
     };
   },
 
@@ -173,13 +253,18 @@ module.exports = {
       const seat = data.seat === 'red' || data.seat === 'black' ? data.seat : null;
       if (!seat) return;
       if (st.players[seat]) return;
-      if (st.players.red === ctx.senderId || st.players.black === ctx.senderId) return;
-      st.players[seat] = ctx.senderId;
+      if (data.bot) {
+        st.players[seat] = BOT;
+      } else {
+        if (st.players.red === ctx.senderId || st.players.black === ctx.senderId) return;
+        st.players[seat] = ctx.senderId;
+      }
       if (st.players.red && st.players.black) {
         resetBoard(st);
         st.phase = 'playing';
       }
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
       return;
     }
 
@@ -201,11 +286,24 @@ module.exports = {
       return;
     }
 
+    // Removes a bot from a seat (a human can't "sit" over a BOT sentinel via the normal `sit`
+    // check, since the seat isn't empty).
+    if (data.kind === 'removeBot') {
+      const seat = data.seat === 'red' || data.seat === 'black' ? data.seat : null;
+      if (!seat || st.players[seat] !== BOT) return;
+      st.players[seat] = null;
+      st.phase = 'waiting';
+      resetBoard(st);
+      broadcastState(room, ctx);
+      return;
+    }
+
     if (data.kind === 'resetGame') {
       if (st.phase !== 'game_over') return;
       resetBoard(st);
       st.phase = st.players.red && st.players.black ? 'playing' : 'waiting';
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
       return;
     }
 
@@ -223,38 +321,9 @@ module.exports = {
       );
       if (!match) return reject();
 
-      const piece = st.board[from.r][from.c];
-      st.board[from.r][from.c] = null;
-      if (match.isCapture) st.board[match.capture.r][match.capture.c] = null;
-      st.board[to.r][to.c] = piece;
-
-      const backRow = piece.color === 'black' ? BOARD_SIZE - 1 : 0;
-      let promoted = false;
-      if (!piece.king && to.r === backRow) {
-        piece.king = true;
-        promoted = true;
-      }
-
-      let continueTurn = false;
-      if (match.isCapture && !promoted) {
-        const further = getMovesForPiece(st.board, to.r, to.c).filter((m) => m.isCapture);
-        if (further.length > 0) {
-          continueTurn = true;
-          st.mustContinueFrom = { r: to.r, c: to.c };
-        }
-      }
-
-      if (!continueTurn) {
-        st.mustContinueFrom = null;
-        st.turn = opponent(seatColor);
-        const oppMoves = getAllMovesForColor(st.board, st.turn);
-        if (oppMoves.length === 0) {
-          st.phase = 'game_over';
-          st.winner = seatColor;
-        }
-      }
-
+      applyCheckersMove(st, seatColor, match);
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
     }
   },
 };

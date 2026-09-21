@@ -53,6 +53,9 @@ function getAllMovesForColor(board, color) {
   }
   return all.some((m) => m.isCapture) ? all.filter((m) => m.isCapture) : all;
 }
+function opponentColor(color) {
+  return color === 'red' ? 'black' : 'red';
+}
 function legalDestinationsFrom(board, from) {
   const piece = board[from.r][from.c];
   if (!piece) return [];
@@ -66,6 +69,7 @@ export function mount(container, api) {
   let roster = [];
   let selected = null;
   let flashError = false;
+  let flipOverride = null; // null = auto (orient so your own color sits at the bottom)
 
   const root = document.createElement('div');
   root.style.display = 'flex';
@@ -76,6 +80,7 @@ export function mount(container, api) {
 
   function nicknameFor(clientId) {
     if (!clientId) return null;
+    if (clientId === 'BOT') return '(bot)';
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
   }
@@ -141,11 +146,24 @@ export function mount(container, api) {
       const occupant = nicknameFor(view.players[color]);
       label.textContent = `${color.toUpperCase()}: ${occupant || '(empty)'}`;
       seatRow.appendChild(label);
-      if (!view.players[color] && !seat) {
-        const btn = document.createElement('button');
-        btn.textContent = `PLAY ${color.toUpperCase()}`;
-        btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color }));
-        seatRow.appendChild(btn);
+      if (!view.players[color]) {
+        if (!seat) {
+          const btn = document.createElement('button');
+          btn.textContent = `PLAY ${color.toUpperCase()}`;
+          btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color }));
+          seatRow.appendChild(btn);
+        }
+        // Shown even when the viewer is already seated — that's the whole point of a bot seat:
+        // a lone human who's already sat down can still fill the other seat without waiting.
+        const botBtn = document.createElement('button');
+        botBtn.textContent = 'PLAY VS BOT';
+        botBtn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color, bot: true }));
+        seatRow.appendChild(botBtn);
+      } else if (view.players[color] === 'BOT') {
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'REMOVE BOT';
+        removeBtn.addEventListener('click', () => api.sendAction({ kind: 'removeBot', seat: color }));
+        seatRow.appendChild(removeBtn);
       }
     }
     if (seat) {
@@ -154,7 +172,37 @@ export function mount(container, api) {
       leaveBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
       seatRow.appendChild(leaveBtn);
     }
+    const autoFlip = seat === 'black';
+    const flipped = flipOverride !== null ? flipOverride : autoFlip;
+    const flipBtn = document.createElement('button');
+    flipBtn.textContent = 'FLIP BOARD';
+    flipBtn.addEventListener('click', () => {
+      flipOverride = !flipped;
+      render();
+    });
+    seatRow.appendChild(flipBtn);
     root.appendChild(seatRow);
+
+    if (view.phase !== 'waiting') {
+      const counts = { black: 0, red: 0 };
+      for (const row of view.board) {
+        for (const cell of row) {
+          if (cell) counts[cell.color]++;
+        }
+      }
+      const diffLine = document.createElement('div');
+      diffLine.style.fontSize = '0.85em';
+      diffLine.style.opacity = '0.85';
+      if (seat) {
+        const mine = counts[seat];
+        const theirs = counts[opponentColor(seat)];
+        const diff = mine - theirs;
+        diffLine.textContent = `You: ${mine}  Opponent: ${theirs}  (${diff > 0 ? '+' : ''}${diff})`;
+      } else {
+        diffLine.textContent = `BLACK: ${counts.black}  RED: ${counts.red}`;
+      }
+      root.appendChild(diffLine);
+    }
 
     const board = document.createElement('div');
     board.style.display = 'grid';
@@ -164,22 +212,36 @@ export function mount(container, api) {
 
     const legalTargets = selected ? legalDestinationsFrom(view.board, selected) : [];
 
+    const lastMove = view.lastMove;
+    // lastMove.path covers the whole chain for a multi-jump (every square the piece passed
+    // through), not just the final leg's from/to.
+    const isLastMoveSquare = (r, c) => !!lastMove && lastMove.path.some((p) => p.r === r && p.c === c);
+
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
         const cell = document.createElement('div');
         cell.dataset.row = String(r);
         cell.dataset.col = String(c);
         const dark = (r + c) % 2 === 1;
+        const displayRow = flipped ? 7 - r : r;
+        const displayCol = flipped ? 7 - c : c;
+        cell.style.gridRowStart = String(displayRow + 1);
+        cell.style.gridColumnStart = String(displayCol + 1);
         cell.style.width = `${CELL}px`;
         cell.style.height = `${CELL}px`;
-        cell.style.background = dark ? '#2a2a2a' : '#0a0a0a';
+        cell.style.background = dark
+          ? isLastMoveSquare(r, c) ? '#3a3a10' : '#2a2a2a'
+          : isLastMoveSquare(r, c) ? '#151505' : '#0a0a0a';
         cell.style.display = 'flex';
         cell.style.alignItems = 'center';
         cell.style.justifyContent = 'center';
         cell.style.boxSizing = 'border-box';
         if (selected && selected.r === r && selected.c === c) {
           cell.style.border = '2px solid #ffb000';
-        } else if (legalTargets.some((t) => t.r === r && t.c === c)) {
+        } else if (isLastMoveSquare(r, c)) {
+          cell.style.border = '2px solid rgba(255, 176, 0, 0.5)';
+        }
+        if (legalTargets.some((t) => t.r === r && t.c === c)) {
           const dot = document.createElement('div');
           dot.style.width = '14px';
           dot.style.height = '14px';

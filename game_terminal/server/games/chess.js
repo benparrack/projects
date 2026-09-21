@@ -286,7 +286,21 @@ function buildPublicState(room) {
     winReason: st.winReason,
     moveHistory: st.moveHistory,
     legalMoves: st.phase === 'playing' ? getLegalMoves(st.board, st.turn, st) : [],
+    timeControlMs: st.timeControlMs || null,
+    clocks: st.clocks || null,
   };
+}
+
+// Charges real elapsed wall-clock time since the last update to whichever side's clock is
+// currently running (the side to move) — called both from the 1x/sec tick (so clients see a live
+// countdown and flag-falls get caught even if nobody moves) and right before a move is accepted
+// (so the exact time used for that move is charged before the turn switches).
+function applyClockElapsed(st) {
+  if (!st.clocks || st.phase !== 'playing') return;
+  const now = Date.now();
+  const elapsed = now - st.lastClockUpdate;
+  st.lastClockUpdate = now;
+  st.clocks[st.turn] = Math.max(0, st.clocks[st.turn] - elapsed);
 }
 
 function broadcastState(room, ctx) {
@@ -302,15 +316,105 @@ function resetBoard(st) {
   st.winner = null;
   st.winReason = null;
   st.moveHistory = [];
+  // st.timeControlMs is a room-level setting (set via the `setTimeControl` action, independent of
+  // resetBoard) — only the remaining-time counters reset here, to the full control, each new game.
+  st.clocks = st.timeControlMs ? { white: st.timeControlMs, black: st.timeControlMs } : null;
+  st.lastClockUpdate = Date.now();
+}
+
+// Applies an already-validated move (from a human or a bot) — mutates st in place (board, turn,
+// move history, check/game-over detection). Shared by both paths so a bot's move goes through
+// exactly the same post-move bookkeeping as a human's.
+function applyChessMove(st, seatColor, match, promotionChoice) {
+  const { from, to } = match;
+  const movingPiece = st.board[from.r][from.c];
+  const capturedPiece = match.enPassant ? st.board[match.from.r][match.to.c] : st.board[to.r][to.c];
+
+  applyMove(st.board, st, match, promotionChoice);
+  st.turn = opponent(seatColor);
+
+  st.moveHistory.push({
+    from: { r: from.r, c: from.c },
+    to: { r: to.r, c: to.c },
+    piece: movingPiece.type,
+    color: seatColor,
+    captured: capturedPiece ? capturedPiece.type : null,
+    promotion: promotionChoice,
+    castle: match.castle || null,
+  });
+
+  const nextLegal = getLegalMoves(st.board, st.turn, st);
+  const kingPos = findKing(st.board, st.turn);
+  const inCheck = kingPos ? isSquareAttacked(st.board, kingPos.r, kingPos.c, seatColor) : false;
+  st.inCheck = inCheck ? st.turn : null;
+
+  if (nextLegal.length === 0) {
+    st.phase = 'game_over';
+    st.winner = inCheck ? seatColor : 'draw';
+    st.winReason = inCheck ? 'checkmate' : 'stalemate';
+  }
+}
+
+const BOT = 'BOT';
+const BOT_THINK_MS_MIN = 400;
+const BOT_THINK_MS_MAX = 900;
+
+// See connect4.js's maybeScheduleBotMove for the sentinel-seat / re-validate-on-fire pattern this
+// mirrors. Also charges clock time for the bot's "thinking" delay when a time control is active,
+// same as a human's move does, so a bot can still lose on time in principle (short delay makes it
+// unlikely in practice, but keeps the clock model consistent rather than special-cased for bots).
+function maybeScheduleBotMove(room) {
+  const st = room.state;
+  if (st.phase !== 'playing' || st.players[st.turn] !== BOT) return;
+  const delay = BOT_THINK_MS_MIN + Math.random() * (BOT_THINK_MS_MAX - BOT_THINK_MS_MIN);
+  setTimeout(() => {
+    const st2 = room.state;
+    if (st2.phase !== 'playing' || st2.players[st2.turn] !== BOT) return;
+    const color = st2.turn;
+
+    if (st2.clocks) {
+      applyClockElapsed(st2);
+      if (st2.clocks[color] <= 0) {
+        st2.phase = 'game_over';
+        st2.winner = opponent(color);
+        st2.winReason = 'timeout';
+        room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
+        return;
+      }
+    }
+
+    const legalMoves = getLegalMoves(st2.board, color, st2);
+    if (legalMoves.length === 0) return;
+    const match = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+    const promotionChoice = match.promotion ? 'queen' : null;
+    applyChessMove(st2, color, match, promotionChoice);
+    room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
+    maybeScheduleBotMove(room);
+  }, delay);
 }
 
 module.exports = {
   type: 'chess',
 
   createInitialState() {
-    const st = { phase: 'waiting', players: { white: null, black: null } };
+    const st = { phase: 'waiting', players: { white: null, black: null }, timeControlMs: null };
     resetBoard(st);
     return st;
+  },
+
+  // 1x/sec is plenty for a countdown clock (vs. slither's real physics tick) — see
+  // roomManager.js's Room constructor for how a plugin opts into this periodic hook.
+  tickIntervalMs: 1000,
+  tick(room, ctx) {
+    const st = room.state;
+    if (st.phase !== 'playing' || !st.clocks) return;
+    applyClockElapsed(st);
+    if (st.clocks[st.turn] <= 0) {
+      st.phase = 'game_over';
+      st.winner = opponent(st.turn);
+      st.winReason = 'timeout';
+    }
+    broadcastState(room, ctx);
   },
 
   // Both seats taken — RoomManager uses this to route extra public-lobby joiners into a fresh
@@ -356,13 +460,18 @@ module.exports = {
       const seat = data.seat === 'white' || data.seat === 'black' ? data.seat : null;
       if (!seat) return;
       if (st.players[seat]) return;
-      if (st.players.white === ctx.senderId || st.players.black === ctx.senderId) return;
-      st.players[seat] = ctx.senderId;
+      if (data.bot) {
+        st.players[seat] = BOT;
+      } else {
+        if (st.players.white === ctx.senderId || st.players.black === ctx.senderId) return;
+        st.players[seat] = ctx.senderId;
+      }
       if (st.players.white && st.players.black) {
         resetBoard(st);
         st.phase = 'playing';
       }
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
       return;
     }
 
@@ -384,11 +493,34 @@ module.exports = {
       return;
     }
 
+    // Removes a bot from a seat (a human can't "sit" over a BOT sentinel via the normal `sit`
+    // check, since the seat isn't empty).
+    if (data.kind === 'removeBot') {
+      const seat = data.seat === 'white' || data.seat === 'black' ? data.seat : null;
+      if (!seat || st.players[seat] !== BOT) return;
+      st.players[seat] = null;
+      st.phase = 'waiting';
+      resetBoard(st);
+      broadcastState(room, ctx);
+      return;
+    }
+
+    if (data.kind === 'setTimeControl') {
+      if (st.phase !== 'waiting') return;
+      const seatColor = st.players.white === ctx.senderId ? 'white' : st.players.black === ctx.senderId ? 'black' : null;
+      if (!seatColor) return;
+      const minutes = Number(data.minutes);
+      st.timeControlMs = Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes * 60000) : null;
+      broadcastState(room, ctx);
+      return;
+    }
+
     if (data.kind === 'resetGame') {
       if (st.phase !== 'game_over') return;
       resetBoard(st);
       st.phase = st.players.white && st.players.black ? 'playing' : 'waiting';
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
       return;
     }
 
@@ -407,6 +539,18 @@ module.exports = {
       if (st.phase !== 'playing') return reject();
       const seatColor = st.players.white === ctx.senderId ? 'white' : st.players.black === ctx.senderId ? 'black' : null;
       if (!seatColor || seatColor !== st.turn) return reject();
+
+      if (st.clocks) {
+        applyClockElapsed(st);
+        if (st.clocks[seatColor] <= 0) {
+          st.phase = 'game_over';
+          st.winner = opponent(seatColor);
+          st.winReason = 'timeout';
+          broadcastState(room, ctx);
+          return;
+        }
+      }
+
       const { from, to } = data;
       if (!from || !to) return reject();
 
@@ -419,34 +563,9 @@ module.exports = {
         promotionChoice = PROMOTION_TYPES.includes(data.promotion) ? data.promotion : 'queen';
       }
 
-      const movingPiece = st.board[from.r][from.c];
-      const capturedPiece = match.enPassant ? st.board[match.from.r][match.to.c] : st.board[to.r][to.c];
-
-      applyMove(st.board, st, match, promotionChoice);
-      st.turn = opponent(seatColor);
-
-      st.moveHistory.push({
-        from: { r: from.r, c: from.c },
-        to: { r: to.r, c: to.c },
-        piece: movingPiece.type,
-        color: seatColor,
-        captured: capturedPiece ? capturedPiece.type : null,
-        promotion: promotionChoice,
-        castle: match.castle || null,
-      });
-
-      const nextLegal = getLegalMoves(st.board, st.turn, st);
-      const kingPos = findKing(st.board, st.turn);
-      const inCheck = kingPos ? isSquareAttacked(st.board, kingPos.r, kingPos.c, seatColor) : false;
-      st.inCheck = inCheck ? st.turn : null;
-
-      if (nextLegal.length === 0) {
-        st.phase = 'game_over';
-        st.winner = inCheck ? seatColor : 'draw';
-        st.winReason = inCheck ? 'checkmate' : 'stalemate';
-      }
-
+      applyChessMove(st, seatColor, match, promotionChoice);
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
     }
   },
 };
