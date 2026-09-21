@@ -17,6 +17,10 @@ const GAMES = [
   { type: 'garticphone', label: 'DRAWING PHONE' },
   { type: 'spades', label: 'SPADES (CARDS)' },
   { type: 'hearts', label: 'HEARTS (CARDS)' },
+  { type: 'backgammon', label: 'BACKGAMMON' },
+  { type: 'tron', label: 'TRON (LIGHT CYCLES)' },
+  { type: 'pictionary', label: 'PICTIONARY' },
+  { type: 'slope', label: 'SLOPE (3D RUNNER)' },
 ];
 
 const SESSION_KEY = 'game_terminal.session';

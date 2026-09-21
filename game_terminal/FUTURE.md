@@ -167,49 +167,43 @@ correctly during real play.
 
 ---
 
-## Slope-style ball runner — proposed, not started
+## Slope-style ball runner — shipped
 
-**Pitch:** A 3D endless runner modeled on the browser game "Slope" — you control a neon-green
-ball that auto-moves forward and downhill along a winding, narrow, procedurally-generated
-track, steering left/right to avoid red obstacles, gaps, and the track edges. Speed ramps up
-the longer you survive; falling off or hitting a hazard ends the run. Score is distance
-traveled. (Researched via web search — the original is a single-player Unity/WebGL game by
-various mirror sites; no source available to reference directly, just the mechanic.)
+See `server/games/slope.js` + `public/games/slope/client.js` + a vendored
+`public/games/slope/three.min.js` (same r128 UMD build `3dgames/shooter/` already uses,
+lazy-loaded via a dynamically injected `<script>` tag on mount so it never touches
+`public/index.html` or loads for every other game). The first 3D game in the hub, and the first
+auto-scrolling endless runner.
 
-**Why this one:** A genuinely different genre from everything else in the hub — the other
-games are all turn-based board games, a drawing canvas, or Slither's top-down 2D arena. This
-would be the first *3D* game and the first with an auto-scrolling "endless runner" pace (the
-player never stops moving forward, unlike Slither where the player fully controls speed via
-boost) — a good stretch for the client rendering side even at prototype fidelity.
+Went with the **shared-track race** design recommended below: every player in a room gets their
+own ball on the same seeded procedural track (identical hazard layout for all), racing to
+survive longest, with a live leaderboard by distance. Real-time tick loop, same
+`tickIntervalMs`/`tick(room, ctx)` hook Slither pioneered.
 
-**Design question to resolve before starting:** the original Slope is single-player, but this
-hub is built entirely around shared multiplayer state — every existing game (including Slither)
-puts multiple people in the same room seeing each other. Two ways to reconcile that:
-- **Shared-track race (recommended):** everyone in a room gets their own ball on the *same*
-  seeded procedural track (so obstacles are identical for all), racing to survive longest/go
-  farthest, with a live leaderboard by distance — genuinely multiplayer, and reuses Slither's
-  `tick(room, ctx)`/`tickIntervalMs` real-time hook almost directly (continuous forward motion
-  + steering input is structurally the same problem Slither already solved).
-- **Solo run in a shared room:** each player's run is fully independent (no shared track seed,
-  no interaction between runs), the room is just a lobby/leaderboard around otherwise
-  single-player sessions. Simpler, but doesn't use the room model for much beyond a scoreboard.
+**Design decisions made:**
+- Track geometry is a deterministic hash `(seed, segmentIndex) -> float`, not a sequential PRNG
+  replayed from 0 — lets either side query any segment's center-offset/hazard directly. Half-width
+  narrows linearly from 6 down to a floor of 2.5 as distance increases; hazards are lateral
+  kill-ranges per segment, always capped to leave at least 2.4 units of safe passage (no segment
+  is unbeatable). A deliberate simplification of "winding track with red obstacles" — no
+  elevation/jumps, continuous lateral position rather than lane-snapping — kept simple enough to
+  guarantee the server and client agree on where the hazards are, which is the one property that
+  actually matters for fairness (the server is sole collision authority).
+- Round flow: `waiting -> countdown(3s) -> racing -> results(4s) -> waiting`, looping forever with
+  a fresh seed each round. A player joining mid-race spectates and starts at the next countdown.
+  Solo play works fine too — a lone player still gets a full round against the track alone.
+- Client renders with prev/cur linear interpolation between the 20Hz broadcasts (the same jitter
+  fix Slither needed), a chase camera, and disposes the renderer/cancels its animation loop and
+  key listeners on unmount so switching games doesn't leak a WebGL context.
 
-**What it needs when built:**
-- 3D rendering: likely Three.js (`3dgames/shooter/` in this repo already vendors a
-  pre-module `three@0.128.0` build for exactly this — file:// / no-bundler friendliness — worth
-  reusing that same approach here, though game_terminal is server-hosted so the CORS-avoidance
-  reason doesn't strictly apply; still worth matching for consistency and because the vendored
-  build is already proven to work in this repo).
-- Procedural track generation: a seeded RNG so a shared-track race can give every client in a
-  room the identical sequence of turns/gaps/hazards from just a shared seed, rather than
-  streaming full geometry over the wire.
-- Auto-forward movement + left/right steering input — conceptually close to Slither's
-  angle-based steering, but constrained to lane-relative left/right rather than a free angle.
-- Collision/fall-off detection against the track's actual (bending, narrowing) geometry, not
-  just a flat bounding box.
-- Speed ramp over time/distance, and a death/respawn-or-round-end flow — if it's a shared race,
-  probably "round ends when everyone's died or after a time cap" rather than Slither's instant
-  individual respawn, since a race implies a shared start/end rather than a persistent world.
+**Verified:** a standalone Node script (fake room/ctx, forcing phase transitions by moving
+`phaseEndsAt` into the past rather than waiting on real timers) covering countdown->racing,
+per-seed determinism, steering, results->waiting cycling, and independent multiplayer death: all
+passed. The server/client track-generation code was diffed line-by-line to confirm they're
+identical. Live-verified in a real Playwright/Firefox session: Three.js loads lazily without
+touching any other game, the 3D scene actually renders (neon-green ball, narrowing track,
+leaderboard), arrow-key steering works, and a death correctly triggers a fresh countdown/round
+with the distance and leaderboard reset.
 
 ---
 
@@ -335,6 +329,114 @@ end condition — including a full 13-trick hand played end-to-end through real 
 Live-verified in a real 4-tab Playwright/Firefox session: simultaneous passing (all 4 submit
 before any hand exchanges), the 2-of-clubs-only legal-card restriction on the very first play of
 a hand, and trick display syncing live across tabs.
+
+---
+
+## Backgammon — shipped
+
+See `server/games/backgammon.js` + `public/games/backgammon/client.js`. Standard rules, casual
+scope: 2 seats, mirror-symmetric standard starting position, opening roll-off (reroll on a tie),
+mandatory bar-entry before any other move, blot-hitting, blocked points (2+ enemy checkers),
+bear-off only once all 15 checkers are home (both the exact-roll and "no checker further back"
+overage cases), doubles = 4 dice, win on bearing off all 15.
+
+**Known deviation, flagged deliberately:** "must use both dice if legally possible" is
+approximated rather than fully solved — dice are played in whatever order the player picks, and
+any die left unplayable after a move is simply forfeited, rather than the full lookahead a strict
+tournament ruleset would use to force the die-order that maximizes total dice played. A real, if
+narrow, rules gap — worth knowing about, not worth the complexity for a casual hobby-project game.
+No doubling cube, no gammon/backgammon scoring multiplier, no bot support (see "Bot/CPU
+opponents" above for the pattern if this ever gets added) — all out of scope for v1.
+
+The client has no legal-destination highlighting (unlike Checkers) — backgammon's
+blocking/bear-off legality was judged complex enough that duplicating it client-side risked
+drifting out of sync with the server; the server is sole legality authority and an illegal
+attempt just gets a rejection flash with a reason. The client does gate which points/bar piles
+even *look* clickable to "your checkers, on your turn" (a fix made during the live-verification
+pass — the first version made your own checkers look clickable on the opponent's turn too; harmless
+since `playFrom` already no-ops without a turn check, but confusing to look at).
+
+**Verified:** a standalone Node script covering starting position/piece counts, the opening
+roll-off, turn alternation, out-of-turn and blocked-point rejection, blot-hit-to-bar +
+mandatory re-entry, bear-off gating, both bear-off cases, and doubles giving 4 dice. Live-verified
+in a real 2-tab Playwright/Firefox session: the board renders with correct starting counts, an
+opening roll assigns the correct starting color, dice work correctly (spending a die updates the
+board and leaves the correct one remaining), and turn passes correctly between seats.
+
+---
+
+## TRON (light cycles) — shipped
+
+See `server/games/tron.js` + `public/games/tron/client.js`. The second real-time tick-loop game
+in the hub after Slither, and structurally its closest relative (continuous per-tick movement,
+steering applied on the next tick, collision against persistent trails) — but round-based ("last
+cycle alive wins") rather than Slither's persistent-world instant-respawn, since a last-one-alive
+game only makes sense with a shared start/end.
+
+**Design decisions made:**
+- 64x48 grid at 10px/cell (matches Slither's canvas footprint), 90ms tick rate.
+- Not seat-based — modeled as a dynamic collection of participants (closer to Slither's
+  `st.snakes` than the 2-seat board games), supporting 2+ players: the first 4 spawn in the
+  corners facing inward along the arena's long edges, 5th+ fall back to a randomized-but-retried
+  position facing the center.
+- Round flow: `waiting` (needs 2+) -> `countdown` (3s, locks in current players + bumps a
+  `roundId` so clients wipe stale trails) -> `playing` -> `round_over` (4s winner/draw display) ->
+  back to `waiting`.
+- Crashed players' trails stay up as permanent obstacles for survivors (matching the arcade
+  original), but a player who *leaves* the room has their trail removed entirely along with their
+  record — an abandoned wall permanently blocking a public room's arena was judged worse than the
+  minor unrealism of it vanishing.
+- 180-degree reversal into the cell you just left is a silent no-op, not a death, per the genre's
+  standard rule. Two movers landing on the same new cell in the same tick both die (head-on).
+- Bandwidth: trails are sent in full only on join snapshot, ticks send only newly-added cells
+  (`trailAdded`) — the same delta pattern Slither already uses for food.
+
+**Verified:** a standalone Node script (fast-forwarding timers by mutating
+`countdownEndAt`/`roundOverAt` directly rather than waiting on real timers) covering the full
+countdown->spawn->play->round_over->waiting cycle, wall/self/other-trail death, the 180-degree-
+reversal no-op, last-survivor-wins, a same-tick mutual out-of-bounds draw, and a same-cell head-on
+collision killing both. Live-verified in a real 2-tab Playwright/Firefox session: the canvas
+renders, arrow-key/on-screen-pad steering works, and a round correctly reached "ROUND OVER —
+DRAW" with both trails visible on the board.
+
+---
+
+## Pictionary — shipped
+
+See `server/games/pictionary.js` + `public/games/pictionary/client.js`. Combines two mechanics
+already in the hub: `drawing.js`'s live shared-canvas segment broadcast, and `hangman.js`'s
+per-client hidden-word pattern (the current drawer sees the word, everyone else sees a blank/
+length-only view until the round ends).
+
+**Design decisions made:**
+- Lobby auto-starts once 2 players are present; the drawer rotates through join order.
+- The drawer picks from 3 random word options (a small built-in 40-word list — common, easily-
+  drawable nouns, no dictionary file needed like Hangman's), with a 15s auto-pick fallback if they
+  don't choose. Drawing round is 80s, server-authoritative (the server ends it on timeout, not
+  just a client-side countdown display).
+- Guesses are validated server-side (case/whitespace-normalized) and logged for everyone to see
+  (right or wrong) without revealing the actual word to players who haven't gotten it yet — a
+  correct guess broadcasts as "guessed the word!" only. Scoring: first correct guesser 3pts, later
+  correct guessers 1pt each, the drawer gets a 2pt bonus if anyone guessed correctly at all. Round
+  ends early once every non-drawer has guessed correctly, otherwise runs out the clock.
+- The canvas/segment wire format is reused byte-for-byte from `drawing.js` so the client's
+  rendering code is near-identical; canvas history clears at the start of each round.
+
+**A real bug caught during live verification, not by the logic script:** the drawing toolbar
+(color swatches, brush-size slider, CLEAR button) was being shown to every player, not just the
+drawer — harmless functionally (the server already rejects `segment`/`clear` actions from anyone
+but `st.drawerClientId`), but confusing UX, since a guesser could click a color or CLEAR and
+nothing would visibly happen. Fixed by hiding the toolbar (`display: none`) whenever
+`view.isDrawer` is false, re-evaluated every render.
+
+**Verified:** a standalone Node script (globally stubbing `setTimeout`/`clearTimeout` to
+fire-on-demand instead of waiting real wall-clock time) covering word-hiding, correct/incorrect
+guess handling, drawer-can't-guess-own-word, no double-scoring, all-guessed early-end detection,
+the word-choice and round timeouts, the post-round pause auto-advancing to the next drawer, and
+leave-mid-round drawer rotation. Live-verified in a real 2-tab Playwright/Firefox session: a full
+round start-to-finish — word auto-picked, a drawn stroke appeared, the word stayed hidden from the
+guesser, a correct guess ended the round instantly with correct scoring (3pts guesser, 2pts
+drawer) and the word revealed.
 
 ---
 
