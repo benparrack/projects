@@ -159,7 +159,7 @@ const BOOST_POOL_SIZE = 8;
 // segment, recomputed fresh every frame relative to that viewer rather than as an ever-
 // accumulating absolute value — so it reads as a continuous slope falling away into the fog
 // without ever drifting out of a sane numeric range over a long race.
-const SLOPE_DROP_PER_SEG = 0.22;
+const SLOPE_DROP_PER_SEG = 0.55; // tuned up after a live look — 0.22 read as barely-perceptible
 function groundYAt(distance, refSegFloat) {
   return -(distance / SEG_LEN - refSegFloat) * SLOPE_DROP_PER_SEG;
 }
