@@ -4,14 +4,18 @@
 // trails/walls). Round-based rather than persistent-world/instant-respawn like Slither, since
 // Tron's "last one alive wins" only makes sense with a shared start/end, not individual respawn.
 
-// 60ms (~16.7Hz) rather than the original 90ms — snappier steering input registration, and more
-// ticks per second for the client's interpolated rendering to blend between (see client.js's
-// TICK_MS_CLIENT, which must be kept equal to this by hand — no shared module in this repo).
-const TICK_MS = 60;
-const GRID_W = 64;
-const GRID_H = 48;
-const CELL_PX = 10; // client-side only in spirit, but kept here as documentation of the pairing
-const SPAWN_MARGIN = 6;
+// 25ms (40Hz) on a 2x-finer grid (128x96 at 5px/cell, same 640x480 arena as the old 64x48 at
+// 10px/cell). Old real-world speed was 10px/60ms = 0.1667px/ms; new is 5px/25ms = 0.2px/ms — about
+// 20% FASTER overall, even though each individual per-tick movement is half the pixel distance
+// (which is what actually reads as "smaller steps", not a slower game). Playtest feedback: "make
+// the white ball smoother by making its steps smaller and just making it faster" — this is the
+// deliberate reconciliation of those two asks (see client.js's TICK_MS_CLIENT, which must be kept
+// equal to this by hand — no shared module in this repo).
+const TICK_MS = 25;
+const GRID_W = 128;
+const GRID_H = 96;
+const CELL_PX = 5; // client-side only in spirit, but kept here as documentation of the pairing
+const SPAWN_MARGIN = 12;
 const COUNTDOWN_MS = 3000;
 const ROUND_OVER_DISPLAY_MS = 4000;
 const MIN_PLAYERS = 2;

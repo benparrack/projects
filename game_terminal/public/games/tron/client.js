@@ -3,15 +3,22 @@
 // trail; steer with arrow keys/WASD (or the on-screen D-pad) to avoid walls, trails, and other
 // players. Last one alive wins the round.
 
-const GRID_W = 64;
-const GRID_H = 48;
-const CELL_PX = 10;
+const GRID_W = 128;
+const GRID_H = 96;
+const CELL_PX = 5;
 const CANVAS_WIDTH = GRID_W * CELL_PX;
 const CANVAS_HEIGHT = GRID_H * CELL_PX;
+// Trail stroke width and head-dot radius used to be derived from CELL_PX (which doubled as both
+// "grid step size" and "how chunky a rendered cell looks"), but now that CELL_PX is halved for
+// finer movement steps, deriving visual thickness from it would make the trail/ball render half
+// as thick too. Keep the same on-screen sizes as before (8px trail, 3.5px ball radius) by making
+// them their own constants instead.
+const TRAIL_WIDTH_PX = 8;
+const BALL_RADIUS_PX = 3.5;
 // Must match server/games/tron.js's TICK_MS by hand (no shared module in this repo) — used to
 // blend the rendered head position between the previous and most-recent tick, same pattern
 // slither.js/slope.js use to avoid raw-broadcast jitter.
-const TICK_MS_CLIENT = 60;
+const TICK_MS_CLIENT = 25;
 
 const KEY_TO_DIR = {
   ArrowUp: 'up', KeyW: 'up',
@@ -179,16 +186,19 @@ export function mount(container, api) {
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     if (!view) return;
 
-    // Faint grid so the arena reads as a grid, not an empty void.
+    // Faint grid so the arena reads as a grid, not an empty void. Spacing is in PIXELS (40px),
+    // not a fixed cell count, so the visual line density stays the same regardless of how fine
+    // GRID_W/GRID_H/CELL_PX are tuned for movement smoothness.
+    const GRIDLINE_PX = 40;
     ctx.strokeStyle = 'rgba(31, 143, 12, 0.12)';
     ctx.lineWidth = 1;
-    for (let gx = 0; gx <= GRID_W; gx += 4) {
+    for (let gx = 0; gx <= GRID_W; gx += GRIDLINE_PX / CELL_PX) {
       ctx.beginPath();
       ctx.moveTo(gx * CELL_PX, 0);
       ctx.lineTo(gx * CELL_PX, CANVAS_HEIGHT);
       ctx.stroke();
     }
-    for (let gy = 0; gy <= GRID_H; gy += 4) {
+    for (let gy = 0; gy <= GRID_H; gy += GRIDLINE_PX / CELL_PX) {
       ctx.beginPath();
       ctx.moveTo(0, gy * CELL_PX);
       ctx.lineTo(CANVAS_WIDTH, gy * CELL_PX);
@@ -234,23 +244,36 @@ export function mount(container, api) {
 
       ctx.strokeStyle = p.color;
       ctx.globalAlpha = dim ? 0.4 : 0.9;
-      ctx.lineWidth = CELL_PX - 2;
+      ctx.lineWidth = TRAIL_WIDTH_PX;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.beginPath();
       if (trail.length > 0) {
         const [x0, y0] = cellPt(trail[0].x, trail[0].y);
         ctx.moveTo(x0, y0);
-        // Every committed cell except the last — the last segment is drawn separately below,
-        // ending at the interpolated (sliding) head position instead of snapping straight to it.
-        for (let i = 1; i < trail.length - 1; i++) {
-          const [x, y] = cellPt(trail[i].x, trail[i].y);
-          ctx.lineTo(x, y);
+        if (p.status === 'alive') {
+          // Draw through every SETTLED cell except the newest one. The newest cell (trail[last])
+          // is where the server just moved this player's head INTO this tick — drawing all the
+          // way to it here would paint the trail there instantly on tick arrival, while the head
+          // dot below is still gliding to catch up over the tick window. That mismatch was the
+          // "trail is displaced from the bike" bug: the trail's tip snapped ahead immediately,
+          // only the decorative dot animated. Instead, the segment leading into the newest cell
+          // is drawn straight to the interpolated (sliding) head position, so the trail's tip and
+          // the head dot always advance in lockstep.
+          const settledCount = trail.length - 1;
+          for (let i = 1; i < settledCount; i++) {
+            const [x, y] = cellPt(trail[i].x, trail[i].y);
+            ctx.lineTo(x, y);
+          }
+          ctx.lineTo(hx * CELL_PX + CELL_PX / 2, hy * CELL_PX + CELL_PX / 2);
+        } else {
+          // Dead: no further interpolation happening (hx/hy already settled at the crash cell),
+          // so draw straight through every committed cell including the last.
+          for (let i = 1; i < trail.length; i++) {
+            const [x, y] = cellPt(trail[i].x, trail[i].y);
+            ctx.lineTo(x, y);
+          }
         }
-        const lastCommitted = trail.length > 1 ? trail[trail.length - 1] : trail[0];
-        const [xl, yl] = cellPt(lastCommitted.x, lastCommitted.y);
-        if (trail.length > 1) ctx.lineTo(xl, yl);
-        if (p.status === 'alive') ctx.lineTo(hx * CELL_PX + CELL_PX / 2, hy * CELL_PX + CELL_PX / 2);
       } else {
         ctx.moveTo(hx * CELL_PX + CELL_PX / 2, hy * CELL_PX + CELL_PX / 2);
       }
@@ -262,12 +285,12 @@ export function mount(container, api) {
         const py = hy * CELL_PX + CELL_PX / 2;
         ctx.fillStyle = '#fff';
         ctx.beginPath();
-        ctx.arc(px, py, (CELL_PX - 3) / 2, 0, Math.PI * 2);
+        ctx.arc(px, py, BALL_RADIUS_PX, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = p.color;
         ctx.font = '10px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(p.nickname, px, py - CELL_PX);
+        ctx.fillText(p.nickname, px, py - 10);
       }
     }
 
