@@ -51,10 +51,11 @@ const BOOST_SPEED_INCREMENT = 0.2;
 const MAX_BOOST_BONUS = 2.0; // caps total bonus around 10 boosts' worth
 
 // Hazard motion: most hazards stay static (unchanged behavior/fairness guarantees), but past
-// MOVING_HAZARD_START_SEG some become time-based — 'lr' oscillates side to side, 'updown' toggles
-// between fully blocking and fully retracted (this game has no real vertical axis for the ball to
-// actually go over/under, so "up/down" is expressed as a blink-danger timing window instead of
-// true vertical motion). Motion needs a shared elapsed-time-since-race-start clock (st.raceStartedAt
+// MOVING_HAZARD_START_SEG some become time-based — 'lr' oscillates side to side, 'updown' rises
+// out of the track, holds (lethal), then sinks back down and retracts on a timer (this game has
+// no real vertical axis for the ball to actually go over/under, so "up/down" is expressed as a
+// telegraphed danger window instead of true vertical motion — see hazardAt()'s comment for why
+// it's NOT a hard on/off toggle). Motion needs a shared elapsed-time-since-race-start clock (st.raceStartedAt
 // below) that server and client both read — unlike the rest of the track math, this is NOT purely
 // a function of (seed, segment) anymore, it also depends on "when," so both sides must agree on
 // what "when" means. Server and client each read their own Date.now(), with no clock-sync
@@ -66,7 +67,15 @@ const HAZARD_MOTION_SALT_BASE = 3000000;
 const HAZARD_OSC_PERIOD_MS = 2200;
 const HAZARD_OSC_AMPLITUDE_FRAC = 0.7; // fraction of the old max lateral offset — leaves margin
 const HAZARD_TOGGLE_PERIOD_MS = 1800;
-const HAZARD_TOGGLE_ACTIVE_FRAC = 0.55; // fraction of each cycle the toggle hazard is dangerous
+// 'updown' hazards move through 4 sub-phases each cycle rather than a hard on/off toggle: RISE
+// (growing out of the track, NOT yet lethal — this is the player's reaction window), HOLD (fully
+// up, lethal), FALL (sinking back down, not lethal again), then retracted/absent for the rest of
+// the cycle. Fixed the "flashes on screen and kills you" bug: with no rise phase, a hazard could
+// go from completely invisible to fully lethal in a single tick, giving zero reaction time.
+const HAZARD_TOGGLE_RISE_FRAC = 0.2;
+const HAZARD_TOGGLE_HOLD_FRAC = 0.3;
+const HAZARD_TOGGLE_FALL_FRAC = 0.2;
+// remaining (1 - RISE - HOLD - FALL) fraction of the cycle is fully retracted/absent
 
 const BASE_SPEED = 0.6; // distance per tick
 const SPEED_RAMP = 0.00004; // extra speed per unit distance traveled
@@ -152,12 +161,16 @@ function hazardMotionType(seed, i) {
 // SAFE_GAP of passage. 'lr' oscillates its center via a sine of elapsedMs, amplitude capped at
 // HAZARD_OSC_AMPLITUDE_FRAC of the old max offset so it never reaches the track edge even at
 // full swing — still leaves SAFE_GAP at every instant, same guarantee, just time-varying instead
-// of fixed. 'updown' reuses the exact static-position math but blinks between fully blocking and
-// fully absent on a timer (this game has no real vertical axis, so "up/down" reads as a timed
-// danger window instead of true vertical motion) — when retracted it's strictly safer than a
-// static hazard (no kill-zone at all), so the SAFE_GAP guarantee holds trivially. Each hazard's
-// phase is offset by its own per-segment seeded value so multiple moving hazards don't all
-// swing/blink in lockstep.
+// of fixed. 'updown' reuses the exact static-position math but rises/holds/falls/retracts on a
+// timer (this game has no real vertical axis, so "up/down" reads as a telegraphed danger window
+// instead of true vertical motion) — only the HOLD sub-phase is lethal (`haz.lethal`), so a player
+// always sees it rising before it can actually kill them. Whenever it isn't lethal it's strictly
+// safer than a static hazard, so the SAFE_GAP guarantee holds trivially. Each hazard's phase is
+// offset by its own per-segment seeded value so multiple moving hazards don't all rise/fall in
+// lockstep. `haz.riseProgress` (0 = fully retracted, 1 = fully up) is for the client's rise/fall
+// animation only — 'static'/'lr' hazards are always fully up (`riseProgress: 1`) and always
+// lethal (`lethal: true`) when present at all, so callers can treat all three motion types
+// uniformly via `haz.lethal` for collision.
 function hazardAt(st, i, elapsedMs) {
   if (i < HAZARD_START_SEG) return null;
   if (gapBlockAt(st.seed, i)) return null;
@@ -175,20 +188,36 @@ function hazardAt(st, i, elapsedMs) {
   const motion = hazardMotionType(st.seed, i);
 
   let hazCenter;
+  let lethal = true;
+  let riseProgress = 1;
   if (motion === 'lr') {
     const amplitude = maxOffset * HAZARD_OSC_AMPLITUDE_FRAC;
     const phase = (elapsedMs / HAZARD_OSC_PERIOD_MS) * 2 * Math.PI + phaseSeed * 2 * Math.PI;
     hazCenter = center + Math.sin(phase) * amplitude;
   } else if (motion === 'updown') {
     const cyclePos = ((elapsedMs + phaseSeed * HAZARD_TOGGLE_PERIOD_MS) % HAZARD_TOGGLE_PERIOD_MS) / HAZARD_TOGGLE_PERIOD_MS;
-    if (cyclePos >= HAZARD_TOGGLE_ACTIVE_FRAC) return null; // currently retracted — safe
+    const riseEnd = HAZARD_TOGGLE_RISE_FRAC;
+    const holdEnd = riseEnd + HAZARD_TOGGLE_HOLD_FRAC;
+    const fallEnd = holdEnd + HAZARD_TOGGLE_FALL_FRAC;
+    if (cyclePos < riseEnd) {
+      riseProgress = cyclePos / HAZARD_TOGGLE_RISE_FRAC;
+      lethal = false;
+    } else if (cyclePos < holdEnd) {
+      riseProgress = 1;
+      lethal = true;
+    } else if (cyclePos < fallEnd) {
+      riseProgress = 1 - (cyclePos - holdEnd) / HAZARD_TOGGLE_FALL_FRAC;
+      lethal = false;
+    } else {
+      return null; // fully retracted — nothing here at all, safe and invisible
+    }
     const offset = (phaseSeed - 0.5) * 2 * maxOffset;
     hazCenter = center + offset;
   } else {
     const offset = (phaseSeed - 0.5) * 2 * maxOffset;
     hazCenter = center + offset;
   }
-  return { start: hazCenter - width / 2, end: hazCenter + width / 2, motion };
+  return { start: hazCenter - width / 2, end: hazCenter + width / 2, motion, lethal, riseProgress };
 }
 
 // Speed boost pickup: null, or a single lateral point { pos } the ball must pass close to
@@ -277,7 +306,7 @@ function stepPlayer(st, p, elapsedMs) {
   let deathReason = dead ? 'edge' : null;
   if (!dead) {
     const haz = hazardAt(st, segIndex, elapsedMs);
-    if (haz && p.lateralPos >= haz.start && p.lateralPos <= haz.end) {
+    if (haz && haz.lethal && p.lateralPos >= haz.start && p.lateralPos <= haz.end) {
       dead = true;
       deathReason = 'hazard';
     }

@@ -41,7 +41,9 @@ const HAZARD_MOTION_SALT_BASE = 3000000;
 const HAZARD_OSC_PERIOD_MS = 2200;
 const HAZARD_OSC_AMPLITUDE_FRAC = 0.7;
 const HAZARD_TOGGLE_PERIOD_MS = 1800;
-const HAZARD_TOGGLE_ACTIVE_FRAC = 0.55;
+const HAZARD_TOGGLE_RISE_FRAC = 0.2;
+const HAZARD_TOGGLE_HOLD_FRAC = 0.3;
+const HAZARD_TOGGLE_FALL_FRAC = 0.2;
 
 const TICK_MS = 50; // matches server's tickIntervalMs — used only for render interpolation timing
 
@@ -100,20 +102,36 @@ function hazardAt(track, i, elapsedMs) {
   const motion = hazardMotionType(track.seed, i);
 
   let hazCenter;
+  let lethal = true;
+  let riseProgress = 1;
   if (motion === 'lr') {
     const amplitude = maxOffset * HAZARD_OSC_AMPLITUDE_FRAC;
     const phase = (elapsedMs / HAZARD_OSC_PERIOD_MS) * 2 * Math.PI + phaseSeed * 2 * Math.PI;
     hazCenter = center + Math.sin(phase) * amplitude;
   } else if (motion === 'updown') {
     const cyclePos = ((elapsedMs + phaseSeed * HAZARD_TOGGLE_PERIOD_MS) % HAZARD_TOGGLE_PERIOD_MS) / HAZARD_TOGGLE_PERIOD_MS;
-    if (cyclePos >= HAZARD_TOGGLE_ACTIVE_FRAC) return null;
+    const riseEnd = HAZARD_TOGGLE_RISE_FRAC;
+    const holdEnd = riseEnd + HAZARD_TOGGLE_HOLD_FRAC;
+    const fallEnd = holdEnd + HAZARD_TOGGLE_FALL_FRAC;
+    if (cyclePos < riseEnd) {
+      riseProgress = cyclePos / HAZARD_TOGGLE_RISE_FRAC;
+      lethal = false;
+    } else if (cyclePos < holdEnd) {
+      riseProgress = 1;
+      lethal = true;
+    } else if (cyclePos < fallEnd) {
+      riseProgress = 1 - (cyclePos - holdEnd) / HAZARD_TOGGLE_FALL_FRAC;
+      lethal = false;
+    } else {
+      return null;
+    }
     const offset = (phaseSeed - 0.5) * 2 * maxOffset;
     hazCenter = center + offset;
   } else {
     const offset = (phaseSeed - 0.5) * 2 * maxOffset;
     hazCenter = center + offset;
   }
-  return { start: hazCenter - width / 2, end: hazCenter + width / 2, motion };
+  return { start: hazCenter - width / 2, end: hazCenter + width / 2, motion, lethal, riseProgress };
 }
 function boostAt(track, i) {
   if (i < BOOST_START_SEG) return null;
@@ -148,6 +166,10 @@ const OTHER_COLORS = [0xffb000, 0x00e5ff, 0xff4dd2, 0xc792ff, 0xffee58];
 
 const GROUND_COLOR = 0x113355;
 const RAMP_COLOR = 0xffcc33; // ground segment right before a gap, cues "jump coming"
+const HAZARD_COLOR_LETHAL = 0xff3333;
+const HAZARD_EMISSIVE_LETHAL = 0x660000;
+const HAZARD_COLOR_RISING = 0xcc8833; // duller amber while an 'updown' hazard is rising/falling —
+const HAZARD_EMISSIVE_RISING = 0x332200; // not yet/no-longer lethal, should read as visually distinct
 const JUMP_HEIGHT = 2.4; // purely cosmetic arc height over a gap block — server has no Y axis
 const FALL_GRAVITY = 9; // purely cosmetic "fell off the edge" drop speed, units/s^2
 const BOOST_COLOR = 0x00ffcc;
@@ -159,7 +181,7 @@ const BOOST_POOL_SIZE = 8;
 // segment, recomputed fresh every frame relative to that viewer rather than as an ever-
 // accumulating absolute value — so it reads as a continuous slope falling away into the fog
 // without ever drifting out of a sane numeric range over a long race.
-const SLOPE_DROP_PER_SEG = 0.55; // tuned up after a live look — 0.22 read as barely-perceptible
+const SLOPE_DROP_PER_SEG = 0.68; // 0.22 read as flat, 0.55 was close but asked to go a bit steeper
 function groundYAt(distance, refSegFloat) {
   return -(distance / SEG_LEN - refSegFloat) * SLOPE_DROP_PER_SEG;
 }
@@ -349,17 +371,24 @@ export function mount(container, api) {
     dir.position.set(5, 12, 8);
     scene.add(dir);
 
+    // Each ground plank is tilted by the track's constant downhill angle (not just translated to
+    // a different height) so consecutive planks' edges line up into one continuous ramp instead
+    // of a staircase of flat plateaus at different Y levels — SLOPE_DROP_PER_SEG is a fixed rate
+    // (world-Y drop per SEG_LEN of world-Z), so the whole track has one uniform tilt angle and a
+    // single rotation works for every plank. See groundYAt()'s comment for the drop-rate math
+    // this angle is derived from; keep both in sync if that constant ever changes.
+    const GROUND_TILT = Math.atan2(SLOPE_DROP_PER_SEG, SEG_LEN);
     for (let i = 0; i < VISIBLE_SEGS_AHEAD + VISIBLE_SEGS_BEHIND; i++) {
       const geo = new THREE.PlaneGeometry(1, SEG_LEN * 1.02);
       const mat = new THREE.MeshLambertMaterial({ color: GROUND_COLOR });
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.rotation.x = -Math.PI / 2;
+      mesh.rotation.x = -Math.PI / 2 - GROUND_TILT;
       scene.add(mesh);
       groundPool.push(mesh);
     }
     for (let i = 0; i < 20; i++) {
       const geo = new THREE.BoxGeometry(1, 1.2, SEG_LEN * 0.9);
-      const mat = new THREE.MeshLambertMaterial({ color: 0xff3333, emissive: 0x660000 });
+      const mat = new THREE.MeshLambertMaterial({ color: HAZARD_COLOR_LETHAL, emissive: HAZARD_EMISSIVE_LETHAL });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.visible = false;
       scene.add(mesh);
@@ -456,8 +485,16 @@ export function mount(container, api) {
       if (haz && hazardIdx < hazardPool.length) {
         const hMesh = hazardPool[hazardIdx++];
         hMesh.visible = true;
-        hMesh.position.set((haz.start + haz.end) / 2, groundY + 0.6, -segCenterDist);
+        // riseProgress < 1 only for an 'updown' hazard mid-rise/fall (static/lr are always 1) —
+        // scale its height by that and re-center so its BASE stays anchored at groundY while it
+        // visibly grows up out of the track / sinks back into it, instead of a hard on/off blink.
+        // Also tints it a duller amber while non-lethal so "still rising, not dangerous yet" and
+        // "fully up, lethal" are visually distinct, not just a size difference.
         hMesh.scale.x = haz.end - haz.start;
+        hMesh.scale.y = haz.riseProgress;
+        hMesh.position.set((haz.start + haz.end) / 2, groundY + 0.6 * haz.riseProgress, -segCenterDist);
+        hMesh.material.color.setHex(haz.lethal ? HAZARD_COLOR_LETHAL : HAZARD_COLOR_RISING);
+        hMesh.material.emissive.setHex(haz.lethal ? HAZARD_EMISSIVE_LETHAL : HAZARD_EMISSIVE_RISING);
       }
 
       const boost = boostAt(track, segIndex);
