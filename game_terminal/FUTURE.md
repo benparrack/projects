@@ -205,6 +205,17 @@ touching any other game, the 3D scene actually renders (neon-green ball, narrowi
 leaderboard), arrow-key steering works, and a death correctly triggers a fresh countdown/round
 with the distance and leaderboard reset.
 
+**Playtest feedback — fixed (2026-09-22):** steering snapped to full lateral speed almost
+instantly instead of gliding, there weren't enough obstacles, and going off the track edge
+looked like hitting a broken black void rather than falling off a platform. Fixed:
+`LATERAL_ACCEL` 0.35→0.12 and `LATERAL_FRICTION` 0.85→0.82 (holding a direction now reaches
+steady-state drift over ~10 ticks/~0.5s instead of ~4 ticks/~0.2s); hazard density raised; a new
+"gap" obstacle type added (2-segment blocks with no ground, a cosmetic jump-arc over them on the
+client); and a `deathReason` ('edge'|'hazard') added to player state so an edge death animates
+the ball dropping away below a fixed death-point camera instead of freezing against the dark
+background, while a hazard death still just dims in place. No solid wall geometry was added —
+sides stay open air per the request. See commit `45b14c9`.
+
 ---
 
 ## Bot/CPU opponents — shipped (Checkers, Chess, Connect 4)
@@ -363,6 +374,15 @@ in a real 2-tab Playwright/Firefox session: the board renders with correct start
 opening roll assigns the correct starting color, dice work correctly (spending a die updates the
 board and leaves the correct one remaining), and turn passes correctly between seats.
 
+**Playtest feedback — fixed (2026-09-22):** "I can't even tell whats going on, the gui needs to
+be cleaned up a ton and it looks terrible." Full client-side visual revamp (server/wire protocol
+untouched): points now render as real triangles (CSS `clip-path`) alternating between two dark
+tones instead of a flat grid, checkers got a radial-gradient + shadow for depth, the board is
+framed in a bordered panel with a clearer status/dice/seat layout, and clickable
+points/bar/dice get an unmistakable glow outline so "yours to play right now" is obvious. Every
+checker/point plays a short pop-in transition on render for a smoother feel. See commit
+`644fb33`.
+
 ---
 
 ## TRON (light cycles) — shipped
@@ -398,6 +418,14 @@ reversal no-op, last-survivor-wins, a same-tick mutual out-of-bounds draw, and a
 collision killing both. Live-verified in a real 2-tab Playwright/Firefox session: the canvas
 renders, arrow-key/on-screen-pad steering works, and a round correctly reached "ROUND OVER —
 DRAW" with both trails visible on the board.
+
+**Playtest feedback — fixed (2026-09-22):** "Should be much smoother instead of just blocks, the
+trail should be seamless and turning should be much smoother and allow for more control." Root
+cause: the client only redrew on server-tick arrival (~11Hz) with each trail cell as a separate
+`fillRect` block. Added a `requestAnimationFrame` render loop that interpolates each racer's head
+between the previous and current tick (same pattern as Slither/Slope), and the trail now renders
+as one connected stroked path (round joins/caps) instead of individual squares. Server tick rate
+also lowered 90ms→60ms for snappier steering registration. See commit `b3cb04c`.
 
 ---
 
