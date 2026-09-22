@@ -4288,6 +4288,7 @@ axioms
 axis
 axle
 axles
+axolotl
 axon
 axons
 axum
@@ -4547,6 +4548,7 @@ baghdad
 bagpipe
 bagpipes
 bags
+baguette
 baguio
 bah
 bahama
@@ -5065,6 +5067,7 @@ basie
 basil
 basilica
 basilicas
+basilisk
 basin
 basing
 basins
@@ -7580,6 +7583,7 @@ brattain
 brattier
 brattiest
 bratty
+bratwurst
 bravado
 brave
 braved
@@ -8861,6 +8865,7 @@ cal
 calabash
 calabashes
 calais
+calamari
 calamine
 calamities
 calamitous
@@ -9385,6 +9390,7 @@ captures
 capturing
 capuchin
 capulet
+capybara
 car
 cara
 caracalla
@@ -9437,6 +9443,7 @@ carcinoma
 carcinomas
 carcinomata
 card
+cardamom
 cardboard
 carded
 cardenas
@@ -19067,6 +19074,7 @@ dodder
 doddered
 doddering
 dodders
+dodecahedron
 dodge
 dodged
 dodger
@@ -20295,6 +20303,7 @@ echo
 echoed
 echoes
 echoing
+echolocation
 echos
 eclectic
 eclectically
@@ -22655,6 +22664,7 @@ exorcize
 exorcized
 exorcizes
 exorcizing
+exoskeleton
 exotic
 exotically
 exotics
@@ -23228,6 +23238,7 @@ fakes
 faking
 fakir
 fakirs
+falafel
 falasha
 falcon
 falconer
@@ -27441,6 +27452,7 @@ gnawing
 gnawn
 gnaws
 gneiss
+gnocchi
 gnome
 gnomes
 gnomish
@@ -30067,6 +30079,7 @@ hierarchical
 hierarchically
 hierarchies
 hierarchy
+hieroglyph
 hieroglyphic
 hieroglyphics
 hieronymus
@@ -34327,6 +34340,7 @@ jabots
 jabs
 jack
 jackal
+jackalope
 jackals
 jackass
 jackasses
@@ -35393,6 +35407,7 @@ keto
 ketogenic
 kettering
 kettle
+kettlebell
 kettledrum
 kettledrums
 kettles
@@ -35558,6 +35573,7 @@ kilts
 kim
 kimberley
 kimberly
+kimchi
 kimono
 kimonos
 kin
@@ -35882,6 +35898,7 @@ kp
 kr
 kraft
 krakatoa
+kraken
 krakow
 kramer
 krasnodar
@@ -35914,6 +35931,7 @@ kruger
 krugerrand
 krupp
 krypton
+kryptonite
 krystal
 ks
 kshatriya
@@ -39556,6 +39574,7 @@ matrixes
 matron
 matronly
 matrons
+matryoshka
 mats
 matt
 matte
@@ -39907,6 +39926,7 @@ meeker
 meekest
 meekly
 meekness
+meerkat
 meet
 meeting
 meetinghouse
@@ -41744,6 +41764,7 @@ moonshots
 moonstone
 moonstones
 moonstruck
+moonwalk
 moor
 moore
 moored
@@ -43343,6 +43364,7 @@ nightie
 nighties
 nightingale
 nightingales
+nightjar
 nightlife
 nightly
 nightmare
@@ -45847,6 +45869,7 @@ padded
 paddies
 padding
 paddle
+paddleboard
 paddled
 paddles
 paddling
@@ -46101,6 +46124,7 @@ panels
 panes
 pang
 pangaea
+pangolin
 pangs
 panhandle
 panhandled
@@ -51020,6 +51044,7 @@ puffball
 puffballs
 puffed
 puffer
+pufferfish
 puffier
 puffiest
 puffin
@@ -51739,6 +51764,7 @@ quoit
 quoited
 quoiting
 quoits
+quokka
 quondam
 quonset
 quorum
@@ -55297,6 +55323,7 @@ rollbacks
 rolled
 roller
 rollerblade
+rollercoaster
 rollers
 rollerskating
 rollick
@@ -56205,6 +56232,7 @@ sammie
 sammy
 samoa
 samoan
+samosa
 samoset
 samovar
 samovars
@@ -56410,6 +56438,7 @@ sashayed
 sashaying
 sashays
 sashes
+sashimi
 saskatchewan
 saskatoon
 sasquatch
@@ -57287,6 +57316,7 @@ seafaring
 seafood
 seagoing
 seagram
+seahorse
 seal
 sealant
 sealants
@@ -61082,6 +61112,7 @@ spells
 spelt
 spelunker
 spelunkers
+spelunking
 spence
 spencer
 spencerian
@@ -61130,6 +61161,7 @@ spicing
 spicy
 spider
 spiders
+spiderweb
 spidery
 spied
 spiel
@@ -64328,6 +64360,7 @@ tabatha
 tabbed
 tabbies
 tabbing
+tabbouleh
 tabby
 tabernacle
 tabernacles
@@ -65255,6 +65288,7 @@ terence
 teresa
 tereshkova
 teri
+teriyaki
 terkel
 term
 termagant
@@ -67125,6 +67159,7 @@ trebling
 treblinka
 tree
 treed
+treehouse
 treeing
 treeless
 trees
@@ -67277,6 +67312,7 @@ trillions
 trillionth
 trillionths
 trills
+trilobite
 trilogies
 trilogy
 trim
@@ -71004,6 +71040,7 @@ walgreen
 walgreens
 waling
 walk
+walkabout
 walked
 walker
 walkers
@@ -71206,6 +71243,7 @@ warty
 warwick
 wary
 was
+wasabi
 wasatch
 wash
 washable
@@ -71468,6 +71506,7 @@ weatherproofed
 weatherproofing
 weatherproofs
 weathers
+weathervane
 weave
 weaved
 weaver
@@ -73337,6 +73376,7 @@ zhukov
 zibo
 ziegfeld
 ziegler
+ziggurat
 ziggy
 zigzag
 zigzagged
@@ -73371,6 +73411,7 @@ zionist
 zionists
 zions
 zip
+zipline
 ziploc
 zipped
 zipper
