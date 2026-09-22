@@ -250,6 +250,25 @@ live: zero console errors, a full round plays correctly, boost pickups exist and
 moving hazards render and animate. The downhill pitch is real (~10-12° camera angle, computed) but
 is the one piece most worth a human's own eyes in actual play rather than a screenshot.
 
+**Playtest feedback round 3 — fixed (2026-09-22):** the ground looked like a staircase (platforms
+not lining up), some `updown` hazards would flash into existence already lethal with zero reaction
+time, and the angle could be a bit steeper. Fixed:
+- **Staircase → continuous ramp**: ground planks were only translated to different heights per
+  segment, never tilted to match — since the track's downhill rate is constant, the whole track
+  has one uniform tilt angle (`Math.atan2(SLOPE_DROP_PER_SEG, SEG_LEN)`), and rotating every plank
+  by that angle (on top of the existing flat-lay rotation) makes consecutive planks' edges line up
+  into one continuous slope instead of flat plateaus at different heights.
+- **Telegraphed hazards**: `updown` hazards now go through rise → hold (lethal) → fall → retract
+  instead of a hard on/off toggle — only the hold sub-phase is `haz.lethal`, so a hazard is always
+  visibly rising (scaling up from the ground, tinted a duller amber) for a real reaction window
+  before it can actually kill you, and visibly sinking/fading back to safe afterward. Verified with
+  a standalone script that the rise/fall progression never jumps and touching a hazard's center is
+  never lethal outside the hold phase.
+- `SLOPE_DROP_PER_SEG` 0.55→0.68 for a bit more pitch.
+
+Live-verified across multiple rounds: the ground renders as a smooth continuous slope with no
+visible steps, zero console errors. See commit `de65630`.
+
 ---
 
 ## Bot/CPU opponents — shipped (Checkers, Chess, Connect 4)
