@@ -24,10 +24,24 @@ const SAFE_GAP = 2.4;
 
 const GAP_START_SEG = 30;
 const GAP_LEN_SEGS = 2;
-const BASE_GAP_CHANCE = 0.02;
-const GAP_RAMP = 0.0003;
-const MAX_GAP_CHANCE = 0.14;
+const BASE_GAP_CHANCE = 0.03;
+const GAP_RAMP = 0.0004;
+const MAX_GAP_CHANCE = 0.18;
 const GAP_SALT_BASE = 1000000;
+
+// Mirrored verbatim from server/games/slope.js — see that file's comments for the full
+// rationale. Boost pickups are geometry-only here (client never touches p.speedBonus, that's
+// server-authoritative collection state); hazard motion needs the same elapsedMs both sides.
+const BOOST_START_SEG = 20;
+const BOOST_CHANCE = 0.035;
+const BOOST_SALT_BASE = 2000000;
+
+const MOVING_HAZARD_START_SEG = 40;
+const HAZARD_MOTION_SALT_BASE = 3000000;
+const HAZARD_OSC_PERIOD_MS = 2200;
+const HAZARD_OSC_AMPLITUDE_FRAC = 0.7;
+const HAZARD_TOGGLE_PERIOD_MS = 1800;
+const HAZARD_TOGGLE_ACTIVE_FRAC = 0.55;
 
 const TICK_MS = 50; // matches server's tickIntervalMs — used only for render interpolation timing
 
@@ -63,7 +77,14 @@ function gapBlockAt(seed, i) {
   const roll = segRand(seed, GAP_SALT_BASE + block);
   return roll < chance;
 }
-function hazardAt(track, i) {
+function hazardMotionType(seed, i) {
+  if (i < MOVING_HAZARD_START_SEG) return 'static';
+  const roll = segRand(seed, HAZARD_MOTION_SALT_BASE + i);
+  if (roll < 0.5) return 'static';
+  if (roll < 0.75) return 'lr';
+  return 'updown';
+}
+function hazardAt(track, i, elapsedMs) {
   if (i < HAZARD_START_SEG) return null;
   if (gapBlockAt(track.seed, i)) return null;
   const chance = Math.min(MAX_HAZARD_CHANCE, BASE_HAZARD_CHANCE + HAZARD_RAMP * (i - HAZARD_START_SEG));
@@ -75,9 +96,35 @@ function hazardAt(track, i) {
   const span = Math.max(maxW - MIN_HAZARD_W, 0.001);
   const width = Math.min(maxW, MIN_HAZARD_W + segRand(track.seed, i * 4 + 2) * span);
   const maxOffset = Math.max(0, halfWidth - width / 2);
-  const offset = (segRand(track.seed, i * 4 + 3) - 0.5) * 2 * maxOffset;
-  const hazCenter = center + offset;
-  return { start: hazCenter - width / 2, end: hazCenter + width / 2 };
+  const phaseSeed = segRand(track.seed, i * 4 + 3);
+  const motion = hazardMotionType(track.seed, i);
+
+  let hazCenter;
+  if (motion === 'lr') {
+    const amplitude = maxOffset * HAZARD_OSC_AMPLITUDE_FRAC;
+    const phase = (elapsedMs / HAZARD_OSC_PERIOD_MS) * 2 * Math.PI + phaseSeed * 2 * Math.PI;
+    hazCenter = center + Math.sin(phase) * amplitude;
+  } else if (motion === 'updown') {
+    const cyclePos = ((elapsedMs + phaseSeed * HAZARD_TOGGLE_PERIOD_MS) % HAZARD_TOGGLE_PERIOD_MS) / HAZARD_TOGGLE_PERIOD_MS;
+    if (cyclePos >= HAZARD_TOGGLE_ACTIVE_FRAC) return null;
+    const offset = (phaseSeed - 0.5) * 2 * maxOffset;
+    hazCenter = center + offset;
+  } else {
+    const offset = (phaseSeed - 0.5) * 2 * maxOffset;
+    hazCenter = center + offset;
+  }
+  return { start: hazCenter - width / 2, end: hazCenter + width / 2, motion };
+}
+function boostAt(track, i) {
+  if (i < BOOST_START_SEG) return null;
+  if (gapBlockAt(track.seed, i)) return null;
+  const roll = segRand(track.seed, BOOST_SALT_BASE + i);
+  if (roll >= BOOST_CHANCE) return null;
+  const halfWidth = trackHalfWidthAt(i);
+  const center = track.centers[i];
+  const offsetFrac = (segRand(track.seed, BOOST_SALT_BASE + i + 500000) - 0.5) * 2;
+  const pos = center + offsetFrac * Math.max(0, halfWidth - 0.6);
+  return { pos };
 }
 
 let threeLoadPromise = null;
@@ -103,6 +150,19 @@ const GROUND_COLOR = 0x113355;
 const RAMP_COLOR = 0xffcc33; // ground segment right before a gap, cues "jump coming"
 const JUMP_HEIGHT = 2.4; // purely cosmetic arc height over a gap block — server has no Y axis
 const FALL_GRAVITY = 9; // purely cosmetic "fell off the edge" drop speed, units/s^2
+const BOOST_COLOR = 0x00ffcc;
+const BOOST_POOL_SIZE = 8;
+
+// Purely cosmetic "downhill" look — the server has no Y axis at all (collision stays lateral-
+// only, see slope.js), so this is a render-only illusion: every ground segment/ball is drawn at
+// a Y that DECREASES the further ahead it is of the local viewer's own current (fractional)
+// segment, recomputed fresh every frame relative to that viewer rather than as an ever-
+// accumulating absolute value — so it reads as a continuous slope falling away into the fog
+// without ever drifting out of a sane numeric range over a long race.
+const SLOPE_DROP_PER_SEG = 0.22;
+function groundYAt(distance, refSegFloat) {
+  return -(distance / SEG_LEN - refSegFloat) * SLOPE_DROP_PER_SEG;
+}
 
 // Is segment i the ground segment immediately before the start of a gap block? (Used only for
 // the ramp color cue — not gameplay.)
@@ -205,7 +265,8 @@ export function mount(container, api) {
     }
     const me = view.players.find((p) => p.clientId === api.getClientId());
     const dist = me ? Math.round(me.alive ? me.distance : me.finalDistance || 0) : 0;
-    hud.textContent = `DISTANCE: ${dist}`;
+    const boosts = me ? me.boostCount || 0 : 0;
+    hud.textContent = `DISTANCE: ${dist}${boosts ? `  BOOSTS: ${boosts}` : ''}`;
 
     if (view.phase === 'waiting') {
       centerMsg.textContent = 'WAITING FOR RACERS...';
@@ -262,6 +323,7 @@ export function mount(container, api) {
   let scene, camera, renderer, rafId;
   const groundPool = [];
   const hazardPool = [];
+  const boostPool = [];
   const ballMeshes = new Map(); // clientId -> mesh
   const deathAnim = new Map(); // clientId -> { startedAt } — cosmetic edge-fall timing, see below
 
@@ -302,6 +364,17 @@ export function mount(container, api) {
       mesh.visible = false;
       scene.add(mesh);
       hazardPool.push(mesh);
+    }
+    for (let i = 0; i < BOOST_POOL_SIZE; i++) {
+      const geo = new THREE.TorusGeometry(0.55, 0.14, 10, 20);
+      const mat = new THREE.MeshStandardMaterial({ color: BOOST_COLOR, emissive: BOOST_COLOR, emissiveIntensity: 0.6 });
+      const mesh = new THREE.Mesh(geo, mat);
+      // TorusGeometry's default orientation already lies in the XY plane with its hole facing
+      // +Z — exactly "facing the direction of travel," so the ball runs straight through the
+      // ring's hole with no extra rotation needed.
+      mesh.visible = false;
+      scene.add(mesh);
+      boostPool.push(mesh);
     }
   }
 
@@ -351,12 +424,21 @@ export function mount(container, api) {
     const startSeg = Math.max(0, Math.floor(camDistance / SEG_LEN) - VISIBLE_SEGS_BEHIND);
     ensureTrack(track, startSeg + VISIBLE_SEGS_AHEAD + VISIBLE_SEGS_BEHIND + 2);
 
+    // Shared reference frame for the downhill illusion and moving hazards this frame — see
+    // groundYAt()'s comment and slope.js's hazard-motion comment for why these are computed
+    // fresh every frame relative to the LOCAL viewer rather than stored/accumulated.
+    const refSegFloat = camDistance / SEG_LEN;
+    const elapsedMs = view.raceStartedAt ? Math.max(0, Date.now() - view.raceStartedAt) : 0;
+
     let hazardIdx = 0;
+    let boostIdx = 0;
     for (let n = 0; n < groundPool.length; n++) {
       const segIndex = startSeg + n;
       const mesh = groundPool[n];
       const center = track.centers[segIndex];
       const halfWidth = trackHalfWidthAt(segIndex);
+      const segCenterDist = segIndex * SEG_LEN + SEG_LEN / 2;
+      const groundY = groundYAt(segCenterDist, refSegFloat);
 
       // A gap segment has no ground at all — the ball glides over it (cosmetic Y arc below).
       // Going off the SIDE over a gap still kills you the same as anywhere else; this only
@@ -366,19 +448,28 @@ export function mount(container, api) {
         continue;
       }
       mesh.visible = true;
-      mesh.position.set(center, 0, -(segIndex * SEG_LEN + SEG_LEN / 2));
+      mesh.position.set(center, groundY, -segCenterDist);
       mesh.scale.x = halfWidth * 2;
       mesh.material.color.setHex(isRampSeg(track.seed, segIndex) ? RAMP_COLOR : GROUND_COLOR);
 
-      const haz = hazardAt(track, segIndex);
+      const haz = hazardAt(track, segIndex, elapsedMs);
       if (haz && hazardIdx < hazardPool.length) {
         const hMesh = hazardPool[hazardIdx++];
         hMesh.visible = true;
-        hMesh.position.set((haz.start + haz.end) / 2, 0.6, -(segIndex * SEG_LEN + SEG_LEN / 2));
+        hMesh.position.set((haz.start + haz.end) / 2, groundY + 0.6, -segCenterDist);
         hMesh.scale.x = haz.end - haz.start;
+      }
+
+      const boost = boostAt(track, segIndex);
+      if (boost && boostIdx < boostPool.length) {
+        const bMesh = boostPool[boostIdx++];
+        bMesh.visible = true;
+        bMesh.position.set(boost.pos, groundY + 0.9, -segCenterDist);
+        bMesh.rotation.z = performance.now() / 400; // slow spin, purely decorative
       }
     }
     for (let i = hazardIdx; i < hazardPool.length; i++) hazardPool[i].visible = false;
+    for (let i = boostIdx; i < boostPool.length; i++) boostPool[i].visible = false;
 
     const seenIds = new Set();
     for (const p of view.players) {
@@ -408,7 +499,8 @@ export function mount(container, api) {
         yOffset = -0.5 * FALL_GRAVITY * elapsedSec * elapsedSec;
       }
 
-      mesh.position.set(pos.lateralPos, 0.45 + yOffset, -pos.distance);
+      const ballGroundY = groundYAt(pos.distance, refSegFloat);
+      mesh.position.set(pos.lateralPos, ballGroundY + 0.45 + yOffset, -pos.distance);
       mesh.material.opacity = p.alive ? 1 : 0.25;
       mesh.material.transparent = !p.alive;
     }
@@ -416,8 +508,15 @@ export function mount(container, api) {
       if (!seenIds.has(id)) mesh.visible = false;
     }
 
-    camera.position.set(camLateral, 3.2, -camDistance + 7);
-    camera.lookAt(camLateral, 0.5, -camDistance - 12);
+    // Camera follows the same downhill ground height as everything else (otherwise it'd float
+    // at a fixed world height while the ground visibly drops away beneath it) and its look-at
+    // target does too, further ahead — which is what actually produces the "looking down the
+    // slope" pitch, rather than a hardcoded tilt angle.
+    const LOOK_AHEAD_DIST = 12;
+    const camGroundY = groundYAt(camDistance - 7, refSegFloat);
+    const lookAtGroundY = groundYAt(camDistance + LOOK_AHEAD_DIST, refSegFloat);
+    camera.position.set(camLateral, camGroundY + 3.2, -camDistance + 7);
+    camera.lookAt(camLateral, lookAtGroundY + 0.5, -camDistance - LOOK_AHEAD_DIST);
 
     if (renderer && canvasHost.clientWidth && renderer.domElement.width !== canvasHost.clientWidth) {
       renderer.setSize(canvasHost.clientWidth, canvasHost.clientHeight || 600);
