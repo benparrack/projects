@@ -19,19 +19,37 @@ const MAX_CENTER = 40; // track center offset clamp, so the winding path can't d
 const MAX_DELTA_PER_SEG = 0.6; // max center-offset change per segment (keeps curves rideable)
 
 const HAZARD_START_SEG = 15; // no hazards for the first ~120 units, a warm-up straight
-const BASE_HAZARD_CHANCE = 0.05;
-const HAZARD_RAMP = 0.0006; // per segment past HAZARD_START_SEG
-const MAX_HAZARD_CHANCE = 0.35;
+const BASE_HAZARD_CHANCE = 0.09;
+const HAZARD_RAMP = 0.001; // per segment past HAZARD_START_SEG
+const MAX_HAZARD_CHANCE = 0.45;
 const MIN_HAZARD_W = 1.5;
 const SAFE_GAP = 2.4; // guaranteed minimum passage width past any hazard (ball radius ~0.45)
+
+// Gap obstacles: a block of GAP_LEN_SEGS consecutive segments with no ground — the ball must
+// glide over them (a purely cosmetic client-side jump arc, see client.js) rather than dodge them
+// laterally. Gap blocks are always ground-safe to cross (no new death condition — going off the
+// *side* of the track over a gap still kills you the same as anywhere else, same as normal edge
+// death below), so this needs no new server-side collision logic at all, just suppressing the
+// ordinary lateral hazard on gap segments (see gapBlockAt/hazardAt).
+const GAP_START_SEG = 30; // gaps show up after hazards have had a chance to establish
+const GAP_LEN_SEGS = 2;
+const BASE_GAP_CHANCE = 0.02;
+const GAP_RAMP = 0.0003;
+const MAX_GAP_CHANCE = 0.14;
+const GAP_SALT_BASE = 1000000; // distinct salt namespace from the i*4+{0..3} salts below
 
 const BASE_SPEED = 0.6; // distance per tick
 const SPEED_RAMP = 0.00004; // extra speed per unit distance traveled
 const MAX_SPEED = 2.4;
 
-const LATERAL_ACCEL = 0.35;
+// Steering: a gentle glide, not a snap. At 20Hz, holding a direction reaches ~90% of the
+// steady-state drift speed (LATERAL_ACCEL / (1 - LATERAL_FRICTION) ~= 1.0) after about 10 ticks
+// (~0.5s) — a deliberate ~3x slower ramp than an earlier version that reached its (higher) cap
+// within ~4 ticks and read as an instant jump. MAX_LATERAL_SPEED stays a hard safety ceiling
+// above the steady-state value, so it's a backstop, not the thing steering normally rides against.
+const LATERAL_ACCEL = 0.12;
 const MAX_LATERAL_SPEED = 1.4;
-const LATERAL_FRICTION = 0.85; // multiplicative decay applied every tick
+const LATERAL_FRICTION = 0.82; // multiplicative decay applied every tick
 
 const COUNTDOWN_MS = 3000;
 const RESULTS_PAUSE_MS = 4000;
@@ -69,12 +87,27 @@ function trackHalfWidthAt(i) {
   return Math.max(MIN_HALF_WIDTH, BASE_HALF_WIDTH - NARROW_RATE * i);
 }
 
+// True if segment `i` falls inside a "gap" block — GAP_LEN_SEGS consecutive segments with no
+// ground, always block-aligned (block = floor(i / GAP_LEN_SEGS)) so a gap is never split across
+// two independent rolls. One roll per block, salted well outside the per-segment salt range used
+// elsewhere so it can't correlate with hazard/track-curve randomness.
+function gapBlockAt(seed, i) {
+  const block = Math.floor(i / GAP_LEN_SEGS);
+  const blockStartSeg = block * GAP_LEN_SEGS;
+  if (blockStartSeg < GAP_START_SEG) return false;
+  const chance = Math.min(MAX_GAP_CHANCE, BASE_GAP_CHANCE + GAP_RAMP * (blockStartSeg - GAP_START_SEG));
+  const roll = segRand(seed, GAP_SALT_BASE + block);
+  return roll < chance;
+}
+
 // Returns null (no hazard this segment) or { start, end } — a lateral sub-range (absolute,
 // same coordinate space as trackCenters/player lateral position) that kills on contact. Always
 // leaves at least SAFE_GAP of passage within the track's current width, so every segment is
-// beatable with correct steering — never a guaranteed-death segment.
+// beatable with correct steering — never a guaranteed-death segment. Gap segments never carry a
+// lateral hazard too (the ball's already gliding over them, see gapBlockAt above).
 function hazardAt(st, i) {
   if (i < HAZARD_START_SEG) return null;
+  if (gapBlockAt(st.seed, i)) return null;
   const chance = Math.min(MAX_HAZARD_CHANCE, BASE_HAZARD_CHANCE + HAZARD_RAMP * (i - HAZARD_START_SEG));
   const roll = segRand(st.seed, i * 4 + 1);
   if (roll >= chance) return null;
@@ -104,6 +137,9 @@ function freshPlayer(clientId, nickname) {
     lateralSpeed: 0,
     steerDir: 0,
     finalDistance: null,
+    deathReason: null, // 'edge' | 'hazard' | null — lets the client tell "fell off the side"
+    // (cosmetic falling animation) apart from "hit an obstacle" (stops in place). No death
+    // condition depends on this — it's purely a client-rendering hint.
   };
 }
 
@@ -120,6 +156,7 @@ function startCountdown(st, now) {
     p.lateralSpeed = 0;
     p.steerDir = 0;
     p.finalDistance = null;
+    p.deathReason = null;
   }
 }
 
@@ -137,13 +174,18 @@ function stepPlayer(st, p) {
   const center = st.trackCenters[segIndex];
 
   let dead = p.lateralPos < center - halfWidth || p.lateralPos > center + halfWidth;
+  let deathReason = dead ? 'edge' : null;
   if (!dead) {
     const haz = hazardAt(st, segIndex);
-    if (haz && p.lateralPos >= haz.start && p.lateralPos <= haz.end) dead = true;
+    if (haz && p.lateralPos >= haz.start && p.lateralPos <= haz.end) {
+      dead = true;
+      deathReason = 'hazard';
+    }
   }
   if (dead) {
     p.alive = false;
     p.finalDistance = p.distance;
+    p.deathReason = deathReason;
   }
 }
 
@@ -174,6 +216,7 @@ function buildPublicState(room) {
       distance: Math.round(p.distance * 10) / 10,
       lateralPos: Math.round(p.lateralPos * 100) / 100,
       finalDistance: p.finalDistance,
+      deathReason: p.deathReason,
     })),
     leaderboard: buildLeaderboard(st),
   };

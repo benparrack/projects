@@ -16,11 +16,18 @@ const MAX_CENTER = 40;
 const MAX_DELTA_PER_SEG = 0.6;
 
 const HAZARD_START_SEG = 15;
-const BASE_HAZARD_CHANCE = 0.05;
-const HAZARD_RAMP = 0.0006;
-const MAX_HAZARD_CHANCE = 0.35;
+const BASE_HAZARD_CHANCE = 0.09;
+const HAZARD_RAMP = 0.001;
+const MAX_HAZARD_CHANCE = 0.45;
 const MIN_HAZARD_W = 1.5;
 const SAFE_GAP = 2.4;
+
+const GAP_START_SEG = 30;
+const GAP_LEN_SEGS = 2;
+const BASE_GAP_CHANCE = 0.02;
+const GAP_RAMP = 0.0003;
+const MAX_GAP_CHANCE = 0.14;
+const GAP_SALT_BASE = 1000000;
 
 const TICK_MS = 50; // matches server's tickIntervalMs — used only for render interpolation timing
 
@@ -48,8 +55,17 @@ function ensureTrack(track, upto) {
 function trackHalfWidthAt(i) {
   return Math.max(MIN_HALF_WIDTH, BASE_HALF_WIDTH - NARROW_RATE * i);
 }
+function gapBlockAt(seed, i) {
+  const block = Math.floor(i / GAP_LEN_SEGS);
+  const blockStartSeg = block * GAP_LEN_SEGS;
+  if (blockStartSeg < GAP_START_SEG) return false;
+  const chance = Math.min(MAX_GAP_CHANCE, BASE_GAP_CHANCE + GAP_RAMP * (blockStartSeg - GAP_START_SEG));
+  const roll = segRand(seed, GAP_SALT_BASE + block);
+  return roll < chance;
+}
 function hazardAt(track, i) {
   if (i < HAZARD_START_SEG) return null;
+  if (gapBlockAt(track.seed, i)) return null;
   const chance = Math.min(MAX_HAZARD_CHANCE, BASE_HAZARD_CHANCE + HAZARD_RAMP * (i - HAZARD_START_SEG));
   const roll = segRand(track.seed, i * 4 + 1);
   if (roll >= chance) return null;
@@ -82,6 +98,24 @@ const VISIBLE_SEGS_AHEAD = 55;
 const VISIBLE_SEGS_BEHIND = 2;
 const PLAYER_COLOR = 0x39ff14;
 const OTHER_COLORS = [0xffb000, 0x00e5ff, 0xff4dd2, 0xc792ff, 0xffee58];
+
+const GROUND_COLOR = 0x113355;
+const RAMP_COLOR = 0xffcc33; // ground segment right before a gap, cues "jump coming"
+const JUMP_HEIGHT = 2.4; // purely cosmetic arc height over a gap block — server has no Y axis
+const FALL_GRAVITY = 9; // purely cosmetic "fell off the edge" drop speed, units/s^2
+
+// Is segment i the ground segment immediately before the start of a gap block? (Used only for
+// the ramp color cue — not gameplay.)
+function isRampSeg(seed, i) {
+  return !gapBlockAt(seed, i) && gapBlockAt(seed, i + 1);
+}
+// World-distance span of the gap block segment i belongs to, or null if i isn't a gap segment.
+function gapSpanAt(seed, i) {
+  if (!gapBlockAt(seed, i)) return null;
+  const block = Math.floor(i / GAP_LEN_SEGS);
+  const start = block * GAP_LEN_SEGS * SEG_LEN;
+  return { start, end: start + GAP_LEN_SEGS * SEG_LEN };
+}
 
 export function mount(container, api) {
   let view = null; // latest {phase, phaseEndsAt, seed, players, leaderboard}
@@ -229,6 +263,7 @@ export function mount(container, api) {
   const groundPool = [];
   const hazardPool = [];
   const ballMeshes = new Map(); // clientId -> mesh
+  const deathAnim = new Map(); // clientId -> { startedAt } — cosmetic edge-fall timing, see below
 
   function ensurePoolSize(pool, size, factory) {
     while (pool.length < size) pool.push(factory());
@@ -254,7 +289,7 @@ export function mount(container, api) {
 
     for (let i = 0; i < VISIBLE_SEGS_AHEAD + VISIBLE_SEGS_BEHIND; i++) {
       const geo = new THREE.PlaneGeometry(1, SEG_LEN * 1.02);
-      const mat = new THREE.MeshLambertMaterial({ color: 0x113355 });
+      const mat = new THREE.MeshLambertMaterial({ color: GROUND_COLOR });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.rotation.x = -Math.PI / 2;
       scene.add(mesh);
@@ -322,9 +357,18 @@ export function mount(container, api) {
       const mesh = groundPool[n];
       const center = track.centers[segIndex];
       const halfWidth = trackHalfWidthAt(segIndex);
+
+      // A gap segment has no ground at all — the ball glides over it (cosmetic Y arc below).
+      // Going off the SIDE over a gap still kills you the same as anywhere else; this only
+      // removes the floor visual, no new death condition.
+      if (gapBlockAt(track.seed, segIndex)) {
+        mesh.visible = false;
+        continue;
+      }
       mesh.visible = true;
       mesh.position.set(center, 0, -(segIndex * SEG_LEN + SEG_LEN / 2));
       mesh.scale.x = halfWidth * 2;
+      mesh.material.color.setHex(isRampSeg(track.seed, segIndex) ? RAMP_COLOR : GROUND_COLOR);
 
       const haz = hazardAt(track, segIndex);
       if (haz && hazardIdx < hazardPool.length) {
@@ -345,7 +389,26 @@ export function mount(container, api) {
       const THREE = window.THREE;
       const mesh = ballMeshFor(THREE, p.clientId, p.clientId === api.getClientId());
       mesh.visible = true;
-      mesh.position.set(pos.lateralPos, 0.45, -pos.distance);
+
+      let yOffset = 0;
+      if (p.alive) {
+        deathAnim.delete(p.clientId);
+        const segIndex = Math.floor(pos.distance / SEG_LEN);
+        const gap = gapSpanAt(track.seed, segIndex);
+        if (gap) {
+          const t = Math.min(1, Math.max(0, (pos.distance - gap.start) / (gap.end - gap.start)));
+          yOffset = Math.sin(t * Math.PI) * JUMP_HEIGHT;
+        }
+      } else if (p.deathReason === 'edge') {
+        // Cosmetic-only: the ball keeps dropping past the platform edge instead of just
+        // freezing/vanishing against the dark background, which used to read as hitting an
+        // invisible wall. Server has no Y axis at all — this never affects who's alive.
+        if (!deathAnim.has(p.clientId)) deathAnim.set(p.clientId, { startedAt: performance.now() });
+        const elapsedSec = (performance.now() - deathAnim.get(p.clientId).startedAt) / 1000;
+        yOffset = -0.5 * FALL_GRAVITY * elapsedSec * elapsedSec;
+      }
+
+      mesh.position.set(pos.lateralPos, 0.45 + yOffset, -pos.distance);
       mesh.material.opacity = p.alive ? 1 : 0.25;
       mesh.material.transparent = !p.alive;
     }
