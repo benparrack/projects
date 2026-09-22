@@ -4,7 +4,10 @@
 // trails/walls). Round-based rather than persistent-world/instant-respawn like Slither, since
 // Tron's "last one alive wins" only makes sense with a shared start/end, not individual respawn.
 
-const TICK_MS = 90;
+// 60ms (~16.7Hz) rather than the original 90ms — snappier steering input registration, and more
+// ticks per second for the client's interpolated rendering to blend between (see client.js's
+// TICK_MS_CLIENT, which must be kept equal to this by hand — no shared module in this repo).
+const TICK_MS = 60;
 const GRID_W = 64;
 const GRID_H = 48;
 const CELL_PX = 10; // client-side only in spirit, but kept here as documentation of the pairing

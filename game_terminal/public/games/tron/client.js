@@ -8,6 +8,10 @@ const GRID_H = 48;
 const CELL_PX = 10;
 const CANVAS_WIDTH = GRID_W * CELL_PX;
 const CANVAS_HEIGHT = GRID_H * CELL_PX;
+// Must match server/games/tron.js's TICK_MS by hand (no shared module in this repo) — used to
+// blend the rendered head position between the previous and most-recent tick, same pattern
+// slither.js/slope.js use to avoid raw-broadcast jitter.
+const TICK_MS_CLIENT = 60;
 
 const KEY_TO_DIR = {
   ArrowUp: 'up', KeyW: 'up',
@@ -129,6 +133,15 @@ export function mount(container, api) {
   // cells (trailAdded), same bandwidth-saving shape as Slither's food add/remove delta.
   const trailMap = new Map();
 
+  // Interpolation state: where each player's head was as of the PREVIOUS tick vs the most recent
+  // one, plus when the most recent tick view actually arrived — draw() blends between the two
+  // using elapsed real time, so movement (including turns) reads as a continuous slide between
+  // ticks instead of a snap, the same fix slither.js/slope.js already needed for this hub's other
+  // real-time games.
+  const prevHeadMap = new Map(); // clientId -> {x,y}
+  const curHeadMap = new Map(); // clientId -> {x,y}
+  let viewReceivedAt = performance.now();
+
   function myClientId() {
     return api.getClientId();
   }
@@ -185,23 +198,76 @@ export function mount(container, api) {
     ctx.lineWidth = 2;
     ctx.strokeRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    const t = Math.min(1, Math.max(0, (performance.now() - viewReceivedAt) / TICK_MS_CLIENT));
+
+    // Pixel-space centerline point for a grid cell — cells render as a stroked path through
+    // their centers rather than individually-filled squares, which is what makes the trail read
+    // as one seamless line instead of a string of separate blocks.
+    function cellPt(x, y) {
+      return [x * CELL_PX + CELL_PX / 2, y * CELL_PX + CELL_PX / 2];
+    }
+
     for (const p of view.players) {
       if (!p.head && p.status !== 'dead') continue;
       const trail = trailMap.get(p.clientId) || [];
       const dim = p.status === 'dead';
-      ctx.fillStyle = p.color;
-      ctx.globalAlpha = dim ? 0.4 : 0.85;
-      for (const c of trail) {
-        ctx.fillRect(c.x * CELL_PX, c.y * CELL_PX, CELL_PX - 1, CELL_PX - 1);
+
+      // Interpolated head: slide from where it was last tick to where it is now, over the real
+      // elapsed time since that tick's broadcast arrived — this is what removes the "jumps in
+      // blocks" feel, turns included (a turn is just two straight segments meeting at a corner;
+      // sliding smoothly INTO that corner instead of teleporting is the actual fix).
+      const cur = curHeadMap.get(p.clientId);
+      const prev = prevHeadMap.get(p.clientId);
+      let hx, hy;
+      if (cur && prev && p.status !== 'dead') {
+        hx = prev.x + (cur.x - prev.x) * t;
+        hy = prev.y + (cur.y - prev.y) * t;
+      } else if (cur) {
+        hx = cur.x;
+        hy = cur.y;
+      } else if (p.head) {
+        hx = p.head.x;
+        hy = p.head.y;
+      } else {
+        continue;
       }
+
+      ctx.strokeStyle = p.color;
+      ctx.globalAlpha = dim ? 0.4 : 0.9;
+      ctx.lineWidth = CELL_PX - 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      if (trail.length > 0) {
+        const [x0, y0] = cellPt(trail[0].x, trail[0].y);
+        ctx.moveTo(x0, y0);
+        // Every committed cell except the last — the last segment is drawn separately below,
+        // ending at the interpolated (sliding) head position instead of snapping straight to it.
+        for (let i = 1; i < trail.length - 1; i++) {
+          const [x, y] = cellPt(trail[i].x, trail[i].y);
+          ctx.lineTo(x, y);
+        }
+        const lastCommitted = trail.length > 1 ? trail[trail.length - 1] : trail[0];
+        const [xl, yl] = cellPt(lastCommitted.x, lastCommitted.y);
+        if (trail.length > 1) ctx.lineTo(xl, yl);
+        if (p.status === 'alive') ctx.lineTo(hx * CELL_PX + CELL_PX / 2, hy * CELL_PX + CELL_PX / 2);
+      } else {
+        ctx.moveTo(hx * CELL_PX + CELL_PX / 2, hy * CELL_PX + CELL_PX / 2);
+      }
+      ctx.stroke();
       ctx.globalAlpha = 1;
-      if (p.head && p.status === 'alive') {
+
+      if (p.status === 'alive') {
+        const px = hx * CELL_PX + CELL_PX / 2;
+        const py = hy * CELL_PX + CELL_PX / 2;
         ctx.fillStyle = '#fff';
-        ctx.fillRect(p.head.x * CELL_PX + 1, p.head.y * CELL_PX + 1, CELL_PX - 3, CELL_PX - 3);
+        ctx.beginPath();
+        ctx.arc(px, py, (CELL_PX - 3) / 2, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = p.color;
         ctx.font = '10px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(p.nickname, p.head.x * CELL_PX + CELL_PX / 2, p.head.y * CELL_PX - 4);
+        ctx.fillText(p.nickname, px, py - CELL_PX);
       }
     }
 
@@ -212,8 +278,23 @@ export function mount(container, api) {
   }
 
   function applyView(view) {
-    if (lastRoundId !== null && view.roundId !== lastRoundId) trailMap.clear();
+    if (lastRoundId !== null && view.roundId !== lastRoundId) {
+      trailMap.clear();
+      prevHeadMap.clear();
+      curHeadMap.clear();
+    }
     lastRoundId = view.roundId;
+    // Shift cur -> prev before adopting the new heads, so draw()'s interpolation blends from
+    // "where it was" to "where it just moved to" — skipped for a player with no previous head
+    // yet (first tick after spawn), which draw() handles by rendering them at their head with no
+    // slide rather than lerping from (0,0) or a stale spot.
+    for (const p of view.players) {
+      if (curHeadMap.has(p.clientId)) prevHeadMap.set(p.clientId, curHeadMap.get(p.clientId));
+      else prevHeadMap.delete(p.clientId);
+      if (p.head) curHeadMap.set(p.clientId, { x: p.head.x, y: p.head.y });
+      else curHeadMap.delete(p.clientId);
+    }
+    viewReceivedAt = performance.now();
     lastView = view;
     renderPlayers(view);
     statusEl.textContent = statusLabel(view);
@@ -265,6 +346,17 @@ export function mount(container, api) {
     getMyId: () => api.getClientId(),
   };
 
+  // Redraw every real animation frame (not just when a tick broadcast arrives) so draw()'s
+  // interpolation actually has frames to blend across — decoupled from the ~60ms server tick the
+  // same way slither.js's/slope.js's render loops are. Cancelled on unmount to avoid leaking a
+  // loop across game switches.
+  let rafId = null;
+  function renderLoop() {
+    rafId = requestAnimationFrame(renderLoop);
+    if (lastView) draw(lastView);
+  }
+  rafId = requestAnimationFrame(renderLoop);
+
   return {
     applySnapshot(snapshot) {
       applySnapshotView(snapshot);
@@ -274,6 +366,7 @@ export function mount(container, api) {
     },
     unmount() {
       window.removeEventListener('keydown', onKeyDown);
+      if (rafId !== null) cancelAnimationFrame(rafId);
       delete window.__tronDebug;
       container.innerHTML = '';
     },
