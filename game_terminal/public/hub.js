@@ -1,28 +1,53 @@
 import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode } from './protocol.js';
 
-// Games available in the hub menu. Adding a new mini-game means one entry here
-// plus a public/games/<type>/client.js module — nothing else in hub.js changes.
-const GAMES = [
-  { type: 'drawing', label: 'SHARED DRAWING CANVAS' },
-  { type: 'hangman', label: 'HANGMAN' },
-  { type: 'checkers', label: 'CHECKERS' },
-  { type: 'chess', label: 'CHESS' },
-  { type: 'slither', label: 'SLITHER' },
-  { type: 'connect4', label: 'CONNECT 4' },
-  { type: 'shooter', label: 'ARENA DUEL (1V1 FPS)' },
-  { type: 'war', label: 'WAR (CARDS)' },
-  { type: 'crazyeights', label: 'CRAZY EIGHTS' },
-  { type: 'bs', label: 'BS (CHEAT)' },
-  { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
-  { type: 'garticphone', label: 'DRAWING PHONE' },
-  { type: 'spades', label: 'SPADES (CARDS)' },
-  { type: 'hearts', label: 'HEARTS (CARDS)' },
-  { type: 'backgammon', label: 'BACKGAMMON' },
-  { type: 'tron', label: 'TRON (LIGHT CYCLES)' },
-  { type: 'pictionary', label: 'PICTIONARY' },
-  { type: 'slope', label: 'SLOPE (3D RUNNER)' },
-  { type: 'mazedash', label: 'MAZE DASH (SPEEDRUN)' },
+// Games available in the hub menu, grouped into collapsible categories. Adding a new mini-game
+// means one entry here (in whichever category fits, or a new category) plus a matching
+// public/games/<type>/client.js module — nothing else in hub.js changes.
+const CATEGORIES = [
+  {
+    name: 'CARD GAMES',
+    games: [
+      { type: 'war', label: 'WAR' },
+      { type: 'crazyeights', label: 'CRAZY EIGHTS' },
+      { type: 'bs', label: 'BS (CHEAT)' },
+      { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
+      { type: 'spades', label: 'SPADES' },
+      { type: 'hearts', label: 'HEARTS' },
+    ],
+  },
+  {
+    name: 'BOARD GAMES',
+    games: [
+      { type: 'checkers', label: 'CHECKERS' },
+      { type: 'chess', label: 'CHESS' },
+      { type: 'connect4', label: 'CONNECT 4' },
+      { type: 'backgammon', label: 'BACKGAMMON' },
+    ],
+  },
+  {
+    name: 'ARENA & REAL-TIME',
+    games: [
+      { type: 'slither', label: 'SLITHER' },
+      { type: 'tron', label: 'TRON (LIGHT CYCLES)' },
+      { type: 'shooter', label: 'ARENA DUEL (1V1 FPS)' },
+      { type: 'slope', label: 'SLOPE (3D RUNNER)' },
+      { type: 'mazedash', label: 'MAZE DASH (SPEEDRUN)' },
+    ],
+  },
+  {
+    name: 'PARTY & DRAWING',
+    games: [
+      { type: 'drawing', label: 'SHARED DRAWING CANVAS' },
+      { type: 'hangman', label: 'HANGMAN' },
+      { type: 'pictionary', label: 'PICTIONARY' },
+      { type: 'garticphone', label: 'DRAWING PHONE' },
+    ],
+  },
 ];
+
+// Flat list, derived from CATEGORIES — everything below that just needs "all games" (initial
+// selection, session restore) keeps working unchanged without knowing about categories.
+const GAMES = CATEGORIES.flatMap((cat) => cat.games);
 
 const SESSION_KEY = 'game_terminal.session';
 
@@ -46,6 +71,10 @@ const els = {
   rosterList: document.getElementById('roster-list'),
 };
 
+function categoryOf(gameType) {
+  return CATEGORIES.find((cat) => cat.games.some((g) => g.type === gameType));
+}
+
 const state = {
   ws: null,
   reconnectDelay: 1000,
@@ -55,6 +84,9 @@ const state = {
   currentRoom: null, // { code, gameType, isPublic }
   activeGameHandle: null, // returned by the mounted game module
   pendingJoin: null, // { kind: 'public'|'private'|'code', code? } — replayed once connected
+  // Which category tabs are expanded — starts with just the selected game's category open so
+  // the menu isn't an overwhelming 19-item wall on first load; toggled by clicking a tab header.
+  expandedCategories: new Set([categoryOf(GAMES[0].type).name]),
 };
 
 function setStatus(text, cls) {
@@ -197,16 +229,49 @@ function replayPendingJoin() {
 
 function renderGameList() {
   els.gameList.innerHTML = '';
-  for (const game of GAMES) {
-    const li = document.createElement('li');
-    li.textContent = game.label;
-    li.dataset.type = game.type;
-    if (game.type === state.selectedGameType) li.classList.add('selected');
-    li.addEventListener('click', () => {
-      state.selectedGameType = game.type;
+  for (const cat of CATEGORIES) {
+    const expanded = state.expandedCategories.has(cat.name);
+    const catHasSelected = cat.games.some((g) => g.type === state.selectedGameType);
+
+    const catLi = document.createElement('li');
+    catLi.className = 'category';
+
+    const header = document.createElement('div');
+    header.className = 'category-header';
+    if (catHasSelected) header.classList.add('has-selected');
+    const arrow = document.createElement('span');
+    arrow.className = 'category-arrow';
+    arrow.textContent = expanded ? '▾' : '▸';
+    header.appendChild(arrow);
+    const name = document.createElement('span');
+    name.textContent = `${cat.name} (${cat.games.length})`;
+    header.appendChild(name);
+    header.addEventListener('click', () => {
+      if (expanded) state.expandedCategories.delete(cat.name);
+      else state.expandedCategories.add(cat.name);
       renderGameList();
     });
-    els.gameList.appendChild(li);
+    catLi.appendChild(header);
+
+    if (expanded) {
+      const subList = document.createElement('ul');
+      subList.className = 'game-sublist';
+      for (const game of cat.games) {
+        const li = document.createElement('li');
+        li.textContent = game.label;
+        li.dataset.type = game.type;
+        if (game.type === state.selectedGameType) li.classList.add('selected');
+        li.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          state.selectedGameType = game.type;
+          renderGameList();
+        });
+        subList.appendChild(li);
+      }
+      catLi.appendChild(subList);
+    }
+
+    els.gameList.appendChild(catLi);
   }
 }
 
@@ -289,7 +354,11 @@ els.btnLeaveRoom.addEventListener('click', leaveRoom);
   const saved = loadSession();
   if (saved && saved.nickname) {
     state.nickname = saved.nickname;
-    if (saved.gameType) state.selectedGameType = saved.gameType;
+    if (saved.gameType) {
+      state.selectedGameType = saved.gameType;
+      const cat = categoryOf(saved.gameType);
+      if (cat) state.expandedCategories = new Set([cat.name]);
+    }
     els.nicknameInput.value = saved.nickname;
     if (saved.roomCode) {
       state.pendingJoin = { kind: 'code', code: saved.roomCode };

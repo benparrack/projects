@@ -76,13 +76,36 @@ button:disabled { opacity: 0.4; cursor: default; }
   padding: 0;
   margin: 0.5em 0 1.2em;
 }
-.game-list li {
-  padding: 8px 10px;
+.game-list .category {
   border: 1px solid var(--border);
   margin-bottom: 6px;
-  cursor: pointer;
 }
-.game-list li.selected { background: var(--fg-dim); color: #000; }
+.category-header {
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.5px;
+}
+.category-header:hover { background: rgba(31, 143, 12, 0.15); }
+.category-header.has-selected { color: var(--accent); border-left: 3px solid var(--accent); padding-left: 7px; }
+.category-arrow { display: inline-block; width: 1em; opacity: 0.8; }
+
+.game-sublist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+.game-sublist li {
+  padding: 8px 10px 8px 26px;
+  cursor: pointer;
+  border-top: 1px solid rgba(31, 143, 12, 0.3);
+}
+.game-sublist li:first-child { border-top: none; }
+.game-sublist li:hover { background: rgba(31, 143, 12, 0.15); }
+.game-sublist li.selected { background: var(--fg-dim); color: #000; }
 
 .room-controls { display: flex; flex-direction: column; gap: 10px; margin-top: 1em; }
 .room-row { display: flex; gap: 8px; }
