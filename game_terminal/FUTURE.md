@@ -216,6 +216,40 @@ the ball dropping away below a fixed death-point camera instead of freezing agai
 background, while a hazard death still just dims in place. No solid wall geometry was added —
 sides stay open air per the request. See commit `45b14c9`.
 
+**Playtest feedback round 2 — fixed (2026-09-22):** wanted permanent speed-boost pickups, an
+actual downhill look (not a flat straight), and more interesting/difficult obstacles (jumps over
+void, hazards that move left-right and up-down). Fixed:
+- **Speed boosts**: a new `boostAt()` pickup, own salt namespace, permanently raises a player's
+  `speedBonus` on collection (+0.2/boost, capped at 2.0, dedup'd per segment). Raised the speed
+  ceiling (`MAX_SPEED_WITH_BOOST=4.2`, up from the old flat `MAX_SPEED=2.4`) so boosts actually
+  matter instead of hitting an already-reached cap. Rendered as a spinning cyan ring.
+- **Downhill visual**: client-only (server still has no real Y axis, collision stays lateral-only)
+  — `groundYAt(distance, refSegFloat)` drops each ground segment/hazard/boost/ball's Y relative to
+  the LOCAL viewer's current fractional segment (never an accumulating absolute value, so it can't
+  drift over a long race), and the camera's position/look-at target follow the same math so the
+  "looking down the slope" pitch falls out of the geometry. Tuned up once (`SLOPE_DROP_PER_SEG`
+  0.22→0.55, commit `7979734`) after a live look showed the fixed camera-height term in the pitch
+  formula was dominating over the drop term — worth another look/tune if it still doesn't read as
+  downhill enough in real play (a static screenshot underspells this kind of effect; it should
+  read much more clearly with the actual scrolling motion).
+- **Moving hazards**: past `MOVING_HAZARD_START_SEG=40`, some hazards now oscillate left-right (a
+  sine of elapsed race time) or toggle fully-blocking/fully-retracted on a timer ("up/down"
+  reinterpreted as a timing window, since the game has no real vertical collision to move a
+  hazard through). Needed a new shared clock (`st.raceStartedAt`, broadcast to clients) since this
+  is the one piece of track math that isn't a pure function of `(seed, segment)` anymore — every
+  fairness guarantee (`SAFE_GAP` always has room) still holds, verified by sampling across full
+  oscillation/toggle periods, not just spot-checked. Gap-jump frequency raised slightly too.
+
+Verified with a standalone script (server/client shared-function diffing, boost math, moving-
+hazard fairness across full periods, a multi-seed full round cycle) — see commit `7267498`. Live
+Playwright verification of the actual feel (boost ring, downhill pitch, hazard timing) was left to
+the coordinating session — running multiple agents' live browser tests concurrently against the
+same shared browser session causes them to steal each other's tabs mid-test (hit during this same
+round of fixes), so live-testing got serialized after the code was committed instead. Confirmed
+live: zero console errors, a full round plays correctly, boost pickups exist and are collectible,
+moving hazards render and animate. The downhill pitch is real (~10-12° camera angle, computed) but
+is the one piece most worth a human's own eyes in actual play rather than a screenshot.
+
 ---
 
 ## Bot/CPU opponents — shipped (Checkers, Chess, Connect 4)
@@ -427,6 +461,19 @@ between the previous and current tick (same pattern as Slither/Slope), and the t
 as one connected stroked path (round joins/caps) instead of individual squares. Server tick rate
 also lowered 90ms→60ms for snappier steering registration. See commit `b3cb04c`.
 
+**Playtest feedback round 2 — fixed (2026-09-22):** "the trail is actually displaced from the
+bike" — root cause: the render loop drew an unconditional line all the way to the newest committed
+trail cell, then a *further* segment to the interpolated head; since a stroked path paints
+everything drawn to it, the trail visually snapped to the new cell instantly on tick arrival while
+the head dot was still gliding to catch up over the tick window. Fixed: the trail's final segment
+now goes straight from the last *settled* point to the interpolated head, never past it, so trail
+and ball advance in lockstep. Also made movement smaller-stepped and net faster per request:
+doubled grid resolution (64×48@10px → 128×96@5px, same canvas size) and dropped the tick rate
+60ms→25ms together, tuned so real-world speed ends up ~20% faster than before while each
+individual step covers half the pixel distance. Trail width/ball radius/nickname offset were
+decoupled from the cell size into fixed constants so they don't shrink into near-invisibility with
+the finer grid. See commit `18ff113`.
+
 ---
 
 ## Pictionary — shipped
@@ -517,6 +564,19 @@ exit cell, colored racer dot), arrow-key movement works and is correctly blocked
 down-move into a wall silently no-op'd while the following right-move succeeded), the live timer
 counts up, and a second player joining mid-race showed up as a spectator without disrupting the
 first player's in-progress run.
+
+---
+
+## Hub menu reorganization — shipped (2026-09-22)
+
+With 19 game types, the flat menu list in `public/hub.js` had gotten unwieldy. `GAMES` is now
+`CATEGORIES` — 4 groups (Card Games, Board Games, Arena & Real-Time, Party & Drawing) — each
+rendered as a collapsible tab (`renderGameList()`); clicking a category header toggles it, and
+multiple can be open at once. The category containing the currently-selected game starts expanded
+(and re-syncs on session restore) so the menu isn't empty-looking on first load. A flat `GAMES`
+array is still derived from `CATEGORIES` via `flatMap` so nothing else in `hub.js` (initial
+selection, session restore) needed to change. Adding a new game now means one entry in whichever
+category fits (or a new category) instead of one line in a flat list. See commit `0e4fbb7`.
 
 ---
 
