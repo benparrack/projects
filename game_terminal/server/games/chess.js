@@ -355,9 +355,12 @@ function applyChessMove(st, seatColor, match, promotionChoice) {
   }
 }
 
+const { think } = require('./ai');
+
 const BOT = 'BOT';
-const BOT_THINK_MS_MIN = 400;
-const BOT_THINK_MS_MAX = 900;
+const BOT_SEARCH_MS = 1500;
+const BOT_THINK_MS_MIN = 100;
+const BOT_THINK_MS_MAX = 300;
 
 // See connect4.js's maybeScheduleBotMove for the sentinel-seat / re-validate-on-fire pattern this
 // mirrors. Also charges clock time for the bot's "thinking" delay when a time control is active,
@@ -385,11 +388,32 @@ function maybeScheduleBotMove(room) {
 
     const legalMoves = getLegalMoves(st2.board, color, st2);
     if (legalMoves.length === 0) return;
-    const match = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-    const promotionChoice = match.promotion ? 'queen' : null;
-    applyChessMove(st2, color, match, promotionChoice);
-    room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
-    maybeScheduleBotMove(room);
+    const history = st2.moveHistory;
+    const plies = history.length;
+    const timeMs = st2.clocks ? Math.max(200, Math.min(BOT_SEARCH_MS, st2.clocks[color] / 25)) : BOT_SEARCH_MS;
+    const finish = (best) => {
+      const st3 = room.state;
+      // Re-validate: a reset, resign or duplicate timer may have changed the game mid-search.
+      if (st3.phase !== 'playing' || st3.turn !== color || st3.players[color] !== BOT || st3.moveHistory !== history || history.length !== plies) return;
+      if (st3.clocks) {
+        applyClockElapsed(st3);
+        if (st3.clocks[color] <= 0) {
+          st3.phase = 'game_over';
+          st3.winner = opponent(color);
+          st3.winReason = 'timeout';
+          room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
+          return;
+        }
+      }
+      let match = best && legalMoves.find((m) => m.from.r === best.from.r && m.from.c === best.from.c && m.to.r === best.to.r && m.to.c === best.to.c);
+      if (!match) match = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+      const promotionChoice = match.promotion ? (best && best.promotion) || 'queen' : null;
+      applyChessMove(st3, color, match, promotionChoice);
+      room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
+      maybeScheduleBotMove(room);
+    };
+    think('chess', { board: st2.board, turn: color, castlingRights: st2.castlingRights, enPassantTarget: st2.enPassantTarget, timeMs })
+      .then(finish, () => finish(null));
   }, delay);
 }
 

@@ -83,9 +83,11 @@ function startNewGame(st) {
   st.nextFirstMover = opponent(firstMover);
 }
 
+const { think } = require('./ai');
+
 const BOT = 'BOT';
-const BOT_THINK_MS_MIN = 400;
-const BOT_THINK_MS_MAX = 900;
+const BOT_THINK_MS_MIN = 150;
+const BOT_THINK_MS_MAX = 350;
 
 function applyDrop(st, color, col) {
   const row = dropRow(st.board, col);
@@ -121,10 +123,17 @@ function maybeScheduleBotMove(room) {
       if (dropRow(st2.board, c) !== -1) openCols.push(c);
     }
     if (openCols.length === 0) return;
-    const col = openCols[Math.floor(Math.random() * openCols.length)];
-    applyDrop(st2, color, col);
-    room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'connect4', data: { kind: 'state', ...buildPublicState(room) } } });
-    maybeScheduleBotMove(room);
+    const board = st2.board;
+    const finish = (col) => {
+      const st3 = room.state;
+      // Re-validate: the game may have been reset or moved on while the engine was thinking.
+      if (st3 !== st2 || st3.board !== board || st3.phase !== 'playing' || st3.turn !== color || st3.players[color] !== BOT) return;
+      if (col == null || dropRow(board, col) === -1) col = openCols[Math.floor(Math.random() * openCols.length)];
+      applyDrop(st3, color, col);
+      room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'connect4', data: { kind: 'state', ...buildPublicState(room) } } });
+      maybeScheduleBotMove(room);
+    };
+    think('connect4', { board, color, timeMs: 700 }).then((r) => finish(r && r.col), () => finish(null));
   }, delay);
 }
 
