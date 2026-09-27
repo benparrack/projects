@@ -28,11 +28,15 @@ or receive, take photos and ship. Setup: **[SETUP.md](SETUP.md)**. Design and fi
   change it.
 
 ## Honest caveats
-- Tradera API behaviour beyond the WSDLs is **unverified until there are keys**: ItemStatus
-  strings, the fixed-price ItemType, required shipping/payment fields on AddItem, BuyStatus
-  values, and the token-login URL. Every failure path notifies you instead of crashing. Expect
+- **New Tradera seller accounts can only list plain auctions** (no fixed price, ≥7 days) until
+  Tradera lifts the restriction. The bot tries fixed price, then falls back to a 7-day auction
+  starting at cost + half the minimum profit, so a sale is still profitable. Auctions aren't
+  repriced; it nudges you if one ends unsold.
+- The API can **buy but never bid** (confirmed in Tradera's docs), so auction sniping isn't
+  possible and the bot only buys Buy-Now/fixed-price items.
+- Still **unverified until there are keys**: ItemStatus strings, required shipping/payment
+  fields on AddItem, and the token-login URL (it now redirects to `/token-login`). Every failure path notifies you instead of crashing. Expect
   a short fix-up session after step 2 of SETUP.
-- Auctions are skipped (only Buy-Now), since bidding at the end of an auction isn't built.
 - Catalog seeds are guesses except BotW. Run `flip catalog check` once there are keys.
 - Sweden may treat systematic reselling as a business (Skatteverket), and you're on a student
   permit. Check before doing more than a handful of flips.

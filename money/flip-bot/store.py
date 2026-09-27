@@ -21,6 +21,10 @@ class Store:
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        try:  # migration: fixed-price vs auction resale listing
+            self.db.execute("ALTER TABLE flips ADD COLUMN list_kind TEXT")
+        except sqlite3.OperationalError:
+            pass
 
     def first_seen(self, source, lid) -> bool:
         cur = self.db.execute("INSERT OR IGNORE INTO seen VALUES (?,?,?)", (source, lid, time.time()))

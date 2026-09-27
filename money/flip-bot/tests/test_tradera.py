@@ -58,6 +58,8 @@ class ZeepParseTest(unittest.TestCase):
 
 class FakeTradera:
     can_act = True
+    FIXED, AUCTION = 3, 1
+    restricted = False
 
     def __init__(self, listings, comps=(400,) * 6):
         self.listings, self.comps, self.bought, self.prices = listings, list(comps), [], []
@@ -77,6 +79,12 @@ class FakeTradera:
 
     def seller_orders(self, since):
         return {}
+
+    def list_item(self, title, desc, price, cat, photos, item_type=3):
+        if self.restricted and item_type == 3:
+            raise RuntimeError("restricted seller")
+        self.listed = (price, item_type)
+        return 1, 555
 
 
 def TL(id_, price):
@@ -149,6 +157,28 @@ class RoutingTest(unittest.TestCase):
         self.st.db.execute("UPDATE flips SET updated=? WHERE id=?", (time.time() - 4 * 86400, fid))
         b.sell_tick()
         self.assertEqual(self.st.get(fid)["list_price"], 380)  # 400 * 0.95
+
+
+class ListingFallbackTest(RoutingTest):
+    def test_restricted_seller_falls_back_to_auction(self):
+        b = self.bot([], dry=False)
+        self.tr.restricted = True
+        from scorer import Deal
+        fid = self.st.add_flip(Deal(TL("9", 150), self.models[0], 400, "s", 150, False, None))
+        self.st.set_state(fid, "bought", cost_sek=220)
+        b.handle("arrived", [str(fid)])
+        photo = pathlib.Path(flip.ROOT, "inbox", str(fid), "a.jpg")
+        photo.write_bytes(b"x")
+        try:
+            b.sell_tick()
+        finally:
+            photo.unlink()
+            photo.parent.rmdir()
+        row = self.st.get(fid)
+        self.assertEqual((row["list_kind"], row["list_price"], self.tr.listed), ("auction", 270, (270, 1)))
+        self.st.db.execute("UPDATE flips SET updated=? WHERE id=?", (time.time() - 4 * 86400, fid))
+        b.sell_tick()
+        self.assertEqual(self.tr.prices, [])  # auctions are never repriced
 
 
 if __name__ == "__main__":

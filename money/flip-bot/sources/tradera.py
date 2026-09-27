@@ -3,8 +3,10 @@ loads offline; calls still go to the live endpoints declared inside them.
 
 Verified from the WSDLs (2026-09-27): SearchAdvanced(ItemStatus, ...) -> SearchItem, BuyerService.Buy(itemId,
 buyAmount), PublicService.FetchToken(userId, secretKey), RestrictedService.AddItem/AddItemImage/AddItemCommit,
-SetPricesOnNonShopItems, OrderService.GetSellerOrders. NOT verified until there are keys: accepted
-ItemStatus strings ("Active"/"Ended" assumed), fixed-price ItemType id, required shipping/payment fields.
+SetPricesOnNonShopItems, OrderService.GetSellerOrders. Verified from docs (api.tradera.com/v4/swagger/v4/swagger.json + /v3/api/docs/<Service>/<Op>): ItemType 1=auction,
+3=fixed price; AcceptedBidderId 1=Sweden; BuyStatus 'Bought' = success; Buy never bids (purchase only);
+new/restricted sellers may only list plain auctions (>=7 days). A v4 REST/JSON API (beta) also exists.
+NOT verified until there are keys: accepted ItemStatus strings ("Active"/"Ended" assumed), required shipping/payment fields.
 """
 import base64
 import logging
@@ -110,18 +112,16 @@ class Tradera:
         return str(r.Status)
 
     # --- selling ---
-    def fixed_price_item_type(self):
-        types = self._svc("PublicService").GetItemTypes(_soapheaders=self._headers()) or []
-        for t in types:
-            d = (t.Description or "").lower()
-            if any(k in d for k in ("fixed", "fast pris", "köp nu", "buy it now", "shop")):
-                return t.Id
-        raise RuntimeError(f"no fixed-price item type in {[(t.Id, t.Description) for t in types]}")
+    # ItemType ids from the v4 swagger docs: 1 = auction (optionally + buyItNowPrice), 3 = fixed price.
+    FIXED, AUCTION = 3, 1
 
-    def list_item(self, title, description, price, category_id, image_paths, item_type, shipping_cost=0):
+    def list_item(self, title, description, price, category_id, image_paths, item_type=3, shipping_cost=0):
+        """item_type 3: fixed price at `price`. item_type 1: plain 7-day auction starting at `price`
+        (the only kind restricted/new seller accounts may create, per the v4 docs)."""
+        auction = int(item_type) == self.AUCTION
         svc = self._svc("RestrictedService")
-        req = {"Title": title[:80], "CategoryId": int(category_id), "Duration": 14, "Restarts": 2,
-               "StartPrice": int(price), "BuyItNowPrice": int(price), "Description": description,
+        req = {"Title": title[:80], "CategoryId": int(category_id), "Duration": 7 if auction else 14,
+               "Restarts": 0 if auction else 2, "StartPrice": int(price), "BuyItNowPrice": 0 if auction else int(price), "Description": description,
                "ItemType": int(item_type), "AutoCommit": False, "DescriptionLanguageCodeIso2": "sv",
                "ReservePrice": None, "AcceptedBidderId": 1, "CustomEndDate": None, "VAT": None,
                "RestartedFromItemId": None,

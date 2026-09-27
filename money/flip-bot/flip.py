@@ -164,7 +164,7 @@ class Bot:
             return f"#{fid}: no Tradera user token. Buy manually: {row['url']}"
         else:
             status = self.tr.buy(row["listing_id"], row["ask_sek"])
-            if "success" not in status.lower() and "bought" not in status.lower():
+            if status.split(".")[-1] != "Bought":  # BuyStatus enum; anything else = not purchased
                 self.st.set_state(fid, "lost")
                 msg = f"#{fid} buy failed: {status}"
                 self.alert(notify.build("flipbot", msg))
@@ -190,6 +190,11 @@ class Bot:
                 self.list_flip(r, photos)
         for r in self.st.by_state("listed"):
             days = (now - r["updated"]) / 86400
+            if r["list_kind"] == "auction":  # can't reprice a running auction; nudge after it ends
+                if days >= 8:
+                    self.alert(notify.build(f"#{r['id']} auction ended unsold?", f"{r['model']}: relist or sell on Blocket."))
+                    self.st.set_state(r["id"], "listed")  # resets the timer so this nudges weekly
+                continue
             floor = (r["cost_sek"] or 0) + self.cfg["min_profit_sek"] // 2
             new = max(floor, int(r["list_price"] * 0.95))
             if days >= 21 and new == r["list_price"]:
@@ -213,10 +218,17 @@ class Bot:
             return
         try:
             cat = (self.st.comps("cat:" + r["model"], max_age=10 ** 9) or [None])[0]
-            item_type = self.tr.fixed_price_item_type()
-            _, item_id = self.tr.list_item(title, desc, fair, cat, photos, item_type)
-            self.st.set_state(r["id"], "listed", list_price=fair, listing_id=str(item_id))
-            self.alert(notify.build("flipbot", f"Listed #{r['id']} on Tradera at {fair} kr"))
+            try:
+                _, item_id = self.tr.list_item(title, desc, fair, cat, photos, self.tr.FIXED)
+                kind, price = "fixed", fair
+            except Exception as e:
+                # New/restricted sellers may only create plain auctions: start at the profit floor.
+                log.info("fixed-price listing rejected (%s); falling back to auction", e)
+                price = (r["cost_sek"] or 0) + self.cfg["min_profit_sek"] // 2
+                _, item_id = self.tr.list_item(title, desc, price, cat, photos, self.tr.AUCTION)
+                kind = "auction"
+            self.st.set_state(r["id"], "listed", list_price=price, listing_id=str(item_id), list_kind=kind)
+            self.alert(notify.build("flipbot", f"Listed #{r['id']} on Tradera ({kind}) at {price} kr"))
         except Exception as e:
             self.alert(notify.build(f"#{r['id']} listing failed", f"{e}"[:300] + " — list it manually; reply 'listed' not needed."))
             log.exception("listing failed")
