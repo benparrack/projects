@@ -255,6 +255,11 @@
   .arm-odd-bar { height: 7px; border-radius: 4px; background: rgba(255,255,255,0.07); overflow: hidden; }
   .arm-odd-bar b { display: block; height: 100%; }
   .armory { max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+  .jr-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 13px; }
+  .jr-time { font-variant-numeric: tabular-nums; color: #ffd76a; min-width: 52px; text-align: right; }
+  .jr-l { flex: 1; text-align: left; }
+  .jr-t { font-size: 11px; opacity: 0.85; }
+  .jr-t.ok { color: #7dffb0; } .jr-t.slow { color: #ffb86b; } .jr-t.fast { color: #8fd8ff; }
 
   /* ---- Goals ---- */
   #goalsPanel { width: min(520px, 100%); padding: 10px 12px; }
@@ -597,6 +602,7 @@
     </div>
     <div id="topControls">
       <button class="icon-btn" id="muteBtn" title="Toggle sound">🔊</button>
+      <button class="icon-btn" id="journeyBtn" title="Journey: when you hit each milestone (pacing log)">📜</button>
       <button class="icon-btn" id="saveBtn" title="Save now">💾</button>
       <button class="icon-btn" id="resetBtn" title="Erase save">🗑</button>
     </div>
@@ -854,7 +860,7 @@ const DAILY_REWARDS = [
 // Stellar Surge: clicking fills a meter; when full, a short frenzy.
 // The Void Front: Ignites and production both deal damage to Void enemies.
 // 10 kills clear a zone; every 5th zone is a boss you must beat within 30s.
-const VOID = { killsPerZone: 10, bossEvery: 5, bossTime: 30, hp0: 10, hpGrowth: 1.33, bossMult: 10, bounty: 0.1, dominionPerZone: 0.005 };
+const VOID = { killsPerZone: 10, bossEvery: 5, bossTime: 30, hp0: 15, hpGrowth: 1.6, hpGrowthLate: 1.3, lateFrom: 25, bossMult: 10, bounty: 0.1, dominionPerZone: 0.005 };
 const BOSS_NAMES = ['The Hollow Maw', 'Entropy Wyrm', 'Null Sovereign', 'The Unmaker', 'Grief Nebula', 'Starless Titan', 'Oblivion Choir', 'The Last Dark'];
 const ENEMY_SPECIES = [
   { name: 'Void Mass', hue: 275 }, { name: 'Null Crystal', hue: 195 }, { name: 'Entropy Bloom', hue: 330 },
@@ -879,11 +885,11 @@ const GILDED = { chance: 0.03, bounty: 10, relicChance: 0.25, hue: 45 };
 // Cooldowns are wall-clock, so they keep recharging while you're away.
 const ABILITIES = [
   { id: 'lance',     icon: '✦', name: 'Nova Lance',   zone: 3,  cd: 45,  dur: 0,  desc: 'Hurl a lance worth 15s of your DPS at the current enemy.' },
-  { id: 'overdrive', icon: '⚡', name: 'Overdrive',    zone: 8,  cd: 90,  dur: 15, desc: 'x3 click power and +25% crit chance for 15s.' },
-  { id: 'chrono',    icon: '⧗', name: 'Chrono Lock',  zone: 13, cd: 120, dur: 10, desc: 'Freeze the boss clock and deal +50% Void damage for 10s.' },
-  { id: 'plunder',   icon: '✧', name: 'Plunder',      zone: 18, cd: 150, dur: 30, desc: 'x5 kill bounties and double relic luck for 30s.' },
-  { id: 'cascade',   icon: '☄', name: 'Star Cascade', zone: 25, cd: 180, dur: 10, desc: 'The core Ignites itself 12 times a second for 10s.' },
-  { id: 'crunch',    icon: '↺', name: 'Big Crunch',   zone: 35, cd: 600, dur: 0,  desc: 'Instantly recharge every other ability.' },
+  { id: 'overdrive', icon: '⚡', name: 'Overdrive',    zone: 10, cd: 90,  dur: 15, desc: 'x3 click power and +25% crit chance for 15s.' },
+  { id: 'chrono',    icon: '⧗', name: 'Chrono Lock',  zone: 20, cd: 120, dur: 10, desc: 'Freeze the boss clock and deal +50% Void damage for 10s.' },
+  { id: 'plunder',   icon: '✧', name: 'Plunder',      zone: 30, cd: 150, dur: 30, desc: 'x5 kill bounties and double relic luck for 30s.' },
+  { id: 'cascade',   icon: '☄', name: 'Star Cascade', zone: 40, cd: 180, dur: 10, desc: 'The core Ignites itself 12 times a second for 10s.' },
+  { id: 'crunch',    icon: '↺', name: 'Big Crunch',   zone: 50, cd: 600, dur: 0,  desc: 'Instantly recharge every other ability.' },
 ];
 
 // Relics: boss loot rolled on a rarity table. They survive every Collapse, and
@@ -940,6 +946,7 @@ function defaultState() {
     abilities: {},   // id -> { readyAt, activeUntil } (epoch ms)
     relics: {},      // id -> stacked points
     relicLog: {},    // rarity id -> count found
+    journey: [],     // [{k, label, t}] first time each milestone was hit, t = play seconds (pacing log)
     void: { zone: 1, kills: 0, maxCleared: 0, farming: false, bossesThisCycle: 0 },
     daily: { lastDay: null, streak: 0, bestStreak: 0 },
     buffs: { blessingUntil: 0 },
@@ -1283,6 +1290,7 @@ function checkNewUnlocks(wasUnlockedBefore) {
     state.meta.highestTierUnlocked = tierIdx;
     if (tierIdx > state.meta.highestTierEverAcrossCycles) state.meta.highestTierEverAcrossCycles = tierIdx;
     logToast(`${STAGE_NAMES[tierIdx + 1]} begins.`, 'achievement');
+    markJourney('tier' + tierIdx, `${GENERATORS[tierIdx].name}: first one bought`);
     spawnBigBurst();
     const c = coreCenter();
     spawnShockwave(c.x, c.y, 'tier');
@@ -1366,6 +1374,7 @@ function doCollapse() {
   const gained = singularitiesOnCollapse();
   state.prestige.singularities += gained;
   state.stats.totalPrestiges++;
+  if (state.stats.totalPrestiges <= 3) markJourney('collapse' + state.stats.totalPrestiges, `Big Collapse #${state.stats.totalPrestiges}`);
   const cycleSecs = (Date.now() - (state.stats.cycleStartedAt || Date.now())) / 1000;
   if (!state.stats.fastestCycleSeconds || cycleSecs < state.stats.fastestCycleSeconds) state.stats.fastestCycleSeconds = cycleSecs;
   state.stats.cycleStartedAt = Date.now();
@@ -2352,9 +2361,14 @@ function playStageChord() {
    ========================================================================= */
 
 function isBossZone(z) { return z % VOID.bossEvery === 0; }
-function enemyMaxHp(z) { return VOID.hp0 * Math.pow(VOID.hpGrowth, z - 1) * (isBossZone(z) ? VOID.bossMult : 1); }
+// Steep early (the economy grows fastest in the first minutes), gentler after zone 25.
+function baseHp(z) {
+  const early = Math.min(z, VOID.lateFrom) - 1, late = Math.max(0, z - VOID.lateFrom);
+  return VOID.hp0 * Math.pow(VOID.hpGrowth, early) * Math.pow(VOID.hpGrowthLate, late);
+}
+function enemyMaxHp(z) { return baseHp(z) * (isBossZone(z) ? VOID.bossMult : 1); }
 function enemyBounty(z) {
-  let b = VOID.hp0 * Math.pow(VOID.hpGrowth, z - 1) * (isBossZone(z) ? VOID.bossMult : 1) * VOID.bounty;
+  let b = enemyMaxHp(z) * VOID.bounty;
   b *= 1 + relicValue('coil');
   if (abilityActive('plunder')) b *= 5;
   return b;
@@ -2412,6 +2426,7 @@ function checkAbilityUnlocks() {
   if (knownAbilityUnlocks >= 0 && n > knownAbilityUnlocks) {
     const a = ABILITIES[n - 1];
     logToast(`New ability: ${a.icon} ${a.name} (key ${n}). ${a.desc}`, 'achievement');
+    markJourney('ab_' + a.id, `Ability unlocked: ${a.name}`);
     playChime(660, 0.4);
     renderAbilityBar(true);
     const btn = document.querySelector(`.ab-btn[data-ab="${a.id}"]`);
@@ -2601,6 +2616,7 @@ function advanceZone() {
   v.kills = 0;
   v.farming = false;
   if (v.zone > state.stats.bestZone) state.stats.bestZone = v.zone;
+  if ([5, 10, 15, 20, 25, 30, 40, 50, 60, 80].includes(v.zone)) markJourney('zone' + v.zone, `Void Front: reached Zone ${v.zone}`);
   el('vfPips').classList.remove('cleared'); void el('vfPips').offsetWidth; el('vfPips').classList.add('cleared');
   checkAbilityUnlocks();
 }
@@ -3068,6 +3084,36 @@ function showArmory() {
   el('armoryClose').addEventListener('click', closeModal);
 }
 
+/* ---- journey (pacing log) ---- */
+// Target play-time (minutes) for first buying each tier, zone and Collapse, measured with an
+// in-page bot playing like a person (1 click/s, shopping every 5s, claiming goals every 30s).
+const JOURNEY_TARGETS = { tier0: 0.25, tier1: 1.25, tier2: 3, tier3: 6, tier4: 8.5, tier5: 12, tier6: 32,
+  zone10: 3, zone20: 8, zone30: 12.5, collapse1: 16 };
+
+function markJourney(k, label) {
+  if (!state.journey || state.journey.some(j => j.k === k)) return;
+  state.journey.push({ k, label, t: Math.round(state.stats.playTimeSeconds) });
+}
+
+function showJourney() {
+  const rows = state.journey.map(j => {
+    const tgt = JOURNEY_TARGETS[j.k];
+    let cmp = '';
+    if (tgt !== undefined) {
+      const d = j.t / 60 - tgt, cls = Math.abs(d) <= Math.max(1, tgt * 0.25) ? 'ok' : d > 0 ? 'slow' : 'fast';
+      cmp = `<span class="jr-t ${cls}">target ${tgt < 1 ? tgt * 60 + 's' : tgt + 'm'}</span>`;
+    }
+    return `<div class="jr-row"><span class="jr-time">${formatDuration(j.t)}</span><span class="jr-l">${j.label}</span>${cmp}</div>`;
+  }).join('') || '<p class="arm-p">Nothing yet. Milestones are logged here as you reach them.</p>';
+  showModal(`
+    <h2>📜 Journey</h2>
+    <p class="arm-p">Active play time when you first reached each milestone. Offline time isn't counted. Target colours: green on pace, amber slower, blue faster.</p>
+    <div class="armory">${rows}</div>
+    <p class="arm-p">Total play time: ${formatDuration(state.stats.playTimeSeconds)}</p>
+    <div class="modal-btn-row"><button class="modal-btn" id="journeyClose">Close</button></div>`);
+  el('journeyClose').addEventListener('click', closeModal);
+}
+
 /* ---- combat sounds ---- */
 let lastShatterAt = 0;
 function playShatter() {
@@ -3106,8 +3152,12 @@ function playBossFail() {
    ========================================================================= */
 
 const SAVE_KEY = 'cosmicForgeSave';
+// Set when erasing: the reload fires beforeunload/visibilitychange, which would
+// otherwise write the old universe straight back into storage.
+let saveDisabled = false;
 
 function saveGame() {
+  if (saveDisabled) return;
   state.savedAt = Date.now();
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
@@ -3146,6 +3196,7 @@ function mergeLoadedState(loaded) {
   state.relics = Object.assign(fresh.relics, loaded.relics);
   state.relicLog = Object.assign(fresh.relicLog, loaded.relicLog);
   state.goals = Array.isArray(loaded.goals) ? loaded.goals : [];
+  state.journey = Array.isArray(loaded.journey) ? loaded.journey : [];
   // Saves from before the tutorial existed belong to players who don't need it.
   if (!loaded.tutorial && (loaded.stats && loaded.stats.totalClicks > 20)) state.tutorial.step = 99;
   if (loaded.seenAchievements === undefined) state.seenAchievements = state.achievements.unlocked.length;
@@ -4415,6 +4466,7 @@ function wireInput() {
     saveGame();
   });
 
+  el('journeyBtn').addEventListener('click', showJourney);
   el('saveBtn').addEventListener('click', () => { saveGame(); logToast('Game saved.', 'event'); });
 
   el('resetBtn').addEventListener('click', () => {
@@ -4427,6 +4479,7 @@ function wireInput() {
       </div>
     `);
     el2(document, '#confirmResetBtn').addEventListener('click', () => {
+      saveDisabled = true;
       try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
       location.reload();
     });
@@ -4492,7 +4545,7 @@ window.debug = {
   killEnemy: () => { if (runtime.enemy) damageEnemy(runtime.enemy.hp + 1); },
   relic: (n) => { for (let i = 0; i < (n || 1); i++) dropRelic(i * 0.3); },
   readyAbilities: () => { for (const a of ABILITIES) abilityRec(a.id).readyAt = 0; },
-  unlockAbilities: () => { state.stats.bestZone = Math.max(state.stats.bestZone, 35); checkAbilityUnlocks(); renderAbilityBar(true); },
+  unlockAbilities: () => { state.stats.bestZone = Math.max(state.stats.bestZone, 50); checkAbilityUnlocks(); renderAbilityBar(true); },
   gilded: () => { const c = GILDED.chance; GILDED.chance = 1; spawnEnemy(); GILDED.chance = c; },
   bossNow: () => { const z = Math.ceil((state.void.zone + 0.01) / VOID.bossEvery) * VOID.bossEvery; window.debug.zone(z); },
   state: () => state,

@@ -27,8 +27,9 @@ bolt at the current Void enemy, and all Energy production streams into it as
 a continuous beam, so each economy upgrade is also a damage upgrade. Enemies
 are hex-cell formations that shatter brick-breaker style as their HP drops.
 
-- 10 kills clear a zone. Enemy HP grows x1.33 per zone, and each kill pays
-  a bounty of Energy.
+- 10 kills clear a zone. Enemy HP grows x1.6 per zone up to Zone 25 (the
+  economy grows fastest early), then x1.3. Each kill pays a bounty of 10% of
+  its HP in Energy.
 - Every 5th zone is a **boss** (x10 HP) you must beat within 30s. If you
   fail, you drop back to farming the previous zone. The "Challenge" button
   shows the DPS you need, and it glows once you can win. Save your Surge
@@ -43,9 +44,9 @@ are hex-cell formations that shatter brick-breaker style as their HP drops.
   penalty and a 10% safety margin.
 - **Gilded Wisps**: 3% of spawns, pay x10 bounty and have a 25% relic chance.
 - **Abilities** (keys 1–6, unlocked permanently by deepest zone reached):
-  Nova Lance (Z3), Overdrive (Z8), Chrono Lock (Z13, freezes the boss clock),
-  Plunder (Z18), Star Cascade (Z25, auto-ignites), Big Crunch (Z35, resets the
-  others).
+  Nova Lance (Z3), Overdrive (Z10), Chrono Lock (Z20, freezes the boss clock),
+  Plunder (Z30), Star Cascade (Z40, auto-ignites), Big Crunch (Z50, resets the
+  others). The later ones are meant to land after your first Collapse or two.
 - **Relics**: bosses always drop one. Rarity is Common / Rare / Epic / Legendary,
   weighted by relic luck (Lodestar relics, Plunder, zone depth). Duplicates stack
   into 8 permanent bonuses (bolt damage, crit, boss time, bounty, production,
@@ -72,9 +73,19 @@ are hex-cell formations that shatter brick-breaker style as their HP drops.
 
 ## Pacing
 
-Tuned with a greedy-buyer simulation at about 2 clicks/s: the 7 tiers
-unlock at roughly 0.5 / 2 / 4 / 9 / 15 / 24 / 38 minutes, and a first
-Collapse is available in well under an hour.
+Measured with `pacing_sim.js`, an in-page bot that drives the real game code
+(so crits, goals, Surge, feats and Void bounties all count). Playing like a
+person (1 click/s, shopping every 5s, claiming goals every 30s) gets:
+
+- The 7 tiers at roughly 0.25 / 1.25 / 3 / 6 / 8.5 / 12 / 32 minutes.
+- Zones 10 / 20 / 30 at about 3 / 8 / 12.5 minutes, then a wall in the
+  mid-30s.
+- A first Collapse available at about 15 minutes (1B Energy).
+
+A perfect 2-clicks/s bot is roughly 1.5x faster. The 📜 **Journey** button
+(top right) logs the active play time when you first hit each of these
+milestones, next to these targets (green is on pace, amber slower, blue
+faster), so a fresh save shows how your own run compares.
 
 ## The Big Collapse (prestige)
 
@@ -91,7 +102,8 @@ is the point: each collapse seeds a strictly stronger next universe.
 | Void abilities | Click the ability bar, or keys `1`–`6` |
 | Buy quantity | x1 / x10 / x25 / Max buttons above the shop list |
 | Mute | speaker icon, top right |
-| Manual save / erase save | 💾 / 🗑 icons, top right |
+| Journey (pacing log) | 📜 icon, top right |
+| Manual save / erase save | 💾 / 🗑 icons, top right. Erase wipes everything and starts a brand-new universe |
 
 ## Notes
 
