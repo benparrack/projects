@@ -2,6 +2,7 @@
 // ties trigger a "war" (both burn a card, flip again). Server plugin: ../../../server/games/war.js
 
 import { renderCard } from '../cardCommon.js';
+import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 export function mount(container, api) {
   let view = null;
@@ -124,7 +125,13 @@ export function mount(container, api) {
     },
     applyEvent(data) {
       if (data && data.kind === 'state') {
+        const prevView = view;
         view = data;
+        tableSounds(prevView, data, (v) => {
+          const me = v.seats.indexOf(api.getClientId());
+          return { played: JSON.stringify(v.lastResult), hand: 0, myTurn: false, result: seatResult(v.winnerSeat, me) };
+        });
+        if (prevView && data.lastResult && data.lastResult.kind === 'war' && JSON.stringify(prevView.lastResult) !== JSON.stringify(data.lastResult)) sfx.play('capture');
         render();
       }
     },

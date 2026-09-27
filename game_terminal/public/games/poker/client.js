@@ -2,6 +2,7 @@
 // Server plugin: ../../../server/games/poker.js
 
 import { renderCard } from '../cardCommon.js';
+import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 // Mirrors server/games/poker.js's HAND_NAMES (category index -> display name) — duplicated here
 // since it's just a tiny display lookup, not game logic that needs to stay authoritative.
@@ -279,7 +280,15 @@ export function mount(container, api) {
     },
     applyEvent(data) {
       if (data && data.kind === 'state') {
+        const prevView = view;
         view = data;
+        tableSounds(prevView, data, (v) => {
+          const me = v.seats.indexOf(api.getClientId());
+          const h = v.hand || {};
+          return { played: (h.community || []).length, hand: (h.myHoleCards || []).length * 2,
+            myTurn: me >= 0 && h.toAct === me && v.winnerSeat == null, result: seatResult(v.winnerSeat, me) };
+        });
+        if (prevView && prevView.hand && data.hand && data.hand.potTotal > prevView.hand.potTotal) sfx.play('chips');
         render();
       }
     },

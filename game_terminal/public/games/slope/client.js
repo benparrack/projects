@@ -8,6 +8,7 @@
 // the server already decided. If the two copies ever diverge, "what you see" and "what kills
 // you" disagree — any change to the track math in slope.js must be mirrored here exactly.
 import { makeServerClock } from '../serverClock.js';
+import { sfx } from '../sfx.js';
 
 const SEG_LEN = 8;
 const BASE_HALF_WIDTH = 6;
@@ -203,6 +204,8 @@ function gapSpanAt(seed, i) {
 export function mount(container, api) {
   const serverClock = makeServerClock();
   let lastLbKey = null;
+  let sfxState = null;
+  let lastCountdownLabel = '';
   let view = null; // latest {phase, phaseEndsAt, seed, players, leaderboard}
   let prevView = null;
   let viewReceivedAt = 0;
@@ -293,12 +296,21 @@ export function mount(container, api) {
     const dist = me ? Math.round(me.alive ? me.distance : me.finalDistance || 0) : 0;
     const boosts = me ? me.boostCount || 0 : 0;
     hud.textContent = `DISTANCE: ${dist}${boosts ? `  BOOSTS: ${boosts}` : ''}`;
+    const sfxKey = { boosts, alive: me ? me.alive : null, phase: view.phase };
+    if (sfxState) {
+      if (sfxKey.boosts > sfxState.boosts) sfx.play('eat');
+      if (sfxState.alive && sfxKey.alive === false && view.phase === 'racing') sfx.play('crash');
+      if (sfxState.phase === 'racing' && view.phase === 'results') sfx.play('point');
+    }
+    sfxState = sfxKey;
 
     if (view.phase === 'waiting') {
       centerMsg.textContent = 'WAITING FOR RACERS...';
     } else if (view.phase === 'countdown') {
       const remaining = Math.max(0, Math.ceil((view.phaseEndsAt - serverClock.now()) / 1000));
       centerMsg.textContent = remaining > 0 ? String(remaining) : 'GO!';
+      if (centerMsg.textContent !== lastCountdownLabel) sfx.play(remaining > 0 ? 'beep' : 'go');
+      lastCountdownLabel = centerMsg.textContent;
     } else if (view.phase === 'racing') {
       centerMsg.textContent = me && !me.alive ? `YOU DIED — distance: ${Math.round(me.finalDistance || 0)}` : '';
     } else if (view.phase === 'results') {

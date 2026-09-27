@@ -4,6 +4,7 @@
 // (server sends the full maze wall data each round rather than the client regenerating it from
 // the seed — see that file's header comment for why).
 import { makeServerClock } from '../serverClock.js';
+import { sfx } from '../sfx.js';
 
 const ROWS = 15; // must match server/games/mazedash.js's ROWS/COLS
 const COLS = 15;
@@ -182,6 +183,7 @@ export function mount(container, api) {
     }
   }
 
+  let lastTimerSfx = '';
   function renderTimer() {
     if (!view || view.phase !== 'racing' || !view.roundStartedAt) {
       timerEl.textContent = '';
@@ -195,9 +197,15 @@ export function mount(container, api) {
     const untilGo = view.roundStartedAt - serverClock.now();
     if (untilGo > 0) {
       timerEl.textContent = `GET READY... ${Math.ceil(untilGo / 1000)}`;
+      if (timerEl.textContent !== lastTimerSfx) sfx.play('beep');
+      lastTimerSfx = timerEl.textContent;
     } else if (me.finished) {
+      if (lastTimerSfx !== 'finished') sfx.play('win');
+      lastTimerSfx = 'finished';
       timerEl.textContent = `FINISHED: ${fmtMs(me.finishMs)}`;
     } else {
+      if (lastTimerSfx.startsWith('GET READY')) sfx.play('go');
+      lastTimerSfx = 'racing';
       timerEl.textContent = fmtMs(serverClock.now() - view.roundStartedAt);
     }
   }

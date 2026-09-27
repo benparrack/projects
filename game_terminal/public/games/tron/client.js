@@ -2,6 +2,7 @@
 // each player's cycle moves one cell per server tick in its current direction, leaving a solid
 // trail; steer with arrow keys/WASD (or the on-screen D-pad) to avoid walls, trails, and other
 // players. Last one alive wins the round.
+import { sfx } from '../sfx.js';
 
 const GRID_W = 128;
 const GRID_H = 96;
@@ -300,7 +301,29 @@ export function mount(container, api) {
     }
   }
 
+  let sfxPrev = null;
+  function tronSounds(view) {
+    const me = api.getClientId();
+    const prev = sfxPrev;
+    sfxPrev = view;
+    if (!prev) return;
+    if (view.phase === 'countdown') {
+      const a = Math.ceil((prev.countdownRemainingMs || 0) / 1000);
+      const b = Math.ceil((view.countdownRemainingMs || 0) / 1000);
+      if (prev.phase !== 'countdown' || b < a) sfx.play('beep');
+    }
+    if (view.phase === 'playing' && prev.phase === 'countdown') sfx.play('go');
+    const was = prev.players.find((p) => p.clientId === me);
+    const now = view.players.find((p) => p.clientId === me);
+    if (was && now && was.status !== 'dead' && now.status === 'dead') sfx.play('crash');
+    if (view.phase === 'round_over' && prev.phase !== 'round_over' && view.roundOver) {
+      if (view.roundOver.isDraw || !now) sfx.play('point');
+      else sfx.play(view.roundOver.winnerId === me ? 'win' : 'lose');
+    }
+  }
+
   function applyView(view) {
+    tronSounds(view);
     if (lastRoundId !== null && view.roundId !== lastRoundId) {
       trailMap.clear();
       prevHeadMap.clear();

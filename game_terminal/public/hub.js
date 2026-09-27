@@ -1,4 +1,11 @@
 import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode } from './protocol.js';
+import { sfx } from './games/sfx.js';
+
+const muteBtn = document.getElementById('btn-mute');
+const renderMute = (m) => { muteBtn.textContent = m ? 'SFX: OFF' : 'SFX: ON'; };
+renderMute(sfx.muted);
+sfx.onChange(renderMute);
+muteBtn.addEventListener('click', () => { sfx.setMuted(!sfx.muted); sfx.play('click'); });
 
 // Games available in the hub menu, grouped into collapsible categories. Adding a new mini-game
 // means one entry here (in whichever category fits, or a new category) plus a matching

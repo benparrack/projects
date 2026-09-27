@@ -1,5 +1,6 @@
 // Hangman — one player picks a word, everyone else guesses letters.
 // Server plugin: ../../../server/games/hangman.js (authoritative word, per-recipient masked views).
+import { sfx } from '../sfx.js';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -216,7 +217,13 @@ export function mount(container, api) {
     applyEvent(data) {
       if (!data) return;
       if (data.kind === 'state') {
+        const prevView = view;
         view = data.view;
+        if (prevView && view) {
+          if (view.result && !prevView.result) sfx.play(view.isPicker ? (view.result === 'win' ? 'lose' : 'win') : view.result);
+          else if (view.wrongGuesses > prevView.wrongGuesses) sfx.play('error');
+          else if (view.mask !== prevView.mask && JSON.stringify(view.mask) !== JSON.stringify(prevView.mask)) sfx.play('point');
+        }
         wordRejectedFlash = false;
         render();
       } else if (data.kind === 'wordRejected') {

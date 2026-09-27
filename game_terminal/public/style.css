@@ -36,6 +36,8 @@ html, body {
 }
 
 .status { font-size: 0.85em; }
+.titlebar-right { display: flex; align-items: center; gap: 12px; }
+.btn-mute { font-size: 0.75em; padding: 2px 8px; }
 .status-connecting { color: var(--accent); }
 .status-connected { color: var(--fg); }
 .status-error { color: var(--error); }

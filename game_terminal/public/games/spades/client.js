@@ -5,6 +5,7 @@
 // module in this repo — same pattern as e.g. slither's client-side `computeZoom`).
 
 import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 const SEAT_LABELS = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 const RANK_ORDER = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -293,10 +294,18 @@ export function mount(container, api) {
     applyEvent(data) {
       if (!data) return;
       if (data.kind === 'state') {
+        const prevView = view;
         view = data;
+        tableSounds(prevView, data, (v) => {
+          const me = typeof v.mySeat === 'number' ? v.mySeat : -1;
+          const turn = v.phase === 'bidding' ? v.biddingTurnIdx : v.turnIdx;
+          return { played: JSON.stringify(v.currentTrick), hand: Array.isArray(v.myHand) ? v.myHand.length : 0,
+            myTurn: me >= 0 && turn === me && v.winnerTeam == null, result: seatResult(v.winnerTeam, me < 0 ? me : me % 2) };
+        });
         lastReject = null;
         render();
       } else if (data.kind === 'actionRejected') {
+        sfx.play('error');
         lastReject = data.reason || 'Illegal move';
         render();
       }

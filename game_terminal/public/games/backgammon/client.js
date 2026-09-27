@@ -10,6 +10,8 @@
 // component (render() clears and rebuilds `root` every call, same as this hub's other games) —
 // true node-reuse animation isn't attempted, but every checker/point plays a short CSS
 // pop-in/glow transition on (re)creation so state changes read as smoother than a hard cut.
+import { sfx, boardSounds } from '../sfx.js';
+
 
 const POINT_W = 48;
 const POINT_H = 160;
@@ -460,12 +462,21 @@ export function mount(container, api) {
     applyEvent(data) {
       if (!data) return;
       if (data.kind === 'state') {
+        const prevView = view;
         view = data;
+        if (prevView && data.lastRoll && JSON.stringify(prevView.lastRoll) !== JSON.stringify(data.lastRoll)) sfx.play('dice');
+        if (prevView && !data.winner) {
+          const bar = (v) => v.bar.white + v.bar.black;
+          if (bar(data) > bar(prevView)) sfx.play('capture');
+          else if (JSON.stringify(prevView.points) !== JSON.stringify(data.points)) sfx.play('move');
+        }
+        boardSounds(prevView, { ...data, board: null }, mySeat());
         flashError = null;
         armedDie = null;
         render();
       } else if (data.kind === 'moveRejected') {
         flashError = data.reason || true;
+        sfx.play('error');
         render();
       }
     },

@@ -3,6 +3,7 @@
 // Server plugin: ../../../server/games/hearts.js
 
 import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 const SEAT_LABELS = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 
@@ -286,10 +287,17 @@ export function mount(container, api) {
     },
     applyEvent(data) {
       if (data && data.kind === 'state') {
+        const prevView = view;
         view = data;
+        tableSounds(prevView, data, (v) => {
+          const me = v.seats.indexOf(api.getClientId());
+          return { played: JSON.stringify(v.currentTrick), hand: v.myHand ? v.myHand.length : 0,
+            myTurn: me >= 0 && v.turnSeat === me && v.winnerSeat == null, result: seatResult(v.winnerSeat, me) };
+        });
         notice = '';
         render();
       } else if (data && data.kind === 'actionRejected') {
+        sfx.play('error');
         notice = REJECT_MESSAGES[data.reason] || "You can't do that right now.";
         render();
       }

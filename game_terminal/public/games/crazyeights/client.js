@@ -3,6 +3,7 @@
 // Server plugin: ../../../server/games/crazyeights.js
 
 import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 const SUITS = ['S', 'H', 'D', 'C'];
 
@@ -231,7 +232,13 @@ export function mount(container, api) {
     },
     applyEvent(data) {
       if (data && data.kind === 'state') {
+        const prevView = view;
         view = data;
+        tableSounds(prevView, data, (v) => {
+          const me = v.seats.indexOf(api.getClientId());
+          return { played: `${JSON.stringify(v.topCard)}:${v.drawPileSize}`, hand: v.myHand ? v.myHand.length : 0,
+            myTurn: me >= 0 && v.turnIdx === me && v.winnerSeat == null, result: seatResult(v.winnerSeat, me) };
+        });
         render();
       }
     },

@@ -2,6 +2,7 @@
 // server/games/slither.js and game_terminal/FUTURE.md for the design writeup).
 // Unlike the other games, the server drives the world on its own schedule; this client
 // just sends steering/boost intent and renders whatever state snapshot arrives.
+import { sfx } from '../sfx.js';
 
 const CANVAS_WIDTH = 640;
 const CANVAS_HEIGHT = 480;
@@ -313,6 +314,13 @@ export function mount(container, api) {
     // nets out to "removed", matching what the server actually still has.
     for (const f of view.foodAdded || []) foodMap.set(f.id, f);
     for (const id of view.foodRemoved || []) foodMap.delete(id);
+    if (currentView) {
+      const me = api.getClientId();
+      const was = currentView.snakes.find((sn) => sn.clientId === me);
+      const now = view.snakes.find((sn) => sn.clientId === me);
+      if (was && now && was.alive && !now.alive) sfx.play('crash');
+      else if (was && now && now.alive && now.length > was.length) sfx.play('eat');
+    }
     previousView = currentView || view;
     currentView = { ...view, food: [...foodMap.values()] };
     lastTickAt = performance.now();

@@ -1,5 +1,7 @@
 // Checkers — click a piece, then click a destination square. Server validates and
 // enforces mandatory captures / multi-jump; illegal attempts get a rejection flash.
+import { sfx, boardSounds } from '../sfx.js';
+
 
 const CELL = 44;
 
@@ -299,11 +301,14 @@ export function mount(container, api) {
     applyEvent(data) {
       if (!data) return;
       if (data.kind === 'state') {
+        const prevView = view;
         view = data;
+        boardSounds(prevView, data, mySeat());
         flashError = false;
         render();
       } else if (data.kind === 'moveRejected') {
         flashError = true;
+        sfx.play('error');
         selected = null;
         render();
       }

@@ -3,6 +3,7 @@
 // each seated player's own perspective (black sees themselves on the bottom) with a manual
 // FLIP BOARD override; `flipped` only ever changes what's rendered where — board coordinates
 // (dataset.row/col, onSquareClick args) always stay in the server's own r/c space.
+import { sfx, boardSounds } from '../sfx.js';
 
 const CELL = 44;
 const GLYPHS = {
@@ -600,7 +601,9 @@ export function mount(container, api) {
           updateClocks();
           return;
         }
+        const prevView = view;
         view = data;
+        boardSounds(prevView, data, mySeat(), { inCheck: !!data.inCheck && !data.winner });
         flashError = false;
         awaitingPremoveResult = false; // the pending move (ours or otherwise) resolved, not rejected
         maybeSubmitPremove();

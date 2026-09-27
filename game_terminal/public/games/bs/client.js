@@ -3,6 +3,7 @@
 // let the play ride. Server plugin: ../../../server/games/bs.js
 
 import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 export function mount(container, api) {
   let view = null;
@@ -199,7 +200,13 @@ export function mount(container, api) {
     },
     applyEvent(data) {
       if (data && data.kind === 'state') {
+        const prevView = view;
         view = data;
+        tableSounds(prevView, data, (v) => {
+          const me = v.seats.indexOf(api.getClientId());
+          return { played: `${v.pileSize}:${JSON.stringify(v.lastChallengeResult)}`, hand: v.myHand ? v.myHand.length : 0,
+            myTurn: me >= 0 && v.turnIdx === me && v.winnerSeat == null, result: seatResult(v.winnerSeat, me) };
+        });
         selected = new Set();
         render();
       }

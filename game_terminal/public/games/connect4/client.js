@@ -2,6 +2,8 @@
 // server-authoritative. Board cells are purely visual (plus data-row/data-col for automated
 // testing, per this hub's grid-game convention) — the drop buttons above the board are what's
 // clickable, matching the classic "click a column" interaction.
+import { sfx, boardSounds } from '../sfx.js';
+
 
 const CELL = 50;
 const COLS = 7;
@@ -198,11 +200,14 @@ export function mount(container, api) {
     applyEvent(data) {
       if (!data) return;
       if (data.kind === 'state') {
+        const prevView = view;
         view = data;
+        boardSounds(prevView, data, mySeat());
         flashError = null;
         render();
       } else if (data.kind === 'moveRejected') {
         flashError = data.reason || 'column_full';
+        sfx.play('error');
         render();
       }
     },
