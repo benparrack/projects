@@ -66,6 +66,26 @@ function ballTexture(THREE) {
   return new THREE.CanvasTexture(c);
 }
 
+// Boost pad: bright chevrons pointing down the track.
+function boostTexture(THREE) {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#00c8ff';
+  g.fillRect(0, 0, 128, 256);
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 16;
+  g.lineJoin = 'miter';
+  for (let i = 0; i < 3; i++) {
+    const y = 40 + i * 78;
+    g.beginPath(); g.moveTo(14, y + 44); g.lineTo(64, y); g.lineTo(114, y + 44); g.stroke();
+  }
+  g.strokeStyle = '#003a55';
+  g.lineWidth = 6;
+  g.strokeRect(3, 3, 122, 250);
+  return new THREE.CanvasTexture(c);
+}
+
 function sunTexture(THREE) {
   const c = document.createElement('canvas');
   c.width = c.height = 256;
@@ -178,6 +198,9 @@ export function mount(container, api) {
   let ball = null; let alive = false;
   let acc = 0; let lastFrame = 0; let lastSend = 0;
   let camPos = null; let shake = 0; let deathAt = 0;
+  let zoomV = 17; let boostFlash = 0;
+  const prev = { s: 0, x: 0, y: 0, roll: 0 }; // ball state one physics step back, for interpolation
+  const drawn = { s: 0, x: 0, y: 0, roll: 0 }; // what we actually render this frame
   let lastCountdown = null; let newBestThisRun = false;
   const obsMat = {};
   const autoMem = { steer: 0, hold: 0 };
@@ -205,6 +228,8 @@ export function mount(container, api) {
     tileMat = tileTexture(THREE);
     obsMat.body = new THREE.MeshBasicMaterial({ color: '#ff1e3c' });
     obsMat.edge = new THREE.LineBasicMaterial({ color: '#ffd0d6' });
+    obsMat.warn = new THREE.MeshBasicMaterial({ color: '#ff1e3c', transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    obsMat.pad = new THREE.MeshBasicMaterial({ map: boostTexture(THREE), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 
     const bt = ballTexture(THREE);
     ballMesh = new THREE.Mesh(new THREE.SphereGeometry(Sim.R, 32, 18), new THREE.MeshStandardMaterial({ map: bt, emissive: '#1b5e12', emissiveMap: bt, metalness: 0.3, roughness: 0.35 }));
@@ -299,6 +324,21 @@ export function mount(container, api) {
         mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), obsMat.edge));
         group.add(mesh);
         entry.obs.push({ mesh, p, o });
+        if (o.lift) {
+          // A red hatch on the floor marks where a piston comes up.
+          const warn = new THREE.Mesh(new THREE.PlaneGeometry(o.hw * 2 + 0.3, o.hl * 2 + 0.3), obsMat.warn);
+          const [x, y, z] = surf(p, o.s, o.xr);
+          warn.position.set(x, y + 0.03, z);
+          warn.rotation.x = -Math.PI / 2 + Math.atan(p.slope);
+          group.add(warn);
+        }
+      }
+      for (const pad of p.pads) {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(pad.hw * 2, pad.hl * 2), obsMat.pad);
+        const [x, y, z] = surf(p, pad.s, pad.xr);
+        m.position.set(x, y + 0.04, z);
+        m.rotation.x = -Math.PI / 2 + Math.atan(p.slope);
+        group.add(m);
       }
     }
     scene.add(group);
@@ -307,7 +347,7 @@ export function mount(container, api) {
   function disposeGroup(g) {
     g.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
-      if (o.material && o.material !== obsMat.body && o.material !== obsMat.edge) o.material.dispose();
+      if (o.material && !Object.values(obsMat).includes(o.material)) o.material.dispose();
     });
     scene.remove(g);
   }
@@ -375,6 +415,8 @@ export function mount(container, api) {
     alive = true;
     acc = 0;
     camPos = null;
+    zoomV = Sim.targetSpeed(0);
+    Object.assign(prev, { s: ball.s, x: ball.x, y: ball.y, roll: ball.roll });
     newBestThisRun = false;
     syncWorld(ball.s);
   }
@@ -446,10 +488,12 @@ export function mount(container, api) {
       let t = raceTime() - acc;
       while (acc >= Sim.DT) {
         const wasAlive = ball.alive;
+        prev.s = ball.s; prev.x = ball.x; prev.y = ball.y; prev.roll = ball.roll;
         const ev = Sim.step(track, ball, steer, t);
         t += Sim.DT;
         acc -= Sim.DT;
         if (ev === 'launch') { if (ball.vy > 4) sfx.play('whoosh', { vol: 0.5 }); }
+        else if (ev === 'boost') { sfx.play('whoosh', { vol: 0.9 }); boostFlash = 1; }
         else if (ev && ev.startsWith('land:')) {
           const impact = Number(ev.slice(5));
           if (impact > 9) { shake = Math.min(0.6, impact / 40); sfx.play('pop', { vol: Math.min(1, impact / 25) }); }
@@ -468,11 +512,21 @@ export function mount(container, api) {
         api.sendAction({ kind: 'pos', s: ball.s, x: ball.x, y: ball.y });
       }
     } else if (ball && !ball.alive) {
+      prev.s = ball.s; prev.x = ball.x; prev.y = ball.y; prev.roll = ball.roll;
       Sim.step(track, ball, 0, raceTime()); // keep falling for the camera
+      acc = Sim.DT;
+    }
+    // Render between the last two physics steps so motion is smooth at any refresh rate.
+    if (ball) {
+      const a = Math.min(1, Math.max(0, acc / Sim.DT));
+      drawn.s = prev.s + (ball.s - prev.s) * a;
+      drawn.x = prev.x + (ball.x - prev.x) * a;
+      drawn.y = prev.y + (ball.y - prev.y) * a;
+      drawn.roll = prev.roll + (ball.roll - prev.roll) * a;
     }
 
     // Who does the camera follow? Us, or while spectating, the leader.
-    let focus = ball;
+    let focus = ball ? { s: drawn.s, x: drawn.x, y: drawn.y, vs: ball.vs, mine: true } : null;
     if (!meInRound() && view.players.length) {
       const lead = [...ghosts.values()].sort((a, b) => b.cur.s - a.cur.s)[0];
       if (lead) focus = { s: lead.cur.s, x: lead.cur.x, y: lead.cur.y, vs: 25, alive: true };
@@ -483,34 +537,42 @@ export function mount(container, api) {
     const t = raceTime();
     for (const e of built.values()) {
       for (const { mesh, p, o } of e.obs) {
-        mesh.position.set(Sim.obstacleX(p, o, view.phase === 'racing' ? t : 0), Sim.heightAt(p, o.s, o.xr) + o.h / 2, -o.s);
+        const tt = view.phase === 'racing' ? t : 0;
+        mesh.position.set(Sim.obstacleX(p, o, tt), Sim.heightAt(p, o.s, o.xr) + Sim.obstacleLift(o, tt) + o.h / 2, -o.s);
       }
     }
     drawGhosts(dt);
 
     if (ball) {
       ballMesh.visible = meInRound();
-      ballMesh.position.set(ball.x, ball.y, -ball.s);
-      ballMesh.rotation.set(-ball.roll, 0, -ball.x * 0.15);
+      ballMesh.position.set(drawn.x, drawn.y, -drawn.s);
+      ballMesh.rotation.set(-drawn.roll, 0, -ball.vx * 0.03);
       glow.position.copy(ballMesh.position).add(new THREE.Vector3(0, 1, 0));
     }
 
     if (focus) {
-      const speed = focus.vs || 20;
-      const deadFor = focus === ball && !ball.alive ? (performance.now() - deathAt) / 1000 : 0;
-      const want = new THREE.Vector3(focus.x * 0.8, focus.y + 4.3 + speed * 0.025, -(focus.s - 8.4 - speed * 0.07));
-      if (deadFor > 0) want.set(camPos ? camPos.x : want.x, camPos ? camPos.y : want.y, camPos ? camPos.z : want.z);
-      if (!camPos) camPos = want.clone();
-      camPos.lerp(want, 1 - Math.exp(-dt * 7));
+      // Chase cam locked straight behind the ball: tight at the start, easing back a little
+      // (and widening a touch) as the run speeds up or a boost kicks in.
+      zoomV += ((focus.vs || 20) - zoomV) * (1 - Math.exp(-dt * 2.5));
+      const fast = Math.min(1, Math.max(0, (zoomV - 17) / 26));
+      const deadFor = focus.mine && !ball.alive ? (performance.now() - deathAt) / 1000 : 0;
+      const back = 4.8 + fast * 1.8;
+      const up = 2.7 + fast * 0.8;
+      if (deadFor <= 0 || !camPos) {
+        if (!camPos) camPos = new THREE.Vector3();
+        camPos.set(focus.x, focus.y + up, -(focus.s - back));
+      }
       camera.position.copy(camPos);
       if (shake > 0) {
         camera.position.x += (Math.random() - 0.5) * shake;
         camera.position.y += (Math.random() - 0.5) * shake;
         shake = Math.max(0, shake - dt * 1.8);
       }
-      camera.lookAt(focus.x, focus.y - 0.6, -(focus.s + (deadFor > 0 ? 0 : 8)));
-      const fov = 66 + Math.min(22, Math.max(0, speed - 17) * 0.8);
-      if (Math.abs(camera.fov - fov) > 0.1) { camera.fov += (fov - camera.fov) * 0.08; camera.updateProjectionMatrix(); }
+      if (deadFor > 0) camera.lookAt(focus.x, focus.y, -focus.s);
+      else camera.lookAt(focus.x, focus.y - 0.3, -(focus.s + 9));
+      boostFlash = Math.max(0, boostFlash - dt * 1.5);
+      const fov = 60 + fast * 12 + boostFlash * 6;
+      if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
       sun.position.set(camera.position.x, camera.position.y + 45, camera.position.z - 1100);
       sun.lookAt(camera.position);
       stars.position.copy(camera.position);

@@ -20,6 +20,7 @@
   const AIR_FRICTION = 0.8;
   const MAX_VX = 13;
   const FALL_DEATH = 38; // this far below the last ground touched = gone
+  const BOOST = 11; // speed a boost pad adds on top of whatever you had (it bleeds off over ~2s)
 
   function mulberry32(seed) {
     let a = seed >>> 0;
@@ -70,6 +71,7 @@
       bank: o.bank || 0,
       obs: [],
       holes: [],
+      pads: [],
       gap: o.kind === 'gap',
     };
     T.pieces.push(p);
@@ -90,10 +92,18 @@
     const between = (a, b) => a + r() * (b - a);
     const width = () => clamp(between(8.5, 10) - 4.6 * d, 4.2, 10);
     const downhill = () => -between(0.12, 0.2 + 0.14 * d);
+    let kind0 = null;
     const shiftTo = (amt) => T.cx + (r() < 0.5 ? -1 : 1) * between(amt * 0.4, amt);
 
+    // Right after a boost pad the ball is going well over the speed the obstacles are sized for,
+    // so what follows is open track — or a jump, which a boost just makes bigger.
+    if (T.boosted) {
+      T.boosted = false;
+      if (s > 220 && r() < 0.5) kind0 = 'jump';
+      else { add(T, { kind: 'plain', len: between(30, 45), slope: downhill(), w: width() }); return; }
+    }
     // After anything scary, a short calm run-out so a landing is never straight into trouble.
-    if (T.since > 0) {
+    if (!kind0 && T.since > 0) {
       T.since = 0;
       add(T, { kind: 'plain', len: between(22, 30), slope: downhill(), w: width() + 1 });
       return;
@@ -109,12 +119,14 @@
       ['holes', s > 480 ? 0.5 + 2 * d : 0],
       ['narrow', s > 700 ? 1.6 * d : 0],
       ['steps', s > 300 ? 0.8 + 0.8 * d : 0],
+      ['boost', s > 150 ? 1.1 : 0],
+      ['pistons', s > 320 ? 0.9 + 1.6 * d : 0],
     ];
     let tot = 0;
     for (const [, w] of table) tot += w;
     let pick = r() * tot;
-    let kind = 'plain';
-    for (const [k, w] of table) { pick -= w; if (pick <= 0) { kind = k; break; } }
+    let kind = kind0 || 'plain';
+    if (!kind0) for (const [k, w] of table) { pick -= w; if (pick <= 0) { kind = k; break; } }
 
     if (kind === 'plain') {
       add(T, { kind, len: between(30, 55), slope: downhill(), w: width() });
@@ -140,8 +152,9 @@
             xr = clamp(prevC + side * (hw + 1.6), -half + hw, half - hw);
             if (Math.abs(xr - prevC) < hw + 1.5) continue;
           }
-          const moving = d > 0.25 && r() < 0.25 + 0.4 * d;
-          p.obs.push({ s: z, xr, hw, hl: between(0.5, 0.9), h: between(1.2, 2.4), amp: moving ? Math.min(half - hw, between(1.5, 3.5)) : 0, freq: between(1.4, 2.4 + d), ph: r() * 6.28 });
+          const moving = d > 0.15 && r() < 0.3 + 0.4 * d;
+          const vert = moving && r() < 0.5; // rises out of the floor and sinks back
+          p.obs.push({ s: z, xr, hw, hl: between(0.5, 0.9), h: between(1.2, 2.4), amp: moving && !vert ? Math.min(half - hw, between(1.5, 3.5)) : 0, freq: between(1.4, 2.4 + d), ph: r() * 6.28, lift: vert ? between(1.6, 2.4 + d) : 0 });
         } else {
           // A wall with a single opening.
           const c = clamp(prevC + between(-reach, reach), -half + lane / 2, half - lane / 2);
@@ -166,7 +179,7 @@
       const reach = v * tAir;
       const gapLen = clamp(between(0.45, 0.75) * reach, 6, reach * 0.8);
       add(T, { kind: 'gap', len: gapLen, slope: 0 });
-      const vMax = targetSpeed(s) * 1.2;
+      const vMax = targetSpeed(s) * 1.2 + BOOST;
       const vyM = rampSlope * vMax;
       const reachMax = vMax * (vyM + Math.sqrt(vyM * vyM + 2 * G * drop)) / G;
       T.y = T.pieces[T.pieces.length - 2].y0 + rampSlope * rampLen; // gap keeps launch height
@@ -193,6 +206,34 @@
     } else if (kind === 'narrow') {
       add(T, { kind, len: between(24, 40 + 20 * d), slope: downhill() * 0.8, w: between(2.8, 3.6), cx1: r() < 0.5 ? shiftTo(3) : null });
       T.since = 1;
+    } else if (kind === 'boost') {
+      // A strip of glowing chevrons; ride over one for a kick of speed.
+      const w = width() + 0.5;
+      const p = add(T, { kind: 'plain', len: between(34, 44), slope: downhill(), w });
+      const n = 1 + Math.floor(r() * 2);
+      for (let i = 0; i < n; i++) {
+        const hw = Math.min(w / 2, between(1.4, 2.2));
+        p.pads.push({ s: p.s0 + 10 + i * 13, hl: 2.4, xr: between(-w / 2 + hw, w / 2 - hw), hw });
+      }
+      T.boosted = true;
+    } else if (kind === 'pistons') {
+      // Red blocks punching up out of the floor and sinking back, alternating sides so there's
+      // always a way round one — or time it and roll straight over it while it's down.
+      const w = width() + 1;
+      const p = add(T, { kind, len: between(40, 60), slope: downhill(), w });
+      const half = w / 2;
+      let side = r() < 0.5 ? -1 : 1;
+      const v = targetSpeed(s) * 1.2;
+      let z = p.s0 + 10;
+      while (z < p.s1 - 6) {
+        const hw = Math.min((w - 2.8) / 2, between(w * 0.2, w * (0.28 + 0.06 * d)));
+        p.obs.push({ s: z, xr: side * (half - hw), hw, hl: between(0.6, 0.9), h: between(1.6, 2.6), amp: 0, freq: 0, ph: r() * 6.28, lift: between(1.8, 2.6 + d) });
+        const flip = r() < 0.6;
+        // Dodging to the other side means crossing this block's width (the ball tops out near
+        // 8 units/s sideways), so a switch needs more room than a same-side row.
+        z += flip ? Math.max(9, v * (2 * hw + 1.2) / 7) * between(1, 1.2) : between(7, 10);
+        if (flip) side = -side;
+      }
     } else if (kind === 'steps') {
       const n = 3 + Math.floor(r() * 3);
       const w = width();
@@ -221,6 +262,13 @@
   // Moving blocks swing on the race clock t (seconds), shared by everyone in the round.
   function obstacleX(p, o, t) {
     return centerAt(p, o.s) + o.xr + (o.amp ? Math.sin(t * o.freq + o.ph) * o.amp : 0);
+  }
+  // A piston block's vertical offset: 0 fully up, -(h + 0.6) fully sunk below the floor. It
+  // dwells a while at each end so the timing is readable.
+  function obstacleLift(o, t) {
+    if (!o.lift) return 0;
+    const u = smooth(clamp(0.5 + 0.9 * Math.sin(t * o.lift + o.ph), 0, 1));
+    return -(1 - u) * (o.h + 0.6);
   }
 
   // Ground under (s, x): { y, p } or null (gap, hole, or off the edge).
@@ -296,6 +344,17 @@
       }
       if (b.y < b.lastGroundY - FALL_DEATH) { b.alive = false; b.cause = 'fall'; return 'dead'; }
     }
+    // Boost pads.
+    if (b.grounded && p0.pads.length) {
+      const xr = b.x - centerAt(p0, b.s);
+      for (const pad of p0.pads) {
+        if (Math.abs(b.s - pad.s) > pad.hl || Math.abs(xr - pad.xr) > pad.hw + R * 0.5) continue;
+        if (b.boostPad === pad) continue;
+        b.boostPad = pad;
+        b.vs = Math.min(b.vs + BOOST, targetSpeed(b.s) + BOOST * 1.1);
+        ev = 'boost';
+      }
+    }
     // Blocks on this piece and the next.
     const i0 = T.pieces.indexOf(p0);
     for (let k = i0; k <= i0 + 1 && k < T.pieces.length; k++) {
@@ -304,8 +363,8 @@
         if (Math.abs(b.s - o.s) > o.hl + R) continue;
         const ox = obstacleX(p, o, t);
         if (Math.abs(b.x - ox) > o.hw + R * 0.85) continue;
-        const base = heightAt(p, o.s, o.xr);
-        if (b.y - R < base + o.h && b.y + R > base) { b.alive = false; b.cause = 'block'; return 'dead'; }
+        const base = heightAt(p, o.s, o.xr) + obstacleLift(o, t);
+        if (b.y - R < base + o.h - 0.05 && b.y + R > base) { b.alive = false; b.cause = 'block'; return 'dead'; }
       }
     }
     return ev;
@@ -317,8 +376,8 @@
   const BOT = {
     easy: { horizon: 0.34, lanes: 7, noise: 0.45, lag: 0.35, gain: 0.8 },
     medium: { horizon: 0.45, lanes: 9, noise: 0.28, lag: 0.18, gain: 1.0 },
-    hard: { horizon: 0.58, lanes: 11, noise: 0.12, lag: 0.06, gain: 1.15 },
-    expert: { horizon: 0.7, lanes: 13, noise: 0, lag: 0, gain: 1.2 },
+    hard: { horizon: 0.58, lanes: 11, noise: 0.12, lag: 0.06, gain: 1.15, pads: 20 },
+    expert: { horizon: 0.7, lanes: 13, noise: 0, lag: 0, gain: 1.2, pads: 40 },
   };
 
   function safeSpot(T, s, x, t) {
@@ -332,10 +391,18 @@
       if (!q) continue;
       for (const o of q.obs) {
         if (Math.abs(s - o.s) > o.hl + 1.2) continue;
+        if (o.lift && obstacleLift(o, t - 0.3) < -o.h && obstacleLift(o, t) < -o.h && obstacleLift(o, t + 0.3) < -o.h) continue;
         if (Math.abs(x - obstacleX(q, o, t)) < o.hw + 0.9) return 0;
       }
     }
     return 1;
+  }
+
+  function onPad(T, s, x) {
+    const p = pieceAt(T, s);
+    if (!p.pads.length) return false;
+    const xr = x - centerAt(p, s);
+    return p.pads.some((q) => Math.abs(s - q.s) < q.hl && Math.abs(xr - q.xr) < q.hw);
   }
 
   function botSteer(T, b, t, level, mem) {
@@ -363,6 +430,7 @@
         const v = safeSpot(T, ss, xx, t + H * f);
         if (v === 0) { clear = f - 1 / n; break; }
         if (v < 1) soft += 1 / n;
+        if (L.pads && onPad(T, ss, xx)) soft -= L.pads / n;
       }
       const cost = (1 - clear) * 100 + soft * 8 + Math.abs(tx - b.x) * 0.25 + Math.abs(xr) * 0.12;
       if (!best || cost < best.cost) best = { tx, cost };
@@ -373,7 +441,7 @@
     return steer;
   }
 
-  const api = { G, R, DT, difficulty, targetSpeed, makeTrack, ensure, pieceAt, centerAt, heightAt, obstacleX, supportAt, newBall, step, botSteer, BOT_LEVELS: Object.keys(BOT) };
+  const api = { G, R, DT, BOOST, difficulty, targetSpeed, makeTrack, ensure, pieceAt, centerAt, heightAt, obstacleX, obstacleLift, supportAt, newBall, step, botSteer, BOT_LEVELS: Object.keys(BOT) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SlopeSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
