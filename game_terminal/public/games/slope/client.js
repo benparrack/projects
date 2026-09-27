@@ -274,7 +274,7 @@ export function mount(container, api) {
 
   // --- Track meshes ---
   function surf(p, s, xr) {
-    return [Sim.centerAt(p, s) + xr * Math.cos(p.bank), Sim.heightAt(p, s, xr), -s];
+    return [Sim.centerAt(p, s) + xr * Math.cos(Sim.bankAt(p, s)), Sim.heightAt(p, s, xr), -s];
   }
   function buildPiece(i) {
     const p = track.pieces[i];

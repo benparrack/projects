@@ -130,10 +130,14 @@
     let kind = kind0 || 'plain';
     if (!kind0) for (const [k, w] of table) { pick -= w; if (pick <= 0) { kind = k; break; } }
 
+    // Plenty of ordinary track leans a little to one side, so gravity is always tugging at you.
+    const tilt = () => (s > 130 && r() < 0.45 ? (r() < 0.5 ? -1 : 1) * between(0.07, 0.14 + 0.1 * d) : 0);
     if (kind === 'plain') {
-      add(T, { kind, len: between(30, 55), slope: downhill(), w: width() });
+      add(T, { kind, len: between(30, 55), slope: downhill(), w: width(), bank: tilt() });
     } else if (kind === 'shift') {
-      add(T, { kind, len: between(30, 50), slope: downhill(), w: width(), cx1: shiftTo(5 + 7 * d) });
+      // Leans into the direction it swings, so the ball wants to slide the way the track goes.
+      const cx1 = shiftTo(5 + 7 * d);
+      add(T, { kind, len: between(30, 50), slope: downhill(), w: width(), cx1, bank: r() < 0.6 ? -Math.sign(cx1 - T.cx) * between(0.08, 0.16 + 0.1 * d) : 0 });
     } else if (kind === 'blocks') {
       const w = width() + 0.8;
       const p = add(T, { kind, len: between(40, 70), slope: downhill(), w, cx1: r() < 0.3 ? shiftTo(4) : null });
@@ -248,8 +252,14 @@
   function centerAt(p, s) {
     return p.cx0 + (p.cx1 - p.cx0) * smooth(clamp((s - p.s0) / p.len, 0, 1));
   }
+  // Side tilt eases in and out over the first/last few units so there's never a step at a seam.
+  function bankAt(p, s) {
+    if (!p.bank) return 0;
+    const e = Math.min(1, (s - p.s0) / 8, (p.s1 - s) / 8);
+    return p.bank * smooth(clamp(e, 0, 1));
+  }
   function heightAt(p, s, xr) {
-    return p.y0 + p.slope * (s - p.s0) + xr * Math.sin(p.bank);
+    return p.y0 + p.slope * (s - p.s0) + xr * Math.sin(bankAt(p, s));
   }
   // Moving blocks swing on the race clock t (seconds), shared by everyone in the round.
   function obstacleX(p, o, t) {
@@ -267,7 +277,7 @@
   function supportAt(T, s, x) {
     const p = pieceAt(T, s);
     if (!p || p.gap || s > p.s1) return null;
-    const xr = (x - centerAt(p, s)) / Math.cos(p.bank);
+    const xr = (x - centerAt(p, s)) / Math.cos(bankAt(p, s));
     if (Math.abs(xr) > p.w / 2 + R * 0.35) return null;
     for (const h of p.holes) if (s >= h.s0 && s <= h.s1 && xr >= h.xr0 + R * 0.3 && xr <= h.xr1 - R * 0.3) return null;
     return { y: heightAt(p, s, clamp(xr, -p.w / 2, p.w / 2)), p };
@@ -293,7 +303,9 @@
     // Forward speed: pulled toward the target speed; downhill adds a little, uphill costs a little.
     if (b.grounded) {
       b.vs += (targetSpeed(b.s) + b.bonus - b.vs) * 0.9 * DT - p0.slope * G * 0.18 * DT;
-      b.vx += steer * STEER_ACCEL * DT + G * Math.sin(p0.bank) * -0.55 * DT;
+      // Gravity along a side tilt: a rolling ball feels 5/7 of g·sinθ. Lateral friction here stands
+      // in for grip/steering, so the pull is scaled up to still read as a proper slide.
+      b.vx += steer * STEER_ACCEL * DT - G * Math.sin(bankAt(p0, b.s)) * (5 / 7) * 1.7 * DT;
       b.vx *= Math.exp(-GROUND_FRICTION * DT);
     } else {
       b.vx += steer * STEER_ACCEL * AIR_STEER * DT;
@@ -434,7 +446,7 @@
     return steer;
   }
 
-  const api = { G, R, DT, BOOST, difficulty, targetSpeed, makeTrack, ensure, pieceAt, centerAt, heightAt, obstacleX, obstacleLift, supportAt, newBall, step, botSteer, BOT_LEVELS: Object.keys(BOT) };
+  const api = { G, R, DT, BOOST, difficulty, targetSpeed, makeTrack, ensure, pieceAt, centerAt, bankAt, heightAt, obstacleX, obstacleLift, supportAt, newBall, step, botSteer, BOT_LEVELS: Object.keys(BOT) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SlopeSim = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
