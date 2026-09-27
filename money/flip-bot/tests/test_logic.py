@@ -21,6 +21,17 @@ class LogicTest(unittest.TestCase):
                          "Zelda Breath of the Wild (Switch 1)")
         self.assertIsNone(catalog.match("Zelda Breath of the Wild Switch 2 Edition", self.models))
 
+    def test_accessories_excluded(self):
+        for t in ["Skyddsfodral för Nintendo Switch Joy-Con Controller", "Switch lever joystick joy con 2PCS",
+                  "Tears of the kingdom Artbook och Pins", "Pokémon Scarlet & Violet Destined Rivals ETB"]:
+            self.assertIsNone(catalog.match(t, self.models), t)
+
+    def test_asking_outliers_ignored(self):
+        m = self.models[0]  # seed 399
+        fair, src = pricing.fair_value(m, asking_prices=[450] * 8 + [2600] * 6)
+        self.assertEqual(fair, round(450 * 0.85))
+        self.assertLessEqual(pricing.fair_value(m, asking_prices=[900] * 10)[0], 1.5 * 399)
+
     def test_bundle_is_ambiguous(self):
         self.assertIsNone(catalog.match("Mario Odyssey + Smash Bros", self.models))
 

@@ -4,6 +4,12 @@ from dataclasses import dataclass, field
 
 import yaml
 
+# Accessories/parts/merch that share game or controller names but aren't the item itself.
+GLOBAL_EXCLUDE = ["fodral", "skydd", "joystick", "spak", "lever", "artbook", "pins", "trading card",
+                  "etb", "booster", "kort", "laddstation", "laddare", "skal", "case", "poster", "guide",
+                  "soundtrack", "amiibo", "figur", "sticker", "dekal", "reservdel", "thumb", "grepp"]
+MIN_PRICE_SEK = 20  # 0/1 kr = "free"/placeholder prices
+
 
 @dataclass
 class Model:
@@ -19,7 +25,7 @@ class Model:
         t = title.lower()
         if not re.search(self.must, t):
             return False
-        return not any(x.lower() in t for x in self.exclude)
+        return not any(x.lower() in t for x in self.exclude + GLOBAL_EXCLUDE)
 
 
 def load(path="catalog.yaml") -> list[Model]:
