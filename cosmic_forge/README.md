@@ -134,3 +134,7 @@ A small `Platform` adapter looks for the CrazyGames SDK v3
   ads**. The rewarded ads appear as "▶ Double it" on the welcome-back screen
   and a "▶ x2 for 10 min" boost button under the era title. Both stay
   hidden when ads aren't available.
+
+`release/` holds the full listing kit: covers, screenshots, store text and
+step-by-step checklists for CrazyGames and itch.io (`release/STORE_LISTING.md`).
+`release/build.sh` makes both upload files into `release/dist/`.
