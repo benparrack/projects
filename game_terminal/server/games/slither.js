@@ -166,6 +166,92 @@ function killSnake(st, snake) {
 // Rounded to whole world units for the wire — sub-pixel precision doesn't matter visually
 // (snakes/food render at a several-unit radius) and shrinking the numbers cuts payload size,
 // which matters since this broadcasts to every client 20x/second.
+const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+
+// --- CPU snakes. Every tick a bot scores ~11 candidate headings around its current one: each is
+// simulated a short way ahead against walls and nearby bodies (deadly = huge penalty), then the
+// safe ones are ranked by how well they point at the best food nearby. Levels differ in how far
+// they look, how fast they react, whether they boost for food, and (expert) whether they try to
+// cut in front of smaller snakes' heads.
+const SNAKE_BOT = {
+  easy: { look: 7, margin: 4, sense: 220, lag: 0.45, boost: false, hunt: false, spread: 0.9 },
+  medium: { look: 12, margin: 10, sense: 420, lag: 0.15, boost: false, hunt: false, spread: 1.1 },
+  hard: { look: 18, margin: 16, sense: 750, lag: 0, boost: true, hunt: false, spread: 1.3 },
+  expert: { look: 22, margin: 20, sense: 950, lag: 0, boost: true, hunt: true, spread: 1.4 },
+};
+
+function steerSnakeBots(st) {
+  const live = [...st.snakes.values()].filter((s) => s.alive);
+  for (const me of live) {
+    if (!me.bot) continue;
+    const lv = SNAKE_BOT[me.bot] || SNAKE_BOT.hard;
+    if (lv.lag && Math.random() < lv.lag) continue;
+    const head = me.points[0];
+    const r = radiusFor(me);
+    const reach = BASE_SPEED * BOOST_MULT * lv.look + 80;
+    // Body points of other snakes that could matter this tick.
+    const near = [];
+    for (const o of live) {
+      if (o === me) continue;
+      const rr = ((r + radiusFor(o)) * 0.8 + lv.margin) ** 2;
+      for (let i = 0; i < o.points.length; i += 2) {
+        const p = o.points[i];
+        if (Math.abs(p.x - head.x) < reach && Math.abs(p.y - head.y) < reach) near.push(p.x, p.y, rr);
+      }
+    }
+    // Best food: value over distance, so clumps from dead snakes pull hard.
+    let goal = null; let goalScore = 0;
+    for (const f of st.food) {
+      const d = Math.hypot(f.x - head.x, f.y - head.y);
+      if (d > lv.sense) continue;
+      // Food density around each pellet makes clumps win; score falls with distance.
+      const sc = f.value / (d + 40);
+      if (sc > goalScore) { goalScore = sc; goal = f; }
+    }
+    let clump = 0;
+    if (goal) for (const f of st.food) if (Math.abs(f.x - goal.x) < 60 && Math.abs(f.y - goal.y) < 60) clump++;
+    // Expert: a smaller snake's head nearby — aim ahead of it to cut it off.
+    if (lv.hunt) {
+      for (const o of live) {
+        if (o === me || o.length > me.length * 0.8 || me.length < 300) continue;
+        const oh = o.points[0];
+        const d = Math.hypot(oh.x - head.x, oh.y - head.y);
+        if (d > 450) continue;
+        const lead = Math.min(160, d * 0.6);
+        goal = { x: oh.x + Math.cos(o.angle) * lead, y: oh.y + Math.sin(o.angle) * lead, hunt: true };
+        break;
+      }
+    }
+    const goalAngle = goal ? Math.atan2(goal.y - head.y, goal.x - head.x) : me.angle;
+    let best = null;
+    for (let k = -5; k <= 5; k++) {
+      const a0 = normalizeAngle(me.angle + (k / 5) * lv.spread);
+      // Simulate: turn toward a0 at TURN_RATE, then continue straight.
+      let ang = me.angle; let x = head.x; let y = head.y; let risk = 0;
+      for (let t = 1; t <= lv.look && !risk; t++) {
+        let diff = normalizeAngle(a0 - ang);
+        diff = Math.max(-TURN_RATE, Math.min(TURN_RATE, diff));
+        ang += diff;
+        x += Math.cos(ang) * BASE_SPEED * 1.5; y += Math.sin(ang) * BASE_SPEED * 1.5;
+        const wm = r + lv.margin;
+        if (x < wm || y < wm || x > st.arenaSize - wm || y > st.arenaSize - wm) risk = lv.look + 1 - t;
+        for (let i = 0; i < near.length && !risk; i += 3) {
+          const dx = x - near[i]; const dy = y - near[i + 1];
+          if (dx * dx + dy * dy < near[i + 2]) risk = lv.look + 1 - t;
+        }
+      }
+      const score = -risk * 1000 + Math.cos(normalizeAngle(a0 - goalAngle)) * 10 - Math.abs(k) * 0.3;
+      if (!best || score > best.score) best = { a: a0, score, risk };
+    }
+    me.targetAngle = best.a;
+    const aligned = goal && Math.cos(normalizeAngle(me.angle - goalAngle)) > 0.9;
+    // Boost only when it pays: a real clump of food close by, or a kill that's actually in reach.
+    const gd = goal ? Math.hypot(goal.x - head.x, goal.y - head.y) : 1e9;
+    me.boosting = lv.boost && !best.risk && aligned && me.length > START_LENGTH * 1.5
+      && ((goal.hunt && gd < 220) || (clump >= 6 && gd < 250));
+  }
+}
+
 function roundPoint(p) {
   return { x: Math.round(p.x), y: Math.round(p.y) };
 }
@@ -176,6 +262,7 @@ function buildSnakesView(st) {
     snakes.push({
       clientId: s.clientId,
       nickname: s.nickname,
+      bot: s.bot || undefined,
       color: s.color,
       alive: s.alive,
       length: Math.round(s.length),
@@ -248,16 +335,27 @@ module.exports = {
     const st = room.state;
     const snake = spawnSnake(client.clientId, client.nickname, st);
     snake.color = COLOR_PALETTE[st.nextColorIdx++ % COLOR_PALETTE.length];
+    snake.bot = client.bot || null;
     st.snakes.set(client.clientId, snake);
   },
 
   onLeave(room, client) {
     room.state.snakes.delete(client.clientId);
+    dropBotsIfAlone(room.state.snakes);
   },
 
   onMessage(room, client, data, ctx) {
     const snake = room.state.snakes.get(ctx.senderId);
     if (!snake || !data || typeof data.kind !== 'string') return;
+    if (data.kind === 'addBot') {
+      const b = newBot(room.state.snakes, data.level);
+      if (b) module.exports.onJoin(room, { clientId: b.clientId, nickname: b.nickname, bot: b.level });
+      return;
+    }
+    if (data.kind === 'removeBot') {
+      if (isBotId(data.clientId)) room.state.snakes.delete(data.clientId);
+      return;
+    }
 
     if (data.kind === 'steer') {
       const angle = Number(data.angle);
@@ -275,6 +373,7 @@ module.exports = {
     const now = Date.now();
     st.tickFoodAdded = [];
     st.tickFoodRemoved = [];
+    steerSnakeBots(st);
 
     for (const snake of st.snakes.values()) {
       if (!snake.alive) {

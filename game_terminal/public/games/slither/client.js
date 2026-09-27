@@ -4,6 +4,7 @@
 // just sends steering/boost intent and renders whatever state snapshot arrives.
 import { sfx } from '../sfx.js';
 import { createFx, flashEl, sharpCanvas } from '../canvasFx.js';
+import { createBotBar } from '../tickBots.js';
 
 const FOOD_COLORS = ['#ffb000', '#39ff14', '#00e5ff', '#ff4fd8', '#ffe14d', '#ff6b3d'];
 
@@ -165,6 +166,8 @@ export function mount(container, api) {
   body.appendChild(side);
   wrap.appendChild(hintTitle);
   wrap.appendChild(hint);
+  const botBar = createBotBar(api);
+  wrap.appendChild(botBar.el);
   wrap.appendChild(body);
   container.appendChild(wrap);
 
@@ -372,6 +375,7 @@ export function mount(container, api) {
   }
 
   function renderLeaderboard(view) {
+    botBar.update(view.snakes);
     leaderboardEl.innerHTML = '';
     for (const entry of view.leaderboard) {
       const li = document.createElement('li');
