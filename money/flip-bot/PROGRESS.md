@@ -15,7 +15,7 @@ Resume here. The spec is `BUILD.md` and the verified findings are in `PLAN.md`.
 - [x] sources/blocket.py + fixtures + parser test
 - [x] catalog.yaml seed + matcher.py + tests
 - [x] pricing.py, scorer.py + tests
-- [ ] store.py (SQLite flips state machine), money controls + tests
-- [ ] notify.py (ntfy alerts + reply subscription) + tests
+- [x] store.py (SQLite flips state machine), money controls + tests
+- [x] notify.py (ntfy alerts + reply subscription) + tests
 - [ ] sources/tradera.py (zeep, WSDL-driven), `flip auth`, buy/list/reprice
 - [ ] flip CLI, dry-run e2e, SETUP.md, README, systemd unit
