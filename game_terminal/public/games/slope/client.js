@@ -224,7 +224,7 @@ export function mount(container, api) {
 
   function initScene() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1)); // 2x+ costs far more than it shows at speed
     host.appendChild(renderer.domElement);
     renderer.domElement.style.display = 'block';
     scene = new THREE.Scene();
@@ -424,17 +424,24 @@ export function mount(container, api) {
     terrain.set(ci, group);
   }
 
-  function syncWorld(s) {
-    Sim.ensure(track, s + 420);
+  // Builds what's coming into view a little at a time (a couple of pieces and at most one terrain
+  // chunk per frame) well before the fog reveals it, so there are no hitches from building a
+  // whole stretch of track in one frame. `all` builds everything at once (new round).
+  let scanFrom = 0;
+  function syncWorld(s, all) {
+    Sim.ensure(track, s + 480);
     const ps = track.pieces;
-    for (let i = 0; i < ps.length; i++) {
-      const p = ps[i];
-      const want = p.s1 > s - 40 && p.s0 < s + 420;
-      if (want && !built.has(i)) buildPiece(i);
-      else if (!want && built.has(i)) { disposeGroup(built.get(i).group); built.delete(i); }
+    let budget = all ? Infinity : 2;
+    while (scanFrom < ps.length && ps[scanFrom].s1 < s - 40) {
+      if (built.has(scanFrom)) { disposeGroup(built.get(scanFrom).group); built.delete(scanFrom); }
+      scanFrom++;
     }
-    const c0 = Math.floor((s - 60) / CHUNK); const c1 = Math.floor((s + 460) / CHUNK);
-    for (let c = c0; c <= c1; c++) if (!terrain.has(c) && c >= 0) buildTerrain(c);
+    for (let i = scanFrom; i < ps.length && ps[i].s0 < s + 460 && budget > 0; i++) {
+      if (!built.has(i)) { buildPiece(i); budget--; }
+    }
+    const c0 = Math.floor((s - 60) / CHUNK); const c1 = Math.floor((s + 480) / CHUNK);
+    let tBudget = all ? Infinity : 1;
+    for (let c = Math.max(0, c0); c <= c1 && tBudget > 0; c++) if (!terrain.has(c)) { buildTerrain(c); tBudget--; }
     for (const [c, g] of terrain) if (c < c0 || c > c1) { disposeGroup(g); terrain.delete(c); }
   }
 
@@ -452,7 +459,8 @@ export function mount(container, api) {
     zoomV = Sim.targetSpeed(0);
     Object.assign(prev, { s: ball.s, x: ball.x, y: ball.y, roll: ball.roll });
     newBestThisRun = false;
-    syncWorld(ball.s);
+    scanFrom = 0;
+    syncWorld(ball.s, true);
   }
 
   // --- Ghosts ---
@@ -530,7 +538,7 @@ export function mount(container, api) {
         else if (ev === 'boost') { sfx.play('whoosh', { vol: 0.9 }); boostFlash = 1; }
         else if (ev && ev.startsWith('land:')) {
           const impact = Number(ev.slice(5));
-          if (impact > 9) { shake = Math.min(0.6, impact / 40); sfx.play('pop', { vol: Math.min(1, impact / 25) }); }
+          if (impact > 11) { shake = Math.max(shake, Math.min(0.28, impact / 90)); sfx.play('pop', { vol: Math.min(1, impact / 25) }); }
         }
         if (wasAlive && !ball.alive) {
           alive = false;
@@ -599,9 +607,11 @@ export function mount(container, api) {
       camera.position.copy(camPos);
       if (window.__slopeCamOffset) camera.position.add(window.__slopeCamOffset); // debug: {x,y,z}
       if (shake > 0) {
-        camera.position.x += (Math.random() - 0.5) * shake;
-        camera.position.y += (Math.random() - 0.5) * shake;
-        shake = Math.max(0, shake - dt * 1.8);
+        // A quick damped wobble rather than random jitter: punchy but easy on the eyes.
+        const ph = ts / 1000;
+        camera.position.x += Math.sin(ph * 47) * shake * 0.5;
+        camera.position.y += Math.sin(ph * 61 + 1.3) * shake;
+        shake = Math.max(0, shake - dt * 1.4);
       }
       if (deadFor > 0) camera.lookAt(focus.x, focus.y, -focus.s);
       else camera.lookAt(focus.x, focus.y - 0.3, -(focus.s + 9));
@@ -618,14 +628,24 @@ export function mount(container, api) {
   }
 
   // --- HUD ---
+  // The HUD runs every frame; only touch the DOM when something actually changed, or the
+  // browser re-lays-out the page 60+ times a second.
+  const domCache = new WeakMap();
+  function setDom(el, prop, v) {
+    const c = domCache.get(el) || {};
+    if (c[prop] === v) return;
+    c[prop] = v;
+    domCache.set(el, c);
+    if (prop === 'fontSize') el.style.fontSize = v; else el[prop] = v;
+  }
   function renderHud() {
     const phase = view.phase;
     const me = view.players.find((p) => p.clientId === api.getClientId());
     const inRound = me && me.inRound;
     const score = ball && inRound ? Math.floor(ball.s) : 0;
-    scoreEl.textContent = inRound ? String(score) : 'SPECTATING';
+    setDom(scoreEl, 'textContent', inRound ? String(score) : 'SPECTATING');
     const kmh = ball ? Math.round(ball.vs * 3.6) : 0;
-    subEl.textContent = inRound ? `${kmh} km/h · BEST ${best}` : 'You\'ll join the next run';
+    setDom(subEl, 'textContent', inRound ? `${kmh} km/h · BEST ${best}` : 'You\'ll join the next run');
 
     let msg = '';
     if (phase === 'countdown') {
@@ -644,19 +664,19 @@ export function mount(container, api) {
       const top = (view.results || []).slice(0, 5).map((r, i) => `${i + 1}. ${r.nickname}  ${r.score}`).join('\n');
       msg = `RESULTS\n${top}\nnext run in ${left}`;
     }
-    centerEl.style.fontSize = phase === 'results' ? '20px' : '44px';
-    centerEl.textContent = msg;
+    setDom(centerEl, 'fontSize', phase === 'results' ? '20px' : '44px');
+    setDom(centerEl, 'textContent', msg);
 
     const live = view.players.filter((p) => p.inRound).map((p) => ({
       name: p.nickname, you: p.clientId === api.getClientId(), alive: p.clientId === api.getClientId() ? !!(ball && ball.alive) : p.alive,
       s: p.clientId === api.getClientId() && ball ? Math.floor(ball.s) : p.score,
     })).sort((a, b) => b.s - a.s);
-    liveEl.innerHTML = live.length > 1 || phase !== 'racing'
+    setDom(liveEl, 'innerHTML', live.length > 1 || phase !== 'racing'
       ? `<b>THIS RUN</b><br>${live.map((r) => `<span style="opacity:${r.alive ? 1 : 0.45}">${r.you ? '▶ ' : ''}${esc(r.name)} ${r.s}${r.alive ? '' : ' ✕'}</span>`).join('<br>')}`
-      : '';
-    boardEl.innerHTML = view.best && view.best.length
+      : '');
+    setDom(boardEl, 'innerHTML', view.best && view.best.length
       ? `<b>ROOM BEST</b><br>${view.best.map((b, i) => `${i + 1}. ${esc(b.nickname)} ${b.score}`).join('<br>')}`
-      : '';
+      : '');
   }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
