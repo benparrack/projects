@@ -53,6 +53,7 @@ function buildPublicState(room) {
   return {
     phase: st.phase,
     players: st.players,
+    botLevels: st.botLevels || {},
     board: st.board,
     turn: st.turn,
     winner: st.winner,
@@ -84,6 +85,7 @@ function startNewGame(st) {
 }
 
 const { think } = require('./ai');
+const { setBotLevel, botLevelOf } = require('./ai/levels');
 
 const BOT = 'BOT';
 const BOT_THINK_MS_MIN = 150;
@@ -133,7 +135,7 @@ function maybeScheduleBotMove(room) {
       room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'connect4', data: { kind: 'state', ...buildPublicState(room) } } });
       maybeScheduleBotMove(room);
     };
-    think('connect4', { board, color, timeMs: 700 }).then((r) => finish(r && r.col), () => finish(null));
+    think('connect4', { board, color, level: botLevelOf(st2, color) }).then((r) => finish(r && r.col), () => finish(null));
   }, delay);
 }
 
@@ -202,6 +204,7 @@ module.exports = {
       if (st.players[seat]) return;
       if (data.bot) {
         st.players[seat] = BOT;
+        setBotLevel(st, seat, data.level);
       } else {
         if (st.players.red === ctx.senderId || st.players.yellow === ctx.senderId) return;
         st.players[seat] = ctx.senderId;
@@ -235,6 +238,14 @@ module.exports = {
 
     // Removes a bot from a seat — a human can't "sit" over a BOT sentinel via the normal `sit`
     // check (seat isn't empty), so this is the only way to clear one, e.g. to sit down themselves.
+    if (data.kind === 'setBotLevel') {
+      const seat = data.seat === 'red' || data.seat === 'yellow' ? data.seat : null;
+      if (!seat || st.players[seat] !== BOT) return;
+      setBotLevel(st, seat, data.level);
+      broadcastState(room, ctx);
+      return;
+    }
+
     if (data.kind === 'removeBot') {
       const seat = data.seat === 'red' || data.seat === 'yellow' ? data.seat : null;
       if (!seat || st.players[seat] !== BOT) return;

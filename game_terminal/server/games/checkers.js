@@ -92,6 +92,7 @@ function buildPublicState(room) {
   return {
     phase: st.phase,
     players: st.players,
+    botLevels: st.botLevels || {},
     board: st.board,
     turn: st.turn,
     mustContinueFrom: st.mustContinueFrom,
@@ -161,35 +162,48 @@ function applyCheckersMove(st, seatColor, match) {
   return continueTurn;
 }
 
-const BOT = 'BOT';
-const BOT_THINK_MS_MIN = 400;
-const BOT_THINK_MS_MAX = 900;
+const { think } = require('./ai');
+const { setBotLevel, botLevelOf } = require('./ai/levels');
 
-function pickCheckersBotMove(st, color) {
+const BOT = 'BOT';
+const BOT_THINK_MS_MIN = 150;
+const BOT_THINK_MS_MAX = 400;
+
+function legalLegs(st, color) {
   let candidates = getAllMovesForColor(st.board, color);
   if (st.mustContinueFrom) {
     candidates = candidates.filter((m) => m.from.r === st.mustContinueFrom.r && m.from.c === st.mustContinueFrom.c);
   }
-  if (candidates.length === 0) return null;
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  return candidates;
 }
 
 // See connect4.js's maybeScheduleBotMove for the sentinel-seat / re-validate-on-fire pattern this
-// mirrors. A capturing multi-jump chain keeps the same color's turn (mustContinueFrom stays set),
-// so this reschedules itself for the continuation leg the same way it does for a fresh turn.
-function maybeScheduleBotMove(room) {
+// mirrors. The engine returns a whole turn (every leg of a multi-jump); the legs are played one at
+// a time through applyCheckersMove, with a short pause between them so the jumps are visible.
+function maybeScheduleBotMove(room, legDelay) {
   const st = room.state;
   if (st.phase !== 'playing' || st.players[st.turn] !== BOT) return;
-  const delay = BOT_THINK_MS_MIN + Math.random() * (BOT_THINK_MS_MAX - BOT_THINK_MS_MIN);
+  const delay = legDelay || BOT_THINK_MS_MIN + Math.random() * (BOT_THINK_MS_MAX - BOT_THINK_MS_MIN);
   setTimeout(() => {
     const st2 = room.state;
     if (st2.phase !== 'playing' || st2.players[st2.turn] !== BOT) return;
     const color = st2.turn;
-    const match = pickCheckersBotMove(st2, color);
-    if (!match) return;
-    applyCheckersMove(st2, color, match);
-    room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'checkers', data: { kind: 'state', ...buildPublicState(room) } } });
-    maybeScheduleBotMove(room);
+    const board = st2.board;
+    const playLegs = (path) => {
+      const st3 = room.state;
+      if (st3 !== st2 || st3.board !== board || st3.phase !== 'playing' || st3.turn !== color || st3.players[color] !== BOT) return;
+      const legs = legalLegs(st3, color);
+      if (!legs.length) return;
+      const [from, to] = path || [];
+      let match = from && to && legs.find((m) => m.from.r === from.r && m.from.c === from.c && m.to.r === to.r && m.to.c === to.c);
+      if (!match) { match = legs[Math.floor(Math.random() * legs.length)]; path = null; }
+      const cont = applyCheckersMove(st3, color, match);
+      room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'checkers', data: { kind: 'state', ...buildPublicState(room) } } });
+      if (cont && path && path.length > 2) setTimeout(() => playLegs(path.slice(1)), 450);
+      else maybeScheduleBotMove(room, cont ? 450 : 0);
+    };
+    think('checkers', { board, color, mustContinueFrom: st2.mustContinueFrom, level: botLevelOf(st2, color) })
+      .then((r) => playLegs(r && r.path), () => playLegs(null));
   }, delay);
 }
 
@@ -255,6 +269,7 @@ module.exports = {
       if (st.players[seat]) return;
       if (data.bot) {
         st.players[seat] = BOT;
+        setBotLevel(st, seat, data.level);
       } else {
         if (st.players.red === ctx.senderId || st.players.black === ctx.senderId) return;
         st.players[seat] = ctx.senderId;
@@ -288,6 +303,14 @@ module.exports = {
 
     // Removes a bot from a seat (a human can't "sit" over a BOT sentinel via the normal `sit`
     // check, since the seat isn't empty).
+    if (data.kind === 'setBotLevel') {
+      const seat = data.seat === 'red' || data.seat === 'black' ? data.seat : null;
+      if (!seat || st.players[seat] !== BOT) return;
+      setBotLevel(st, seat, data.level);
+      broadcastState(room, ctx);
+      return;
+    }
+
     if (data.kind === 'removeBot') {
       const seat = data.seat === 'red' || data.seat === 'black' ? data.seat : null;
       if (!seat || st.players[seat] !== BOT) return;

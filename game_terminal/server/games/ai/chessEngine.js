@@ -373,8 +373,8 @@ function fromGame({ board, turn, castlingRights, enPassantTarget }) {
   return pos;
 }
 
-function search(pos, timeMs) {
-  const deadline = Date.now() + timeMs;
+function search(pos, timeMs, maxDepth = 99, noise = 0) {
+  let deadline = Date.now() + timeMs;
   let nodes = 0;
   let stop = false;
   const killers = new Int32Array(MAX_PLY * 2);
@@ -523,7 +523,7 @@ function search(pos, timeMs) {
   let bestScore = 0;
   let depthDone = 0;
   const startTime = Date.now();
-  for (let depth = 1; depth < MAX_PLY - 4; depth++) {
+  for (let depth = 1; depth <= Math.min(maxDepth, MAX_PLY - 5); depth++) {
     rootBest = 0;
     const score = negamax(depth, -INF, INF, 0, false);
     if (rootBest && (!stop || rootBest)) {
@@ -535,12 +535,45 @@ function search(pos, timeMs) {
     if (Math.abs(score) > MATE - 200) break;
     if (Date.now() - startTime > timeMs * 0.45) break;
   }
+  // Weaker levels: score every root move with a full window at the depth reached, add Gaussian
+  // noise and play the best noisy score — so they misjudge close positions (and, at high noise,
+  // sometimes hang material) instead of playing the engine's exact best move.
+  if (noise > 0 && bestMove && depthDone >= 1) {
+    stop = false;
+    deadline = Date.now() + 2000;
+    const us = pos.side;
+    const end = pos.gen(MOVE_BUF, 0, false);
+    const roots = Array.from(MOVE_BUF.subarray(0, end));
+    let pick = bestMove;
+    let pickScore = -Infinity;
+    for (const m of roots) {
+      pos.make(m);
+      if (pos.inCheck(us)) { pos.unmake(m); continue; }
+      const s = -negamax(depthDone - 1, -INF, INF, 1, true);
+      pos.unmake(m);
+      if (stop) break;
+      const g = Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random());
+      const noisy = s + g * noise;
+      if (noisy > pickScore) { pickScore = noisy; pick = m; }
+    }
+    bestMove = pick;
+  }
   return { move: bestMove, score: bestScore, depth: depthDone, nodes };
 }
 
+// Difficulty levels: search depth cap, root-score noise (centipawns) and time budget.
+const LEVELS = {
+  easy: { depth: 1, noise: 220, time: 400 },
+  medium: { depth: 3, noise: 70, time: 800 },
+  hard: { depth: 6, noise: 12, time: 1200 },
+  expert: { depth: 99, noise: 0, time: 2500 },
+};
+
 function bestMove(input) {
   const pos = fromGame(input);
-  const { move, score, depth, nodes } = search(pos, input.timeMs || 1500);
+  const lv = LEVELS[input.level] || LEVELS.hard;
+  const timeMs = Math.min(lv.time, input.timeMs || lv.time);
+  const { move, score, depth, nodes } = search(pos, timeMs, lv.depth, lv.noise);
   if (!move) return null;
   const from = mFrom(move); const to = mTo(move);
   return {

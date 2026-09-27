@@ -4,6 +4,7 @@
 // FLIP BOARD override; `flipped` only ever changes what's rendered where — board coordinates
 // (dataset.row/col, onSquareClick args) always stay in the server's own r/c space.
 import { sfx, boardSounds } from '../sfx.js';
+import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { slideFrom, captureGhost, changeTracker, LAST_MOVE_TINT, CHECK_GLOW } from '../boardFx.js';
 
@@ -311,12 +312,14 @@ export function mount(container, api) {
         // a lone human who's already sat down can still fill the other seat without waiting.
         const botBtn = document.createElement('button');
         botBtn.textContent = 'PLAY VS BOT';
-        botBtn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color, bot: true }));
+        botBtn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color, bot: true, level: preferredLevel() }));
         seatRow.appendChild(botBtn);
+        seatRow.appendChild(levelSelect(preferredLevel()));
       } else if (view.players[color] === 'BOT') {
         const removeBtn = document.createElement('button');
         removeBtn.textContent = 'REMOVE BOT';
         removeBtn.addEventListener('click', () => api.sendAction({ kind: 'removeBot', seat: color }));
+        seatRow.appendChild(levelSelect((view.botLevels || {})[color], (level) => api.sendAction({ kind: 'setBotLevel', seat: color, level })));
         seatRow.appendChild(removeBtn);
       }
     }

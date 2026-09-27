@@ -279,6 +279,7 @@ function buildPublicState(room) {
   return {
     phase: st.phase,
     players: st.players,
+    botLevels: st.botLevels || {},
     board: st.board,
     turn: st.turn,
     inCheck: st.inCheck,
@@ -356,9 +357,9 @@ function applyChessMove(st, seatColor, match, promotionChoice) {
 }
 
 const { think } = require('./ai');
+const { setBotLevel, botLevelOf } = require('./ai/levels');
 
 const BOT = 'BOT';
-const BOT_SEARCH_MS = 1500;
 const BOT_THINK_MS_MIN = 100;
 const BOT_THINK_MS_MAX = 300;
 
@@ -390,7 +391,8 @@ function maybeScheduleBotMove(room) {
     if (legalMoves.length === 0) return;
     const history = st2.moveHistory;
     const plies = history.length;
-    const timeMs = st2.clocks ? Math.max(200, Math.min(BOT_SEARCH_MS, st2.clocks[color] / 25)) : BOT_SEARCH_MS;
+    // The engine caps this further by difficulty level; a running clock caps it at ~1/25th.
+    const timeMs = st2.clocks ? Math.max(200, st2.clocks[color] / 25) : undefined;
     const finish = (best) => {
       const st3 = room.state;
       // Re-validate: a reset, resign or duplicate timer may have changed the game mid-search.
@@ -412,7 +414,7 @@ function maybeScheduleBotMove(room) {
       room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
       maybeScheduleBotMove(room);
     };
-    think('chess', { board: st2.board, turn: color, castlingRights: st2.castlingRights, enPassantTarget: st2.enPassantTarget, timeMs })
+    think('chess', { board: st2.board, turn: color, castlingRights: st2.castlingRights, enPassantTarget: st2.enPassantTarget, timeMs, level: botLevelOf(st2, color) })
       .then(finish, () => finish(null));
   }, delay);
 }
@@ -486,6 +488,7 @@ module.exports = {
       if (st.players[seat]) return;
       if (data.bot) {
         st.players[seat] = BOT;
+        setBotLevel(st, seat, data.level);
       } else {
         if (st.players.white === ctx.senderId || st.players.black === ctx.senderId) return;
         st.players[seat] = ctx.senderId;
@@ -519,6 +522,14 @@ module.exports = {
 
     // Removes a bot from a seat (a human can't "sit" over a BOT sentinel via the normal `sit`
     // check, since the seat isn't empty).
+    if (data.kind === 'setBotLevel') {
+      const seat = data.seat === 'white' || data.seat === 'black' ? data.seat : null;
+      if (!seat || st.players[seat] !== BOT) return;
+      setBotLevel(st, seat, data.level);
+      broadcastState(room, ctx);
+      return;
+    }
+
     if (data.kind === 'removeBot') {
       const seat = data.seat === 'white' || data.seat === 'black' ? data.seat : null;
       if (!seat || st.players[seat] !== BOT) return;

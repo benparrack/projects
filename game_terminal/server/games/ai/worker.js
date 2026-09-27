@@ -8,6 +8,7 @@ const { parentPort } = require('worker_threads');
 const engines = {
   chess: require('./chessEngine'),
   connect4: require('./connect4Engine'),
+  checkers: require('./checkersEngine'),
 };
 
 parentPort.on('message', ({ id, engine, input }) => {

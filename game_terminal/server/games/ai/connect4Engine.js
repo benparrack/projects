@@ -42,7 +42,17 @@ const ttDepth = new Int8Array(TT_SIZE);
 const ttFlag = new Int8Array(TT_SIZE); // 0 empty, 1 exact, 2 lower, 3 upper
 const ttMove = new Int8Array(TT_SIZE);
 
-function bestMove({ board, color, timeMs = 800 }) {
+// Difficulty levels: depth cap, root-score noise, chance of a plain random move, time budget.
+const LEVELS = {
+  easy: { depth: 2, noise: 35, random: 0.2, time: 300 },
+  medium: { depth: 5, noise: 12, random: 0, time: 500 },
+  hard: { depth: 10, noise: 0, random: 0, time: 700 },
+  expert: { depth: CELLS, noise: 0, random: 0, time: 1500 },
+};
+
+function bestMove({ board, color, level, timeMs }) {
+  const lv = LEVELS[level] || LEVELS.hard;
+  timeMs = Math.min(lv.time, timeMs || lv.time);
   const cells = new Int8Array(CELLS);
   const heights = new Int8Array(COLS);
   let count = 0;
@@ -62,7 +72,7 @@ function bestMove({ board, color, timeMs = 800 }) {
   for (let i = 0; i < CELLS; i++) if (cells[i]) { lo ^= ZLO[i * 3 + cells[i]]; hi ^= ZHI[i * 3 + cells[i]]; }
   ttFlag.fill(0);
 
-  const deadline = Date.now() + timeMs;
+  let deadline = Date.now() + timeMs;
   let nodes = 0;
   let aborted = false;
 
@@ -184,7 +194,9 @@ function bestMove({ board, color, timeMs = 800 }) {
   const legal = ORDER.filter((c) => heights[c] < ROWS);
   if (legal.length === 0) return null;
   let bestCol = legal[0];
-  const maxDepth = CELLS - count;
+  if (lv.random && Math.random() < lv.random) return { col: legal[Math.floor(Math.random() * legal.length)], nodes: 0 };
+  const maxDepth = Math.min(lv.depth, CELLS - count);
+  let depthDone = 0;
   for (let depth = 1; depth <= maxDepth; depth++) {
     let alpha = -Infinity;
     let iterBest = -1;
@@ -198,10 +210,24 @@ function bestMove({ board, color, timeMs = 800 }) {
     }
     if (aborted) break;
     if (iterBest >= 0) bestCol = iterBest;
+    depthDone = depth;
     if (Math.abs(alpha) > WIN - 100) break; // solved: forced win or loss
     if (Date.now() > deadline - timeMs * 0.6) break; // next ply wouldn't finish
   }
-  return { col: bestCol, nodes };
+  // Weaker levels: full-window score for every root move plus noise, so close calls go wrong.
+  if (lv.noise && depthDone) {
+    let pickScore = -Infinity;
+    aborted = false;
+    deadline = Date.now() + 1000;
+    for (const c of legal) {
+      play(c, me);
+      const s = winsAt(idxFor(c) + COLS, me) ? WIN : -negamax(depthDone - 1, -Infinity, Infinity, 3 - me);
+      unplay(c, me);
+      const noisy = s + (Math.random() * 2 - 1) * lv.noise;
+      if (noisy > pickScore) { pickScore = noisy; bestCol = c; }
+    }
+  }
+  return { col: bestCol, nodes, depth: depthDone };
 }
 
 module.exports = { bestMove };
