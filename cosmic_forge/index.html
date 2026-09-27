@@ -860,7 +860,7 @@ const DAILY_REWARDS = [
 // Stellar Surge: clicking fills a meter; when full, a short frenzy.
 // The Void Front: Ignites and production both deal damage to Void enemies.
 // 10 kills clear a zone; every 5th zone is a boss you must beat within 30s.
-const VOID = { killsPerZone: 10, bossEvery: 5, bossTime: 30, hp0: 25, hpGrowth: 1.6, hpGrowthLate: 1.3, lateFrom: 25, bossMult: 10, bounty: 0.07, bountySecs: 1.5, bountyBossSecs: 30, bountyFullAt: 2, dominionPerZone: 0.005 };
+const VOID = { killsPerZone: 10, bossEvery: 5, bossTime: 30, hp0: 25, hpGrowth: 1.6, hpGrowthLate: 1.3, lateFrom: 25, bossMult: 10, bounty: 0.07, bountySecs: 2.5, bountyBossSecs: 45, bountyFullAt: 2, dominionPerZone: 0.005 };
 const BOSS_NAMES = ['The Hollow Maw', 'Entropy Wyrm', 'Null Sovereign', 'The Unmaker', 'Grief Nebula', 'Starless Titan', 'Oblivion Choir', 'The Last Dark'];
 const ENEMY_SPECIES = [
   { name: 'Void Mass', hue: 275 }, { name: 'Null Crystal', hue: 195 }, { name: 'Entropy Bloom', hue: 330 },
@@ -1708,7 +1708,7 @@ function generateGoal() {
   if (options.length === 0) return null;
   const g = options[Math.floor(Math.random() * options.length)];
   g.id = Date.now().toString(36) + (goalIdCounter++);
-  g.rewardSecs = 30 + Math.floor(Math.random() * 30);
+  g.rewardSecs = 60 + Math.floor(Math.random() * 60);
   g.matter = Math.random() < 0.4 ? 1 + Math.floor((highestOwnedTierIndex() + 2) / 2) : 0;
   return g;
 }
@@ -1756,7 +1756,7 @@ function goalText(g) {
 const GOAL_ICONS = { own: '⚙', clicks: '⚡', crits: '✸', earn: '✦', upgrade: '▲', surge: '☇', kills: '⚔', zone: '⚑', ability: '✦' };
 
 function goalEnergyReward(g) {
-  return Math.max(totalProductionPerSecond() * g.rewardSecs, clickPower() * 25, 25);
+  return Math.max(totalProductionPerSecond() * g.rewardSecs, clickPower() * 50, 50);
 }
 
 function claimGoal(id, ev) {

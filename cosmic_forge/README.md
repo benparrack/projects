@@ -30,10 +30,10 @@ are hex-cell formations that shatter brick-breaker style as their HP drops.
 
 - 10 kills clear a zone. Enemies start at 25 HP, which grows x1.6 per zone up
   to Zone 25 (the economy grows fastest early), then x1.3. Each kill pays about
-  1.5 seconds of your current production (bosses about 30 seconds) plus 7% of
+  2.5 seconds of your current production (bosses about 45 seconds) plus 7% of
   its HP, shown as "Per kill" under the enemy. Enemies you kill in under 2
   seconds pay proportionally less, so farming easy zones never beats pushing.
-  Kills end up around 25–35% of income.
+  Kills end up around 25–45% of income.
   Clearing zones also raises **Dominion**, a permanent +0.5% production per
   zone cleared.
 - Every 5th zone is a **boss** (x10 HP) you must beat within 30s. If you
@@ -66,7 +66,7 @@ are hex-cell formations that shatter brick-breaker style as their HP drops.
 
 - **Goals**: three rotating short objectives (own the next milestone, click
   N times, land crits, earn X Energy, buy an upgrade, trigger a Surge).
-  Each pays about 30–60s of production, sometimes plus Matter, and is
+  Each pays about 60–120s of production, sometimes plus Matter, and is
   replaced immediately, so there's always a next thing about a minute away.
 - **Stellar Surge**: rapid clicking fills a ring around the core; when full,
   you get 12s of x5 click power and x2 production, then a 30s recharge.
