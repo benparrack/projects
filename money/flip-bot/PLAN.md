@@ -27,9 +27,21 @@ buys, messages sellers, or posts listings.
   sold prices.
 - **Sources:**
   - **Blocket.se** is Sweden's main classifieds site and the source to scrape.
-    It has no official public API, but its web frontend uses an internal JSON
-    search API, and a community `blocket_api` Python package exists. Check at
-    build time whether it still works without login.
+    **Verified 2026-09-27:** Blocket has moved to FINN's (Schibsted)
+    platform. The old `api.blocket.se/search_bff` API (and the community
+    `blocket_api` package built on it) is dead: it returns a 503, and the
+    token endpoint returns a 404. What works now, with no login or token:
+    `GET https://www.blocket.se/recommerce/forsale/search?q=<query>&sort=PUBLISHED_DESC`
+    with a normal browser User-Agent. The HTML has a
+    `<script type="application/json" data-react-query-state>` tag containing
+    **base64-encoded JSON**. Decode it, then find the query whose
+    `state.data` has `docs`. That gives about 50 listings per page, each with
+    `id, heading, price.amount (SEK), location, coordinates, timestamp (ms),
+    canonical_url, image_urls, trade_type`, plus
+    `metadata.result_size.match_count`. Newest-first sorting works; the top
+    result was 29 minutes old. robots.txt doesn't disallow `/recommerce/forsale/search`.
+    A backup source: the `seoStructuredData` ld+json script lists the same
+    items as schema.org Products.
   - **Tradera.com** is Sweden's eBay-style auction site. It has an **official
     developer API** (free registration, rate-limited) with *ended* auctions,
     so it can supply real sold-price comps. That solves the auto-pricing
