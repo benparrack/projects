@@ -3,6 +3,7 @@
 // trail; steer with arrow keys/WASD (or the on-screen D-pad) to avoid walls, trails, and other
 // players. Last one alive wins the round.
 import { sfx } from '../sfx.js';
+import { createFx, flashEl } from '../canvasFx.js';
 
 const GRID_W = 128;
 const GRID_H = 96;
@@ -67,6 +68,8 @@ export function mount(container, api) {
   canvas.style.background = '#05080a';
   canvas.style.touchAction = 'none';
   const ctx = canvas.getContext('2d');
+  const fx = createFx();
+  let sparkClock = 0;
 
   const overlay = document.createElement('div');
   overlay.style.position = 'absolute';
@@ -186,6 +189,10 @@ export function mount(container, api) {
     ctx.fillStyle = '#05080a';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     if (!view) return;
+    fx.applyShake(ctx);
+    const now = performance.now();
+    const emitSparks = now - sparkClock > 33;
+    if (emitSparks) sparkClock = now;
 
     // Faint grid so the arena reads as a grid, not an empty void. Spacing is in PIXELS (40px),
     // not a fixed cell count, so the visual line density stays the same regardless of how fine
@@ -244,8 +251,6 @@ export function mount(container, api) {
       }
 
       ctx.strokeStyle = p.color;
-      ctx.globalAlpha = dim ? 0.4 : 0.9;
-      ctx.lineWidth = TRAIL_WIDTH_PX;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.beginPath();
@@ -278,16 +283,39 @@ export function mount(container, api) {
       } else {
         ctx.moveTo(hx * CELL_PX + CELL_PX / 2, hy * CELL_PX + CELL_PX / 2);
       }
+      // Soft neon halo under the solid trail (two wide low-alpha passes — far cheaper than
+      // shadowBlur on a long path every frame), then the trail itself with a bright core.
+      ctx.globalAlpha = dim ? 0.05 : 0.12;
+      ctx.lineWidth = TRAIL_WIDTH_PX * 2.6;
       ctx.stroke();
+      ctx.globalAlpha = dim ? 0.08 : 0.2;
+      ctx.lineWidth = TRAIL_WIDTH_PX * 1.6;
+      ctx.stroke();
+      ctx.globalAlpha = dim ? 0.35 : 0.9;
+      ctx.lineWidth = TRAIL_WIDTH_PX;
+      ctx.stroke();
+      if (!dim) {
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = TRAIL_WIDTH_PX * 0.25;
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
 
       if (p.status === 'alive') {
         const px = hx * CELL_PX + CELL_PX / 2;
         const py = hy * CELL_PX + CELL_PX / 2;
+        ctx.save();
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 14;
         ctx.fillStyle = '#fff';
         ctx.beginPath();
-        ctx.arc(px, py, BALL_RADIUS_PX, 0, Math.PI * 2);
+        ctx.arc(px, py, BALL_RADIUS_PX + 0.5, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+        if (emitSparks && view.phase === 'playing') {
+          fx.burst(px, py, p.color, { count: 1, speed: 40, life: 0.35, size: 1.6 });
+        }
         ctx.fillStyle = p.color;
         ctx.font = '10px monospace';
         ctx.textAlign = 'center';
@@ -295,7 +323,16 @@ export function mount(container, api) {
       }
     }
 
+    fx.draw(ctx);
+    ctx.restore();
+    fx.drawOverlay(ctx, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    const wasHidden = overlay.hidden;
     overlay.hidden = view.phase !== 'round_over';
+    if (wasHidden && !overlay.hidden) {
+      overlay.style.fontSize = '2em';
+      overlay.animate([{ transform: 'translate(-50%, -50%) scale(0.3)', opacity: 0 }, { transform: 'translate(-50%, -50%) scale(1.15)', opacity: 1, offset: 0.7 }, { transform: 'translate(-50%, -50%) scale(1)' }], { duration: 420, easing: 'ease-out' });
+    }
     if (!overlay.hidden) {
       overlay.textContent = view.roundOver && view.roundOver.isDraw ? 'DRAW!' : `${view.roundOver ? view.roundOver.winnerNickname : ''} WINS!`;
     }
@@ -310,15 +347,44 @@ export function mount(container, api) {
     if (view.phase === 'countdown') {
       const a = Math.ceil((prev.countdownRemainingMs || 0) / 1000);
       const b = Math.ceil((view.countdownRemainingMs || 0) / 1000);
-      if (prev.phase !== 'countdown' || b < a) sfx.play('beep');
+      if (prev.phase !== 'countdown' || b < a) {
+        sfx.play('beep');
+        if (b > 0) fx.bigLabel(String(b));
+      }
     }
-    if (view.phase === 'playing' && prev.phase === 'countdown') sfx.play('go');
+    if (view.phase === 'playing' && prev.phase === 'countdown') {
+      sfx.play('go');
+      fx.bigLabel('GO!');
+    }
+    // Crash explosions for every player who died this tick (bigger, with shake + flash, for you).
+    for (const p of view.players) {
+      const before = prev.players.find((q) => q.clientId === p.clientId);
+      if (!before || before.status === 'dead' || p.status !== 'dead') continue;
+      const h = p.head || curHeadMap.get(p.clientId);
+      if (!h) continue;
+      const x = h.x * CELL_PX + CELL_PX / 2;
+      const y = h.y * CELL_PX + CELL_PX / 2;
+      const mine = p.clientId === me;
+      fx.burst(x, y, p.color, { count: mine ? 60 : 36, speed: 260, life: 0.8, size: 3 });
+      fx.burst(x, y, '#ffffff', { count: 12, speed: 140, life: 0.4, size: 2 });
+      fx.ring(x, y, p.color, { radius: 48, life: 0.5 });
+      fx.shake(mine ? 9 : 4);
+      if (mine) flashEl(canvasWrap);
+    }
     const was = prev.players.find((p) => p.clientId === me);
     const now = view.players.find((p) => p.clientId === me);
     if (was && now && was.status !== 'dead' && now.status === 'dead') sfx.play('crash');
     if (view.phase === 'round_over' && prev.phase !== 'round_over' && view.roundOver) {
       if (view.roundOver.isDraw || !now) sfx.play('point');
       else sfx.play(view.roundOver.winnerId === me ? 'win' : 'lose');
+      const w = !view.roundOver.isDraw && view.players.find((p) => p.clientId === view.roundOver.winnerId);
+      const wh = w && (w.head || curHeadMap.get(w.clientId));
+      if (wh) {
+        const x = wh.x * CELL_PX + CELL_PX / 2;
+        const y = wh.y * CELL_PX + CELL_PX / 2;
+        for (let i = 0; i < 3; i++) fx.ring(x, y, w.color, { radius: 30 + i * 25, life: 0.6 + i * 0.2 });
+        fx.burst(x, y, w.color, { count: 50, speed: 220, life: 1.1, size: 2.5, gravity: 120 });
+      }
     }
   }
 

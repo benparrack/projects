@@ -9,6 +9,7 @@
 // you" disagree — any change to the track math in slope.js must be mirrored here exactly.
 import { makeServerClock } from '../serverClock.js';
 import { sfx } from '../sfx.js';
+import { flashEl } from '../canvasFx.js';
 
 const SEG_LEN = 8;
 const BASE_HALF_WIDTH = 6;
@@ -298,7 +299,11 @@ export function mount(container, api) {
     hud.textContent = `DISTANCE: ${dist}${boosts ? `  BOOSTS: ${boosts}` : ''}`;
     const sfxKey = { boosts, alive: me ? me.alive : null, phase: view.phase };
     if (sfxState) {
-      if (sfxKey.boosts > sfxState.boosts) sfx.play('eat');
+      if (sfxKey.boosts > sfxState.boosts) {
+        sfx.play('eat');
+        fovKick = 10;
+        flashEl(root, 'rgba(0, 229, 255, 0.22)', 220);
+      }
       if (sfxState.alive && sfxKey.alive === false && view.phase === 'racing') sfx.play('crash');
       if (sfxState.phase === 'racing' && view.phase === 'results') sfx.play('point');
     }
@@ -309,7 +314,12 @@ export function mount(container, api) {
     } else if (view.phase === 'countdown') {
       const remaining = Math.max(0, Math.ceil((view.phaseEndsAt - serverClock.now()) / 1000));
       centerMsg.textContent = remaining > 0 ? String(remaining) : 'GO!';
-      if (centerMsg.textContent !== lastCountdownLabel) sfx.play(remaining > 0 ? 'beep' : 'go');
+      if (centerMsg.textContent !== lastCountdownLabel) {
+        sfx.play(remaining > 0 ? 'beep' : 'go');
+        if (!REDUCED) {
+          centerMsg.animate([{ scale: 0.3, opacity: 0 }, { scale: 1.25, opacity: 1, offset: 0.6 }, { scale: 1 }], { duration: 360, easing: 'ease-out' });
+        }
+      }
       lastCountdownLabel = centerMsg.textContent;
     } else if (view.phase === 'racing') {
       centerMsg.textContent = me && !me.alive ? `YOU DIED — distance: ${Math.round(me.finalDistance || 0)}` : '';
@@ -369,6 +379,21 @@ export function mount(container, api) {
   const hazardPool = [];
   const boostPool = [];
   const ballMeshes = new Map(); // clientId -> mesh
+  // --- juice: speed lines overlay, local-ball trail, death debris, camera shake/FOV kick ---
+  const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const trailPool = []; // fading ghost spheres behind the local ball
+  const trailHist = [];
+  const debris = []; // { mesh, vx, vy, vz, age }
+  let shake = 0;
+  let fovKick = 0;
+  let speedNorm = 0;
+  let lastFrameAt = performance.now();
+  const deadSeen = new Set();
+  const streaks = [];
+  const fxCanvas = document.createElement('canvas');
+  fxCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
+  const fxCtx = fxCanvas.getContext('2d');
+  root.insertBefore(fxCanvas, canvasHost.nextSibling);
   const deathAnim = new Map(); // clientId -> { startedAt } — cosmetic edge-fall timing, see below
 
   function ensurePoolSize(pool, size, factory) {
@@ -458,10 +483,124 @@ export function mount(container, api) {
     };
   }
 
+  function spawnDebris(THREE, pos, color) {
+    const n = REDUCED ? 6 : 26;
+    for (let i = 0; i < n; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.16, 0.16, 0.16),
+        new THREE.MeshBasicMaterial({ color, transparent: true }),
+      );
+      mesh.position.copy(pos);
+      scene.add(mesh);
+      const a = Math.random() * Math.PI * 2;
+      const v = 3 + Math.random() * 6;
+      debris.push({ mesh, vx: Math.cos(a) * v, vy: 3 + Math.random() * 6, vz: Math.sin(a) * v - 4, age: 0 });
+    }
+  }
+
+  function updateJuice(THREE, me, dt) {
+    // Speed: distance gained per server tick, normalised between base speed (0.6) and the
+    // boosted ceiling (4.2) — see server/games/slope.js.
+    const pm = me && prevView && prevView.players.find((q) => q.clientId === me.clientId);
+    const perTick = me && me.alive && pm && pm.alive ? me.distance - pm.distance : 0;
+    const target = Math.min(1, Math.max(0, (perTick - 0.6) / 3.6));
+    speedNorm += (target - speedNorm) * Math.min(1, dt * 3);
+
+    for (let i = debris.length - 1; i >= 0; i--) {
+      const d = debris[i];
+      d.age += dt;
+      d.vy -= 18 * dt;
+      d.mesh.position.x += d.vx * dt;
+      d.mesh.position.y += d.vy * dt;
+      d.mesh.position.z += d.vz * dt;
+      d.mesh.rotation.x += dt * 8;
+      d.mesh.rotation.y += dt * 6;
+      d.mesh.material.opacity = Math.max(0, 1 - d.age / 1.4);
+      if (d.age > 1.4) {
+        scene.remove(d.mesh);
+        d.mesh.geometry.dispose();
+        d.mesh.material.dispose();
+        debris.splice(i, 1);
+      }
+    }
+    shake *= Math.pow(0.004, dt);
+    fovKick *= Math.pow(0.05, dt);
+
+    // Screen-space speed streaks: rush outward from the vanishing point, more and brighter the
+    // faster you go (boost pickups spike this via fovKick).
+    const w = root.clientWidth;
+    const h = root.clientHeight;
+    if (fxCanvas.width !== w || fxCanvas.height !== h) {
+      fxCanvas.width = w;
+      fxCanvas.height = h;
+    }
+    fxCtx.clearRect(0, 0, w, h);
+    if (REDUCED || view.phase !== 'racing' || !me || !me.alive) {
+      streaks.length = 0;
+      return;
+    }
+    const intensity = Math.min(1, speedNorm + fovKick / 10);
+    const want = Math.round(6 + intensity * 50);
+    while (streaks.length < want) {
+      streaks.push({ a: Math.random() * Math.PI * 2, r: 40 + Math.random() * 200, v: 0.6 + Math.random() * 0.8 });
+    }
+    streaks.length = Math.min(streaks.length, want);
+    const cx = w / 2;
+    const cy = h * 0.42;
+    const maxR = Math.hypot(w, h) / 2;
+    fxCtx.lineCap = 'round';
+    for (const st of streaks) {
+      st.r += dt * st.v * (500 + 1600 * intensity);
+      if (st.r > maxR) {
+        st.r = 40 + Math.random() * 80;
+        st.a = Math.random() * Math.PI * 2;
+      }
+      const len = 20 + 90 * intensity * (st.r / maxR);
+      const x0 = cx + Math.cos(st.a) * st.r;
+      const y0 = cy + Math.sin(st.a) * st.r;
+      fxCtx.strokeStyle = `rgba(160, 255, 140, ${(0.08 + 0.35 * intensity) * (st.r / maxR)})`;
+      fxCtx.lineWidth = 1 + 1.5 * intensity;
+      fxCtx.beginPath();
+      fxCtx.moveTo(x0, y0);
+      fxCtx.lineTo(x0 + Math.cos(st.a) * len, y0 + Math.sin(st.a) * len);
+      fxCtx.stroke();
+    }
+  }
+
+  function updateTrail(THREE, localMesh) {
+    if (!trailPool.length) {
+      for (let i = 0; i < 10; i++) {
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(0.45, 10, 8),
+          new THREE.MeshBasicMaterial({ color: PLAYER_COLOR, transparent: true, depthWrite: false }),
+        );
+        m.visible = false;
+        scene.add(m);
+        trailPool.push(m);
+      }
+    }
+    const alive = localMesh && localMesh.visible && !localMesh.material.transparent;
+    if (alive && !REDUCED) trailHist.unshift(localMesh.position.clone());
+    else trailHist.length = 0;
+    trailHist.length = Math.min(trailHist.length, trailPool.length * 2);
+    trailPool.forEach((m, i) => {
+      const p = trailHist[(i + 1) * 2];
+      m.visible = !!p;
+      if (!p) return;
+      m.position.copy(p);
+      const k = 1 - i / trailPool.length;
+      m.scale.setScalar(0.3 + 0.6 * k);
+      m.material.opacity = 0.35 * k * (0.4 + speedNorm);
+    });
+  }
+
   function renderFrame() {
     if (destroyed) return;
     rafId = requestAnimationFrame(renderFrame);
     if (!scene || !view) return;
+    const frameNow = performance.now();
+    const dt = Math.min(0.05, (frameNow - lastFrameAt) / 1000);
+    lastFrameAt = frameNow;
 
     if (track.seed !== view.seed) {
       track = { seed: view.seed, centers: [0] };
@@ -560,6 +699,20 @@ export function mount(container, api) {
 
       const ballGroundY = groundYAt(pos.distance, refSegFloat);
       mesh.position.set(pos.lateralPos, ballGroundY + 0.45 + yOffset, -pos.distance);
+      // Hazard crash (not an edge fall, which keeps its drop animation): shatter into debris.
+      if (!p.alive && view.phase === 'racing' && !deadSeen.has(p.clientId)) {
+        deadSeen.add(p.clientId);
+        const pp = prevView && prevView.players.find((q) => q.clientId === p.clientId);
+        const justDied = !!(pp && pp.alive);
+        if (justDied && p.deathReason !== 'edge') spawnDebris(THREE, mesh.position, mesh.material.color.getHex());
+        if (justDied && p.clientId === api.getClientId()) {
+          shake = p.deathReason === 'edge' ? 0.25 : 0.6;
+          flashEl(root);
+        }
+      } else if (p.alive) {
+        deadSeen.delete(p.clientId);
+      }
+      if (p.deathReason !== 'edge' && !p.alive) mesh.visible = false;
       mesh.material.opacity = p.alive ? 1 : 0.25;
       mesh.material.transparent = !p.alive;
     }
@@ -574,8 +727,17 @@ export function mount(container, api) {
     const LOOK_AHEAD_DIST = 12;
     const camGroundY = groundYAt(camDistance - 7, refSegFloat);
     const lookAtGroundY = groundYAt(camDistance + LOOK_AHEAD_DIST, refSegFloat);
-    camera.position.set(camLateral, camGroundY + 3.2, -camDistance + 7);
-    camera.lookAt(camLateral, lookAtGroundY + 0.5, -camDistance - LOOK_AHEAD_DIST);
+    updateJuice(window.THREE, me, dt);
+    updateTrail(window.THREE, me ? ballMeshes.get(me.clientId) : null);
+    const sx = REDUCED ? 0 : (Math.random() - 0.5) * shake;
+    const sy = REDUCED ? 0 : (Math.random() - 0.5) * shake;
+    camera.position.set(camLateral + sx, camGroundY + 3.2 + sy, -camDistance + 7);
+    camera.lookAt(camLateral + sx * 0.5, lookAtGroundY + 0.5, -camDistance - LOOK_AHEAD_DIST);
+    const fov = 70 + speedNorm * 12 + fovKick;
+    if (Math.abs(camera.fov - fov) > 0.05) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
 
     if (renderer && canvasHost.clientWidth && renderer.domElement.width !== canvasHost.clientWidth) {
       renderer.setSize(canvasHost.clientWidth, canvasHost.clientHeight || 600);

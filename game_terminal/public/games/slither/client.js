@@ -3,6 +3,9 @@
 // Unlike the other games, the server drives the world on its own schedule; this client
 // just sends steering/boost intent and renders whatever state snapshot arrives.
 import { sfx } from '../sfx.js';
+import { createFx, flashEl } from '../canvasFx.js';
+
+const FOOD_COLORS = ['#ffb000', '#39ff14', '#00e5ff', '#ff4fd8', '#ffe14d', '#ff6b3d'];
 
 const CANVAS_WIDTH = 640;
 const CANVAS_HEIGHT = 480;
@@ -103,6 +106,9 @@ export function mount(container, api) {
   canvas.style.touchAction = 'none';
   canvas.style.cursor = 'crosshair';
   const ctx = canvas.getContext('2d');
+  // Effects are spawned in WORLD coordinates and drawn under the camera transform.
+  const fx = createFx();
+  let boostClock = 0;
 
   const overlay = document.createElement('div');
   overlay.style.position = 'absolute';
@@ -205,28 +211,59 @@ export function mount(container, api) {
     const camY = own ? own.points[0].y : view.arenaSize / 2;
     const zoom = computeZoom(own ? own.length : START_LENGTH);
     const toScreen = (x, y) => [CANVAS_WIDTH / 2 + (x - camX) * zoom, CANVAS_HEIGHT / 2 + (y - camY) * zoom];
+    const now = performance.now();
 
-    // arena border
+    fx.applyShake(ctx);
+
+    // World-space dot grid, so movement reads even far from food and walls.
+    const GRID = 60;
+    ctx.fillStyle = 'rgba(57, 255, 20, 0.16)';
+    const gx0 = Math.max(0, Math.floor((camX - CANVAS_WIDTH / 2 / zoom) / GRID) * GRID);
+    const gy0 = Math.max(0, Math.floor((camY - CANVAS_HEIGHT / 2 / zoom) / GRID) * GRID);
+    const gx1 = Math.min(view.arenaSize, camX + CANVAS_WIDTH / 2 / zoom);
+    const gy1 = Math.min(view.arenaSize, camY + CANVAS_HEIGHT / 2 / zoom);
+    const dot = Math.max(1, 1.5 * zoom);
+    for (let gx = gx0; gx <= gx1; gx += GRID) {
+      for (let gy = gy0; gy <= gy1; gy += GRID) {
+        const [x, y] = toScreen(gx, gy);
+        ctx.fillRect(x - dot / 2, y - dot / 2, dot, dot);
+      }
+    }
+
+    // arena border (glowing)
     const [bx, by] = toScreen(0, 0);
-    ctx.strokeStyle = '#1f8f0c';
-    ctx.lineWidth = 2;
+    ctx.save();
+    ctx.shadowColor = '#39ff14';
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = '#39ff14';
+    ctx.lineWidth = 3;
     ctx.strokeRect(bx, by, view.arenaSize * zoom, view.arenaSize * zoom);
+    ctx.restore();
 
-    // food
-    ctx.fillStyle = '#ffb000';
+    // food: colored, gently pulsing orbs with an additive halo
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
     for (const f of view.food) {
       const [x, y] = toScreen(f.x, f.y);
       if (x < -20 || x > CANVAS_WIDTH + 20 || y < -20 || y > CANVAS_HEIGHT + 20) continue;
+      const color = FOOD_COLORS[f.id % FOOD_COLORS.length];
+      const r = FOOD_RADIUS * zoom * (1 + 0.18 * Math.sin(now / 280 + f.id));
+      ctx.globalAlpha = 0.14;
+      ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x, y, FOOD_RADIUS * zoom, 0, Math.PI * 2);
+      ctx.arc(x, y, r * 1.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
 
-    // snakes
+    // snakes: dark outline, body, and a light spine stripe, then eyes that face the heading
     for (const s of view.snakes) {
       if (!s.alive || s.points.length < 2) continue;
-      ctx.strokeStyle = s.color;
-      ctx.lineWidth = computeRadius(s.length) * 2 * zoom;
+      const rad = computeRadius(s.length) * zoom;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.beginPath();
@@ -235,14 +272,63 @@ export function mount(container, api) {
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
+      const isOwn = own && s.clientId === own.clientId;
+      if (isOwn && lastBoostSent) {
+        ctx.save();
+        ctx.shadowColor = s.color;
+        ctx.shadowBlur = 22;
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = rad * 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = rad * 2 + 3;
       ctx.stroke();
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = rad * 2;
+      ctx.stroke();
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = Math.max(1, rad * 0.5);
+      ctx.setLineDash([rad * 0.9, rad * 1.1]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
 
       const [hx, hy] = toScreen(s.points[0].x, s.points[0].y);
+      const [nx, ny] = toScreen(s.points[1].x, s.points[1].y);
+      const ang = Math.atan2(hy - ny, hx - nx);
+      for (const side of [-1, 1]) {
+        const ex = hx + Math.cos(ang + side * 0.75) * rad * 0.6;
+        const ey = hy + Math.sin(ang + side * 0.75) * rad * 0.6;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(ex, ey, rad * 0.36, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(ex + Math.cos(ang) * rad * 0.12, ey + Math.sin(ang) * rad * 0.12, rad * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (isOwn && lastBoostSent && now - boostClock > 40) {
+        boostClock = now;
+        const tail = s.points[s.points.length - 1];
+        fx.burst(tail.x, tail.y, s.color, { count: 2, speed: 50, life: 0.45, size: 3 });
+      }
       ctx.fillStyle = '#fff';
       ctx.font = `${Math.max(9, 11 * zoom)}px monospace`;
       ctx.textAlign = 'center';
       ctx.fillText(s.nickname, hx, hy - 16 * zoom);
     }
+
+    ctx.save();
+    ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-camX, -camY);
+    fx.draw(ctx);
+    ctx.restore();
+    ctx.restore(); // shake
 
     if (!own || own.alive) {
       overlay.hidden = true;
@@ -313,13 +399,38 @@ export function mount(container, api) {
     // within the same tick, appearing in both lists — applying added first means that case
     // nets out to "removed", matching what the server actually still has.
     for (const f of view.foodAdded || []) foodMap.set(f.id, f);
-    for (const id of view.foodRemoved || []) foodMap.delete(id);
+    for (const id of view.foodRemoved || []) {
+      // Eaten orb: a little sparkle where it was.
+      const f = foodMap.get(id);
+      if (f) fx.burst(f.x, f.y, FOOD_COLORS[f.id % FOOD_COLORS.length], { count: 6, speed: 70, life: 0.35, size: 2.5 });
+      foodMap.delete(id);
+    }
     if (currentView) {
       const me = api.getClientId();
       const was = currentView.snakes.find((sn) => sn.clientId === me);
       const now = view.snakes.find((sn) => sn.clientId === me);
       if (was && now && was.alive && !now.alive) sfx.play('crash');
       else if (was && now && now.alive && now.length > was.length) sfx.play('eat');
+      // Death explosions along the whole body of any snake that just died.
+      for (const sn of view.snakes) {
+        const before = currentView.snakes.find((q) => q.clientId === sn.clientId);
+        if (!before || !before.alive || sn.alive) continue;
+        const pts = before.points;
+        const stepN = Math.max(1, Math.floor(pts.length / 14));
+        for (let i = 0; i < pts.length; i += stepN) {
+          fx.burst(pts[i].x, pts[i].y, sn.color, { count: 5, speed: 120, life: 0.7, size: 3.5 });
+        }
+        fx.ring(pts[0].x, pts[0].y, sn.color, { radius: 70, life: 0.55 });
+        fx.burst(pts[0].x, pts[0].y, '#fff', { count: 14, speed: 180, life: 0.4, size: 2 });
+        if (sn.clientId === me) {
+          fx.shake(10);
+          flashEl(canvasWrap);
+        } else if (now && now.alive) {
+          const dx = pts[0].x - now.points[0].x;
+          const dy = pts[0].y - now.points[0].y;
+          if (dx * dx + dy * dy < 400 * 400) fx.shake(4);
+        }
+      }
     }
     previousView = currentView || view;
     currentView = { ...view, food: [...foodMap.values()] };
