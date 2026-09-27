@@ -36,8 +36,24 @@ are hex-cell formations that shatter brick-breaker style as their HP drops.
 - Bosses drop Matter. Each zone cleared adds +0.5% production (**Dominion**).
   Every 2 bosses beaten in a cycle add +1 Singularity on Collapse. A Collapse
   resets the Front to Zone 1.
-- There are new Void Feats and Goals ("Defeat N enemies", "Reach Zone N").
-  Debug helpers: `zone(n)`, `killEnemy()`, `bossNow()`.
+- **Sectors**: every 10 zones is a new named sector with its own arena tint.
+- **Boss affixes** (from Zone 15): Shielded (beam does half damage), Regenerating
+  (heals 2%/s), Swift (20s timer, x2 Matter), Armored (x0.7 damage, drops 2 relics).
+  The Challenge button shows the effective DPS you need, including the affix
+  penalty and a 10% safety margin.
+- **Gilded Wisps**: 3% of spawns, pay x10 bounty and have a 25% relic chance.
+- **Abilities** (keys 1–6, unlocked permanently by deepest zone reached):
+  Nova Lance (Z3), Overdrive (Z8), Chrono Lock (Z13, freezes the boss clock),
+  Plunder (Z18), Star Cascade (Z25, auto-ignites), Big Crunch (Z35, resets the
+  others).
+- **Relics**: bosses always drop one. Rarity is Common / Rare / Epic / Legendary,
+  weighted by relic luck (Lodestar relics, Plunder, zone depth). Duplicates stack
+  into 8 permanent bonuses (bolt damage, crit, boss time, bounty, production,
+  cooldowns, Matter, luck), and they survive Collapse. Open the ◈ button on the
+  Front to see the **Armory** (abilities, relics, current odds).
+- There are Void Feats and Goals ("Defeat N enemies", "Reach Zone N", "Use N
+  abilities"). Debug helpers: `zone(n)`, `killEnemy()`, `bossNow()`,
+  `relic(n)`, `readyAbilities()`, `unlockAbilities()`, `gilded()`.
 
 ## Retention systems
 
@@ -72,6 +88,7 @@ is the point: each collapse seeds a strictly stronger next universe.
 | Action | How |
 |---|---|
 | Ignite | Click the core, or `space` |
+| Void abilities | Click the ability bar, or keys `1`–`6` |
 | Buy quantity | x1 / x10 / x25 / Max buttons above the shop list |
 | Mute | speaker icon, top right |
 | Manual save / erase save | 💾 / 🗑 icons, top right |

@@ -165,6 +165,97 @@
   @keyframes bossReady { from { box-shadow: 0 0 4px rgba(255,46,99,0.4); } to { box-shadow: 0 0 18px rgba(255,46,99,0.9); } }
   #vfBossBtn:hover { filter: brightness(1.15); }
 
+
+  /* ---- Void Front: sectors, abilities, relics ---- */
+  #voidFront { --sector-hue: 275; width: 300px; }
+  #vfArena { height: 210px; background: radial-gradient(ellipse at center, hsla(var(--sector-hue),70%,35%,0.3), rgba(5,5,10,0.45) 70%); transition: background 1.2s; }
+  #vfArena::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 8px;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 3px); }
+  #vfSector { font-size: 10px; color: hsl(var(--sector-hue),70%,75%); letter-spacing: 0.5px; margin-top: 1px; opacity: 0.85; }
+  .vf-head { align-items: flex-start; }
+  .vf-head-r { display: flex; align-items: center; gap: 6px; }
+  #vfRelicBtn { border: 1px solid rgba(255,209,102,0.35); background: rgba(255,209,102,0.08); color: var(--gold); border-radius: 6px;
+    font: inherit; font-size: 11px; font-weight: 700; padding: 2px 7px; cursor: pointer; }
+  #vfRelicBtn:hover { background: rgba(255,209,102,0.18); }
+  #vfAffix { position: absolute; left: 0; right: 0; top: 22px; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #9be7ff; pointer-events: none; cursor: help; }
+  #vfAffix:empty { display: none; }
+  #voidFront.gilded { border-color: rgba(255,209,102,0.6); box-shadow: 0 0 22px rgba(255,209,102,0.25); }
+  #voidFront.gilded #vfName { color: #ffd166; text-shadow: 0 0 10px rgba(255,209,102,0.8); }
+  #voidFront.chrono #vfArena { box-shadow: inset 0 0 40px rgba(120,220,255,0.35); }
+  #voidFront.chrono #vfTimerFill { background: linear-gradient(90deg, #48cae4, #9be7ff); }
+  #vfTimer { height: 12px; }
+  #vfTimeText { position: absolute; inset: 0; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; color: #fff; text-shadow: 0 1px 2px #000; }
+  #vfPips.cleared .pip { animation: pipFlash 0.7s ease-out; }
+  @keyframes pipFlash { 0% { background: #fff; box-shadow: 0 0 10px #fff; } 100% { } }
+  #vfBossBtn em { font-style: normal; color: #9be7ff; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+  #voidFront.boss #vfHpFill { transition: none; }
+
+  #vfBanner { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; pointer-events: none; opacity: 0; padding: 8px 4px; }
+  #vfBanner.show { animation: vfBanner 2.4s ease-out forwards; }
+  #vfBanner .vb-k { font-size: 10px; letter-spacing: 4px; text-transform: uppercase; font-weight: 700; }
+  #vfBanner .vb-t { font-size: 20px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 0 14px currentColor; }
+  #vfBanner .vb-s { font-size: 10px; opacity: 0.85; margin-top: 2px; padding: 0 8px; }
+  #vfBanner.boss { color: #ff8fa3; background: linear-gradient(90deg, transparent, rgba(120,0,20,0.75), transparent); }
+  #vfBanner.boss .vb-k { animation: surgeFlash 0.2s ease-in-out infinite alternate; }
+  #vfBanner.sector { color: hsl(var(--sector-hue),90%,78%); background: linear-gradient(90deg, transparent, rgba(0,0,0,0.6), transparent); }
+  #vfBanner.gilded { color: #ffd166; background: linear-gradient(90deg, transparent, rgba(80,60,0,0.6), transparent); }
+  #vfBanner.fail { color: #ff6b6b; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.6), transparent); }
+  @keyframes vfBanner {
+    0% { opacity: 0; transform: translateY(-50%) scaleX(1.6); letter-spacing: 6px; }
+    12% { opacity: 1; transform: translateY(-50%) scaleX(1); }
+    78% { opacity: 1; transform: translateY(-50%); }
+    100% { opacity: 0; transform: translateY(-65%); }
+  }
+
+  #abilityBar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .ab-btn { --cd: 0deg; position: relative; aspect-ratio: 1; border-radius: 9px; border: 1px solid rgba(157,78,221,0.45);
+    background: radial-gradient(circle at 50% 35%, rgba(157,78,221,0.35), rgba(20,10,40,0.8)); color: #f1e3ff; font: inherit; cursor: pointer; padding: 0; overflow: hidden;
+    transition: transform 0.1s, box-shadow 0.2s; }
+  .ab-btn:hover:not(.locked) { transform: translateY(-1px); filter: brightness(1.2); }
+  .ab-btn:active:not(.locked) { transform: scale(0.94); }
+  .ab-ic { font-size: 17px; line-height: 1; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .ab-key { position: absolute; left: 3px; top: 1px; font-size: 8.5px; font-weight: 700; opacity: 0.6; }
+  .ab-cd { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; text-shadow: 0 1px 3px #000;
+    background: conic-gradient(rgba(5,3,12,0.72) var(--cd), transparent 0); }
+  .ab-btn.ready { border-color: rgba(255,209,102,0.7); box-shadow: 0 0 10px rgba(255,209,102,0.35), inset 0 0 8px rgba(255,209,102,0.2); }
+  .ab-btn.ready .ab-ic { text-shadow: 0 0 8px #ffd166; }
+  .ab-btn.active { border-color: #9be7ff; box-shadow: 0 0 14px rgba(120,220,255,0.7); animation: surgeFlash 0.4s ease-in-out infinite alternate; }
+  .ab-btn.active .ab-cd { background: conic-gradient(rgba(120,220,255,0.28) var(--cd), transparent 0); }
+  .ab-btn.locked { opacity: 0.35; cursor: default; filter: grayscale(1); }
+  .ab-btn.locked .ab-ic { top: -8px; font-size: 13px; }
+  .ab-lock { position: absolute; left: 0; right: 0; bottom: 3px; font-size: 9px; font-weight: 700; }
+  .ab-btn.fresh { animation: abFresh 1s ease-in-out 4; }
+  @keyframes abFresh { 50% { box-shadow: 0 0 18px #ffd166; transform: scale(1.08); } }
+
+  #relicCard { --rc: #fff; position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 10px; align-items: center; padding: 9px 11px;
+    border-radius: 10px; border: 1px solid var(--rc); background: rgba(10,6,22,0.94); box-shadow: 0 0 22px color-mix(in srgb, var(--rc) 45%, transparent);
+    opacity: 0; transform: translateY(20px) scale(0.95); pointer-events: none; transition: opacity 0.3s, transform 0.35s cubic-bezier(.2,1.6,.4,1); z-index: 3; }
+  #relicCard.show { opacity: 1; transform: none; }
+  #relicCard .rc-icon { font-size: 26px; color: var(--rc); text-shadow: 0 0 12px var(--rc); width: 34px; text-align: center; }
+  #relicCard .rc-rar { font-size: 9.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--rc); font-weight: 800; }
+  #relicCard .rc-name { font-size: 13px; font-weight: 700; }
+  #relicCard .rc-gain { font-size: 10.5px; color: var(--text-dim); }
+  #relicCard.rc-legendary { background: linear-gradient(135deg, rgba(60,40,0,0.96), rgba(10,6,22,0.96)); }
+  #relicCard.rc-legendary.show .rc-icon { animation: surgeFlash 0.3s ease-in-out infinite alternate; }
+
+  .armory .section-title .muted, .arm-n .muted { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: 0.6; font-size: 11px; }
+  .arm-ab { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: left; }
+  .arm-ab.locked { opacity: 0.45; }
+  .arm-ic { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: rgba(157,78,221,0.25); flex-shrink: 0; }
+  .arm-n { font-size: 13px; font-weight: 700; }
+  .arm-d { font-size: 11.5px; color: var(--text-dim); }
+  .arm-p { font-size: 11.5px; color: var(--text-dim); margin: 4px 0 8px; text-align: left; }
+  .arm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .arm-rel { display: grid; grid-template-columns: 26px 1fr; grid-template-rows: auto auto; column-gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.04); text-align: left; }
+  .arm-rel.none { opacity: 0.4; }
+  .arm-ric { grid-row: span 2; font-size: 18px; color: var(--gold); display: flex; align-items: center; justify-content: center; }
+  .arm-rn { font-size: 12px; font-weight: 700; }
+  .arm-rv { font-size: 10.5px; color: var(--cyan); }
+  .arm-odd { display: grid; grid-template-columns: 76px 1fr 44px 28px; gap: 8px; align-items: center; font-size: 11.5px; margin: 3px 0; text-align: left; }
+  .arm-odd-bar { height: 7px; border-radius: 4px; background: rgba(255,255,255,0.07); overflow: hidden; }
+  .arm-odd-bar b { display: block; height: 100%; }
+  .armory { max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+
   /* ---- Goals ---- */
   #goalsPanel { width: min(520px, 100%); padding: 10px 12px; }
   #goalsPanel .goals-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
@@ -454,10 +545,23 @@
     #mainRow { flex-direction: column; gap: 6px; }
     #centerCol { flex: 0 0 auto; gap: 4px; }
     #coreStage { --core-size: min(180px, 24vh, 44vw); }
-    #battleRow { gap: 8px; align-items: stretch; }
+    #battleRow { gap: 6px; align-items: stretch; }
+    #coreStage { --core-size: min(160px, 22vh, 40vw); }
+    #igniteWrap { flex: 0 0 auto; max-width: 42vw; justify-content: center; }
+    #hint { font-size: 10.5px; text-align: center; letter-spacing: 0.3px; }
     #voidFront { width: auto; flex: 1; min-width: 0; padding: 6px 8px; gap: 4px; }
-    #vfArena { height: auto; flex: 1; min-height: 90px; }
+    #vfArena { height: auto; flex: 1; min-height: 110px; }
+    #vfSector { display: none; }
     #vfInfo { display: none; }
+    #abilityBar { gap: 3px; }
+    .ab-ic { font-size: 13px; }
+    .ab-key { display: none; }
+    .ab-cd { font-size: 10px; }
+    #vfBanner .vb-t { font-size: 15px; }
+    #vfBanner .vb-s { display: none; }
+    #relicCard { left: 4px; right: 4px; bottom: 4px; padding: 6px; gap: 6px; }
+    #relicCard .rc-icon { font-size: 20px; width: 24px; }
+    #relicCard .rc-gain { display: none; }
     #vfBossBtn { padding: 5px 6px; font-size: 11px; }
     .vf-head .section-title { font-size: 9px; }
     #stageLabel .stage-flavor, #ignitePower { display: none; }
@@ -516,11 +620,15 @@
         <div id="ignitePower">Click power: <b id="clickPowerVal">1</b> · Crit chance <b id="critChanceVal">5%</b></div>
       </div>
       <div id="voidFront" class="panel">
-        <div class="vf-head"><div class="section-title">Void Front</div><div id="vfZone">Zone 1</div></div>
+        <div class="vf-head">
+          <div><div class="section-title">Void Front</div><div id="vfSector"></div></div>
+          <div class="vf-head-r"><div id="vfZone">Zone 1</div><button id="vfRelicBtn" title="Armory: abilities, relics and drop odds">◈ <span id="vfRelicCount">0</span></button></div>
+        </div>
         <div id="vfPips"></div>
-        <div id="vfArena"><canvas id="vfCanvas"></canvas><div id="vfName"></div></div>
+        <div id="vfArena"><canvas id="vfCanvas"></canvas><div id="vfName"></div><div id="vfAffix"></div><div id="vfBanner"></div><div id="relicCard"></div></div>
         <div class="vf-bar"><div id="vfHpFill"></div><span id="vfHpText"></span></div>
-        <div class="vf-bar" id="vfTimer"><div id="vfTimerFill"></div></div>
+        <div class="vf-bar" id="vfTimer"><div id="vfTimerFill"></div><span id="vfTimeText"></span></div>
+        <div id="abilityBar"></div>
         <div id="vfInfo"><span>DPS <b id="vfDps">0</b></span><span>Dominion <b id="vfDom">+0%</b></span></div>
         <button id="vfBossBtn"></button>
       </div>
@@ -718,6 +826,13 @@ const ACHIEVEMENTS = [
   { id: 'zone_25',        name: 'Deep Incursion',     desc: 'Reach Zone 25 of the Void Front.',          category: 'Void', check: s => s.stats.bestZone >= 25 },
   { id: 'zone_50',        name: 'Edge of Nothing',    desc: 'Reach Zone 50 of the Void Front.',          category: 'Void', check: s => s.stats.bestZone >= 50 },
   { id: 'zone_100',       name: 'Light Unending',     desc: 'Reach Zone 100 of the Void Front.',         category: 'Void', check: s => s.stats.bestZone >= 100 },
+  { id: 'ability_1',      name: 'Unleashed',          desc: 'Use an ability.',                           category: 'Void', check: s => s.stats.abilitiesUsed >= 1 },
+  { id: 'ability_100',    name: 'Arsenal',            desc: 'Use abilities 100 times.',                  category: 'Void', check: s => s.stats.abilitiesUsed >= 100 },
+  { id: 'relic_1',        name: 'Treasure Hunter',    desc: 'Find a relic.',                             category: 'Void', check: s => s.stats.relicsFound >= 1 },
+  { id: 'relic_25',       name: 'Curator',            desc: 'Find 25 relics.',                           category: 'Void', check: s => s.stats.relicsFound >= 25 },
+  { id: 'relic_legend',   name: 'Mythic Find',        desc: 'Find a Legendary relic.',                   category: 'Void', check: s => s.stats.legendariesFound >= 1 },
+  { id: 'gilded_10',      name: 'Gold Rush',          desc: 'Defeat 10 Gilded Wisps.',                   category: 'Void', check: s => s.stats.gildedDefeated >= 10 },
+  { id: 'affix_boss',     name: 'Adaptable',          desc: 'Defeat a boss with an affix.',              category: 'Void', check: s => s.stats.affixBossesDefeated >= 1 },
 ];
 
 // Goals: three always-on short-term objectives, regenerated from the player's
@@ -744,6 +859,50 @@ const BOSS_NAMES = ['The Hollow Maw', 'Entropy Wyrm', 'Null Sovereign', 'The Unm
 const ENEMY_SPECIES = [
   { name: 'Void Mass', hue: 275 }, { name: 'Null Crystal', hue: 195 }, { name: 'Entropy Bloom', hue: 330 },
   { name: 'Hollow Spore', hue: 150 }, { name: 'Dark Shard', hue: 240 },
+];
+// Every 10 zones is a new sector with its own arena colour.
+const SECTORS = [
+  { name: 'The Rim', hue: 275 }, { name: 'Ashen Drift', hue: 20 }, { name: 'Shattered Veil', hue: 195 },
+  { name: 'Hollow Expanse', hue: 150 }, { name: 'Crimson Deep', hue: 350 }, { name: 'Silent Choir', hue: 230 },
+  { name: 'Abyssal Core', hue: 300 }, { name: 'The Beyond', hue: 45 },
+];
+// Bosses from zone 15 on carry an affix that changes how they have to be beaten.
+const BOSS_AFFIXES = [
+  { id: 'shielded',  name: 'Shielded',     desc: 'Beam damage halved: click it down.' },
+  { id: 'regen',     name: 'Regenerating', desc: 'Heals 2% of its HP every second.' },
+  { id: 'swift',     name: 'Swift',        desc: 'Only 20s on the clock, but double Matter.' },
+  { id: 'armored',   name: 'Armored',      desc: 'Takes 30% less damage, but drops a second relic.' },
+];
+const GILDED = { chance: 0.03, bounty: 10, relicChance: 0.25, hue: 45 };
+
+// Active abilities: unlocked permanently by the deepest zone ever reached.
+// Cooldowns are wall-clock, so they keep recharging while you're away.
+const ABILITIES = [
+  { id: 'lance',     icon: '✦', name: 'Nova Lance',   zone: 3,  cd: 45,  dur: 0,  desc: 'Hurl a lance worth 15s of your DPS at the current enemy.' },
+  { id: 'overdrive', icon: '⚡', name: 'Overdrive',    zone: 8,  cd: 90,  dur: 15, desc: 'x3 click power and +25% crit chance for 15s.' },
+  { id: 'chrono',    icon: '⧗', name: 'Chrono Lock',  zone: 13, cd: 120, dur: 10, desc: 'Freeze the boss clock and deal +50% Void damage for 10s.' },
+  { id: 'plunder',   icon: '✧', name: 'Plunder',      zone: 18, cd: 150, dur: 30, desc: 'x5 kill bounties and double relic luck for 30s.' },
+  { id: 'cascade',   icon: '☄', name: 'Star Cascade', zone: 25, cd: 180, dur: 10, desc: 'The core Ignites itself 12 times a second for 10s.' },
+  { id: 'crunch',    icon: '↺', name: 'Big Crunch',   zone: 35, cd: 600, dur: 0,  desc: 'Instantly recharge every other ability.' },
+];
+
+// Relics: boss loot rolled on a rarity table. They survive every Collapse, and
+// duplicates stack, so each boss kill is a small permanent upgrade.
+const RARITIES = [
+  { id: 'common',    name: 'Common',    color: '#c9d1e8', weight: 62, pts: 1 },
+  { id: 'rare',      name: 'Rare',      color: '#48cae4', weight: 27, pts: 2.5 },
+  { id: 'epic',      name: 'Epic',      color: '#c77dff', weight: 9,  pts: 6 },
+  { id: 'legendary', name: 'Legendary', color: '#ffd166', weight: 2,  pts: 15 },
+];
+const RELICS = [
+  { id: 'fury',     icon: '🜂', name: 'Shard of Fury',    per: 0.10,  cap: Infinity, label: v => `+${Math.round(v * 100)}% bolt damage` },
+  { id: 'lens',     icon: '◎', name: 'Void Lens',        per: 0.004, cap: 0.35,     label: v => `+${(v * 100).toFixed(1)}% crit chance` },
+  { id: 'sand',     icon: '⧗', name: 'Chrono Sand',      per: 0.5,   cap: 30,       label: v => `+${v.toFixed(1)}s boss timer` },
+  { id: 'coil',     icon: '✧', name: "Hoarder's Coil",   per: 0.15,  cap: Infinity, label: v => `+${Math.round(v * 100)}% kill bounties` },
+  { id: 'heart',    icon: '✺', name: 'Resonant Heart',   per: 0.02,  cap: Infinity, label: v => `+${Math.round(v * 100)}% production` },
+  { id: 'echo',     icon: '↻', name: 'Echo Stone',       per: 0.01,  cap: 0.5,      label: v => `-${Math.round(v * 100)}% ability cooldowns` },
+  { id: 'prism',    icon: '◆', name: 'Prism of Plenty',  per: 0.04,  cap: Infinity, label: v => `+${Math.round(v * 100)}% Matter` },
+  { id: 'lodestar', icon: '★', name: 'Lodestar',         per: 0.03,  cap: 3,        label: v => `+${Math.round(v * 100)}% relic luck` },
 ];
 
 const SURGE = { perClick: 0.022, perCrit: 0.05, decayPerSec: 0.08, idleGrace: 1.0, duration: 12, cooldown: 30, clickMult: 5, prodMult: 2 };
@@ -776,7 +935,11 @@ function defaultState() {
       surgesTriggered: 0, goalsCompleted: 0, lifetimeMatter: 0, peakRate: 0,
       cycleStartedAt: Date.now(), fastestCycleSeconds: 0,
       enemiesDefeated: 0, bossesDefeated: 0, bestZone: 1,
+      relicsFound: 0, legendariesFound: 0, abilitiesUsed: 0, gildedDefeated: 0, affixBossesDefeated: 0,
     },
+    abilities: {},   // id -> { readyAt, activeUntil } (epoch ms)
+    relics: {},      // id -> stacked points
+    relicLog: {},    // rarity id -> count found
     void: { zone: 1, kills: 0, maxCleared: 0, farming: false, bossesThisCycle: 0 },
     daily: { lastDay: null, streak: 0, bestStreak: 0 },
     buffs: { blessingUntil: 0 },
@@ -816,7 +979,7 @@ const runtime = {
   audioCtx: null,
   surge: { meter: 0, activeUntil: 0, cooldownUntil: 0, lastClick: 0 },
   enemy: null,
-  vf: { shards: [], bolts: [], clickDps: 0, respawnIn: 0, aw: 0, ah: 0, dpr: 1, arenaPos: null, corePos: null, coreR: 0 },
+  vf: { shards: [], bolts: [], lances: [], loot: [], clickDps: 0, respawnIn: 0, aw: 0, ah: 0, dpr: 1, arenaPos: null, corePos: null, coreR: 0, cascadeAcc: 0 },
 };
 
 function ownedOf(s, genId) {
@@ -915,6 +1078,7 @@ function globalProductionMultiplier() {
   if (boostActive()) mult *= 2;
   if (surgeActive()) mult *= SURGE.prodMult;
   mult *= dominionMultiplier();
+  mult *= 1 + relicValue('heart');
   return mult;
 }
 
@@ -954,6 +1118,8 @@ function critStats() {
   for (const m of MONUMENTS) {
     if (m.effect.type === 'crit' && monumentPurchased(m.id)) { chance += m.effect.chance; mult += m.effect.mult; }
   }
+  chance += relicValue('lens');
+  if (abilityActive('overdrive')) chance += 0.25;
   if (runtime.activeEvent && runtime.activeEvent.type === 'meteorShower') {
     chance = Math.min(1, chance + 0.5);
     mult *= 2;
@@ -970,7 +1136,7 @@ function matterDropChance() {
 }
 
 function matterGainMultiplier() {
-  let mult = 1 + 0.10 * state.prestige.upgrades.matterAffinity;
+  let mult = (1 + 0.10 * state.prestige.upgrades.matterAffinity) * (1 + relicValue('prism'));
   for (const m of MONUMENTS) {
     if (m.effect.type === 'matterGainPct' && monumentPurchased(m.id)) mult *= (1 + m.effect.value);
   }
@@ -990,6 +1156,7 @@ function clickPower() {
   // pointless to click once generators take over.
   let out = Math.max(power * globalProductionMultiplier(), totalProductionPerSecond() * 0.04);
   if (surgeActive()) out *= SURGE.clickMult;
+  if (abilityActive('overdrive')) out *= 3;
   return out;
 }
 
@@ -1038,7 +1205,8 @@ function singularitiesOnCollapse() {
    ACTIONS
    ========================================================================= */
 
-function doIgnite(clientX, clientY) {
+// auto: fired by Star Cascade, so it skips the per-click sound and screen clutter.
+function doIgnite(clientX, clientY, auto) {
   const { chance, mult } = critStats();
   const isCrit = Math.random() < chance;
   const power = clickPower();
@@ -1055,12 +1223,13 @@ function doIgnite(clientX, clientY) {
       popValue('matterVal');
     }
   }
-  spawnFloatPop(clientX, clientY, '+' + formatNum(gained), isCrit);
+  if (!auto || isCrit) spawnFloatPop(clientX, clientY, '+' + formatNum(gained), isCrit);
   spawnClickParticles(clientX, clientY, isCrit);
-  spawnShockwave(clientX, clientY, isCrit ? 'crit' : null);
-  fireBolt(gained, isCrit);
+  if (!auto) spawnShockwave(clientX, clientY, isCrit ? 'crit' : null);
+  fireBolt(gained * boltDamageMult(), isCrit);
   feedSurge(isCrit);
-  kickCore(isCrit ? 1 : 0.45);
+  kickCore(isCrit ? 1 : auto ? 0.2 : 0.45);
+  if (auto) { checkAchievements(); return; }
   advanceTutorial();
   playTone(isCrit ? 660 : 440, isCrit ? 0.14 : 0.06, isCrit ? 'triangle' : 'sine', isCrit ? 0.11 : 0.05, { pitchJitter: 0.04, reverb: isCrit ? 0.15 : 0 });
   checkAchievements();
@@ -1499,6 +1668,7 @@ function makeGoalCandidates() {
   if (state.stats.totalClicks > 60) c.push({ type: 'surge', target: 1, base: state.stats.surgesTriggered });
   c.push({ type: 'kills', target: [8, 12, 20][Math.floor(Math.random() * 3)], base: state.stats.enemiesDefeated });
   if (!state.void.farming) c.push({ type: 'zone', target: state.void.zone + 1 + Math.floor(Math.random() * 2) });
+  if (ABILITIES.some(abilityUnlocked)) c.push({ type: 'ability', target: [2, 3, 4][Math.floor(Math.random() * 3)], base: state.stats.abilitiesUsed });
   return c;
 }
 
@@ -1533,6 +1703,7 @@ function goalProgress(g) {
     case 'upgrade': return (state.generatorUpgrades.purchased.length - g.base) / g.target;
     case 'surge': return (state.stats.surgesTriggered - g.base) / g.target;
     case 'kills': return (state.stats.enemiesDefeated - g.base) / g.target;
+    case 'ability': return (state.stats.abilitiesUsed - g.base) / g.target;
     case 'zone': return (state.void.maxCleared + 1) / g.target;
   }
   return 0;
@@ -1548,12 +1719,13 @@ function goalText(g) {
     case 'upgrade': return 'Buy an Efficiency Upgrade';
     case 'surge': return 'Trigger a Stellar Surge';
     case 'kills': return `Defeat ${g.target} Void enemies`;
+    case 'ability': return `Use ${g.target} abilities (keys 1–6)`;
     case 'zone': return `Reach Zone ${g.target}`;
   }
   return '';
 }
 
-const GOAL_ICONS = { own: '⚙', clicks: '⚡', crits: '✸', earn: '✦', upgrade: '▲', surge: '☇', kills: '⚔', zone: '⚑' };
+const GOAL_ICONS = { own: '⚙', clicks: '⚡', crits: '✸', earn: '✦', upgrade: '▲', surge: '☇', kills: '⚔', zone: '⚑', ability: '✦' };
 
 function goalEnergyReward(g) {
   return Math.max(totalProductionPerSecond() * g.rewardSecs, clickPower() * 25, 25);
@@ -2181,31 +2353,156 @@ function playStageChord() {
 
 function isBossZone(z) { return z % VOID.bossEvery === 0; }
 function enemyMaxHp(z) { return VOID.hp0 * Math.pow(VOID.hpGrowth, z - 1) * (isBossZone(z) ? VOID.bossMult : 1); }
-function enemyBounty(z) { return enemyMaxHp(z) * VOID.bounty; }
-function bossMatter(z) { return 2 + Math.floor(z / 10); }
+function enemyBounty(z) {
+  let b = VOID.hp0 * Math.pow(VOID.hpGrowth, z - 1) * (isBossZone(z) ? VOID.bossMult : 1) * VOID.bounty;
+  b *= 1 + relicValue('coil');
+  if (abilityActive('plunder')) b *= 5;
+  return b;
+}
+function bossMatter(z, affix) { return (2 + Math.floor(z / 10)) * (affix === 'swift' ? 2 : 1); }
 function bossName(z) { return BOSS_NAMES[(z / VOID.bossEvery - 1) % BOSS_NAMES.length]; }
+function bossAffix(z) { return isBossZone(z) && z >= 15 ? BOSS_AFFIXES[(z / VOID.bossEvery * 3 + 1) % BOSS_AFFIXES.length].id : null; }
+function affixInfo(id) { return BOSS_AFFIXES.find(a => a.id === id); }
+function bossTimeFor(affix) { return (affix === 'swift' ? 20 : VOID.bossTime) + relicValue('sand'); }
+function sectorOf(z) { return Math.floor((z - 1) / 10); }
+function sectorInfo(z) { const i = sectorOf(z); return { ...SECTORS[i % SECTORS.length], num: i + 1 }; }
+function roman(n) { const m = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]; let s = ''; for (const [v, r] of m) while (n >= v) { s += r; n -= v; } return s; }
 function dominionMultiplier() { return 1 + VOID.dominionPerZone * state.void.maxCleared; }
 
 // Damage per second shown to the player: production plus recent click damage.
-function currentDps() { return totalProductionPerSecond() + runtime.vf.clickDps; }
+function currentDps() { return totalProductionPerSecond() * beamDamageMult() + runtime.vf.clickDps; }
+
+/* ---- abilities ---- */
+
+function abilityDef(id) { return ABILITIES.find(a => a.id === id); }
+function abilityUnlocked(a) { return state.stats.bestZone >= a.zone; }
+function abilityRec(id) { return state.abilities[id] || (state.abilities[id] = { readyAt: 0, activeUntil: 0 }); }
+function abilityActive(id) { const r = state.abilities[id]; return !!r && Date.now() < r.activeUntil; }
+function abilityCooldownLeft(id) { const r = state.abilities[id]; return r ? Math.max(0, (r.readyAt - Date.now()) / 1000) : 0; }
+function abilityCooldown(a) { return a.cd * (1 - relicValue('echo')); }
+
+function useAbility(id) {
+  const a = abilityDef(id);
+  if (!a || !abilityUnlocked(a) || abilityCooldownLeft(id) > 0) return false;
+  if (id === 'lance' && (!runtime.enemy || runtime.enemy.deadT > 0)) return false;
+  const now = Date.now(), rec = abilityRec(id);
+  rec.readyAt = now + abilityCooldown(a) * 1000;
+  if (a.dur) rec.activeUntil = now + a.dur * 1000;
+  state.stats.abilitiesUsed++;
+  if (id === 'lance') {
+    const dmg = Math.max(totalProductionPerSecond() * 15, clickPower() * 30) * voidDamageMult();
+    runtime.vf.lances.push({ t: 0, dur: 0.35, dmg });
+  } else if (id === 'crunch') {
+    for (const o of ABILITIES) if (o.id !== 'crunch' && state.abilities[o.id]) state.abilities[o.id].readyAt = 0;
+    logToast('Big Crunch: every ability is recharged.', 'event');
+  } else if (id === 'chrono') {
+    el('voidFront').classList.add('chrono');
+  }
+  const btn = document.querySelector(`.ab-btn[data-ab="${id}"]`);
+  if (btn) { const r = btn.getBoundingClientRect(); spawnShockwave(r.left + r.width / 2, r.top + r.height / 2, 'crit'); }
+  playAbility(id);
+  renderAbilityBar(true);
+  checkAchievements();
+  return true;
+}
+
+let knownAbilityUnlocks = -1;
+function checkAbilityUnlocks() {
+  const n = ABILITIES.filter(abilityUnlocked).length;
+  if (knownAbilityUnlocks >= 0 && n > knownAbilityUnlocks) {
+    const a = ABILITIES[n - 1];
+    logToast(`New ability: ${a.icon} ${a.name} (key ${n}). ${a.desc}`, 'achievement');
+    playChime(660, 0.4);
+    renderAbilityBar(true);
+    const btn = document.querySelector(`.ab-btn[data-ab="${a.id}"]`);
+    if (btn) btn.classList.add('fresh');
+  }
+  knownAbilityUnlocks = n;
+}
+
+/* ---- relics ---- */
+
+function relicValue(id) {
+  const r = RELICS.find(x => x.id === id);
+  return Math.min(r.cap, (state.relics[id] || 0) * r.per);
+}
+function relicLuck() { return (1 + relicValue('lodestar')) * (abilityActive('plunder') ? 2 : 1) * (1 + state.void.zone / 60); }
+function rarityOdds() {
+  const luck = relicLuck();
+  const w = RARITIES.map((r, i) => r.weight * (i === 0 ? 1 : Math.pow(luck, i * 0.8)));
+  const tot = w.reduce((a, b) => a + b, 0);
+  return w.map(x => x / tot);
+}
+function rollRarity() {
+  const odds = rarityOdds();
+  let x = Math.random();
+  for (let i = 0; i < odds.length; i++) { if ((x -= odds[i]) < 0) return RARITIES[i]; }
+  return RARITIES[0];
+}
+function totalRelicsFound() { return RARITIES.reduce((a, r) => a + (state.relicLog[r.id] || 0), 0); }
+
+function dropRelic(delay) {
+  const rar = rollRarity();
+  const relic = RELICS[Math.floor(Math.random() * RELICS.length)];
+  const before = relicValue(relic.id);
+  state.relics[relic.id] = (state.relics[relic.id] || 0) + rar.pts;
+  state.relicLog[rar.id] = (state.relicLog[rar.id] || 0) + 1;
+  state.stats.relicsFound++;
+  if (rar.id === 'legendary') state.stats.legendariesFound++;
+  const gain = relicValue(relic.id) - before;
+  runtime.vf.loot.push({ t: -(delay || 0), color: rar.color, rarity: rar.id, x: (Math.random() - 0.5) * 3 });
+  setTimeout(() => {
+    showRelicCard(relic, rar, gain);
+    logToast(`${rar.name} relic: ${relic.icon} ${relic.name} (${relic.label(gain)}).`, rar.id === 'legendary' || rar.id === 'epic' ? 'achievement' : 'event');
+    playRelic(rar.id);
+    if (rar.id === 'legendary') { shakeScreen(); const p = runtime.vf.arenaPos; if (p) spawnShockwave(p.x, p.y, 'tier'); }
+  }, 350 + (delay || 0) * 1000);
+  checkAchievements();
+}
+
+let relicCardTimer = 0;
+function showRelicCard(relic, rar, gain) {
+  const card = el('relicCard');
+  card.style.setProperty('--rc', rar.color);
+  card.className = 'rc-' + rar.id;
+  card.innerHTML = `<div class="rc-icon">${relic.icon}</div><div class="rc-body"><div class="rc-rar">${rar.name} relic</div><div class="rc-name">${relic.name}</div><div class="rc-gain">${relic.label(gain)} · total ${relic.label(relicValue(relic.id))}</div></div>`;
+  void card.offsetWidth;
+  card.classList.add('show');
+  clearTimeout(relicCardTimer);
+  relicCardTimer = setTimeout(() => card.classList.remove('show'), rar.id === 'legendary' ? 5200 : 3400);
+}
+
+/* ---- enemies ---- */
 
 function spawnEnemy() {
   const v = state.void, z = v.zone, boss = isBossZone(z);
   const r = seededRand(Math.floor(Math.random() * 1e9));
   const species = ENEMY_SPECIES[Math.floor(r() * ENEMY_SPECIES.length)];
+  const gilded = !boss && Math.random() < GILDED.chance;
+  const affix = boss ? bossAffix(z) : null;
   const maxHp = enemyMaxHp(z);
+  const prev = runtime.enemy;
   runtime.enemy = {
-    zone: z, boss, maxHp, hp: maxHp,
-    name: boss ? bossName(z) : species.name,
-    hue: boss ? 350 : species.hue,
+    zone: z, boss, gilded, affix, maxHp, hp: maxHp,
+    name: boss ? bossName(z) : gilded ? 'Gilded Wisp' : species.name,
+    hue: boss ? 350 : gilded ? GILDED.hue : species.hue,
     cells: buildEnemyCells(r, boss ? 4 : 2 + (z > 10 ? 1 : 0)),
     spawnT: 0, flash: 0, shake: 0, deadT: 0, t: r() * 10,
-    bossLeft: boss ? VOID.bossTime : 0,
+    bossTime: boss ? bossTimeFor(affix) : 0,
+    bossLeft: boss ? bossTimeFor(affix) : 0,
   };
   runtime.vf.respawnIn = 0;
   if (boss) {
     playBossAppear();
-    logToast(`⚠ Boss: ${runtime.enemy.name}. Defeat it within ${VOID.bossTime}s! (Save your Surge for this.)`, 'event');
+    const ai = affixInfo(affix);
+    showArenaBanner('⚠ Warning ⚠', runtime.enemy.name, ai ? `${ai.name} · ${ai.desc}` : `Defeat it within ${Math.round(runtime.enemy.bossTime)}s`, 'boss');
+    logToast(`⚠ Boss: ${runtime.enemy.name}${ai ? ` (${ai.name})` : ''}. Defeat it within ${Math.round(runtime.enemy.bossTime)}s! Save your Surge and abilities for this.`, 'event');
+  } else if (!prev || sectorOf(prev.zone) !== sectorOf(z)) {
+    const s = sectorInfo(z);
+    if (prev) showArenaBanner(`Sector ${roman(s.num)}`, s.name, `Zones ${(s.num - 1) * 10 + 1}–${s.num * 10}`, 'sector');
+  } else if (gilded) {
+    showArenaBanner('', '✦ Gilded Wisp ✦', `x${GILDED.bounty} bounty · may carry a relic`, 'gilded');
+    playTone(1318.5, 0.25, 'triangle', 0.05, { reverb: 0.4 });
   }
   renderVoidFront();
 }
@@ -2225,6 +2522,19 @@ function buildEnemyCells(r, rings) {
   cells.forEach(c => { if (c.d === 0) c.breakAt = -1; });
   return cells;
 }
+
+// Multipliers on damage dealt to the Void (not on Energy earned).
+function voidDamageMult() {
+  const e = runtime.enemy;
+  let m = abilityActive('chrono') ? 1.5 : 1;
+  if (e && e.affix === 'armored') m *= 0.7;
+  return m;
+}
+function beamDamageMult() {
+  const e = runtime.enemy;
+  return voidDamageMult() * (e && e.affix === 'shielded' ? 0.5 : 1);
+}
+function boltDamageMult() { return 1 + relicValue('fury'); }
 
 function damageEnemy(amount) {
   const e = runtime.enemy;
@@ -2250,15 +2560,16 @@ function defeatEnemy() {
   const e = runtime.enemy, v = state.void;
   e.deadT = 0.0001;
   e.cells.forEach(c => { if (!c.broken) breakCell(e, c); });
-  const bounty = enemyBounty(e.zone);
+  const bounty = enemyBounty(e.zone) * (e.gilded ? GILDED.bounty : 1);
   addEnergy(bounty);
   state.stats.enemiesDefeated++;
   const pos = runtime.vf.arenaPos;
-  spawnFloatPop(pos.x, pos.y - 20, '+' + formatNum(bounty), false, '#c77dff');
+  spawnFloatPop(pos.x, pos.y - 20, '+' + formatNum(bounty), e.gilded, e.gilded ? '#ffd166' : '#c77dff');
   if (e.boss) {
     state.stats.bossesDefeated++;
+    if (e.affix) state.stats.affixBossesDefeated++;
     v.bossesThisCycle++;
-    const m = Math.round(bossMatter(e.zone) * matterGainMultiplier());
+    const m = Math.round(bossMatter(e.zone, e.affix) * matterGainMultiplier());
     addMatter(m);
     popValue('matterVal');
     spawnFloatPop(pos.x, pos.y - 44, '+' + formatInt(m) + ' Matter', true, '#48cae4');
@@ -2267,12 +2578,19 @@ function defeatEnemy() {
     shakeScreen();
     playBossDefeated();
     Platform.happytime();
+    dropRelic(0.5);
+    if (e.affix === 'armored') dropRelic(1.3);
     advanceZone();
   } else {
     playKill();
+    if (e.gilded) {
+      state.stats.gildedDefeated++;
+      playChime(880, 0.4);
+      if (Math.random() < GILDED.relicChance) dropRelic(0.4);
+    }
     if (!v.farming) { v.kills++; if (v.kills >= VOID.killsPerZone) advanceZone(); }
   }
-  runtime.vf.respawnIn = e.boss ? 1.2 : 0.45;
+  runtime.vf.respawnIn = e.boss ? 1.6 : 0.45;
   checkAchievements();
 }
 
@@ -2283,18 +2601,21 @@ function advanceZone() {
   v.kills = 0;
   v.farming = false;
   if (v.zone > state.stats.bestZone) state.stats.bestZone = v.zone;
+  el('vfPips').classList.remove('cleared'); void el('vfPips').offsetWidth; el('vfPips').classList.add('cleared');
+  checkAbilityUnlocks();
 }
 
 function failBoss() {
   const e = runtime.enemy, v = state.void;
-  logToast(`${e.name} repelled your assault. Grow stronger and challenge it again.`, 'event');
+  logToast(`${e.name} repelled your assault. Farm, grow stronger and challenge it again.`, 'event');
   playBossFail();
+  showArenaBanner('', 'Repelled', 'Farming the previous zone', 'fail');
   v.zone = e.zone - 1;
   v.farming = true;
   v.kills = VOID.killsPerZone;
   e.deadT = 0.0001;
   e.fled = true;
-  runtime.vf.respawnIn = 0.8;
+  runtime.vf.respawnIn = 1.2;
 }
 
 function challengeBoss() {
@@ -2306,15 +2627,34 @@ function challengeBoss() {
   spawnEnemy();
 }
 
-// Called from simTick: production damage and the boss clock.
+// Rough seconds-to-kill for the next boss, affix included (drives the Challenge button).
+function bossKillEstimate(z, dps) {
+  const affix = bossAffix(z), hp = enemyMaxHp(z);
+  const prod = totalProductionPerSecond(), clicks = runtime.vf.clickDps;
+  let eff = prod * (affix === 'shielded' ? 0.5 : 1) + clicks;
+  if (affix === 'armored') eff *= 0.7;
+  if (affix === 'regen') eff -= hp * 0.02;
+  // `need`/`have` are in effective (post-affix) damage, with the same 10% margin used for `ready`.
+  const limit = bossTimeFor(affix);
+  return { time: eff > 0 ? hp / eff : Infinity, limit, need: hp / (limit * 0.9), have: Math.max(0, eff), affix };
+}
+
+// Called from simTick: production damage, the boss clock, regen and Star Cascade.
 function updateVoid(dtSec, rate) {
   const vf = runtime.vf;
   vf.clickDps *= Math.exp(-dtSec / 3);
+  if (abilityActive('cascade')) {
+    vf.cascadeAcc += dtSec * 12;
+    const c = coreCenter();
+    while (vf.cascadeAcc >= 1) { vf.cascadeAcc -= 1; doIgnite(c.x + (Math.random() - 0.5) * 60, c.y + (Math.random() - 0.5) * 60, true); }
+  } else vf.cascadeAcc = 0;
+  if (!abilityActive('chrono')) el('voidFront').classList.remove('chrono');
   const e = runtime.enemy;
   if (!e) return;
   if (e.deadT === 0) {
-    if (rate > 0) damageEnemy(rate * dtSec);
-    if (e.boss && e.deadT === 0) {
+    if (rate > 0) damageEnemy(rate * dtSec * beamDamageMult());
+    if (e.affix === 'regen' && e.deadT === 0) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.02 * dtSec);
+    if (e.boss && e.deadT === 0 && !abilityActive('chrono')) {
       e.bossLeft -= dtSec;
       if (e.bossLeft <= 0) failBoss();
     }
@@ -2324,8 +2664,10 @@ function updateVoid(dtSec, rate) {
 // Called from doIgnite: a bolt flies from the core and lands a moment later.
 function fireBolt(dmg, isCrit) {
   const vf = runtime.vf;
+  dmg *= voidDamageMult();
   vf.clickDps += dmg / 3;
   vf.bolts.push({ t: 0, dur: 0.16 + Math.random() * 0.05, dmg, crit: isCrit, bend: (Math.random() - 0.5) * 80 });
+  if (vf.bolts.length > 60) vf.bolts.splice(0, vf.bolts.length - 60);
 }
 
 /* ---- rendering ---- */
@@ -2411,6 +2753,29 @@ function drawVoid(dt) {
       ctx.beginPath(); ctx.arc(0, 0, s * 7.6, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
     }
+    if (e.affix === 'shielded' && !dying) {
+      // hex shield bubble that ripples when the beam hits it
+      ctx.save();
+      ctx.rotate(e.t * 0.3);
+      ctx.strokeStyle = `hsla(195,100%,70%,${0.35 + e.flash * 0.4})`;
+      ctx.fillStyle = 'hsla(195,100%,60%,0.06)';
+      ctx.lineWidth = 2;
+      hexPath(ctx, 0, 0, s * 8.2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    if (e.affix === 'regen' && !dying) {
+      const k = (e.t * 0.8) % 1;
+      ctx.strokeStyle = `hsla(140,90%,60%,${0.5 * (1 - k)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, s * (3 + k * 5), 0, Math.PI * 2); ctx.stroke();
+    }
+    if (e.gilded && !dying) {
+      for (let i = 0; i < 7; i++) {
+        const a = e.t * 1.4 + i * 0.9, rr = s * (4.5 + Math.sin(e.t * 2 + i) * 0.8);
+        ctx.fillStyle = `hsla(45,100%,${70 + Math.sin(e.t * 6 + i) * 20}%,0.9)`;
+        ctx.beginPath(); ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr, 1.6, 0, Math.PI * 2); ctx.fill();
+      }
+    }
     ctx.rotate(Math.sin(e.t * 0.7) * 0.08);
     const frac = Math.max(0, e.hp / e.maxHp);
     for (const c of e.cells) {
@@ -2420,7 +2785,8 @@ function drawVoid(dt) {
       const x = c.x * s + wob, y = c.y * s;
       const light = 14 + (4 - c.d) * 5;
       hexPath(ctx, x, y, s * 0.93);
-      ctx.fillStyle = e.flash > 0 ? `hsl(${e.hue},60%,${light + e.flash * 55}%)` : `hsl(${e.hue},55%,${light}%)`;
+      const sat = e.gilded ? 85 : 55;
+      ctx.fillStyle = e.flash > 0 ? `hsl(${e.hue},60%,${light + e.flash * 55}%)` : `hsl(${e.hue},${sat}%,${light + (e.gilded ? 12 : 0)}%)`;
       ctx.fill();
       ctx.strokeStyle = near ? `hsla(${e.hue},100%,80%,${0.6 + Math.sin(e.t * 12) * 0.3})` : `hsla(${e.hue},90%,65%,0.85)`;
       ctx.lineWidth = 1.2;
@@ -2462,17 +2828,48 @@ function drawVoid(dt) {
   }
   ctx.restore();
 
+  // relic loot: a gem pops out of the wreck under a pillar of rarity-coloured light
+  for (let i = vf.loot.length - 1; i >= 0; i--) {
+    const L = vf.loot[i];
+    L.t += dt;
+    if (L.t < 0) continue;
+    if (L.t > 2.6) { vf.loot.splice(i, 1); continue; }
+    const fade = L.t > 2 ? 1 - (L.t - 2) / 0.6 : 1;
+    const gx = cx + L.x * s, gy = cy - 10 - Math.min(1, L.t * 2.5) * 18 + Math.sin(L.t * 5) * 3;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.globalCompositeOperation = 'lighter';
+    const pw = 10 + (L.rarity === 'legendary' ? 14 : L.rarity === 'epic' ? 8 : 0);
+    const pg = ctx.createLinearGradient(0, 0, 0, H);
+    pg.addColorStop(0, 'rgba(0,0,0,0)'); pg.addColorStop(0.5, L.color); pg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = pg;
+    ctx.globalAlpha = fade * 0.35 * Math.min(1, L.t * 3);
+    ctx.fillRect(gx - pw / 2, 0, pw, H);
+    ctx.globalAlpha = fade;
+    const gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, 22);
+    gg.addColorStop(0, '#ffffff'); gg.addColorStop(0.3, L.color); gg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gg;
+    ctx.beginPath(); ctx.arc(gx, gy, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.translate(gx, gy); ctx.rotate(L.t * 2);
+    ctx.fillStyle = L.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 0); ctx.lineTo(0, 8); ctx.lineTo(-6, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
   // live HP / timer bars
   if (e) {
     const frac = Math.max(0, e.hp / e.maxHp);
     el('vfHpFill').style.width = (frac * 100) + '%';
     el('vfHpText').textContent = e.deadT > 0 ? (e.fled ? 'Escaped' : 'Destroyed') : `${formatNum(Math.max(0, e.hp))} / ${formatNum(e.maxHp)}`;
     if (e.boss) {
-      el('vfTimerFill').style.width = Math.max(0, e.bossLeft / VOID.bossTime * 100) + '%';
-      el('vfTimer').classList.toggle('urgent', e.bossLeft < 8 && e.deadT === 0);
+      el('vfTimerFill').style.width = Math.max(0, e.bossLeft / e.bossTime * 100) + '%';
+      el('vfTimer').classList.toggle('urgent', e.bossLeft < 8 && e.deadT === 0 && !abilityActive('chrono'));
+      el('vfTimeText').textContent = e.deadT === 0 ? (abilityActive('chrono') ? '⧗ frozen' : e.bossLeft.toFixed(1) + 's') : '';
     }
   }
   drawVoidFx(dt);
+  renderAbilityBar();
 }
 
 // Beam + bolts from the core to the enemy, drawn above the UI.
@@ -2488,7 +2885,7 @@ function drawVoidFx(dt) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   if (rate > 0 && e && e.deadT === 0) {
-    const w = 1 + Math.min(5, Math.log10(rate + 1) * 0.6);
+    const w = (1 + Math.min(5, Math.log10(rate + 1) * 0.6)) * (e.affix === 'shielded' ? 0.6 : 1) * (abilityActive('chrono') ? 1.5 : 1);
     const grad = ctx.createLinearGradient(sx, sy, b.x, b.y);
     grad.addColorStop(0, 'rgba(255,209,102,0.55)');
     grad.addColorStop(1, `hsla(${e.hue},90%,70%,0.55)`);
@@ -2502,6 +2899,31 @@ function drawVoidFx(dt) {
     ctx.lineWidth = w * 3;
     ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(b.x, b.y); ctx.stroke();
     ctx.globalAlpha = 1;
+  }
+  for (let i = vf.lances.length - 1; i >= 0; i--) {
+    const la = vf.lances[i];
+    la.t += dt;
+    const k = Math.min(1, la.t / la.dur);
+    const hx = sx + dx * k, hy = sy + dy * k, tail = Math.max(0, k - 0.45);
+    const lg = ctx.createLinearGradient(sx + dx * tail, sy + dy * tail, hx, hy);
+    lg.addColorStop(0, 'rgba(120,220,255,0)'); lg.addColorStop(1, 'rgba(220,250,255,1)');
+    ctx.strokeStyle = lg; ctx.lineCap = 'round';
+    for (const [w, al] of [[16, 0.25], [7, 0.7], [3, 1]]) {
+      ctx.globalAlpha = al; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(sx + dx * tail, sy + dy * tail); ctx.lineTo(hx, hy); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    if (k >= 1) {
+      vf.lances.splice(i, 1);
+      const en = runtime.enemy;
+      spawnShockwave(b.x, b.y, 'tier');
+      shakeScreen();
+      if (en && en.deadT === 0) {
+        en.flash = 1; en.shake = 1.5;
+        spawnFloatPop(b.x, b.y - 30, '✦ ' + formatNum(la.dmg), true, '#9be7ff');
+        damageEnemy(la.dmg);
+      }
+    }
   }
   for (let i = vf.bolts.length - 1; i >= 0; i--) {
     const bo = vf.bolts[i];
@@ -2539,9 +2961,18 @@ let voidFrontSig = '';
 function renderVoidFront() {
   const v = state.void, e = runtime.enemy;
   const boss = !!(e && e.boss);
-  el('voidFront').classList.toggle('boss', boss);
+  const vfEl = el('voidFront');
+  vfEl.classList.toggle('boss', boss);
+  vfEl.classList.toggle('gilded', !!(e && e.gilded && e.deadT === 0));
+  const sec = sectorInfo(v.zone);
+  vfEl.style.setProperty('--sector-hue', sec.hue);
   el('vfZone').textContent = `Zone ${v.zone}${v.farming ? ' · farming' : ''}`;
+  el('vfSector').textContent = `Sector ${roman(sec.num)} · ${sec.name}`;
   el('vfName').textContent = e ? e.name : '';
+  const ai = e && affixInfo(e.affix);
+  el('vfAffix').textContent = ai ? ai.name : '';
+  el('vfAffix').title = ai ? ai.desc : '';
+  el('vfRelicCount').textContent = totalRelicsFound();
   const sig = `${v.zone}|${v.kills}|${v.farming}|${boss}`;
   if (sig !== voidFrontSig) {
     voidFrontSig = sig;
@@ -2562,13 +2993,79 @@ function renderVoidFront() {
   btn.classList.toggle('show', v.farming);
   if (v.farming) {
     const bz = v.maxCleared + 1;
-    const need = enemyMaxHp(bz);
-    const est = dps > 0 ? need / dps : Infinity;
-    const ready = est <= VOID.bossTime * 0.9;
+    const est = bossKillEstimate(bz, dps);
+    const ready = est.time <= est.limit * 0.9;
     btn.classList.toggle('ready', ready);
-    const html = `⚔ Challenge ${bossName(bz)}<small>${ready ? 'You can win this now!' : `Need ~${formatNum(need / VOID.bossTime)} DPS · have ${formatNum(dps)}`}</small>`;
+    const ax = est.affix ? ` <em>${affixInfo(est.affix).name}</em>` : '';
+    const html = `⚔ Challenge ${bossName(bz)}${ax}<small>${ready ? 'You can win this now!' : `Need ~${formatNum(est.need)} DPS · have ${formatNum(est.have)}`}</small>`;
     if (btn.innerHTML !== html) btn.innerHTML = html;
   }
+}
+
+/* ---- ability bar ---- */
+let abilityBarSig = '';
+function renderAbilityBar(force) {
+  const bar = el('abilityBar');
+  const sig = ABILITIES.map(a => abilityUnlocked(a) ? 1 : 0).join('');
+  if (force || sig !== abilityBarSig) {
+    abilityBarSig = sig;
+    bar.innerHTML = ABILITIES.map((a, i) => abilityUnlocked(a)
+      ? `<button class="ab-btn" data-ab="${a.id}" title="${a.name} [${i + 1}]: ${a.desc} (${Math.round(abilityCooldown(a))}s cooldown)"><span class="ab-ic">${a.icon}</span><span class="ab-key">${i + 1}</span><span class="ab-cd"></span></button>`
+      : `<button class="ab-btn locked" data-ab="${a.id}" title="${a.name}: unlocks at Zone ${a.zone}. ${a.desc}"><span class="ab-ic">${a.icon}</span><span class="ab-lock">Z${a.zone}</span></button>`).join('');
+  }
+  const now = Date.now();
+  for (const b of bar.children) {
+    if (b.classList.contains('locked')) continue;
+    const a = abilityDef(b.dataset.ab), r = state.abilities[a.id];
+    const left = r ? Math.max(0, r.readyAt - now) / 1000 : 0;
+    const active = r && now < r.activeUntil;
+    const cd = abilityCooldown(a);
+    const frac = active ? (r.activeUntil - now) / (a.dur * 1000) : left > 0 ? left / cd : 0;
+    b.classList.toggle('active', !!active);
+    b.classList.toggle('ready', !active && left <= 0);
+    b.style.setProperty('--cd', (frac * 360).toFixed(1) + 'deg');
+    const txt = active ? Math.ceil((r.activeUntil - now) / 1000) + 's' : left > 0 ? (left >= 60 ? Math.ceil(left / 60) + 'm' : Math.ceil(left) + '') : '';
+    const cdEl = b.lastElementChild;
+    if (cdEl.textContent !== txt) cdEl.textContent = txt;
+  }
+}
+
+/* ---- arena banner (boss warning, new sector, gilded, repelled) ---- */
+function showArenaBanner(kicker, title, sub, kind) {
+  const b = el('vfBanner');
+  b.className = '';
+  b.innerHTML = `${kicker ? `<div class="vb-k">${kicker}</div>` : ''}<div class="vb-t">${title}</div>${sub ? `<div class="vb-s">${sub}</div>` : ''}`;
+  void b.offsetWidth;
+  b.className = 'show ' + (kind || '');
+}
+
+/* ---- Relics & abilities overview ---- */
+function showArmory() {
+  const odds = rarityOdds();
+  const abil = ABILITIES.map((a, i) => {
+    const un = abilityUnlocked(a);
+    return `<div class="arm-ab${un ? '' : ' locked'}"><div class="arm-ic">${a.icon}</div><div><div class="arm-n">${a.name} <span class="muted">${un ? `key ${i + 1} · ${Math.round(abilityCooldown(a))}s cooldown` : `unlocks at Zone ${a.zone}`}</span></div><div class="arm-d">${a.desc}</div></div></div>`;
+  }).join('');
+  const rel = RELICS.map(r => {
+    const pts = state.relics[r.id] || 0;
+    const v = relicValue(r.id);
+    return `<div class="arm-rel${pts ? '' : ' none'}"><div class="arm-ric">${r.icon}</div><div class="arm-rn">${r.name}</div><div class="arm-rv">${pts ? r.label(v) : 'not found yet'}${v >= r.cap ? ' (max)' : ''}</div></div>`;
+  }).join('');
+  const found = RARITIES.map(r => `<span style="color:${r.color}">${state.relicLog[r.id] || 0} ${r.name}</span>`).join(' · ');
+  const oddsHtml = RARITIES.map((r, i) => `<div class="arm-odd"><span style="color:${r.color}">${r.name}</span><div class="arm-odd-bar"><b style="width:${(odds[i] * 100).toFixed(1)}%;background:${r.color}"></b></div><span>${(odds[i] * 100).toFixed(odds[i] < 0.1 ? 1 : 0)}%</span><span class="muted">x${r.pts}</span></div>`).join('');
+  showModal(`
+    <h2>◈ Armory</h2>
+    <div class="armory">
+      <div class="section-title">Abilities <span class="muted">(unlocked forever by your deepest zone: ${state.stats.bestZone})</span></div>
+      ${abil}
+      <div class="section-title" style="margin-top:14px">Relics <span class="muted">(kept through every Collapse)</span></div>
+      <p class="arm-p">Every boss drops a relic, Armored bosses drop two, and Gilded Wisps sometimes carry one. Duplicates stack. Found: ${found}</p>
+      <div class="arm-grid">${rel}</div>
+      <div class="section-title" style="margin-top:14px">Drop odds right now <span class="muted">(luck x${relicLuck().toFixed(2)}: deeper zones, Lodestar and Plunder raise it)</span></div>
+      ${oddsHtml}
+    </div>
+    <div class="modal-btn-row"><button class="modal-btn" id="armoryClose">Close</button></div>`);
+  el('armoryClose').addEventListener('click', closeModal);
 }
 
 /* ---- combat sounds ---- */
@@ -2590,6 +3087,15 @@ function playBossAppear() {
 }
 function playBossDefeated() {
   [392, 523.3, 659.3, 784, 1046.5].forEach((f, i) => setTimeout(() => playTone(f, 0.5, 'triangle', 0.07, { reverb: 0.45 }), i * 80));
+}
+function playAbility(id) {
+  const f = { lance: [880, 1320], overdrive: [440, 660, 880], chrono: [1046, 784, 523], plunder: [659, 988, 1318], cascade: [523, 659, 784, 1046], crunch: [220, 440, 880] }[id] || [660];
+  f.forEach((x, i) => setTimeout(() => playTone(x, 0.22, 'triangle', 0.06, { reverb: 0.35 }), i * 60));
+  if (id === 'lance') playTone(110, 0.5, 'sawtooth', 0.05, { reverb: 0.3 });
+}
+function playRelic(rarity) {
+  const n = { common: 2, rare: 3, epic: 4, legendary: 6 }[rarity] || 2;
+  [784, 988, 1175, 1318, 1568, 2093].slice(0, n).forEach((f, i) => setTimeout(() => playTone(f, 0.35, 'sine', 0.06, { reverb: 0.5 }), i * 90));
 }
 function playBossFail() {
   [330, 262, 196, 131].forEach((f, i) => setTimeout(() => playTone(f, 0.35, 'sawtooth', 0.05, { reverb: 0.3 }), i * 110));
@@ -2636,6 +3142,9 @@ function mergeLoadedState(loaded) {
   state.buffs = Object.assign(fresh.buffs, loaded.buffs);
   state.tutorial = Object.assign(fresh.tutorial, loaded.tutorial);
   state.void = Object.assign(fresh.void, loaded.void);
+  state.abilities = Object.assign(fresh.abilities, loaded.abilities);
+  state.relics = Object.assign(fresh.relics, loaded.relics);
+  state.relicLog = Object.assign(fresh.relicLog, loaded.relicLog);
   state.goals = Array.isArray(loaded.goals) ? loaded.goals : [];
   // Saves from before the tutorial existed belong to players who don't need it.
   if (!loaded.tutorial && (loaded.stats && loaded.stats.totalClicks > 20)) state.tutorial.step = 99;
@@ -3870,6 +4379,14 @@ function mainLoop(ts) {
 function wireInput() {
   el('igniteBtn').addEventListener('click', (e) => doIgnite(e.clientX, e.clientY));
   el('vfBossBtn').addEventListener('click', challengeBoss);
+  el('vfRelicBtn').addEventListener('click', showArmory);
+  el('abilityBar').addEventListener('click', (e) => {
+    const b = e.target.closest('.ab-btn');
+    if (!b) return;
+    b.classList.remove('fresh');
+    if (b.classList.contains('locked')) { const a = abilityDef(b.dataset.ab); logToast(`${a.icon} ${a.name} unlocks at Zone ${a.zone}. ${a.desc}`, 'event'); return; }
+    useAbility(b.dataset.ab);
+  });
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3924,6 +4441,8 @@ function wireInput() {
   });
 
   window.addEventListener('keydown', (e) => {
+    const dm = /^(Digit|Numpad)([1-6])$/.exec(e.code);
+    if (dm && !modalOpen()) { useAbility(ABILITIES[+dm[2] - 1].id); return; }
     if (e.code === 'Space') {
       e.preventDefault();
       const rect = el('igniteBtn').getBoundingClientRect();
@@ -3971,6 +4490,10 @@ window.debug = {
   completeGoals: () => { state.goals.forEach(g => { if (g.type === 'own') { const x = state.generators.find(y => y.id === g.gen); x.owned = Math.max(x.owned, g.target); } else g.base = -1e300; }); renderAll(); renderGoals(true); },
   zone: (n) => { state.void.zone = n; state.void.maxCleared = Math.max(state.void.maxCleared, n - 1); state.void.kills = 0; state.void.farming = false; spawnEnemy(); },
   killEnemy: () => { if (runtime.enemy) damageEnemy(runtime.enemy.hp + 1); },
+  relic: (n) => { for (let i = 0; i < (n || 1); i++) dropRelic(i * 0.3); },
+  readyAbilities: () => { for (const a of ABILITIES) abilityRec(a.id).readyAt = 0; },
+  unlockAbilities: () => { state.stats.bestZone = Math.max(state.stats.bestZone, 35); checkAbilityUnlocks(); renderAbilityBar(true); },
+  gilded: () => { const c = GILDED.chance; GILDED.chance = 1; spawnEnemy(); GILDED.chance = c; },
   bossNow: () => { const z = Math.ceil((state.void.zone + 0.01) / VOID.bossEvery) * VOID.bossEvery; window.debug.zone(z); },
   state: () => state,
 };
@@ -4021,6 +4544,8 @@ function init() {
   ensureGoals();
   renderAll();
   renderGoals(true);
+  checkAbilityUnlocks();
+  renderAbilityBar(true);
   scheduleNextEvent();
   checkAchievements();
 
