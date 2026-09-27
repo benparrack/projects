@@ -3,6 +3,9 @@
 // based only on the immediately-previous entry. After every book has rotated through all players,
 // everyone sees the full chains. Server plugin: ../../../server/games/garticphone.js
 
+import { sfx } from '../sfx.js';
+import { scribble } from '../drawFx.js';
+
 const CANVAS_WIDTH = 360;
 const CANVAS_HEIGHT = 240;
 
@@ -62,6 +65,7 @@ export function mount(container, api) {
       drawing = true;
       last = pos(ev);
       canvas.setPointerCapture(ev.pointerId);
+      scribble();
     });
     canvas.addEventListener('pointermove', (ev) => {
       if (!drawing) return;
@@ -71,6 +75,7 @@ export function mount(container, api) {
       canvasCtx.moveTo(last.x, last.y);
       canvasCtx.lineTo(p.x, p.y);
       canvasCtx.stroke();
+      scribble();
       last = p;
     });
     const stop = () => { drawing = false; last = null; };
@@ -132,6 +137,7 @@ export function mount(container, api) {
 
   function buildTask(task) {
     const box = document.createElement('div');
+    box.className = 'dfx-pop';
     box.style.display = 'flex';
     box.style.flexDirection = 'column';
     box.style.gap = '10px';
@@ -193,6 +199,31 @@ export function mount(container, api) {
     return box;
   }
 
+  let revealPlayed = false;
+  let stampShownFor = null;
+  const pipsShown = new Set();
+  const revealTimers = [];
+
+  // Sounds for the difference between two consecutive views.
+  function feedback(prev, next) {
+    if (!prev || !next) return;
+    if (next.phase !== prev.phase) {
+      if (next.phase === 'playing') sfx.play('go');
+      else if (next.phase === 'reveal') sfx.play('chime');
+      else if (next.phase === 'waiting') { pipsShown.clear(); revealTimers.splice(0).forEach(clearTimeout); }
+      return;
+    }
+    if (next.phase !== 'playing') return;
+    if (next.currentRound !== prev.currentRound) {
+      sfx.play('whoosh');
+      setTimeout(() => sfx.play('turn'), 150);
+      return;
+    }
+    const mine = next.myTask && next.myTask.alreadySubmitted && !(prev.myTask && prev.myTask.alreadySubmitted);
+    if (mine) sfx.play('pop');
+    else if (next.submittedSeatIdxs.length > prev.submittedSeatIdxs.length) sfx.play('blip');
+  }
+
   function render() {
     const focused = taskCache.el && taskCache.el.contains(document.activeElement) ? document.activeElement : null;
     root.innerHTML = '';
@@ -202,6 +233,7 @@ export function mount(container, api) {
     }
 
     if (view.phase !== 'playing') taskCache = { key: null, el: null };
+    if (view.phase !== 'reveal') revealPlayed = false;
     const mySeat = mySeatIndex();
     const status = document.createElement('div');
     if (view.phase === 'waiting') {
@@ -229,7 +261,7 @@ export function mount(container, api) {
       leaveBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
       seatRow.appendChild(leaveBtn);
     }
-    if (view.phase === 'waiting' && view.seats.length >= 3 && mySeat === 0) {
+    if (view.phase === 'waiting' && view.seats.length >= 3 && mySeat !== -1) {
       const startBtn = document.createElement('button');
       startBtn.textContent = 'START GAME';
       startBtn.addEventListener('click', () => api.sendAction({ kind: 'startGame' }));
@@ -244,11 +276,43 @@ export function mount(container, api) {
       root.appendChild(players);
     }
 
+    if (view.phase === 'playing') {
+      const pips = document.createElement('div');
+      pips.style.display = 'flex';
+      pips.style.gap = '6px';
+      pips.style.flexWrap = 'wrap';
+      pips.style.justifyContent = 'center';
+      pips.style.fontSize = '0.8em';
+      const done = new Set(view.submittedSeatIdxs);
+      view.seats.forEach((id, i) => {
+        const pip = document.createElement('span');
+        pip.style.padding = '2px 8px';
+        pip.style.borderRadius = '10px';
+        pip.style.border = `1px solid ${done.has(i) ? '#39ff14' : '#444'}`;
+        pip.style.color = done.has(i) ? '#39ff14' : '';
+        pip.style.opacity = done.has(i) ? '1' : '0.55';
+        pip.textContent = `${done.has(i) ? '✓ ' : '✎ '}${nicknameFor(id)}`;
+        if (done.has(i) && !pipsShown.has(`${view.currentRound}:${i}`)) {
+          pip.style.display = 'inline-block';
+          pip.className = 'dfx-bump';
+          pipsShown.add(`${view.currentRound}:${i}`);
+        }
+        pips.appendChild(pip);
+      });
+      root.appendChild(pips);
+    }
+
     if (view.phase === 'playing' && mySeat !== -1) {
       const task = view.myTask;
       if (task.alreadySubmitted) {
+        const stamp = document.createElement('div');
+        stamp.className = 'dfx-stamp';
+        stamp.textContent = '✓ SUBMITTED';
+        if (stampShownFor === view.currentRound) stamp.style.animation = 'none';
+        stampShownFor = view.currentRound;
+        root.appendChild(stamp);
         const waiting = document.createElement('div');
-        waiting.textContent = 'Submitted! Waiting for everyone else...';
+        waiting.textContent = 'Waiting for everyone else...';
         waiting.style.opacity = '0.8';
         root.appendChild(waiting);
       } else {
@@ -260,6 +324,8 @@ export function mount(container, api) {
     }
 
     if (view.phase === 'reveal') {
+      const animate = !revealPlayed;
+      revealPlayed = true;
       view.books.forEach((book, bookIdx) => {
         const bookBox = document.createElement('div');
         bookBox.style.display = 'flex';
@@ -274,8 +340,15 @@ export function mount(container, api) {
         title.textContent = `${nicknameFor(view.seats[bookIdx])}'s chain:`;
         title.style.fontWeight = 'bold';
         bookBox.appendChild(title);
-        for (const entry of book) {
+        if (animate) { bookBox.className = 'dfx-pop'; bookBox.style.animationDelay = `${bookIdx * 0.25}s`; }
+        book.forEach((entry, entryIdx) => {
           const row = document.createElement('div');
+          if (animate) {
+            const delay = bookIdx * 0.25 + 0.3 + entryIdx * 0.45;
+            row.className = 'dfx-pop';
+            row.style.animationDelay = `${delay}s`;
+            if (bookIdx === 0) revealTimers.push(setTimeout(() => sfx.play(entryIdx % 2 ? 'pop' : 'blip'), delay * 1000));
+          }
           row.style.display = 'flex';
           row.style.flexDirection = 'column';
           row.style.alignItems = 'center';
@@ -287,11 +360,17 @@ export function mount(container, api) {
           row.appendChild(who);
           row.appendChild(renderPreviousEntry(entry));
           bookBox.appendChild(row);
-        }
+        });
         root.appendChild(bookBox);
       });
       const again = document.createElement('button');
       again.textContent = 'PLAY AGAIN';
+      if (animate) {
+        const longest = Math.max(0, ...view.books.map((b, i) => i * 0.25 + 0.3 + b.length * 0.45));
+        revealTimers.push(setTimeout(() => sfx.play('win'), longest * 1000));
+        again.className = 'dfx-pop';
+        again.style.animationDelay = `${longest}s`;
+      }
       again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
       root.appendChild(again);
     }
@@ -306,7 +385,9 @@ export function mount(container, api) {
     },
     applyEvent(data) {
       if (data && data.kind === 'state') {
+        const prevView = view;
         view = data;
+        feedback(prevView, view);
         render();
       }
     },
@@ -315,6 +396,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      revealTimers.splice(0).forEach(clearTimeout);
       container.innerHTML = '';
     },
   };

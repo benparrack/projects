@@ -9,6 +9,8 @@
 // other game stays inside the boxed layout) shown only while the local player is seated and a
 // round is live/just-decided.
 
+import { sfx } from '../sfx.js';
+
 // Kept in sync by hand with server/games/shooter.js constants (no shared module in this repo,
 // same convention as slither's SERVER_TICK_MS/START_LENGTH).
 const SERVER_TICK_MS = 33;
@@ -308,6 +310,23 @@ const HUD_STYLE = `
 .shooter-wslot.active { opacity: 1; border-color: #39ff14; color: #39ff14; }
 .shooter-banner { position: absolute; top: 40%; left: 0; right: 0; text-align: center; font-size: 28px; pointer-events: none; text-shadow: 0 0 8px #000; }
 .shooter-banner .sub { font-size: 15px; opacity: 0.85; margin-top: 6px; }
+.shooter-banner.pop > div:first-child { animation: shooter-pop 0.45s cubic-bezier(.2,1.6,.4,1); }
+.shooter-count { display: inline-block; font-size: 64px; color: #ffe066; text-shadow: 0 0 18px rgba(255,224,102,.7); animation: shooter-pop 0.5s cubic-bezier(.2,1.6,.4,1); }
+.shooter-dmg { position: absolute; top: 50%; left: 50%; pointer-events: none; font-weight: bold; font-size: 18px; color: #fff; text-shadow: 0 0 4px #000, 0 0 10px rgba(255,77,77,.8); animation: shooter-dmg 0.8s ease-out forwards; }
+.shooter-dmg.head { color: #ffe066; font-size: 24px; text-shadow: 0 0 4px #000, 0 0 12px rgba(255,224,102,.9); }
+.shooter-callout { position: absolute; top: 28%; left: 0; right: 0; text-align: center; pointer-events: none; font-size: 34px; font-weight: bold; letter-spacing: 4px; animation: shooter-callout 1.4s ease-out forwards; }
+.shooter-callout.good { color: #39ff14; text-shadow: 0 0 16px rgba(57,255,20,.7); }
+.shooter-callout.bad { color: #ff4d4d; text-shadow: 0 0 16px rgba(255,77,77,.7); }
+.shooter-shake { animation: shooter-shake 0.22s linear; }
+.shooter-bump { animation: shooter-bump 0.18s ease-out; }
+.shooter-lowhp { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px 30px rgba(255,0,0,.55); animation: shooter-heartbeat 0.9s ease-in-out infinite; }
+@keyframes shooter-pop { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes shooter-dmg { 0% { transform: translate(var(--dx), -10px) scale(1.4); opacity: 1; } 100% { transform: translate(calc(var(--dx) * 2), -70px) scale(0.9); opacity: 0; } }
+@keyframes shooter-callout { 0% { transform: scale(2.2); opacity: 0; } 15% { transform: scale(1); opacity: 1; } 75% { opacity: 1; } 100% { transform: translateY(-20px); opacity: 0; } }
+@keyframes shooter-shake { 0%,100% { transform: none; } 20% { transform: translate(-6px, 3px); } 40% { transform: translate(5px, -4px); } 60% { transform: translate(-4px, -2px); } 80% { transform: translate(3px, 3px); } }
+@keyframes shooter-bump { 0% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes shooter-heartbeat { 0%,100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+@media (prefers-reduced-motion: reduce) { .shooter-shake, .shooter-bump, .shooter-lowhp { animation: none; } }
 .shooter-hitmarker { position: absolute; top: 50%; left: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; pointer-events: none; opacity: 0; }
 .shooter-hitmarker.show { opacity: 1; transition: opacity 0.05s linear; }
 .shooter-hitmarker.fade { opacity: 0; transition: opacity 0.35s ease-out; }
@@ -610,6 +629,11 @@ export function mount(container, api) {
     damageFlash.className = 'shooter-damage-flash';
     overlayRoot.appendChild(damageFlash);
 
+    const lowHp = document.createElement('div');
+    lowHp.className = 'shooter-lowhp';
+    lowHp.hidden = true;
+    overlayRoot.appendChild(lowHp);
+
     const hudTop = document.createElement('div');
     hudTop.className = 'shooter-hud-top';
     const scorePill = document.createElement('div');
@@ -823,7 +847,7 @@ export function mount(container, api) {
       oppGroup: opponent.group, oppAvatar: opponent, selfAvatar: self, updateAvatarPose,
       oppGunRig, selfGunRig, viewmodelGunRig,
       tracerPool,
-      crosshair, scope, hitmarker, damageFlash, scorePill, banner, bannerText, rematchBtn, unlockHint,
+      crosshair, scope, hitmarker, damageFlash, lowHp, scorePill, banner, bannerText, rematchBtn, unlockHint,
       meBarFill, meLabel, oppBarFill, oppLabel, ammoEl, wslots,
       onResize,
     };
@@ -897,6 +921,7 @@ export function mount(container, api) {
     predicted.sliding = true;
     predicted.slideStartedAt = now;
     lastSlideAt = now;
+    sfx.play('slide', { vol: 0.8 });
     api.sendAction({ kind: 'slide' });
   }
 
@@ -906,6 +931,8 @@ export function mount(container, api) {
     if (ev.code === kb.weapon1 || ev.code === kb.weapon2 || ev.code === kb.weapon3) {
       const weapon = ev.code === kb.weapon1 ? 'pistol' : ev.code === kb.weapon2 ? 'shotgun' : 'sniper';
       if (weapon !== 'sniper' && zoomed) setZoomed(false);
+      const me = currentView && currentView.players[mySeat];
+      if (me && me.weapon !== weapon) sfx.play('swap');
       api.sendAction({ kind: 'switchWeapon', weapon });
       return;
     }
@@ -921,7 +948,7 @@ export function mount(container, api) {
     if (ev.code === kb.jump && !ev.repeat) {
       // Predict the jump impulse locally for immediate feedback; the server independently
       // validates groundedness and is authoritative for the actual result.
-      if (predicted.y <= 0.001 && predicted.velY <= 0) predicted.velY = JUMP_VELOCITY;
+      if (predicted.y <= 0.001 && predicted.velY <= 0) { predicted.velY = JUMP_VELOCITY; sfx.play('jump'); }
       api.sendAction({ kind: 'jump' });
       return;
     }
@@ -1015,6 +1042,8 @@ export function mount(container, api) {
       // was still moving upward onto a target at the moment of the click. In third person this is
       // additionally corrected for camera/eye offset — see computeEffectiveAim.
       const aim = computeEffectiveAim();
+      const me = currentView && currentView.players[mySeat];
+      if (me && currentView.phase === 'playing' && !me.reloading && me.ammo[me.weapon] === 0) sfx.play('dry');
       // Also send our own current predicted position: the server's tracked x/z only advances on
       // its own tick loop, so while actively moving it's always a bit behind what's actually
       // being rendered here (client-side prediction). Resolving the shot from the server's stale
@@ -1190,6 +1219,7 @@ export function mount(container, api) {
     };
   }
 
+  let lastCountSecs = null;
   function updateHud() {
     if (!arena || !currentView) return;
     const me = currentView.players[mySeat];
@@ -1214,18 +1244,26 @@ export function mount(container, api) {
       const secs = Math.max(0, Math.ceil((currentView.roundEndsAt - Date.now()) / 1000));
       arena.banner.hidden = false;
       arena.rematchBtn.hidden = true;
-      const winnerNote = currentView.lastRoundWinnerSeat ? `SEAT ${currentView.lastRoundWinnerSeat.toUpperCase()} WON THE ROUND` : '';
-      arena.bannerText.innerHTML = `${winnerNote}<div class="sub">NEXT ROUND IN ${secs}…</div>`;
+      const w = currentView.lastRoundWinnerSeat;
+      const winnerNote = w ? (w === mySeat ? 'YOU WON THE ROUND' : 'YOU LOST THE ROUND') : 'GET READY';
+      if (secs !== lastCountSecs) {
+        lastCountSecs = secs;
+        if (secs > 0 && secs <= 3) sfx.play('beep');
+        arena.bannerText.innerHTML = `${winnerNote}<div class="sub">NEXT ROUND IN</div><div class="shooter-count">${secs || 'GO'}</div>`;
+      }
     } else if (currentView.phase === 'game_over') {
+      lastCountSecs = null;
       arena.banner.hidden = false;
       arena.rematchBtn.hidden = false;
       const won = currentView.matchWinner === mySeat;
       const reasonNote = currentView.matchWinReason === 'opponent_disconnected' ? ' (OPPONENT DISCONNECTED)' : '';
       arena.bannerText.innerHTML = `${won ? 'YOU WIN THE MATCH' : 'YOU LOSE THE MATCH'}${reasonNote}`;
     } else {
+      lastCountSecs = null;
       arena.banner.hidden = true;
       arena.rematchBtn.hidden = true;
     }
+    arena.lowHp.hidden = !(me && me.alive && currentView.phase === 'playing' && me.hp / me.maxHp <= 0.3);
   }
 
   function renderFrame(now) {
@@ -1467,6 +1505,7 @@ export function mount(container, api) {
       }
     }
 
+    stateFeedback(currentView, st);
     previousView = currentView || st;
     currentView = st;
     lastTickAt = performance.now();
@@ -1496,6 +1535,64 @@ export function mount(container, api) {
     }, 60);
   }
 
+  function bump(el) {
+    el.classList.remove('shooter-bump');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('shooter-bump');
+  }
+
+  function shake() {
+    if (!arena) return;
+    arena.canvas.classList.remove('shooter-shake');
+    void arena.canvas.offsetWidth;
+    arena.canvas.classList.add('shooter-shake');
+  }
+
+  function popDamage(amount, headshot) {
+    if (!arena || !amount) return;
+    const el = document.createElement('div');
+    el.className = `shooter-dmg${headshot ? ' head' : ''}`;
+    el.textContent = headshot ? `${amount}!` : `${amount}`;
+    el.style.setProperty('--dx', `${Math.round(18 + Math.random() * 22) * (Math.random() < 0.5 ? -1 : 1)}px`);
+    arena.overlayRoot.appendChild(el);
+    setTimeout(() => el.remove(), 850);
+  }
+
+  function callout(text, good) {
+    if (!arena) return;
+    const el = document.createElement('div');
+    el.className = `shooter-callout ${good ? 'good' : 'bad'}`;
+    el.textContent = text;
+    arena.overlayRoot.appendChild(el);
+    setTimeout(() => el.remove(), 1450);
+  }
+
+  // Sounds/animations driven by state changes between two consecutive broadcasts.
+  function stateFeedback(prev, st) {
+    if (!arena || !prev || !mySeat) return;
+    const me = st.players[mySeat], pme = prev.players[mySeat];
+    if (me && pme && me.weapon === pme.weapon) {
+      if (me.reloading && !pme.reloading) sfx.play('reload');
+      else if (!me.reloading && pme.reloading) { sfx.play('reloaded'); bump(arena.ammoEl); }
+    }
+    if (me && pme && me.weapon !== pme.weapon && arena.wslots[me.weapon]) bump(arena.wslots[me.weapon]);
+    const opp = opponentSeat();
+    const roundEnded = (st.phase === 'round_intro' || st.phase === 'game_over') && prev.phase === 'playing';
+    if (roundEnded) {
+      const iWon = st.wins[mySeat] > prev.wins[mySeat];
+      const theyWon = st.wins[opp] > prev.wins[opp];
+      if (st.phase === 'game_over') {
+        sfx.play(st.matchWinner === mySeat ? 'win' : 'lose');
+        callout(st.matchWinner === mySeat ? 'VICTORY' : 'DEFEATED', st.matchWinner === mySeat);
+      } else if (iWon) { sfx.play('kill'); callout('ELIMINATED', true); }
+      else if (theyWon) { sfx.play('crash'); callout('YOU DIED', false); }
+      arena.banner.classList.remove('pop');
+      void arena.banner.offsetWidth;
+      arena.banner.classList.add('pop');
+    }
+    if (st.phase === 'playing' && prev.phase === 'round_intro') { sfx.play('go'); callout('FIGHT!', true); }
+  }
+
   function applyShot(data) {
     if (!arena || !mySeat) return;
     // Tracer + muzzle flash render for BOTH shooters, not just the local player — previously
@@ -1503,13 +1600,25 @@ export function mount(container, api) {
     // was completely invisible to both sides (no gun models means the tracer/flash IS the only
     // shot feedback there is).
     showTracer(data);
+    const gunSound = data.weapon === 'shotgun' || data.weapon === 'sniper' ? data.weapon : 'pistol';
     if (data.shooterSeat === mySeat) {
+      sfx.play(gunSound);
       arena.viewmodelGunRig.kick();
       arena.selfGunRig.kick();
-      if (data.hit) flashHitmarker(data.headshot);
+      bump(arena.ammoEl);
+      if (data.hit) {
+        flashHitmarker(data.headshot);
+        setTimeout(() => sfx.play(data.headshot ? 'headshot' : 'hit'), 40);
+        popDamage(data.damage, data.headshot);
+      }
     } else {
+      sfx.play(gunSound, { vol: 0.45 });
       arena.oppGunRig.kick();
-      if (data.hitSeat === mySeat) flashDamage();
+      if (data.hitSeat === mySeat) {
+        flashDamage();
+        sfx.play('hurt');
+        shake();
+      }
     }
   }
 

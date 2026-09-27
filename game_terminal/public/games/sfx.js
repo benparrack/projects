@@ -27,7 +27,11 @@ for (const ev of ['pointerdown', 'keydown']) {
   window.addEventListener(ev, () => audio(), { once: true, capture: true });
 }
 
+// Per-call volume multiplier (sfx.play(name, { vol })) — e.g. an opponent's gunshot plays quieter.
+let volScale = 1;
+
 function tone(freq, dur, { type = 'square', vol = 0.3, at = 0, slide = 0 } = {}) {
+  vol *= volScale;
   const t = ctx.currentTime + at;
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
@@ -43,6 +47,7 @@ function tone(freq, dur, { type = 'square', vol = 0.3, at = 0, slide = 0 } = {})
 
 let noiseBuf = null;
 function noise(dur, { vol = 0.3, at = 0, filter = 2000, q = 1 } = {}) {
+  vol *= volScale;
   if (!noiseBuf) {
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -82,19 +87,42 @@ const SOUNDS = {
   error:   () => tone(140, 0.18, { type: 'sawtooth', vol: 0.2 }),
   win:     () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, { type: 'triangle', vol: 0.3, at: i * 0.11 })),
   lose:    () => [392, 330, 262, 196].forEach((f, i) => tone(f, 0.22, { type: 'triangle', vol: 0.25, at: i * 0.14 })),
+  // --- shooter ---
+  pistol:  () => { noise(0.12, { filter: 1400, q: 0.6, vol: 0.9 }); tone(220, 0.09, { type: 'square', slide: -150, vol: 0.25 }); },
+  shotgun: () => { noise(0.3, { filter: 700, q: 0.4, vol: 1 }); noise(0.1, { filter: 2600, q: 0.5, vol: 0.5 }); tone(110, 0.2, { type: 'sawtooth', slide: -70, vol: 0.3 }); },
+  sniper:  () => { noise(0.08, { filter: 3200, q: 0.5, vol: 0.9 }); noise(0.5, { filter: 500, q: 0.3, vol: 0.7, at: 0.02 }); tone(900, 0.35, { type: 'sine', slide: -800, vol: 0.2 }); },
+  hit:     () => { tone(1800, 0.05, { type: 'square', vol: 0.18 }); tone(2400, 0.04, { type: 'square', vol: 0.12, at: 0.03 }); },
+  headshot:() => { tone(2093, 0.12, { type: 'triangle', vol: 0.35 }); tone(3136, 0.2, { type: 'triangle', vol: 0.25, at: 0.05 }); },
+  hurt:    () => { noise(0.18, { filter: 300, q: 0.7, vol: 0.9 }); tone(90, 0.2, { type: 'sine', slide: -40, vol: 0.5 }); },
+  reload:  () => { noise(0.04, { filter: 4000, q: 2, vol: 0.5 }); noise(0.05, { filter: 2500, q: 2, vol: 0.5, at: 0.18 }); },
+  reloaded:() => { noise(0.04, { filter: 3000, q: 3, vol: 0.6 }); tone(1300, 0.05, { type: 'square', vol: 0.12, at: 0.04 }); },
+  dry:     () => noise(0.025, { filter: 5000, q: 4, vol: 0.5 }),
+  jump:    () => tone(260, 0.12, { type: 'triangle', slide: 240, vol: 0.18 }),
+  slide:   () => noise(0.35, { filter: 900, q: 0.4, vol: 0.35 }),
+  swap:    () => { noise(0.03, { filter: 3500, q: 2, vol: 0.4 }); noise(0.03, { filter: 2000, q: 2, vol: 0.4, at: 0.07 }); },
+  kill:    () => { tone(523, 0.1, { type: 'square', vol: 0.2 }); tone(784, 0.1, { type: 'square', vol: 0.2, at: 0.08 }); tone(1047, 0.25, { type: 'square', vol: 0.2, at: 0.16 }); },
+  // --- drawing games ---
+  pop:     () => tone(420, 0.09, { type: 'sine', slide: 600, vol: 0.3 }),
+  blip:    () => tone(1320, 0.04, { type: 'sine', vol: 0.12 }),
+  tick:    () => tone(1500, 0.03, { type: 'square', vol: 0.1 }),
+  whoosh:  () => noise(0.35, { filter: 1200, q: 0.3, vol: 0.4 }),
+  chime:   () => [1047, 1319, 1568].forEach((f, i) => tone(f, 0.3, { type: 'sine', vol: 0.18, at: i * 0.06 })),
+  scribble:() => noise(0.05, { filter: 2800 + Math.random() * 1500, q: 3, vol: 0.12 }),
 };
 
 // Throttle identical sounds fired in the same burst (e.g. several events per frame).
 const lastPlayed = {};
 
 export const sfx = {
-  play(name) {
+  play(name, { vol = 1 } = {}) {
     if (muted || !SOUNDS[name]) return;
     const now = performance.now();
     if (now - (lastPlayed[name] || 0) < 40) return;
     lastPlayed[name] = now;
     if (!audio() || ctx.state !== 'running') return;
+    volScale = vol;
     try { SOUNDS[name](); } catch { /* ignore audio errors */ }
+    volScale = 1;
   },
   get muted() { return muted; },
   setMuted(m) {

@@ -3,12 +3,15 @@
 // clear events mirror drawing.js's wire format; 'state' is a per-recipient view like hangman.js's
 // — only the drawer's own view carries the actual word while a round is live).
 import { makeServerClock } from '../serverClock.js';
+import { sfx } from '../sfx.js';
+import { timerBar, floatText, burst, revealWord, replay, scribble } from '../drawFx.js';
 
 const CANVAS_WIDTH = 640;
 const CANVAS_HEIGHT = 420;
 const CANVAS_BG = '#000';
 const COLORS = ['#39ff14', '#ffb000', '#00e5ff', '#ff4dd2', '#ffffff', '#ff4d4d', '#4d79ff', '#000000'];
 const DEFAULT_SIZE = 4;
+const ROUND_MS = 80000; // kept in sync by hand with server/games/pictionary.js
 
 export function mount(container, api) {
   const serverClock = makeServerClock();
@@ -78,7 +81,7 @@ export function mount(container, api) {
 
   const clearBtn = document.createElement('button');
   clearBtn.textContent = 'CLEAR';
-  clearBtn.addEventListener('click', () => api.sendAction({ kind: 'clear' }));
+  clearBtn.addEventListener('click', () => { sfx.play('whoosh'); api.sendAction({ kind: 'clear' }); });
   toolbar.appendChild(clearBtn);
 
   const canvas = document.createElement('canvas');
@@ -93,7 +96,12 @@ export function mount(container, api) {
   const cctx = canvas.getContext('2d');
 
   canvasWrap.appendChild(toolbar);
-  canvasWrap.appendChild(canvas);
+  const stage = document.createElement('div');
+  stage.className = 'dfx-stage';
+  canvas.style.display = 'block';
+  stage.appendChild(canvas);
+  canvasWrap.appendChild(stage);
+  let revealEl = null;
 
   function drawSegment(seg) {
     cctx.strokeStyle = seg.color;
@@ -134,6 +142,7 @@ export function mount(container, api) {
     strokeId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     last = pointerPos(ev);
     canvas.setPointerCapture(ev.pointerId);
+    scribble();
   }
   function onPointerMove(ev) {
     if (!drawing || !canDraw()) return;
@@ -142,6 +151,7 @@ export function mount(container, api) {
     const seg = { strokeId, x0: last.x, y0: last.y, x1: pos.x, y1: pos.y, color: currentColor, size: currentSize };
     segments.push(seg);
     drawSegment(seg);
+    scribble();
     api.sendAction({ kind: 'segment', segment: seg });
     last = pos;
   }
@@ -202,7 +212,11 @@ export function mount(container, api) {
   scoreEl.style.justifyContent = 'center';
   scoreEl.style.fontSize = '13px';
 
+  const timer = timerBar();
+  timer.el.style.width = `${CANVAS_WIDTH}px`;
+
   root.appendChild(statusEl);
+  root.appendChild(timer.el);
   root.appendChild(wordChoiceEl);
   root.appendChild(canvasWrap);
   root.appendChild(guessForm);
@@ -213,7 +227,7 @@ export function mount(container, api) {
     if (!view) {
       statusEl.textContent = 'Loading...';
       wordChoiceEl.hidden = true;
-      guessForm.hidden = true;
+      guessForm.style.display = 'none';
       return;
     }
 
@@ -224,8 +238,9 @@ export function mount(container, api) {
     toolbar.style.display = view.isDrawer ? 'flex' : 'none';
 
     wordChoiceEl.innerHTML = '';
-    guessForm.hidden = true;
+    guessForm.style.display = 'none';
 
+    timer.el.style.visibility = view.phase === 'drawing' ? 'visible' : 'hidden';
     if (view.phase === 'lobby') {
       statusEl.textContent = `Waiting for at least one more player (${view.playerCount} here)...`;
     } else if (view.phase === 'choosing_word') {
@@ -234,6 +249,7 @@ export function mount(container, api) {
         for (const word of view.wordOptions || []) {
           const btn = document.createElement('button');
           btn.textContent = word.toUpperCase();
+          if (!choicesShown) { btn.className = 'dfx-pop'; btn.style.animationDelay = `${wordChoiceEl.children.length * 0.12}s`; }
           btn.addEventListener('click', () => api.sendAction({ kind: 'chooseWord', word }));
           wordChoiceEl.appendChild(btn);
         }
@@ -241,7 +257,9 @@ export function mount(container, api) {
         statusEl.textContent = `Waiting for ${drawerName} to pick a word...`;
       }
     } else if (view.phase === 'drawing') {
-      const secsLeft = view.roundEndsAt ? Math.max(0, Math.ceil((view.roundEndsAt - serverClock.now()) / 1000)) : 0;
+      const msLeft = view.roundEndsAt ? Math.max(0, view.roundEndsAt - serverClock.now()) : 0;
+      const secsLeft = Math.ceil(msLeft / 1000);
+      timer.update(msLeft / ROUND_MS, secsLeft);
       if (view.isDrawer) {
         statusEl.textContent = `Draw: "${view.word ? view.word.toUpperCase() : ''}" — ${secsLeft}s left`;
       } else {
@@ -249,15 +267,18 @@ export function mount(container, api) {
         statusEl.textContent = guessed
           ? `You got it! Waiting on others — ${secsLeft}s left`
           : `${drawerName} is drawing — ${secsLeft}s left`;
-        guessForm.hidden = guessed;
+        guessForm.style.display = (guessed) ? 'none' : 'flex';
       }
     } else if (view.phase === 'round_over') {
       statusEl.textContent = `Round over — the word was "${(view.word || '').toUpperCase()}"`;
     }
 
+    choicesShown = view.phase === 'choosing_word';
     logEl.innerHTML = '';
-    for (const entry of view.guessLog) {
+    if (view.guessLog.length < logShown) logShown = 0;
+    view.guessLog.forEach((entry, idx) => {
       const line = document.createElement('div');
+      if (idx >= logShown) line.className = 'dfx-slide';
       const name = nicknameFor(entry.clientId);
       if (entry.correct) {
         line.textContent = `${name} guessed the word!`;
@@ -266,7 +287,8 @@ export function mount(container, api) {
         line.textContent = `${name}: ${entry.text}`;
       }
       logEl.appendChild(line);
-    }
+    });
+    logShown = view.guessLog.length;
     logEl.scrollTop = logEl.scrollHeight;
 
     scoreEl.innerHTML = '';
@@ -274,7 +296,56 @@ export function mount(container, api) {
     for (const [clientId, pts] of entries) {
       const el = document.createElement('div');
       el.textContent = `${nicknameFor(clientId)}: ${pts}`;
+      if (shownScores[clientId] !== undefined && pts > shownScores[clientId]) {
+        el.style.color = '#39ff14';
+        el.style.display = 'inline-block';
+        replay(el, 'dfx-bump');
+      }
+      shownScores[clientId] = pts;
       scoreEl.appendChild(el);
+    }
+  }
+
+  let choicesShown = false;
+  let logShown = 0;
+  const shownScores = {};
+
+  // Sounds + animations from the difference between two consecutive views.
+  function feedback(prev, next) {
+    if (!prev || !next) return;
+    const me = api.getClientId();
+    if (next.phase !== prev.phase) {
+      if (revealEl && next.phase !== 'round_over') { revealEl.remove(); revealEl = null; }
+      if (next.phase === 'choosing_word') {
+        sfx.play('turn');
+        if (next.isDrawer) floatText(stage, "YOU'RE UP — PICK A WORD", true);
+      } else if (next.phase === 'drawing') {
+        sfx.play('whoosh');
+        timer.reset();
+        floatText(stage, next.isDrawer ? 'DRAW!' : 'GUESS!');
+      } else if (next.phase === 'round_over') {
+        const anyone = (next.correctGuessers || []).length > 0;
+        sfx.play(anyone ? 'chime' : 'lose');
+        if (revealEl) revealEl.remove();
+        revealEl = next.word ? revealWord(stage, next.word, anyone ? 'THE WORD WAS' : 'NOBODY GOT IT — THE WORD WAS') : null;
+      }
+      return;
+    }
+    if (next.phase !== 'drawing') return;
+    const fresh = next.guessLog.slice(prev.guessLog.length);
+    for (const entry of fresh) {
+      if (!entry.correct) { sfx.play('blip'); continue; }
+      if (entry.clientId === me) {
+        const gained = (next.scores[me] || 0) - (prev.scores[me] || 0);
+        sfx.play('point');
+        burst(stage);
+        replay(stage, 'dfx-flash');
+        floatText(stage, gained > 0 ? `+${gained} YOU GOT IT!` : 'YOU GOT IT!');
+      } else {
+        sfx.play(next.isDrawer ? 'point' : 'chime');
+        floatText(stage, `${nicknameFor(entry.clientId)} got it!`, true);
+        if (next.isDrawer) burst(stage, 12);
+      }
     }
   }
 
@@ -300,7 +371,9 @@ export function mount(container, api) {
       if (!data) return;
       if (data.kind === 'state') {
         const prevPhase = view ? view.phase : null;
+        const prevView = view;
         view = data.view;
+        feedback(prevView, view);
         if (view) serverClock.sync(view.serverNow);
         // The server only ever ships full segment history inside 'state' views on join/reset —
         // live strokes arrive as their own 'segment' events. Re-sync from history only when the
