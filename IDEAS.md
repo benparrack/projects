@@ -544,7 +544,7 @@ day, read in real depth rather than a one-line trivia fact.
 
 ## 39. Claude Code Usage Analyst
 
-**Status:** In progress (started 2026-09-27) — see `claude_usage_analyst/`.
+**Status:** Done (2026-09-27) — `claude_usage_analyst/`, run `claude-usage`. See its README for the limit-calibration findings.
 **Pitch:** Parse local Claude Code transcripts (`~/.claude/projects/**/*.jsonl`) into a dashboard: cost/tokens by project, session, and day; which sessions blew up on cache reads; tool-call patterns; actionable habit suggestions.
 
 **Why this one:** Directly serves the token/context discipline goals in this repo's `CLAUDE.md` (cache-read tokens dominate cost), using Ben's own real data.

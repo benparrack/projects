@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Usage Analyst</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23d97757'/><path d='M8 22V14M14 22V9M20 22V17M26 22V12' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo"></span>Claude Usage<span class="muted"> Analyst</span></div>
+  <nav id="nav">
+    <a href="#/overview" data-view="overview">Overview</a>
+    <a href="#/limits" data-view="limits">Limits</a>
+    <a href="#/sessions" data-view="sessions">Sessions</a>
+    <a href="#/insights" data-view="insights">Insights</a>
+    <a href="#/tools" data-view="tools">Tools</a>
+    <a href="#/settings" data-view="settings">Settings</a>
+  </nav>
+  <div class="controls">
+    <select id="range" title="Date range">
+      <option value="1">Today</option>
+      <option value="7">7 days</option>
+      <option value="30" selected>30 days</option>
+      <option value="90">90 days</option>
+      <option value="0">All time</option>
+    </select>
+    <select id="project" title="Project filter"><option value="">All projects</option></select>
+    <span id="live" class="live" title="Auto-refreshing"><i></i><span>live</span></span>
+    <button id="theme" class="icon-btn" title="Toggle theme">◐</button>
+  </div>
+</header>
+<main id="main"><div class="loading">Reading transcripts…</div></main>
+<div id="tip" class="tip" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

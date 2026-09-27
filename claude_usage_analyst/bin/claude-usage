@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Launcher: resolves the real location (works when symlinked into ~/.local/bin)
+DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m claude_usage "$@"
