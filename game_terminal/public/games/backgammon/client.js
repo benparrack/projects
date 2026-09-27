@@ -11,6 +11,7 @@
 // true node-reuse animation isn't attempted, but every checker/point plays a short CSS
 // pop-in/glow transition on (re)creation so state changes read as smoother than a hard cut.
 import { sfx, boardSounds } from '../sfx.js';
+import { slideFrom, LAST_MOVE_TINT } from '../boardFx.js';
 
 
 const POINT_W = 48;
@@ -46,6 +47,8 @@ function popIn(el, delayMs = 0) {
 
 export function mount(container, api) {
   let view = null;
+  let animKey; // last move we've slid a checker for (undefined until the first render)
+  let prevBar = null;
   let roster = [];
   let armedDie = null;
   let flashError = null;
@@ -108,6 +111,7 @@ export function mount(container, api) {
 
   function discEl(color, i, animate = true) {
     const d = document.createElement('div');
+    d.className = 'bg-disc';
     d.style.width = `${DISC}px`;
     d.style.height = `${DISC}px`;
     d.style.borderRadius = '50%';
@@ -151,6 +155,8 @@ export function mount(container, api) {
     cell.style.transition = 'box-shadow 0.2s ease';
 
     cell.appendChild(triangleBg(pointNum, faceUp));
+    const lm = view.lastMove;
+    if (lm && (lm.from === pointNum || lm.to === pointNum)) cell.style.boxShadow = LAST_MOVE_TINT;
 
     const content = document.createElement('div');
     content.style.position = 'relative';
@@ -205,6 +211,7 @@ export function mount(container, api) {
 
   function renderBarPile(color) {
     const wrap = document.createElement('div');
+    wrap.dataset.bar = color;
     wrap.style.display = 'flex';
     wrap.style.flexDirection = 'column';
     wrap.style.alignItems = 'center';
@@ -237,6 +244,32 @@ export function mount(container, api) {
     if (view.phase === 'playing') return view.turn === 'white' ? '#f2f2f2' : AMBER;
     if (view.phase === 'game_over') return ACCENT;
     return '#9ecfa3';
+  }
+
+  // Slide the checker that just moved from its source point/bar to its new spot, and a hit blot
+  // from that spot to the bar. Replaces that disc's pop-in so it doesn't also scale in.
+  function topDisc(el) {
+    const discs = el ? el.querySelectorAll('.bg-disc') : [];
+    const d = discs[discs.length - 1];
+    if (d) { d.style.transition = 'none'; d.style.transform = ''; d.style.opacity = '1'; }
+    return d;
+  }
+  function animateLastMove() {
+    const lm = view.lastMove;
+    const key = lm ? JSON.stringify([lm, view.points, view.bar, view.borneOff]) : null;
+    const first = animKey === undefined;
+    const changed = key !== animKey;
+    animKey = key;
+    const barBefore = prevBar;
+    prevBar = { ...view.bar };
+    if (first || !changed || !lm || lm.to === 'off') return;
+    const spot = (p) => root.querySelector(p === 'bar' ? `[data-bar="${lm.color}"]` : `[data-point="${p}"]`);
+    const toEl = spot(lm.to);
+    slideFrom(topDisc(toEl), spot(lm.from), { duration: 260 });
+    const opp = lm.color === 'white' ? 'black' : 'white';
+    if (barBefore && view.bar[opp] > barBefore[opp]) {
+      slideFrom(topDisc(root.querySelector(`[data-bar="${opp}"]`)), toEl, { duration: 300, delay: 180 });
+    }
   }
 
   function render() {
@@ -450,6 +483,7 @@ export function mount(container, api) {
     board.appendChild(mid);
     board.appendChild(makeRow(BOTTOM_LEFT, BOTTOM_RIGHT, false));
     root.appendChild(board);
+    animateLastMove();
   }
 
   render();

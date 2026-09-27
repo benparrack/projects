@@ -3,6 +3,7 @@
 // testing, per this hub's grid-game convention) — the drop buttons above the board are what's
 // clickable, matching the classic "click a column" interaction.
 import { sfx, boardSounds } from '../sfx.js';
+import { dropIn, changeTracker } from '../boardFx.js';
 
 
 const CELL = 50;
@@ -15,8 +16,29 @@ const REJECT_MESSAGES = {
   invalid_column: 'Invalid move',
 };
 
+// The four-in-a-row through the last-placed disc (the server doesn't send the winning line).
+function winningLine(board, r0, c0) {
+  const color = board[r0] && board[r0][c0];
+  if (!color) return [];
+  for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+    const line = [{ r: r0, c: c0 }];
+    for (const sgn of [1, -1]) {
+      let r = r0 + dr * sgn;
+      let c = c0 + dc * sgn;
+      while (board[r] && board[r][c] === color) {
+        line.push({ r, c });
+        r += dr * sgn;
+        c += dc * sgn;
+      }
+    }
+    if (line.length >= 4) return line;
+  }
+  return [];
+}
+
 export function mount(container, api) {
   let view = null;
+  const dropChanged = changeTracker();
   let roster = [];
   let flashError = null; // null, or one of REJECT_MESSAGES' keys
 
@@ -160,6 +182,10 @@ export function mount(container, api) {
     board.style.padding = '4px';
     board.style.boxSizing = 'content-box';
 
+    board.style.overflow = 'hidden';
+    const lm = view.lastMove;
+    const animateDrop = dropChanged(lm ? `${lm.r},${lm.c}:${view.board.flat().filter(Boolean).length}` : null);
+    const winCells = view.phase === 'game_over' && lm ? winningLine(view.board, lm.r, lm.c) : [];
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const cell = document.createElement('div');
@@ -170,11 +196,27 @@ export function mount(container, api) {
         cell.style.borderRadius = '50%';
         cell.style.boxSizing = 'border-box';
         const piece = view.board[r][c];
-        if (piece === 'red') cell.style.background = '#ff4d4d';
-        else if (piece === 'yellow') cell.style.background = '#ffee58';
-        else cell.style.background = '#05080a';
-        if (view.lastMove && view.lastMove.r === r && view.lastMove.c === c) {
-          cell.style.boxShadow = '0 0 0 3px #39ff14 inset';
+        cell.style.background = '#05080a';
+        cell.style.boxShadow = 'inset 0 3px 6px rgba(0,0,0,.8)';
+        if (piece) {
+          const disc = document.createElement('div');
+          const red = piece === 'red';
+          Object.assign(disc.style, {
+            width: '100%', height: '100%', borderRadius: '50%', boxSizing: 'border-box',
+            background: red
+              ? 'radial-gradient(circle at 35% 30%, #ff9a9a, #ff4d4d 45%, #b32020)'
+              : 'radial-gradient(circle at 35% 30%, #fffbc2, #ffee58 45%, #c9b400)',
+            border: `3px solid ${red ? '#d63a3a' : '#e0cf3a'}`,
+          });
+          const isLast = lm && lm.r === r && lm.c === c;
+          if (isLast) disc.style.outline = '3px solid #39ff14';
+          if (winCells.some((w) => w.r === r && w.c === c)) {
+            disc.style.outline = '3px solid #fff';
+            disc.animate([{ filter: 'brightness(1)' }, { filter: 'brightness(1.6)' }],
+              { duration: 500, iterations: Infinity, direction: 'alternate' });
+          }
+          if (isLast && animateDrop) dropIn(disc, r, CELL);
+          cell.appendChild(disc);
         }
         board.appendChild(cell);
       }

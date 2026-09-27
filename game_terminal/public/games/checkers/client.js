@@ -1,6 +1,7 @@
 // Checkers — click a piece, then click a destination square. Server validates and
 // enforces mandatory captures / multi-jump; illegal attempts get a rejection flash.
 import { sfx, boardSounds } from '../sfx.js';
+import { slideFrom, captureGhost } from '../boardFx.js';
 
 
 const CELL = 44;
@@ -68,6 +69,9 @@ function legalDestinationsFrom(board, from) {
 
 export function mount(container, api) {
   let view = null;
+  // Path of the last move we've already animated, so a multi-jump that arrives one leg per update
+  // only animates the new legs (and a full-chain bot move animates every leg).
+  let animatedPath; // undefined until the first render, so a page load doesn't animate
   let roster = [];
   let selected = null;
   let flashError = false;
@@ -221,9 +225,11 @@ export function mount(container, api) {
     // through), not just the final leg's from/to.
     const isLastMoveSquare = (r, c) => !!lastMove && lastMove.path.some((p) => p.r === r && p.c === c);
 
+    const cellAt = {};
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
         const cell = document.createElement('div');
+        cellAt[`${r},${c}`] = cell;
         cell.dataset.row = String(r);
         cell.dataset.col = String(c);
         const dark = (r + c) % 2 === 1;
@@ -282,6 +288,7 @@ export function mount(container, api) {
       }
     }
     root.appendChild(board);
+    animateLastMove(cellAt);
 
     if (view.phase === 'game_over') {
       const again = document.createElement('button');
@@ -289,6 +296,37 @@ export function mount(container, api) {
       again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
       root.appendChild(again);
     }
+  }
+
+  function animateLastMove(cellAt) {
+    const lm = view.lastMove;
+    const path = lm ? lm.path : null;
+    const key = path ? JSON.stringify(path) : null;
+    const prev = animatedPath;
+    animatedPath = key;
+    if (!path || path.length < 2 || prev === undefined || prev === key) return;
+    // Continuing the same chain? Start from the last leg we already showed.
+    let start = 0;
+    const prevPath = prev && JSON.parse(prev);
+    if (prevPath && prevPath.length < path.length && JSON.stringify(path.slice(0, prevPath.length)) === prev) {
+      start = prevPath.length - 1;
+    }
+    const at = (p) => cellAt[`${p.r},${p.c}`];
+    const end = path[path.length - 1];
+    const disc = at(end) && at(end).lastElementChild;
+    if (!disc) return;
+    const legs = path.length - 1 - start;
+    slideFrom(disc, path.slice(start, -1).map(at), { duration: 180 });
+    const moverBlack = view.board[end.r][end.c] && view.board[end.r][end.c].color === 'black';
+    (lm.captures || []).slice(-legs).forEach((cap, i) => {
+      if (!cap) return;
+      const ghost = document.createElement('div');
+      Object.assign(ghost.style, {
+        width: `${CELL - 12}px`, height: `${CELL - 12}px`, borderRadius: '50%', boxSizing: 'border-box',
+        background: moverBlack ? '#ff4d4d' : '#1a1a1a', border: moverBlack ? '2px solid #7a1414' : '2px solid #999',
+      });
+      captureGhost(at(cap), ghost, null, { delay: 180 * (i + 1) - 60 });
+    });
   }
 
   render();

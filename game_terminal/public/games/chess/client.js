@@ -4,6 +4,7 @@
 // FLIP BOARD override; `flipped` only ever changes what's rendered where — board coordinates
 // (dataset.row/col, onSquareClick args) always stay in the server's own r/c space.
 import { sfx, boardSounds } from '../sfx.js';
+import { slideFrom, captureGhost, changeTracker, LAST_MOVE_TINT, CHECK_GLOW } from '../boardFx.js';
 
 const CELL = 44;
 const GLYPHS = {
@@ -61,6 +62,7 @@ function materialDiffSeries(history) {
 
 export function mount(container, api) {
   let view = null;
+  const moveChanged = changeTracker();
   let roster = [];
   let selected = null;
   let flashError = false;
@@ -364,6 +366,11 @@ export function mount(container, api) {
     board.style.border = '1px solid #1f8f0c';
 
     const destMoves = legalDestinations();
+    const history = view.moveHistory || [];
+    const lm = history[history.length - 1] || null;
+    const animate = moveChanged(lm ? `${history.length}:${lm.from.r}${lm.from.c}${lm.to.r}${lm.to.c}` : null);
+    const cellAt = {};
+    const isSq = (p, r, c) => p && p.r === r && p.c === c;
 
     for (let vr = 0; vr < 8; vr++) {
       for (let vc = 0; vc < 8; vc++) {
@@ -393,13 +400,22 @@ export function mount(container, api) {
           cell.style.border = '2px dashed #ff4d4d';
         }
         cell.addEventListener('click', () => onSquareClick(r, c));
+        cellAt[`${r},${c}`] = cell;
+        if (lm && (isSq(lm.from, r, c) || isSq(lm.to, r, c))) cell.style.boxShadow = LAST_MOVE_TINT;
         const piece = view.board[r][c];
+        if (piece && piece.type === 'king' && view.inCheck === piece.color && !view.winner) {
+          cell.style.backgroundImage = CHECK_GLOW;
+        }
         if (piece) {
           const glyph = document.createElement('span');
+          glyph.style.position = 'relative';
           glyph.textContent = GLYPHS[piece.color][piece.type];
           glyph.style.color = GLYPH_COLORS[piece.color];
           glyph.style.textShadow = GLYPH_OUTLINE;
           cell.appendChild(glyph);
+          if (animate && isSq(lm.to, r, c)) {
+            slideFrom(glyph, () => cellAt[`${lm.from.r},${lm.from.c}`]);
+          }
         }
         const destMove = destMoves.find((m) => m.to.r === r && m.to.c === c);
         if (destMove) {
@@ -420,6 +436,17 @@ export function mount(container, api) {
           cell.appendChild(marker);
         }
         board.appendChild(cell);
+      }
+    }
+    if (animate) {
+      if (lm.captured) {
+        const capColor = lm.color === 'white' ? 'black' : 'white';
+        captureGhost(cellAt[`${lm.to.r},${lm.to.c}`], GLYPHS[capColor][lm.captured], GLYPH_COLORS[capColor]);
+      }
+      if (lm.castle) {
+        const [rf, rt] = lm.castle === 'king' ? [7, 5] : [0, 3];
+        const rookGlyph = cellAt[`${lm.to.r},${rt}`] && cellAt[`${lm.to.r},${rt}`].querySelector('span');
+        slideFrom(rookGlyph, cellAt[`${lm.to.r},${rf}`]);
       }
     }
 
