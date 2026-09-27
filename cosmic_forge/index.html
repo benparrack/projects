@@ -129,6 +129,42 @@
   #surgeLabel.active { color: #fff; text-shadow: 0 0 12px var(--cyan), 0 0 24px var(--cyan); animation: surgeFlash 0.5s ease-in-out infinite alternate; }
   @keyframes surgeFlash { from { opacity: 0.7; } to { opacity: 1; } }
 
+  /* ---- Void Front ---- */
+  #battleRow { display: flex; align-items: center; justify-content: center; gap: 28px; width: 100%; }
+  #fxLayer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 12; pointer-events: none; }
+  #voidFront { width: 270px; flex-shrink: 0; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; position: relative; overflow: hidden; }
+  #voidFront.boss { border-color: rgba(255,90,110,0.55); box-shadow: 0 0 24px rgba(255,60,90,0.25), inset 0 0 30px rgba(255,40,80,0.08); }
+  .vf-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .vf-head .section-title { margin: 0; }
+  #vfZone { font-size: 12px; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
+  #vfPips { display: flex; gap: 3px; height: 6px; }
+  #vfPips .pip { flex: 1; border-radius: 3px; background: rgba(255,255,255,0.08); transition: background 0.2s; }
+  #vfPips .pip.on { background: linear-gradient(90deg, #c77dff, #7b2cbf); box-shadow: 0 0 6px rgba(199,125,255,0.6); }
+  #vfPips .pip.boss { flex: 1.6; background: rgba(255,90,110,0.18); }
+  #vfPips.farming .pip.on { background: rgba(199,125,255,0.35); box-shadow: none; }
+  #vfArena { position: relative; height: 190px; border-radius: 8px; overflow: hidden;
+    background: radial-gradient(ellipse at center, rgba(90,24,154,0.25), rgba(5,5,10,0.4) 70%); }
+  #vfCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #vfName { position: absolute; left: 0; right: 0; top: 6px; text-align: center; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); font-weight: 600; pointer-events: none; }
+  #voidFront.boss #vfName { color: #ff8fa3; text-shadow: 0 0 10px rgba(255,60,90,0.8); font-size: 12px; }
+  .vf-bar { position: relative; height: 14px; border-radius: 7px; background: rgba(255,255,255,0.07); overflow: hidden; }
+  #vfHpFill { height: 100%; width: 100%; background: linear-gradient(90deg, #9d4edd, #ff6b9d); border-radius: 7px; }
+  #voidFront.boss #vfHpFill { background: linear-gradient(90deg, #ff2e63, #ff8fa3); }
+  #vfHpText { position: absolute; inset: 0; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; color: #fff; text-shadow: 0 1px 2px #000; }
+  #vfTimer { height: 5px; display: none; }
+  #voidFront.boss #vfTimer { display: block; }
+  #vfTimerFill { height: 100%; width: 100%; background: linear-gradient(90deg, #ffd166, #ff2e63); }
+  #vfTimer.urgent #vfTimerFill { animation: surgeFlash 0.25s ease-in-out infinite alternate; }
+  #vfInfo { font-size: 10.5px; color: var(--text-dim); display: flex; justify-content: space-between; gap: 6px; }
+  #vfInfo b { color: var(--text); font-weight: 600; }
+  #vfBossBtn { display: none; border: 1px solid rgba(255,90,110,0.5); background: rgba(255,60,90,0.12); color: #ffb3c1;
+    border-radius: 8px; padding: 7px 8px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; line-height: 1.25; }
+  #vfBossBtn small { display: block; font-weight: 500; font-size: 10px; opacity: 0.8; }
+  #vfBossBtn.show { display: block; }
+  #vfBossBtn.ready { background: linear-gradient(135deg, #ff2e63, #ff8fa3); color: #fff; border-color: #ff8fa3; animation: bossReady 0.9s ease-in-out infinite alternate; }
+  @keyframes bossReady { from { box-shadow: 0 0 4px rgba(255,46,99,0.4); } to { box-shadow: 0 0 18px rgba(255,46,99,0.9); } }
+  #vfBossBtn:hover { filter: brightness(1.15); }
+
   /* ---- Goals ---- */
   #goalsPanel { width: min(520px, 100%); padding: 10px 12px; }
   #goalsPanel .goals-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
@@ -417,7 +453,13 @@
     .icon-btn { width: 30px; height: 30px; font-size: 13px; }
     #mainRow { flex-direction: column; gap: 6px; }
     #centerCol { flex: 0 0 auto; gap: 4px; }
-    #coreStage { --core-size: min(230px, 30vh, 70vw); }
+    #coreStage { --core-size: min(180px, 24vh, 44vw); }
+    #battleRow { gap: 8px; align-items: stretch; }
+    #voidFront { width: auto; flex: 1; min-width: 0; padding: 6px 8px; gap: 4px; }
+    #vfArena { height: auto; flex: 1; min-height: 90px; }
+    #vfInfo { display: none; }
+    #vfBossBtn { padding: 5px 6px; font-size: 11px; }
+    .vf-head .section-title { font-size: 9px; }
     #stageLabel .stage-flavor, #ignitePower { display: none; }
     #stageLabel .stage-name { font-size: 15px; }
     #goalsPanel { padding: 6px 10px; }
@@ -433,6 +475,7 @@
 <canvas id="backdrop"></canvas>
 <div id="vignette"></div>
 <canvas id="particleLayer"></canvas>
+<canvas id="fxLayer"></canvas>
 
 <div id="ui">
   <div id="topbar" class="panel">
@@ -462,6 +505,7 @@
         <div class="stage-flavor" id="stageFlavor">A single ember of primordial energy, waiting to become everything.</div>
       </div>
       <div id="buffChips"></div>
+      <div id="battleRow">
       <div id="igniteWrap">
         <div id="coreStage">
           <canvas id="coreCanvas"></canvas>
@@ -470,6 +514,16 @@
         <div id="surgeLabel"></div>
         <div id="hint"></div>
         <div id="ignitePower">Click power: <b id="clickPowerVal">1</b> · Crit chance <b id="critChanceVal">5%</b></div>
+      </div>
+      <div id="voidFront" class="panel">
+        <div class="vf-head"><div class="section-title">Void Front</div><div id="vfZone">Zone 1</div></div>
+        <div id="vfPips"></div>
+        <div id="vfArena"><canvas id="vfCanvas"></canvas><div id="vfName"></div></div>
+        <div class="vf-bar"><div id="vfHpFill"></div><span id="vfHpText"></span></div>
+        <div class="vf-bar" id="vfTimer"><div id="vfTimerFill"></div></div>
+        <div id="vfInfo"><span>DPS <b id="vfDps">0</b></span><span>Dominion <b id="vfDom">+0%</b></span></div>
+        <button id="vfBossBtn"></button>
+      </div>
       </div>
       <div id="goalsPanel" class="panel">
         <div class="goals-head"><div class="section-title">Goals</div><div id="goalsDone"></div></div>
@@ -656,6 +710,14 @@ const ACHIEVEMENTS = [
   { id: 'daily_7',        name: 'Faithful Orbit',     desc: 'Reach a 7-day login streak.',               category: 'Dedication', check: s => s.daily.bestStreak >= 7 },
   { id: 'play_1h',        name: 'Time Dilation',      desc: 'Play for 1 hour in total.',                 category: 'Dedication', check: s => s.stats.playTimeSeconds >= 3600 },
   { id: 'play_10h',       name: 'Deep Time',          desc: 'Play for 10 hours in total.',               category: 'Dedication', check: s => s.stats.playTimeSeconds >= 36000 },
+  { id: 'void_first',     name: 'First Blood',        desc: 'Defeat your first Void enemy.',             category: 'Void', check: s => s.stats.enemiesDefeated >= 1 },
+  { id: 'void_100',       name: 'Voidbreaker',        desc: 'Defeat 100 Void enemies.',                  category: 'Void', check: s => s.stats.enemiesDefeated >= 100 },
+  { id: 'void_1000',      name: 'Scourge of Nothing', desc: 'Defeat 1,000 Void enemies.',                category: 'Void', check: s => s.stats.enemiesDefeated >= 1000 },
+  { id: 'boss_first',     name: 'Giant Slayer',       desc: 'Defeat your first Void boss.',              category: 'Void', check: s => s.stats.bossesDefeated >= 1 },
+  { id: 'boss_10',        name: 'Tyrant Breaker',     desc: 'Defeat 10 Void bosses.',                    category: 'Void', check: s => s.stats.bossesDefeated >= 10 },
+  { id: 'zone_25',        name: 'Deep Incursion',     desc: 'Reach Zone 25 of the Void Front.',          category: 'Void', check: s => s.stats.bestZone >= 25 },
+  { id: 'zone_50',        name: 'Edge of Nothing',    desc: 'Reach Zone 50 of the Void Front.',          category: 'Void', check: s => s.stats.bestZone >= 50 },
+  { id: 'zone_100',       name: 'Light Unending',     desc: 'Reach Zone 100 of the Void Front.',         category: 'Void', check: s => s.stats.bestZone >= 100 },
 ];
 
 // Goals: three always-on short-term objectives, regenerated from the player's
@@ -675,6 +737,15 @@ const DAILY_REWARDS = [
 ];
 
 // Stellar Surge: clicking fills a meter; when full, a short frenzy.
+// The Void Front: Ignites and production both deal damage to Void enemies.
+// 10 kills clear a zone; every 5th zone is a boss you must beat within 30s.
+const VOID = { killsPerZone: 10, bossEvery: 5, bossTime: 30, hp0: 10, hpGrowth: 1.33, bossMult: 10, bounty: 0.1, dominionPerZone: 0.005 };
+const BOSS_NAMES = ['The Hollow Maw', 'Entropy Wyrm', 'Null Sovereign', 'The Unmaker', 'Grief Nebula', 'Starless Titan', 'Oblivion Choir', 'The Last Dark'];
+const ENEMY_SPECIES = [
+  { name: 'Void Mass', hue: 275 }, { name: 'Null Crystal', hue: 195 }, { name: 'Entropy Bloom', hue: 330 },
+  { name: 'Hollow Spore', hue: 150 }, { name: 'Dark Shard', hue: 240 },
+];
+
 const SURGE = { perClick: 0.022, perCrit: 0.05, decayPerSec: 0.08, idleGrace: 1.0, duration: 12, cooldown: 30, clickMult: 5, prodMult: 2 };
 
 const EVENT_TYPES = [
@@ -704,7 +775,9 @@ function defaultState() {
       cometsCaught: 0, stardustCollected: 0,
       surgesTriggered: 0, goalsCompleted: 0, lifetimeMatter: 0, peakRate: 0,
       cycleStartedAt: Date.now(), fastestCycleSeconds: 0,
+      enemiesDefeated: 0, bossesDefeated: 0, bestZone: 1,
     },
+    void: { zone: 1, kills: 0, maxCleared: 0, farming: false, bossesThisCycle: 0 },
     daily: { lastDay: null, streak: 0, bestStreak: 0 },
     buffs: { blessingUntil: 0 },
     goals: [],
@@ -742,6 +815,8 @@ const runtime = {
   backdropObjs: { ambient: [], shootingStars: [], dust: [], protostars: [], stars: [], planets: [], galaxySeed: null, clusters: [], webSeed: null },
   audioCtx: null,
   surge: { meter: 0, activeUntil: 0, cooldownUntil: 0, lastClick: 0 },
+  enemy: null,
+  vf: { shards: [], bolts: [], clickDps: 0, respawnIn: 0, aw: 0, ah: 0, dpr: 1, arenaPos: null, corePos: null, coreR: 0 },
 };
 
 function ownedOf(s, genId) {
@@ -839,6 +914,7 @@ function globalProductionMultiplier() {
   if (blessingActive()) mult *= 2;
   if (boostActive()) mult *= 2;
   if (surgeActive()) mult *= SURGE.prodMult;
+  mult *= dominionMultiplier();
   return mult;
 }
 
@@ -955,7 +1031,7 @@ function canCollapse() {
 }
 
 function singularitiesOnCollapse() {
-  return Math.floor(5 * Math.sqrt(state.stats.lifetimeEnergyThisCycle / 1e8));
+  return Math.floor(5 * Math.sqrt(state.stats.lifetimeEnergyThisCycle / 1e8)) + Math.floor(state.void.bossesThisCycle / 2);
 }
 
 /* =========================================================================
@@ -982,6 +1058,7 @@ function doIgnite(clientX, clientY) {
   spawnFloatPop(clientX, clientY, '+' + formatNum(gained), isCrit);
   spawnClickParticles(clientX, clientY, isCrit);
   spawnShockwave(clientX, clientY, isCrit ? 'crit' : null);
+  fireBolt(gained, isCrit);
   feedSurge(isCrit);
   kickCore(isCrit ? 1 : 0.45);
   advanceTutorial();
@@ -1133,6 +1210,8 @@ function doCollapse() {
   state.meta.highestTierUnlocked = -1;
   runtime.activeEvent = null;
   runtime.supernovaPending = false;
+  state.void = defaultState().void;
+  runtime.enemy = null;
 
   const echoLevel = state.prestige.upgrades.echoesOfBigBang;
   if (echoLevel > 0) {
@@ -1418,6 +1497,8 @@ function makeGoalCandidates() {
     c.push({ type: 'upgrade', target: 1, base: state.generatorUpgrades.purchased.length });
   }
   if (state.stats.totalClicks > 60) c.push({ type: 'surge', target: 1, base: state.stats.surgesTriggered });
+  c.push({ type: 'kills', target: [8, 12, 20][Math.floor(Math.random() * 3)], base: state.stats.enemiesDefeated });
+  if (!state.void.farming) c.push({ type: 'zone', target: state.void.zone + 1 + Math.floor(Math.random() * 2) });
   return c;
 }
 
@@ -1451,6 +1532,8 @@ function goalProgress(g) {
     case 'earn': return (state.stats.lifetimeEnergyEarned - g.base) / g.target;
     case 'upgrade': return (state.generatorUpgrades.purchased.length - g.base) / g.target;
     case 'surge': return (state.stats.surgesTriggered - g.base) / g.target;
+    case 'kills': return (state.stats.enemiesDefeated - g.base) / g.target;
+    case 'zone': return (state.void.maxCleared + 1) / g.target;
   }
   return 0;
 }
@@ -1464,11 +1547,13 @@ function goalText(g) {
     case 'earn': return `Earn ${formatNum(g.target)} Energy`;
     case 'upgrade': return 'Buy an Efficiency Upgrade';
     case 'surge': return 'Trigger a Stellar Surge';
+    case 'kills': return `Defeat ${g.target} Void enemies`;
+    case 'zone': return `Reach Zone ${g.target}`;
   }
   return '';
 }
 
-const GOAL_ICONS = { own: '⚙', clicks: '⚡', crits: '✸', earn: '✦', upgrade: '▲', surge: '☇' };
+const GOAL_ICONS = { own: '⚙', clicks: '⚡', crits: '✸', earn: '✦', upgrade: '▲', surge: '☇', kills: '⚔', zone: '⚑' };
 
 function goalEnergyReward(g) {
   return Math.max(totalProductionPerSecond() * g.rewardSecs, clickPower() * 25, 25);
@@ -1609,7 +1694,7 @@ function renderHint() {
   advanceTutorial();
   const narrow = window.innerWidth <= 900;
   const hints = {
-    0: 'Tap the ember to ignite it ✦',
+    0: narrow ? 'Tap the ember — every Ignite strikes the Void ✦' : 'Tap the ember — every Ignite strikes the Void →',
     1: narrow ? 'Buy a Dust Collector ↓' : 'Buy a Dust Collector →',
     2: `Own 10 Dust Collectors to unlock Protostars (${ownedOf(state, 'dust')}/10)`,
     3: 'Finish a Goal and hit CLAIM for a bonus',
@@ -2088,6 +2173,429 @@ function playStageChord() {
 }
 
 /* =========================================================================
+   THE VOID FRONT — enemies, zones and bosses
+   Every Ignite fires a bolt and all production streams in as a beam, so the
+   same upgrades that grow Energy also grow damage. Ten kills clear a zone;
+   every fifth zone is a timed boss that has to be out-grown, not out-waited.
+   ========================================================================= */
+
+function isBossZone(z) { return z % VOID.bossEvery === 0; }
+function enemyMaxHp(z) { return VOID.hp0 * Math.pow(VOID.hpGrowth, z - 1) * (isBossZone(z) ? VOID.bossMult : 1); }
+function enemyBounty(z) { return enemyMaxHp(z) * VOID.bounty; }
+function bossMatter(z) { return 2 + Math.floor(z / 10); }
+function bossName(z) { return BOSS_NAMES[(z / VOID.bossEvery - 1) % BOSS_NAMES.length]; }
+function dominionMultiplier() { return 1 + VOID.dominionPerZone * state.void.maxCleared; }
+
+// Damage per second shown to the player: production plus recent click damage.
+function currentDps() { return totalProductionPerSecond() + runtime.vf.clickDps; }
+
+function spawnEnemy() {
+  const v = state.void, z = v.zone, boss = isBossZone(z);
+  const r = seededRand(Math.floor(Math.random() * 1e9));
+  const species = ENEMY_SPECIES[Math.floor(r() * ENEMY_SPECIES.length)];
+  const maxHp = enemyMaxHp(z);
+  runtime.enemy = {
+    zone: z, boss, maxHp, hp: maxHp,
+    name: boss ? bossName(z) : species.name,
+    hue: boss ? 350 : species.hue,
+    cells: buildEnemyCells(r, boss ? 4 : 2 + (z > 10 ? 1 : 0)),
+    spawnT: 0, flash: 0, shake: 0, deadT: 0, t: r() * 10,
+    bossLeft: boss ? VOID.bossTime : 0,
+  };
+  runtime.vf.respawnIn = 0;
+  if (boss) {
+    playBossAppear();
+    logToast(`⚠ Boss: ${runtime.enemy.name}. Defeat it within ${VOID.bossTime}s! (Save your Surge for this.)`, 'event');
+  }
+  renderVoidFront();
+}
+
+// A hex-cell formation (brick-breaker style): outer cells shatter first as HP drops.
+function buildEnemyCells(r, rings) {
+  const cells = [];
+  for (let q = -rings; q <= rings; q++) {
+    for (let rr = Math.max(-rings, -q - rings); rr <= Math.min(rings, -q + rings); rr++) {
+      const d = Math.max(Math.abs(q), Math.abs(rr), Math.abs(-q - rr));
+      if (d === rings && r() < 0.45) continue;
+      cells.push({ x: Math.sqrt(3) * (q + rr / 2), y: 1.5 * rr, d, broken: false, wob: r() * 6.28 });
+    }
+  }
+  const breakable = cells.filter(c => c.d > 0).sort((a, b) => (b.d + r() * 0.9) - (a.d + r() * 0.9));
+  breakable.forEach((c, i) => { c.breakAt = 1 - (i + 1) / (breakable.length + 1); });
+  cells.forEach(c => { if (c.d === 0) c.breakAt = -1; });
+  return cells;
+}
+
+function damageEnemy(amount) {
+  const e = runtime.enemy;
+  if (!e || e.deadT > 0) return;
+  e.hp -= amount;
+  const frac = Math.max(0, e.hp / e.maxHp);
+  for (const c of e.cells) if (!c.broken && frac < c.breakAt) breakCell(e, c);
+  if (e.hp <= 0) defeatEnemy();
+}
+
+function breakCell(e, c) {
+  c.broken = true;
+  const n = e.boss ? 5 : 4;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 4;
+    runtime.vf.shards.push({ x: c.x, y: c.y, vx: Math.cos(a) * sp + c.x * 0.6, vy: Math.sin(a) * sp + c.y * 0.6 - 2, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 12, life: 1, hue: e.hue, size: 0.35 + Math.random() * 0.35 });
+  }
+  if (runtime.vf.shards.length > 260) runtime.vf.shards.splice(0, runtime.vf.shards.length - 260);
+  playShatter();
+}
+
+function defeatEnemy() {
+  const e = runtime.enemy, v = state.void;
+  e.deadT = 0.0001;
+  e.cells.forEach(c => { if (!c.broken) breakCell(e, c); });
+  const bounty = enemyBounty(e.zone);
+  addEnergy(bounty);
+  state.stats.enemiesDefeated++;
+  const pos = runtime.vf.arenaPos;
+  spawnFloatPop(pos.x, pos.y - 20, '+' + formatNum(bounty), false, '#c77dff');
+  if (e.boss) {
+    state.stats.bossesDefeated++;
+    v.bossesThisCycle++;
+    const m = Math.round(bossMatter(e.zone) * matterGainMultiplier());
+    addMatter(m);
+    popValue('matterVal');
+    spawnFloatPop(pos.x, pos.y - 44, '+' + formatInt(m) + ' Matter', true, '#48cae4');
+    logToast(`${e.name} is destroyed! +${formatInt(m)} Matter. Zone ${e.zone + 1} opens.`, 'achievement');
+    spawnShockwave(pos.x, pos.y, 'tier');
+    shakeScreen();
+    playBossDefeated();
+    Platform.happytime();
+    advanceZone();
+  } else {
+    playKill();
+    if (!v.farming) { v.kills++; if (v.kills >= VOID.killsPerZone) advanceZone(); }
+  }
+  runtime.vf.respawnIn = e.boss ? 1.2 : 0.45;
+  checkAchievements();
+}
+
+function advanceZone() {
+  const v = state.void;
+  v.maxCleared = Math.max(v.maxCleared, v.zone);
+  v.zone++;
+  v.kills = 0;
+  v.farming = false;
+  if (v.zone > state.stats.bestZone) state.stats.bestZone = v.zone;
+}
+
+function failBoss() {
+  const e = runtime.enemy, v = state.void;
+  logToast(`${e.name} repelled your assault. Grow stronger and challenge it again.`, 'event');
+  playBossFail();
+  v.zone = e.zone - 1;
+  v.farming = true;
+  v.kills = VOID.killsPerZone;
+  e.deadT = 0.0001;
+  e.fled = true;
+  runtime.vf.respawnIn = 0.8;
+}
+
+function challengeBoss() {
+  const v = state.void;
+  if (!v.farming) return;
+  v.farming = false;
+  v.zone = v.maxCleared + 1;
+  v.kills = 0;
+  spawnEnemy();
+}
+
+// Called from simTick: production damage and the boss clock.
+function updateVoid(dtSec, rate) {
+  const vf = runtime.vf;
+  vf.clickDps *= Math.exp(-dtSec / 3);
+  const e = runtime.enemy;
+  if (!e) return;
+  if (e.deadT === 0) {
+    if (rate > 0) damageEnemy(rate * dtSec);
+    if (e.boss && e.deadT === 0) {
+      e.bossLeft -= dtSec;
+      if (e.bossLeft <= 0) failBoss();
+    }
+  }
+}
+
+// Called from doIgnite: a bolt flies from the core and lands a moment later.
+function fireBolt(dmg, isCrit) {
+  const vf = runtime.vf;
+  vf.clickDps += dmg / 3;
+  vf.bolts.push({ t: 0, dur: 0.16 + Math.random() * 0.05, dmg, crit: isCrit, bend: (Math.random() - 0.5) * 80 });
+}
+
+/* ---- rendering ---- */
+
+const vfCanvas = document.getElementById('vfCanvas');
+const vctx = vfCanvas.getContext('2d');
+const fxCanvas = document.getElementById('fxLayer');
+const fctx = fxCanvas.getContext('2d');
+
+function resizeVoidCanvases() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const r = vfCanvas.getBoundingClientRect();
+  vfCanvas.width = Math.max(1, Math.round(r.width * dpr));
+  vfCanvas.height = Math.max(1, Math.round(r.height * dpr));
+  runtime.vf.aw = r.width; runtime.vf.ah = r.height; runtime.vf.dpr = dpr;
+  fxCanvas.width = Math.round(window.innerWidth * dpr);
+  fxCanvas.height = Math.round(window.innerHeight * dpr);
+  updateVoidAnchors();
+}
+
+// Cached screen positions (refreshed on resize and on the UI tick) so the
+// per-frame beam drawing never forces a layout.
+function updateVoidAnchors() {
+  const a = vfCanvas.getBoundingClientRect();
+  runtime.vf.arenaPos = { x: a.left + a.width / 2, y: a.top + a.height / 2 + 6 };
+  runtime.vf.corePos = coreCenter();
+  runtime.vf.coreR = el('coreStage').getBoundingClientRect().width * 0.3;
+}
+
+function hexPath(ctx, x, y, r) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 6 + i * Math.PI / 3;
+    const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function drawVoid(dt) {
+  const vf = runtime.vf;
+  if (!vf.aw) resizeVoidCanvases();
+  let e = runtime.enemy;
+  if (e && e.deadT > 0) {
+    e.deadT += dt;
+    vf.respawnIn -= dt;
+    if (vf.respawnIn <= 0) { spawnEnemy(); e = runtime.enemy; }
+  } else if (!e) spawnEnemy(), e = runtime.enemy;
+
+  const ctx = vctx, W = vf.aw, H = vf.ah;
+  ctx.setTransform(vf.dpr, 0, 0, vf.dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const s = Math.min(W / (2 * Math.sqrt(3) * 4 + 3), (H - 16) / (3 * 4 + 3)) * 1.05;
+  const cx = W / 2, cy = H / 2 + 8;
+
+  if (e) {
+    e.t += dt;
+    e.spawnT = Math.min(1, e.spawnT + dt * 2.8);
+    e.flash = Math.max(0, e.flash - dt * 5);
+    e.shake = Math.max(0, e.shake - dt * 6);
+    const sp = e.spawnT, back = 1.7;
+    const ease = 1 + (back + 1) * Math.pow(sp - 1, 3) + back * Math.pow(sp - 1, 2);
+    const dying = e.deadT > 0;
+    const scale = dying ? Math.max(0, 1 - e.deadT * (e.fled ? 1.5 : 3)) : ease;
+    const ox = (Math.random() - 0.5) * e.shake * 6, oy = (Math.random() - 0.5) * e.shake * 6 + Math.sin(e.t * 1.6) * 3;
+
+    ctx.save();
+    ctx.translate(cx + ox, cy + oy);
+    if (e.fled) ctx.translate(0, -e.deadT * 60);
+    ctx.scale(scale, scale);
+    // aura
+    const auraR = s * (e.boss ? 9 : 6) * (1 + Math.sin(e.t * (e.boss ? 4 : 2)) * 0.05);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, auraR);
+    g.addColorStop(0, `hsla(${e.hue},90%,55%,${e.boss ? 0.35 : 0.22})`);
+    g.addColorStop(1, `hsla(${e.hue},90%,40%,0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, auraR, 0, Math.PI * 2); ctx.fill();
+    if (e.boss) {
+      ctx.strokeStyle = `hsla(${e.hue},100%,65%,0.5)`;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 8]);
+      ctx.lineDashOffset = -e.t * 30;
+      ctx.beginPath(); ctx.arc(0, 0, s * 7.6, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.rotate(Math.sin(e.t * 0.7) * 0.08);
+    const frac = Math.max(0, e.hp / e.maxHp);
+    for (const c of e.cells) {
+      if (c.broken) continue;
+      const near = c.breakAt > 0 && frac - c.breakAt < 0.06;
+      const wob = Math.sin(e.t * 3 + c.wob) * (near ? 1.2 : 0.4);
+      const x = c.x * s + wob, y = c.y * s;
+      const light = 14 + (4 - c.d) * 5;
+      hexPath(ctx, x, y, s * 0.93);
+      ctx.fillStyle = e.flash > 0 ? `hsl(${e.hue},60%,${light + e.flash * 55}%)` : `hsl(${e.hue},55%,${light}%)`;
+      ctx.fill();
+      ctx.strokeStyle = near ? `hsla(${e.hue},100%,80%,${0.6 + Math.sin(e.t * 12) * 0.3})` : `hsla(${e.hue},90%,65%,0.85)`;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      if (c.d === 0) {
+        // the nucleus / eye
+        const eg = ctx.createRadialGradient(x, y, 0, x, y, s * 1.4);
+        eg.addColorStop(0, e.boss ? '#fff0f3' : '#ffffff');
+        eg.addColorStop(0.35, `hsla(${e.hue},100%,70%,0.95)`);
+        eg.addColorStop(1, `hsla(${e.hue},100%,50%,0)`);
+        ctx.fillStyle = eg;
+        ctx.beginPath(); ctx.arc(x, y, s * 1.4, 0, Math.PI * 2); ctx.fill();
+        if (e.boss) {
+          // slit pupil that tracks the core
+          const cp = runtime.vf.corePos, ap = runtime.vf.arenaPos;
+          const ang = cp && ap ? Math.atan2(cp.y - ap.y, cp.x - ap.x) : Math.PI;
+          ctx.fillStyle = '#1a0006';
+          ctx.beginPath(); ctx.ellipse(x + Math.cos(ang) * s * 0.3, y + Math.sin(ang) * s * 0.3, s * 0.16, s * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // shards (in cell units around the arena center)
+  ctx.save();
+  ctx.translate(cx, cy);
+  for (let i = vf.shards.length - 1; i >= 0; i--) {
+    const p = vf.shards[i];
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 9 * dt; p.rot += p.vr * dt; p.life -= dt * 1.1;
+    if (p.life <= 0) { vf.shards.splice(i, 1); continue; }
+    ctx.save();
+    ctx.translate(p.x * s, p.y * s);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = `hsla(${p.hue},90%,${55 + p.life * 25}%,${p.life})`;
+    const z = p.size * s;
+    ctx.beginPath(); ctx.moveTo(0, -z); ctx.lineTo(z * 0.8, z * 0.6); ctx.lineTo(-z * 0.8, z * 0.5); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // live HP / timer bars
+  if (e) {
+    const frac = Math.max(0, e.hp / e.maxHp);
+    el('vfHpFill').style.width = (frac * 100) + '%';
+    el('vfHpText').textContent = e.deadT > 0 ? (e.fled ? 'Escaped' : 'Destroyed') : `${formatNum(Math.max(0, e.hp))} / ${formatNum(e.maxHp)}`;
+    if (e.boss) {
+      el('vfTimerFill').style.width = Math.max(0, e.bossLeft / VOID.bossTime * 100) + '%';
+      el('vfTimer').classList.toggle('urgent', e.bossLeft < 8 && e.deadT === 0);
+    }
+  }
+  drawVoidFx(dt);
+}
+
+// Beam + bolts from the core to the enemy, drawn above the UI.
+function drawVoidFx(dt) {
+  const vf = runtime.vf, ctx = fctx;
+  ctx.setTransform(vf.dpr, 0, 0, vf.dpr, 0, 0);
+  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  const a = vf.corePos, b = vf.arenaPos, e = runtime.enemy;
+  if (!a || !b) return;
+  const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+  const sx = a.x + dx / len * vf.coreR, sy = a.y + dy / len * vf.coreR;
+  const rate = totalProductionPerSecond();
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  if (rate > 0 && e && e.deadT === 0) {
+    const w = 1 + Math.min(5, Math.log10(rate + 1) * 0.6);
+    const grad = ctx.createLinearGradient(sx, sy, b.x, b.y);
+    grad.addColorStop(0, 'rgba(255,209,102,0.55)');
+    grad.addColorStop(1, `hsla(${e.hue},90%,70%,0.55)`);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = w;
+    ctx.setLineDash([10, 14]);
+    ctx.lineDashOffset = -performance.now() / 12;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.25;
+    ctx.lineWidth = w * 3;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  for (let i = vf.bolts.length - 1; i >= 0; i--) {
+    const bo = vf.bolts[i];
+    bo.t += dt;
+    const k = Math.min(1, bo.t / bo.dur);
+    const nx = -dy / len, ny = dx / len;
+    const pt = (u) => { const arc = Math.sin(u * Math.PI) * bo.bend; return [sx + dx * u + nx * arc, sy + dy * u + ny * arc]; };
+    const [hx, hy] = pt(k);
+    ctx.strokeStyle = bo.crit ? 'rgba(255,120,120,0.9)' : 'rgba(255,220,140,0.85)';
+    ctx.lineWidth = bo.crit ? 4 : 2.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let j = 0; j <= 6; j++) { const [px, py] = pt(Math.max(0, k - 0.25 + j * 0.25 / 6)); if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+    ctx.stroke();
+    const hg = ctx.createRadialGradient(hx, hy, 0, hx, hy, bo.crit ? 14 : 9);
+    hg.addColorStop(0, 'rgba(255,255,255,1)');
+    hg.addColorStop(1, bo.crit ? 'rgba(255,80,80,0)' : 'rgba(255,200,100,0)');
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(hx, hy, bo.crit ? 14 : 9, 0, Math.PI * 2); ctx.fill();
+    if (k >= 1) {
+      vf.bolts.splice(i, 1);
+      const en = runtime.enemy;
+      if (en && en.deadT === 0) {
+        en.flash = 1;
+        en.shake = bo.crit ? 1 : 0.5;
+        spawnFloatPop(b.x + (Math.random() - 0.5) * 40, b.y - 10, '-' + formatNum(bo.dmg), bo.crit, bo.crit ? '#ff6b6b' : '#f1e3ff');
+        damageEnemy(bo.dmg);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+let voidFrontSig = '';
+function renderVoidFront() {
+  const v = state.void, e = runtime.enemy;
+  const boss = !!(e && e.boss);
+  el('voidFront').classList.toggle('boss', boss);
+  el('vfZone').textContent = `Zone ${v.zone}${v.farming ? ' · farming' : ''}`;
+  el('vfName').textContent = e ? e.name : '';
+  const sig = `${v.zone}|${v.kills}|${v.farming}|${boss}`;
+  if (sig !== voidFrontSig) {
+    voidFrontSig = sig;
+    const pips = el('vfPips');
+    pips.classList.toggle('farming', v.farming);
+    if (boss) pips.innerHTML = '<div class="pip boss on" style="background:linear-gradient(90deg,#ff2e63,#ff8fa3)"></div>';
+    else {
+      let h = '';
+      for (let i = 0; i < VOID.killsPerZone; i++) h += `<div class="pip${i < v.kills ? ' on' : ''}"></div>`;
+      if (isBossZone(v.zone + 1)) h += '<div class="pip boss"></div>';
+      pips.innerHTML = h;
+    }
+  }
+  const dps = currentDps();
+  el('vfDps').textContent = formatNum(dps) + '/s';
+  el('vfDom').textContent = '+' + (Math.round((dominionMultiplier() - 1) * 1000) / 10) + '%';
+  const btn = el('vfBossBtn');
+  btn.classList.toggle('show', v.farming);
+  if (v.farming) {
+    const bz = v.maxCleared + 1;
+    const need = enemyMaxHp(bz);
+    const est = dps > 0 ? need / dps : Infinity;
+    const ready = est <= VOID.bossTime * 0.9;
+    btn.classList.toggle('ready', ready);
+    const html = `⚔ Challenge ${bossName(bz)}<small>${ready ? 'You can win this now!' : `Need ~${formatNum(need / VOID.bossTime)} DPS · have ${formatNum(dps)}`}</small>`;
+    if (btn.innerHTML !== html) btn.innerHTML = html;
+  }
+}
+
+/* ---- combat sounds ---- */
+let lastShatterAt = 0;
+function playShatter() {
+  const now = performance.now();
+  if (now - lastShatterAt < 45) return;
+  lastShatterAt = now;
+  playTone(1400 + Math.random() * 900, 0.04, 'square', 0.018, { pitchJitter: 0.1 });
+}
+function playKill() {
+  playTone(260, 0.1, 'triangle', 0.07);
+  setTimeout(() => playTone(520, 0.12, 'triangle', 0.05, { reverb: 0.2 }), 55);
+}
+function playBossAppear() {
+  playTone(55, 1.4, 'sawtooth', 0.07, { reverb: 0.5 });
+  playTone(82.4, 1.4, 'sawtooth', 0.04, { reverb: 0.5 });
+  setTimeout(() => playTone(58, 1.0, 'sawtooth', 0.05, { reverb: 0.5 }), 500);
+}
+function playBossDefeated() {
+  [392, 523.3, 659.3, 784, 1046.5].forEach((f, i) => setTimeout(() => playTone(f, 0.5, 'triangle', 0.07, { reverb: 0.45 }), i * 80));
+}
+function playBossFail() {
+  [330, 262, 196, 131].forEach((f, i) => setTimeout(() => playTone(f, 0.35, 'sawtooth', 0.05, { reverb: 0.3 }), i * 110));
+}
+
+/* =========================================================================
    PERSISTENCE
    ========================================================================= */
 
@@ -2127,6 +2635,7 @@ function mergeLoadedState(loaded) {
   state.daily = Object.assign(fresh.daily, loaded.daily);
   state.buffs = Object.assign(fresh.buffs, loaded.buffs);
   state.tutorial = Object.assign(fresh.tutorial, loaded.tutorial);
+  state.void = Object.assign(fresh.void, loaded.void);
   state.goals = Array.isArray(loaded.goals) ? loaded.goals : [];
   // Saves from before the tutorial existed belong to players who don't need it.
   if (!loaded.tutorial && (loaded.stats && loaded.stats.totalClicks > 20)) state.tutorial.step = 99;
@@ -2686,8 +3195,8 @@ function refreshPrestigeTab() {
   });
 }
 
-const ACHIEVEMENT_CATEGORIES = ['Clicking', 'Generators', 'Energy', 'Prestige', 'Events', 'Dedication'];
-const CATEGORY_ICONS = { Clicking: '⚡', Generators: '⚙', Energy: '✦', Prestige: '◈', Events: '☄', Dedication: '♥' };
+const ACHIEVEMENT_CATEGORIES = ['Clicking', 'Generators', 'Energy', 'Void', 'Prestige', 'Events', 'Dedication'];
+const CATEGORY_ICONS = { Clicking: '⚡', Generators: '⚙', Energy: '✦', Void: '⚔', Prestige: '◈', Events: '☄', Dedication: '♥' };
 
 function renderAchievementsTab() {
   const wrap = el('tabContent');
@@ -2926,6 +3435,7 @@ function resizeCanvases() {
   particleCanvas.width = window.innerWidth;
   particleCanvas.height = window.innerHeight;
   resizeCore();
+  resizeVoidCanvases();
 }
 
 function updateAndDrawParticles(dt) {
@@ -3260,6 +3770,7 @@ function simTick(dtMs) {
   const rate = totalProductionPerSecond();
   addEnergy(rate * dtSec);
   state.stats.playTimeSeconds += dtSec;
+  updateVoid(dtSec, rate);
 
   if (runtime.activeEvent && nowSec() >= runtime.activeEvent.endsAt) {
     runtime.activeEvent = null;
@@ -3318,6 +3829,7 @@ function mainLoop(ts) {
 
   renderBackdrop(dt);
   drawCore(dt);
+  drawVoid(dt);
   updateAndDrawParticles(dt);
   tweenDisplayValues();
 
@@ -3340,6 +3852,8 @@ function mainLoop(ts) {
     renderSurgeLabel();
     renderHint();
     updateTabDots();
+    updateVoidAnchors();
+    renderVoidFront();
     if (runtime.supernovaPending) {
       const remaining = Math.max(0, runtime.supernovaDecisionEndsAt - nowSec());
       el('supernovaTimerFill').style.width = (remaining / 10 * 100) + '%';
@@ -3355,6 +3869,7 @@ function mainLoop(ts) {
 
 function wireInput() {
   el('igniteBtn').addEventListener('click', (e) => doIgnite(e.clientX, e.clientY));
+  el('vfBossBtn').addEventListener('click', challengeBoss);
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3454,6 +3969,9 @@ window.debug = {
   daily: (streakDay) => { if (streakDay) { const d = new Date(); d.setDate(d.getDate() - 1); state.daily.lastDay = dayKey(d); state.daily.streak = streakDay - 1; } else state.daily.lastDay = null; showDailyModal(); },
   stageCard: (i) => showStageCard(i),
   completeGoals: () => { state.goals.forEach(g => { if (g.type === 'own') { const x = state.generators.find(y => y.id === g.gen); x.owned = Math.max(x.owned, g.target); } else g.base = -1e300; }); renderAll(); renderGoals(true); },
+  zone: (n) => { state.void.zone = n; state.void.maxCleared = Math.max(state.void.maxCleared, n - 1); state.void.kills = 0; state.void.farming = false; spawnEnemy(); },
+  killEnemy: () => { if (runtime.enemy) damageEnemy(runtime.enemy.hp + 1); },
+  bossNow: () => { const z = Math.ceil((state.void.zone + 0.01) / VOID.bossEvery) * VOID.bossEvery; window.debug.zone(z); },
   state: () => state,
 };
 

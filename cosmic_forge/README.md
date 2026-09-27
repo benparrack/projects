@@ -20,6 +20,25 @@ full-screen "A new era" cinematic each time you reach one.
 - **Feats** (achievements, 5 categories) grant small permanent production
   bonuses that survive everything below.
 
+## The Void Front (combat)
+
+A panel beside the core, in the spirit of Clicker Heroes. Every Ignite fires a
+bolt at the current Void enemy, and all Energy production streams into it as
+a continuous beam, so each economy upgrade is also a damage upgrade. Enemies
+are hex-cell formations that shatter brick-breaker style as their HP drops.
+
+- 10 kills clear a zone. Enemy HP grows x1.33 per zone, and each kill pays
+  a bounty of Energy.
+- Every 5th zone is a **boss** (x10 HP) you must beat within 30s. If you
+  fail, you drop back to farming the previous zone. The "Challenge" button
+  shows the DPS you need, and it glows once you can win. Save your Surge
+  for bosses.
+- Bosses drop Matter. Each zone cleared adds +0.5% production (**Dominion**).
+  Every 2 bosses beaten in a cycle add +1 Singularity on Collapse. A Collapse
+  resets the Front to Zone 1.
+- There are new Void Feats and Goals ("Defeat N enemies", "Reach Zone N").
+  Debug helpers: `zone(n)`, `killEnemy()`, `bossNow()`.
+
 ## Retention systems
 
 - **Goals**: three rotating short objectives (own the next milestone, click
