@@ -36,7 +36,17 @@ and Haiku side-queries. Its own `cost-state` total includes them, so the gap is
 spread over each session's requests as **"Background calls"**. Afterwards, session
 totals match Claude Code's exactly (`claude-usage validate`).
 
-**Limits.** 5-hour windows start at your first message, rounded down to 10 minutes. That
+**Live limits.** The current 5-hour and weekly percentages come straight from the
+endpoint Claude Code's `/usage` calls (`claude_usage/live.py`), so they match `/usage`
+exactly and include claude.ai usage. The OAuth token is read from
+`~/.claude/.credentials.json` for each fetch (at most once a minute), is sent only to
+`api.anthropic.com`, and is never stored or refreshed. If it has expired or the fetch
+fails, the dashboard falls back to the estimate below. Turn it off with
+`"live_usage": false` in settings. Burn rate and "you'll hit the limit at…" still come
+from the unit model, rescaled to the live %. Each window's live reading is also saved
+as a calibration point (marked "auto"), which keeps the fallback estimate honest.
+
+**Estimated limits.** 5-hour windows start at your first message, rounded down to 10 minutes. That
 matches the reset times in the "You've hit your session limit · resets 9:20pm" messages,
 and each hit's reset time also anchors its window exactly. Anthropic doesn't publish Pro
 limits in tokens, so the limit is *learned from your limit hits*:
@@ -78,6 +88,7 @@ so a session that moves from `game_terminal` to `mission_control` is split corre
 claude_usage/parser.py    transcript → compact per-file records (cached in ~/.cache/claude-usage)
 claude_usage/analysis.py  sessions, blocks, calibration, waste simulation, API payloads
 claude_usage/pricing.py   per-model rates
+claude_usage/live.py      exact % from Anthropic's usage endpoint (same as /usage)
 claude_usage/server.py    stdlib HTTP server + JSON API + notifier
 claude_usage/cli.py       serve / summary / validate
 web/                      index.html, app.js, app.css (hand-rolled SVG charts)

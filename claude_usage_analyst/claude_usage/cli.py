@@ -9,6 +9,7 @@ import urllib.request
 
 from . import server
 from .analysis import Analysis, pretty_path
+from . import live as live_mod
 from .parser import Scanner
 
 DEFAULT_PORT = 8765
@@ -59,7 +60,9 @@ def _fmt_dur(s):
 
 def cmd_summary(args):
     records, _ = Scanner().scan()
-    a = Analysis(records, server.load_settings())
+    settings = server.load_settings()
+    lv = live_mod.fetch() if settings.get("live_usage") else None
+    a = Analysis(records, settings, live=lv)
     now = time.time()
     day0 = time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1))
     today = [r for r in a.requests if r["ts"] >= day0]
@@ -77,7 +80,8 @@ def cmd_summary(args):
         pct = f"{cur['pct']:.0f}%" if cur["pct"] is not None else "?"
         bar_n = int(min(cur["pct"] or 0, 100) / 5)
         bar = "█" * bar_n + "░" * (20 - bar_n)
-        print(f"\n{bold}Current 5h window{rst}  {bar} {pct} of est. limit")
+        src = "live from Anthropic" if cur["source"] == "live" else "of est. limit"
+        print(f"\n{bold}Current 5h window{rst}  {bar} {pct} {src}")
         print(f"  resets in {_fmt_dur(cur['remaining_s'])}   burn {_fmt_money(cur['cost_rate_per_hour'])}/h"
               f"   window cost {_fmt_money(b['cost'])}")
         if cur["eta_limit"]:
@@ -85,8 +89,15 @@ def cmd_summary(args):
         for s in cur["sessions"][:4]:
             live = "●" if s["live"] else " "
             print(f"  {live} {s['title'][:52]:<52} {s['units'] / (cur['limit'] or 1) * 100:5.1f}%")
+    elif cur is not None and a._live_window("five_hour"):
+        print(f"\n{bold}Current 5h window{rst}  {a._live_window('five_hour')['pct']:.0f}% (live; nothing local in it yet)")
     else:
         print(f"\n{dim}No active 5h window: the next message starts a fresh one.{rst}")
+    wl = week.get("live")
+    if wl:
+        print(f"  weekly limit {wl['pct']:.0f}% used, resets {time.strftime('%a %H:%M', time.localtime(wl['resets_at']))}")
+    elif lv and not lv.get("ok"):
+        print(f"{dim}  (live usage unavailable: {lv['error']}; showing estimate){rst}")
     ins = a.insights()
     if ins["recommendations"]:
         top = ins["recommendations"][0]

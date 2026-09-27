@@ -445,7 +445,8 @@ views.limits = function () {
   const lim = cal.block_limit;
   let gauge;
   if (cur && cur.active) {
-    const p = cur.pct ?? 0, pp = cur.projected_pct ?? 0;
+    const p = cur.pct ?? 0, pp = cur.projected_pct ?? 0, live = cur.source === "live";
+    const lim = cur.limit;
     const cls = p >= 90 ? "st-bad" : p >= 70 || pp >= 100 ? "st-warn" : "st-good";
     const color = p >= 90 ? "var(--critical)" : p >= 70 ? "var(--serious)" : "var(--good)";
     const b = cur.block;
@@ -458,20 +459,21 @@ views.limits = function () {
     const chart = lineChart({
       series: [{ points: pts, color: "var(--s1)", area: true, label: "Used" }, { points: proj.length ? [[pts.length ? pts[pts.length - 1][0] : L.now, b.units], ...proj.slice(1)] : [], color: "var(--s1)", dash: true, label: "Projection" }],
       xmin: b.start, xmax: b.end, ymax: Math.max((lim || 0) * 1.1, Math.min(cur.projected, (lim || cur.projected) * 1.1), b.units) * 1.02, height: 200, w: 0.8,
-      refLine: lim ? { value: lim, label: "est. limit" } : null, vmarks: [{ t: L.now, label: "now", color: "var(--ink-2)" }],
+      refLine: lim ? { value: lim, label: live ? "limit" : "est. limit" } : null, vmarks: [{ t: L.now, label: "now", color: "var(--ink-2)" }],
       tipFn: (t) => { const i = nearest(pts, t); return i == null ? null : tipRows(fmtTime(pts[i][0]), [["var(--s1)", "Used", tok(pts[i][1]) + " units"], ["", "of limit", lim ? pct((pts[i][1] / lim) * 100) : "–"]]); },
     });
     gauge = `<div class="gauge-wrap"><div class="gauge">
         <div class="status ${cls}">${p >= 100 ? "Limit reached" : p >= 90 ? "Nearly out" : pp >= 100 ? "On pace to hit the limit" : "Plenty left"}</div>
-        <div class="big">${pct(p)}</div><div class="muted">of your estimated 5-hour limit</div>
+        <div class="big">${pct(p)}</div><div class="muted">${live ? `of your 5-hour limit · <span class="pill good" title="Fetched from the same Anthropic endpoint /usage uses${cur.live_stale ? " (last good value; the latest fetch failed)" : ""}">live${cur.live_stale ? " · stale" : ""}</span>` : "of your estimated 5-hour limit"}</div>
         <div class="meter mt"><b class="proj" style="width:${Math.min(pp, 100)}%;background:${color}"></b><b style="width:${Math.min(p, 100)}%;background:${color}"></b></div>
         <dl class="kv mt">
-          <dt>Resets in</dt><dd><b>${dur(cur.remaining_s)}</b> at ${fmtTime(b.end)}</dd>
+          <dt>Resets in</dt><dd><b>${dur(cur.remaining_s)}</b> at ${fmtTime(L.now + cur.remaining_s)}</dd>
           <dt>Burn rate</dt><dd>${cur.rate_per_hour ? tok(cur.rate_per_hour) + " units/h · " + money(cur.cost_rate_per_hour) + "/h" : "idle"}</dd>
           <dt>At this pace</dt><dd>${cur.eta_limit ? `<b style="color:var(--critical)">limit at ${fmtTime(cur.eta_limit)}</b>` : `ends at ~${pct(pp)}`}</dd>
           <dt>Window cost</dt><dd>${money(b.cost)} API-equivalent</dd>
         </dl>
-        <form id="calib" class="mt" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        ${live ? "" : `<p class="muted mt" style="font-size:12.5px;margin-bottom:0">${L.live && L.live.error ? `Live usage unavailable: ${esc(L.live.error)}. ` : ""}Showing the estimate.</p>`}
+        <form id="calib" class="mt" style="display:${live ? "none" : "flex"};gap:6px;align-items:center;flex-wrap:wrap">
           <span class="muted" style="font-size:12.5px">/usage says</span>
           <input type="number" id="calpct" min="1" max="100" step="1" style="width:70px" placeholder="%">
           <button type="submit">Calibrate</button><span id="calmsg" class="muted" style="font-size:12px"></span>
@@ -494,7 +496,7 @@ views.limits = function () {
       <div class="card"><div class="card-h"><h2>Recent 5-hour windows</h2><span class="muted">✕ = hit the limit</span></div>${hist}</div>
       <div class="card"><div class="card-h"><h2>Last 14 days</h2><span class="muted">rolling 7d: ${tok(wk.units)} units (${wk.blocks_equiv ? wk.blocks_equiv.toFixed(1) + "× a full window" : "–"}) · ${money(wk.cost)}</span></div>
         ${stackedBars({ w: 0.5, cats: dayCats, series: [{ label: "Usage units", color: "var(--s1)" }], fmt: tok, refLine: wk.limit ? { value: wk.limit / 7, label: "weekly limit ÷ 7" } : null })}
-        ${wk.limit ? `<p>Weekly: <b>${pct(wk.pct)}</b> of your ${tok(wk.limit)}-unit weekly budget.</p>` : `<p class="muted">No weekly limit set. Add one in <a href="#/settings">Settings</a> if you've been told your weekly cap.</p>`}</div>
+        ${wk.live ? `<p>Weekly limit: <b>${pct(wk.live.pct)}</b> used <span class="pill good">live</span> · resets ${fmtDT(wk.live.resets_at)}</p>` : wk.limit ? `<p>Weekly: <b>${pct(wk.pct)}</b> of your ${tok(wk.limit)}-unit weekly budget.</p>` : `<p class="muted">No weekly limit set. Add one in <a href="#/settings">Settings</a> if you've been told your weekly cap.</p>`}</div>
     </div>
     <div class="card mt"><div class="card-h"><h2>How the limit is estimated</h2><span class="pill ${cal.source === "calibrated" ? "good" : ""}">${cal.source}</span></div>
       <div class="grid g2"><div>
@@ -505,8 +507,8 @@ views.limits = function () {
         ${cal.spread ? `Across your ${cal.clean_hits} clean limit hits this lands within <b>${pct((cal.spread - 1) * 100)}</b> of the same number, and no window that stayed under the limit exceeds it.` : ""}
         Estimated limit: <b>${lim ? tok(lim) + " units" : "unknown"}</b> per 5 hours${cal.source === "manual" ? " (set manually)" : ""}. It refits automatically every time you hit the limit again.</p>
       </div><div><div class="tbl-wrap"><table><thead><tr><th>Limit hit</th><th class="r">Units</th><th class="r">API-eq $</th><th class="r"></th></tr></thead><tbody>${samples || `<tr><td colspan="4" class="muted">No limit hits recorded yet</td></tr>`}</tbody></table></div>
-      ${(cal.readings || []).length ? `<div class="tbl-wrap mt"><table><thead><tr><th>/usage reading</th><th class="r">Said</th><th class="r">Model now says</th><th>Models</th></tr></thead><tbody>${cal.readings.slice().reverse().map((r) => `<tr><td>${fmtDT(r.ts)}</td><td class="r num">${pct(r.pct)}</td><td class="r num">${pct(r.predicted)}</td><td>${r.families.map(esc).join(", ")}</td></tr>`).join("")}</tbody></table></div>` : ""}
-      <p class="muted" style="font-size:12.5px">Most accurate calibration: run <code>/usage</code> in Claude Code and enter the "current session" % above (or <code>claude-usage calibrate 44</code>), ideally after a stretch on a model you haven't calibrated yet.</p></div></div>
+      ${(cal.readings || []).length ? `<div class="tbl-wrap mt"><table><thead><tr><th>/usage reading</th><th class="r">Said</th><th class="r">Model now says</th><th>Models</th></tr></thead><tbody>${cal.readings.slice().reverse().map((r) => `<tr><td>${fmtDT(r.ts)}</td><td class="r num">${pct(r.pct)}${r.auto ? ' <span class="muted" title="recorded automatically from the live endpoint">auto</span>' : ""}</td><td class="r num">${pct(r.predicted)}</td><td>${r.families.map(esc).join(", ")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <p class="muted" style="font-size:12.5px">${L.live && L.live.ok ? "The current % comes live from Anthropic, so this estimate only drives past windows and the fallback. Each window's live reading is saved above as calibration automatically. " : ""}Manual calibration: run <code>/usage</code> in Claude Code and enter the "current session" % above (or <code>claude-usage calibrate 44</code>), ideally after a stretch on a model you haven't calibrated yet.</p></div></div>
     </div>`;
   bindTips(main);
   bindRows(main);

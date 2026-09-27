@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from claude_usage import pricing  # noqa: E402
+from claude_usage import live, pricing  # noqa: E402
 from claude_usage.analysis import Analysis  # noqa: E402
 from claude_usage.parser import Scanner, parse_file, parse_reset  # noqa: E402
 
@@ -211,6 +211,40 @@ class AnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(a.calibration["readings"][0]["predicted"], pct, places=3)
         self.assertAlmostEqual(a.current_block()["pct"], pct, places=3)
 
+    def test_live_usage_overrides_estimate(self):
+        recs = self.fx.records()
+        now = T0 + 3600
+        est = Analysis(recs, now=now).current_block()
+        self.assertEqual(est["source"], "estimate")
+        lv = live.parse({"five_hour": {"utilization": 37.0, "resets_at": iso(T0 + 4 * 3600)},
+                         "seven_day": {"utilization": 12.0, "resets_at": iso(T0 + 86400)}}, now)
+        a = Analysis(recs, now=now, live=lv)
+        cur = a.current_block()
+        self.assertEqual(cur["source"], "live")
+        self.assertEqual(cur["pct"], 37.0)
+        self.assertAlmostEqual(cur["remaining_s"], 3 * 3600)
+        self.assertAlmostEqual(cur["block"]["units"] / cur["limit"] * 100, 37.0)
+        self.assertEqual(a.weekly()["live"]["pct"], 12.0)
+        # numbers for a window that has already reset are ignored
+        old = live.parse({"five_hour": {"utilization": 90.0, "resets_at": iso(now - 60)}}, now)
+        self.assertEqual(Analysis(recs, now=now, live=old).current_block()["source"], "estimate")
+        self.assertFalse(live.parse({})["ok"])
+
+    def test_live_cache_and_stale_fallback(self):
+        calls = []
+
+        def fake():
+            calls.append(1)
+            if len(calls) == 1:
+                return live.parse({"five_hour": {"utilization": 50.0, "resets_at": None}})
+            return {"ok": False, "error": "HTTP 500", "fetched_at": time.time()}
+        lu = live.LiveUsage(fetcher=fake, ttl=60)
+        self.assertTrue(lu.get()["ok"])
+        lu.get()
+        self.assertEqual(len(calls), 1)  # cached within the TTL
+        r = lu.get(force=True)
+        self.assertTrue(r["ok"] and r["stale"])  # a failure falls back to the last good value
+
     def test_payloads_serialize(self):
         for payload in (self.a.data_payload(), self.a.limits_payload(), self.a.insights(),
                         self.a.tools_payload(), self.a.session_detail("s1")):
@@ -222,6 +256,7 @@ class ServerTests(unittest.TestCase):
         fx = Fixture()
         os.environ["XDG_CONFIG_HOME"] = str(Path(fx.tmp.name) / "cfg")
         os.environ["XDG_CACHE_HOME"] = str(Path(fx.tmp.name) / "cache")
+        os.environ["CLAUDE_CONFIG_DIR"] = str(Path(fx.tmp.name) / "noclaude")  # never touch real credentials
         from claude_usage import server
         holder = {}
         th = threading.Thread(target=server.serve, kwargs={"port": 0, "root": fx.root,

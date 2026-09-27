@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import urlparse, unquote
 
 from .analysis import Analysis, DEFAULTS
+from .live import LiveUsage
 from .parser import Scanner
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -50,10 +51,12 @@ def save_settings(new):
                 v = float(v) if v not in (None, "", 0, "0") else None
                 if k == "compact_threshold" and v is None:
                     v = DEFAULTS[k]
-            elif k == "notify":
+            elif k in ("notify", "live_usage"):
                 v = bool(v)
             elif k == "usage_readings":
-                v = [{"ts": float(r["ts"]), "pct": float(r["pct"])} for r in (v or [])][-50:]
+                v = [dict({"ts": float(r["ts"]), "pct": float(r["pct"])},
+                          **({"auto": True, "resets_at": r.get("resets_at")} if r.get("auto") else {}))
+                     for r in (v or [])][-50:]
             cur[k] = v
     p = settings_path()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -64,8 +67,9 @@ def save_settings(new):
 class State:
     """Holds the latest Analysis; rebuilds when transcripts or settings change."""
 
-    def __init__(self, root=None, cache_file=None):
+    def __init__(self, root=None, cache_file=None, live=None):
         self.scanner = Scanner(root=root, cache_file=cache_file)
+        self.live = live if live is not None else LiveUsage()
         self.lock = threading.Lock()
         self.analysis = None
         self.sig = None
@@ -80,14 +84,36 @@ class State:
             if self.analysis is not None and not force and now - self.built_at < 3:
                 return self.analysis
             sig = self.scanner.signature()
+            live = self.live.get() if self.settings.get("live_usage") else None
+            if live and live.get("ok") and not live.get("stale"):
+                self._auto_reading(live)
             if self.analysis is None or force or sig != self.sig:
                 records, _ = self.scanner.scan(sig)
-                self.analysis = Analysis(records, self.settings, now=now)
+                self.analysis = Analysis(records, self.settings, now=now, live=live)
                 self.sig = sig
             else:
                 self.analysis.now = now
+                self.analysis.live = live
             self.built_at = now
             return self.analysis
+
+    def _auto_reading(self, live):
+        """Keep one exact reading per 5h window so the fallback estimate stays calibrated.
+
+        Updated at most every 20 minutes, and only from 20% up, since the endpoint
+        returns whole percents and small values are too coarse to fit weights from.
+        """
+        w = live["five_hour"]
+        if w["pct"] < 20 or not w["resets_at"]:
+            return
+        readings = list(self.settings.get("usage_readings") or [])
+        prev = next((r for r in reversed(readings) if r.get("auto") and r.get("resets_at") == w["resets_at"]), None)
+        if prev and (live["fetched_at"] - prev["ts"] < 20 * 60 or prev["pct"] == w["pct"]):
+            return
+        if prev:
+            readings.remove(prev)
+        readings.append({"ts": live["fetched_at"], "pct": w["pct"], "auto": True, "resets_at": w["resets_at"]})
+        self.settings = save_settings({"usage_readings": readings})
 
     def update_settings(self, new):
         self.settings = save_settings(new)
@@ -175,6 +201,8 @@ def make_handler(state):
             if name == "settings":
                 return self._json({"settings": state.settings, "defaults": DEFAULTS,
                                    "calibration": a.calibration})
+            if name == "live":
+                return self._json(state.live.get() if state.settings.get("live_usage") else {"ok": False, "error": "disabled"})
             if name == "ping":
                 return self._json({"ok": True, "app": "claude-usage", "generated": a.now})
             if name.startswith("session/"):

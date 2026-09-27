@@ -18,6 +18,7 @@ DEFAULTS = {
     "weekly_limit_units": None,
     "compact_threshold": 120_000,
     "notify": True,
+    "live_usage": True,  # fetch exact % from Anthropic's usage endpoint (same as /usage)
     "usage_readings": None,  # [{"ts": epoch, "pct": 44}] from Claude Code's /usage
 }
 
@@ -55,7 +56,8 @@ def req_ctx(r):
 class Analysis:
     """Everything the dashboard needs, computed from a {path: record} dict."""
 
-    def __init__(self, records, settings=None, now=None):
+    def __init__(self, records, settings=None, now=None, live=None):
+        self.live = live  # exact % from Anthropic's usage endpoint (see live.py), or None
         self.settings = dict(DEFAULTS)
         self.settings.update(settings or {})
         self.now = now or time.time()
@@ -387,7 +389,7 @@ class Analysis:
             if b is None or p <= 0:
                 continue
             comps = self._block_components(b["i"], ts)
-            readings.append({"ts": ts, "pct": p, "block": b["i"], "comps": comps})
+            readings.append({"ts": ts, "pct": p, "block": b["i"], "comps": comps, "auto": bool(rd.get("auto"))})
         ref_L = []
         for rd in readings:
             per = {f: o + alpha * i + beta * c for f, (o, i, c) in rd["comps"].items()}
@@ -428,7 +430,7 @@ class Analysis:
         for rd in readings:
             pred = self._units(rd["comps"], alpha, beta, weights) / limit * 100 if limit else None
             reading_rows.append({"ts": rd["ts"], "pct": rd["pct"], "predicted": pred,
-                                 "families": sorted(rd["comps"])})
+                                 "families": sorted(rd["comps"]), "auto": rd["auto"]})
         self._cal_extra = {"weights": weights, "readings": reading_rows, "hit_estimate": hit_est,
                            "reading_limit_samples": len(ref_L)}
         peak = max((b["units"] for b in self.blocks), default=0)
@@ -484,11 +486,31 @@ class Analysis:
         for r in reqs:
             acc += r["units"]
             timeline.append([r["ts"], round(acc)])
+        pct = (b["units"] / limit * 100) if limit else None
+        source = "estimate"
+        lv = self._live_window("five_hour")
+        if lv and active:
+            # Anthropic's own number wins. Rescale the unit model so the burn rate,
+            # projection and chart stay consistent with it.
+            source = "live"
+            pct = lv["pct"]
+            if lv["resets_at"]:
+                remaining = max(lv["resets_at"] - now, 0)
+            if pct > 0 and b["units"] > 0:
+                limit = b["units"] * 100 / pct
+            projected = b["units"] + rate * remaining
+            eta = None
+            if limit and rate > 0 and b["units"] < limit:
+                secs = (limit - b["units"]) / rate
+                if secs < remaining:
+                    eta = now + secs
         return {
             "block": b,
             "active": active,
+            "source": source,
+            "live_stale": bool(lv and lv.get("stale")),
             "limit": limit,
-            "pct": (b["units"] / limit * 100) if limit else None,
+            "pct": pct,
             "rate_per_hour": rate * 3600,
             "cost_rate_per_hour": rate_cost * 3600,
             "remaining_s": remaining,
@@ -502,6 +524,15 @@ class Analysis:
                 for sid, v in sorted(per_session.items(), key=lambda kv: -kv[1][0])
             ],
         }
+
+    def _live_window(self, key):
+        lv = self.live
+        if not lv or not lv.get("ok") or key not in lv:
+            return None
+        w = dict(lv[key], stale=bool(lv.get("stale")), fetched_at=lv["fetched_at"])
+        if w["resets_at"] and w["resets_at"] <= self.now:
+            return None  # that window already ended; the numbers are for a past window
+        return w
 
     def weekly(self):
         now = self.now
@@ -521,6 +552,7 @@ class Analysis:
             "prev_cost": sum(r["cost"] for r in prev),
             "limit": float(lim) if lim else None,
             "pct": (units / float(lim) * 100) if lim else None,
+            "live": self._live_window("seven_day"),
             "blocks_equiv": (units / self.calibration["block_limit"]) if self.calibration["block_limit"] else None,
             "daily_units": days,
             "weekly_hits": [h for h in self.limit_hits if h["weekly"]],
@@ -933,6 +965,9 @@ class Analysis:
             "blocks": [dict(b, sessions=b["sessions"][:20]) for b in self.blocks[-120:]],
             "hits": self.limit_hits,
             "now": self.now,
+            "live": ({"ok": True, "fetched_at": self.live["fetched_at"], "stale": bool(self.live.get("stale"))}
+                     if self.live and self.live.get("ok") else
+                     {"ok": False, "error": self.live.get("error")} if self.live else None),
         }
 
 
