@@ -1,3 +1,4 @@
+import { preferredLevel, levelSelect, levelLabel } from './botLevel.js';
 // Shared rendering helper for the standard-52-card games (War, Crazy Eights, BS, Poker, Hearts,
 // Spades) — one DOM building block so they all share the same card face, back and animations.
 // Styles live in an injected stylesheet; callers may still set inline cursor/outline/opacity/
@@ -93,19 +94,32 @@ function ensureStyles() {
   document.head.appendChild(tag);
 }
 
-// --- CPU players (see server/games/cardBots.js): a bot's seat id is 'bot-<Name>'. ---
+// --- CPU players (see server/games/cardBots.js): a bot's seat id is 'bot-<Name>~<level>'. ---
 export const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
-export const botName = (id) => `🤖 ${id.slice(4)}`;
+export const botName = (id) => {
+  const [name, level] = id.slice(4).split('~');
+  return level ? `🤖 ${name} (${levelLabel(level)})` : `🤖 ${name}`;
+};
 
 // "+ ADD BOT" (optionally for a specific seat) — glowing dashed button.
-export function addBotButton(api, seat, label = '+ ADD BOT') {
+// Comes with a difficulty picker (remembered per browser) unless `withLevel` is false.
+export function addBotButton(api, seat, label = '+ ADD BOT', withLevel = true) {
   ensureStyles();
   const b = document.createElement('button');
   b.className = 'gt-bot-add';
   b.textContent = label;
   b.title = 'Fill this seat with a computer player';
-  b.addEventListener('click', () => api.sendAction(seat === undefined ? { kind: 'addBot' } : { kind: 'addBot', seat }));
-  return b;
+  b.addEventListener('click', () => api.sendAction({ kind: 'addBot', level: preferredLevel(), ...(seat === undefined ? {} : { seat }) }));
+  if (!withLevel) return b;
+  const wrap = document.createElement('span');
+  wrap.style.cssText = 'display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap';
+  const sel = levelSelect(preferredLevel(), () => {
+    // Keep every other picker on the page in sync with the new preference.
+    for (const o of document.querySelectorAll('select.gt-bot-level')) o.value = sel.value;
+  });
+  sel.style.fontSize = '.8em';
+  wrap.append(b, sel);
+  return wrap;
 }
 
 export function removeBotButton(api, seat, label = '✕') {
@@ -120,13 +134,13 @@ export function removeBotButton(api, seat, label = '✕') {
 
 // Seat-list games (War, Crazy Eights, BS, Poker): one add button plus a remove chip per bot.
 // Bots can join only before a game starts; they can be removed between games too.
-export function botSeatControls(api, seats, maxSeats, phase) {
+export function botSeatControls(api, seats, maxSeats, phase, withLevel = true) {
   const frag = document.createDocumentFragment();
   if (phase !== 'waiting' && phase !== 'game_over') return frag;
   seats.forEach((id, i) => {
     if (isBot(id)) frag.appendChild(removeBotButton(api, i, `✕ ${botName(id)}`));
   });
-  if (phase === 'waiting' && seats.length < maxSeats) frag.appendChild(addBotButton(api));
+  if (phase === 'waiting' && seats.length < maxSeats) frag.appendChild(addBotButton(api, undefined, '+ ADD BOT', withLevel));
   return frag;
 }
 

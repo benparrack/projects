@@ -67,7 +67,7 @@ export function mount(container, api) {
       leaveBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
       seatRow.appendChild(leaveBtn);
     }
-    seatRow.appendChild(botSeatControls(api, view.seats, 2, view.phase));
+    seatRow.appendChild(botSeatControls(api, view.seats, 2, view.phase, false));
     root.appendChild(seatRow);
 
     if (view.seats.length > 0) {

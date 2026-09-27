@@ -465,5 +465,5 @@ module.exports = {
     }
   },
 
-  _internal: { evaluate7, BIG_BLIND },
+  _internal: { evaluate7, compareHandTuples, BIG_BLIND },
 };

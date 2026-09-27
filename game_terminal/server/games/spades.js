@@ -32,6 +32,7 @@ function dealNewHand(st) {
   st.tricksWon = [0, 0, 0, 0];
   st.currentTrick = [];
   st.spadesBroken = false;
+  st.playedCards = [];
   st.leadSeatIdx = null;
   st.turnIdx = null;
   st.lastTrick = null;
@@ -273,6 +274,7 @@ module.exports = {
         const winnerSeatIdx = trickWinnerSeat(st.currentTrick);
         st.tricksWon[winnerSeatIdx] += 1;
         st.lastTrick = { winnerSeatIdx, cards: st.currentTrick };
+        st.playedCards = [...(st.playedCards || []), ...st.currentTrick.map((x) => x.card)];
         st.currentTrick = [];
         st.leadSeatIdx = winnerSeatIdx;
         st.turnIdx = winnerSeatIdx;
