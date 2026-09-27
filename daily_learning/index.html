@@ -276,6 +276,21 @@
   #recordStatus { font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 16px; }
   #recordingPlayer { width: 100%; margin-top: 8px; }
   #noRecordingNote { font-size: 13px; color: var(--faint); margin-top: 4px; }
+  #writeToggle { margin-top: 14px; }
+  #noteEditor { margin-top: 14px; }
+  #noteInput {
+    display: block; width: 100%; box-sizing: border-box; min-height: 140px; resize: vertical;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: 12px 14px; font-size: 15px; line-height: 1.55; font-family: inherit;
+  }
+  #noteInput:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #noteActions { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  #noteStatus { font-size: 13px; color: var(--muted); }
+  #noteView {
+    margin-top: 12px; padding: 12px 14px; border-radius: 10px;
+    background: var(--surface-2); border: 1px solid var(--border-soft);
+    font-size: 15px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
 
   details.panel > summary {
     cursor: pointer; list-style: none;
@@ -301,6 +316,8 @@
   .hright { display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
   .hmic { color: var(--danger); display: none; }
   .hmic.on { display: inline; }
+  .hnote { color: var(--accent); display: none; }
+  .hnote.on { display: inline; }
 
   #categoryList { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
   #categoryList li {
@@ -429,7 +446,7 @@
 
     <section id="reflectionCard" class="card panel">
       <h3>Say it back</h3>
-      <p class="hint">Explaining what you just read out loud is one of the best ways to make it stick.</p>
+      <p class="hint">Explaining what you just read, out loud or in writing, is one of the best ways to make it stick.</p>
       <div id="recordRow">
         <button class="btn primary" id="recordBtn">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v5"/></svg>
@@ -440,6 +457,18 @@
       <div id="recordStatus"></div>
       <audio id="recordingPlayer" controls hidden></audio>
       <div id="noRecordingNote">No reflection recorded for this day yet.</div>
+      <button class="btn" id="writeToggle">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        <span>Write it instead</span>
+      </button>
+      <div id="noteEditor" hidden>
+        <textarea id="noteInput" placeholder="In your own words: what was it about, and what surprised you?"></textarea>
+        <div id="noteActions">
+          <button class="btn primary" id="saveNoteBtn">Save note</button>
+          <span id="noteStatus"></span>
+        </div>
+      </div>
+      <div id="noteView" hidden></div>
     </section>
   </div>
 
@@ -888,6 +917,47 @@
       note.hidden = false;
       note.textContent = isToday ? 'No reflection recorded yet today.' : 'No reflection recorded for this day.';
     }
+    renderNote();
+  }
+
+  function renderNote() {
+    const isToday = viewingDate === todayKey();
+    const saved = history[viewingDate] && history[viewingDate].note;
+    $('noteStatus').textContent = '';
+    // Today: editable textarea (opened automatically if a note exists). Past days: read-only.
+    $('writeToggle').hidden = !isToday || !!saved;
+    $('noteEditor').hidden = !isToday || !saved;
+    $('noteInput').value = saved ? saved.text : '';
+    $('noteView').hidden = isToday || !saved;
+    $('noteView').textContent = saved ? saved.text : '';
+    syncNoRecordingNote();
+  }
+
+  function syncNoRecordingNote() {
+    const entry = history[viewingDate] || {};
+    $('noRecordingNote').hidden = !!(entry.recording || entry.note);
+  }
+
+  async function saveNote() {
+    const date = viewingDate;
+    $('noteStatus').textContent = 'Saving…';
+    try {
+      const res = await fetch('/api/note/' + encodeURIComponent(date), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: $('noteInput').value })
+      });
+      if (!res.ok) throw new Error('save failed');
+      const data = await res.json();
+      const entry = Object.assign({}, history[date]);
+      if (data.note) entry.note = data.note; else delete entry.note;
+      history[date] = entry;
+      syncNoRecordingNote();
+      renderHistory();
+      $('noteStatus').textContent = data.note ? 'Saved.' : 'Note cleared.';
+    } catch (e) {
+      $('noteStatus').textContent = 'Could not save the note.';
+    }
   }
 
   function render(topic) {
@@ -991,7 +1061,8 @@
       }
       const right = document.createElement('span');
       right.className = 'hright';
-      right.innerHTML = '<svg class="hmic' + (entry.recording ? ' on' : '') + '" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/></svg>';
+      right.innerHTML = '<svg class="hmic' + (entry.recording ? ' on' : '') + '" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/></svg>' +
+        '<svg class="hnote' + (entry.note ? ' on' : '') + '" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
       right.append(formatDate(d, { month: 'short', day: 'numeric' }));
       btn.append(dot, title, right);
       btn.addEventListener('click', () => { render(entry.topic); window.scrollTo({ top: 0 }); });
@@ -1107,6 +1178,16 @@
     if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
     else startRecording();
   });
+  $('writeToggle').addEventListener('click', () => {
+    $('writeToggle').hidden = true;
+    $('noteEditor').hidden = false;
+    $('noteInput').focus();
+  });
+  $('saveNoteBtn').addEventListener('click', saveNote);
+  $('noteInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveNote(); }
+  });
+  $('noteInput').addEventListener('input', () => { $('noteStatus').textContent = ''; });
   $('spinBtn').addEventListener('click', spinWheel);
   $('addCategoryBtn').addEventListener('click', addCategory);
   $('resetCategoriesBtn').addEventListener('click', resetCategories);

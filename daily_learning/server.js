@@ -134,6 +134,27 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (parts[0] === 'api' && parts[1] === 'note' && parts[2] && req.method === 'POST') {
+    const date = parts[2];
+    if (!isValidDateKey(date)) { sendJSON(res, 400, { error: 'bad date' }); return; }
+    let text;
+    try {
+      text = JSON.parse((await readBody(req)).toString('utf8')).text;
+    } catch (e) {
+      sendJSON(res, 400, { error: 'bad json' });
+      return;
+    }
+    if (typeof text !== 'string') { sendJSON(res, 400, { error: 'text must be a string' }); return; }
+    const history = loadHistory();
+    const entry = Object.assign({}, history[date]);
+    const note = text.trim() ? { text, writtenAt: new Date().toISOString() } : null;
+    if (note) entry.note = note; else delete entry.note;
+    history[date] = entry;
+    saveHistory(history);
+    sendJSON(res, 200, { ok: true, note });
+    return;
+  }
+
   if (url.pathname === '/api/categories' && req.method === 'GET') {
     sendJSON(res, 200, loadCategories());
     return;
