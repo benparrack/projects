@@ -47,6 +47,27 @@ buys, messages sellers, or posts listings.
     so it can supply real sold-price comps. That solves the auto-pricing
     problem below, maybe as early as the MVP. It's also the easiest place to
     resell.
+    **Checked 2026-09-27:**
+    - *Official API:* alive. `api.tradera.com/v3/SearchService.asmx`
+      (SOAP/ASMX) offers Search, SearchAdvanced, SearchByFixedCriteria,
+      SearchByZipCode and SearchCategoryCount. Calling without keys fails
+      with "Invalid application id", so Ben has to register a free app
+      (developer program at api.tradera.com) to get an AppId and AppKey.
+      SearchAdvanced accepts an `ItemStatus` field and results include
+      `IsEnded`/`HasBids`, so sold comps *look* possible through the API.
+      Confirm the accepted ItemStatus values once there's a key.
+    - *Website:* `tradera.com/search?q=…&itemStatus=Sold` embeds full
+      JSON in the Next.js flight data: `"items":[{itemId, price,
+      shortDescription, totalBids, endDate, isActive, itemType,
+      itemUrl, …}]`, 80 per page, and it works without login. Test on
+      "zelda breath of the wild switch": 80 sold items, median 399 kr.
+      **But robots.txt disallows `/search?*`**, so the bot should use the
+      official API, not scrape this page. Looking up comps by hand in a
+      browser is fine.
+    - *Matcher lesson from that test:* the "Switch 2 Edition" of BotW sold
+      for 500–595 kr, while the original sold for 280–470 kr. They share
+      almost the same title, so catalog entries need exclude words
+      (`exclude: ["switch 2"]`) or the comps get skewed.
   - Facebook Marketplace stays out, as below.
 - **Swedish red-flag words:** trasig/trasiga (broken), defekt, reservdelar (for
   parts), "säljes som den är" (sold as-is), byte/bytes (swap), endast kartong
