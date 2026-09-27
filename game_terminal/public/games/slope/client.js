@@ -52,17 +52,27 @@ function tileTexture(THREE) {
   return t;
 }
 
+// Ball skin: a glossy green marble with one bright band. The sphere is turned so the band runs
+// along the rolling direction (it stays put while the ball spins); a few faint low-contrast dots
+// are the only hint of the spin, so fast rolling doesn't strobe.
 function ballTexture(THREE) {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = '#0a1a0a';
+  const grad = g.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, '#0c2a0c');
+  grad.addColorStop(0.5, '#1f6b18');
+  grad.addColorStop(1, '#0c2a0c');
+  g.fillStyle = grad;
   g.fillRect(0, 0, 256, 128);
-  g.strokeStyle = '#39ff14';
-  g.lineWidth = 7;
-  for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(i * 64 + 8, 0); g.lineTo(i * 64 + 40, 128); g.stroke(); }
+  g.fillStyle = 'rgba(12, 40, 12, 0.55)';
+  for (let i = 0; i < 10; i++) {
+    g.beginPath();
+    g.arc((i * 83) % 256, 20 + ((i * 37) % 30) + (i % 2) * 60, 6, 0, Math.PI * 2);
+    g.fill();
+  }
   g.fillStyle = '#b6ff9c';
-  g.fillRect(0, 58, 256, 12);
+  g.fillRect(0, 59, 256, 10);
   return new THREE.CanvasTexture(c);
 }
 
@@ -232,7 +242,7 @@ export function mount(container, api) {
     obsMat.pad = new THREE.MeshBasicMaterial({ map: boostTexture(THREE), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 
     const bt = ballTexture(THREE);
-    ballMesh = new THREE.Mesh(new THREE.SphereGeometry(Sim.R, 32, 18), new THREE.MeshStandardMaterial({ map: bt, emissive: '#1b5e12', emissiveMap: bt, metalness: 0.3, roughness: 0.35 }));
+    ballMesh = new THREE.Mesh(new THREE.SphereGeometry(Sim.R, 32, 18).rotateZ(Math.PI / 2), new THREE.MeshStandardMaterial({ map: bt, emissive: '#1b5e12', emissiveMap: bt, metalness: 0.3, roughness: 0.35 }));
     scene.add(ballMesh);
     glow = new THREE.PointLight('#39ff14', 1.2, 9);
     scene.add(glow);
