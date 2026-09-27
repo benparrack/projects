@@ -29,8 +29,11 @@ a continuous beam, so each economy upgrade is also a damage upgrade. Enemies
 are hex-cell formations that shatter brick-breaker style as their HP drops.
 
 - 10 kills clear a zone. Enemies start at 25 HP, which grows x1.6 per zone up
-  to Zone 25 (the economy grows fastest early), then x1.3. Each kill pays a
-  bounty of 7% of its HP in Energy, shown as "Per kill" under the enemy.
+  to Zone 25 (the economy grows fastest early), then x1.3. Each kill pays about
+  1.5 seconds of your current production (bosses about 30 seconds) plus 7% of
+  its HP, shown as "Per kill" under the enemy. Enemies you kill in under 2
+  seconds pay proportionally less, so farming easy zones never beats pushing.
+  Kills end up around 25–35% of income.
   Clearing zones also raises **Dominion**, a permanent +0.5% production per
   zone cleared.
 - Every 5th zone is a **boss** (x10 HP) you must beat within 30s. If you

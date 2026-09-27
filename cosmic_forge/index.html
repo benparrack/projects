@@ -860,7 +860,7 @@ const DAILY_REWARDS = [
 // Stellar Surge: clicking fills a meter; when full, a short frenzy.
 // The Void Front: Ignites and production both deal damage to Void enemies.
 // 10 kills clear a zone; every 5th zone is a boss you must beat within 30s.
-const VOID = { killsPerZone: 10, bossEvery: 5, bossTime: 30, hp0: 25, hpGrowth: 1.6, hpGrowthLate: 1.3, lateFrom: 25, bossMult: 10, bounty: 0.07, dominionPerZone: 0.005 };
+const VOID = { killsPerZone: 10, bossEvery: 5, bossTime: 30, hp0: 25, hpGrowth: 1.6, hpGrowthLate: 1.3, lateFrom: 25, bossMult: 10, bounty: 0.07, bountySecs: 1.5, bountyBossSecs: 30, bountyFullAt: 2, dominionPerZone: 0.005 };
 const BOSS_NAMES = ['The Hollow Maw', 'Entropy Wyrm', 'Null Sovereign', 'The Unmaker', 'Grief Nebula', 'Starless Titan', 'Oblivion Choir', 'The Last Dark'];
 const ENEMY_SPECIES = [
   { name: 'Void Mass', hue: 275 }, { name: 'Null Crystal', hue: 195 }, { name: 'Entropy Bloom', hue: 330 },
@@ -2386,8 +2386,15 @@ function baseHp(z) {
   return VOID.hp0 * Math.pow(VOID.hpGrowth, early) * Math.pow(VOID.hpGrowthLate, late);
 }
 function enemyMaxHp(z) { return baseHp(z) * (isBossZone(z) ? VOID.bossMult : 1); }
+// A kill pays a few seconds of current production (so it keeps pace with the
+// economy) plus a small HP-based floor. The production part shrinks for enemies
+// you shred in under bountyFullAt seconds, so mowing down easy zones can't out-earn
+// actually pushing forward. Bosses pay a big lump so beating one feels like a win.
 function enemyBounty(z) {
-  let b = enemyMaxHp(z) * VOID.bounty;
+  const hp = enemyMaxHp(z), dps = Math.max(currentDps(), 1e-9);
+  const effort = Math.min(1, hp / dps / VOID.bountyFullAt);
+  const secs = (isBossZone(z) ? VOID.bountyBossSecs : VOID.bountySecs) * effort;
+  let b = hp * VOID.bounty + totalProductionPerSecond() * secs;
   b *= 1 + relicValue('coil');
   if (abilityActive('plunder')) b *= 5;
   return b;
