@@ -110,6 +110,7 @@ function freshPlayer(clientId, nickname, colorIdx) {
     nickname,
     color: COLOR_PALETTE[colorIdx % COLOR_PALETTE.length],
     racingThisRound: false,
+    bot: null,
     r: 0,
     c: 0,
     finished: false,
@@ -119,10 +120,79 @@ function freshPlayer(clientId, nickname, colorIdx) {
 
 const COUNTDOWN_MS = 3000;
 
+const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+
+// --- CPU racers. Every bot explores depth-first (never stuck: backtracks out of dead ends); the
+// level decides how it picks among unexplored branches and how fast it moves:
+//   easy    random branch, slow;  medium  branch that points toward the exit usually;
+//   hard    usually the true route (knows the maze), quick;  expert  always the true route, fast.
+const MAZE_BOT = {
+  easy: { ms: [260, 360], read: 900, truth: 0, lean: 0.4 },
+  medium: { ms: [230, 320], read: 700, truth: 0, lean: 0.75 },
+  hard: { ms: [170, 230], read: 1100, truth: 0.8, lean: 0.75 },
+  expert: { ms: [125, 165], read: 1300, truth: 1, lean: 1 },
+};
+
+function botStep(room, clientId, roundId) {
+  const st = room.state;
+  const p = st.players.get(clientId);
+  if (!p || st.roundId !== roundId || st.phase !== 'racing' || !p.racingThisRound || p.finished) return;
+  const lv = MAZE_BOT[p.bot] || MAZE_BOT.hard;
+  const mem = p.botMem;
+  const key = (r, c) => r * COLS + c;
+  mem.seen.add(key(p.r, p.c));
+  const cell = st.maze[p.r][p.c];
+  const open = DIRS.filter((d) => cell[d.name] && !mem.seen.has(key(p.r + d.dr, p.c + d.dc)));
+  let dir;
+  if (open.length) {
+    const truthDir = open.find((d) => st.distToExit[p.r + d.dr][p.c + d.dc] < st.distToExit[p.r][p.c]);
+    if (truthDir && Math.random() < lv.truth) dir = truthDir;
+    else if (Math.random() < lv.lean) {
+      // Head for the exit as the crow flies (down/right), which is often but not always right.
+      dir = open.slice().sort((a, b) => (b.dr + b.dc) - (a.dr + a.dc))[0];
+    } else dir = open[Math.floor(Math.random() * open.length)];
+    mem.stack.push(DIR_BY_NAME[dir.opp]);
+  } else {
+    dir = mem.stack.pop();
+    if (!dir) return;
+  }
+  applyMove(st, p, dir);
+  room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'mazedash', data: { kind: 'state', ...buildPublicState(room) } } });
+  if (!p.finished) setTimeout(() => botStep(room, clientId, roundId), lv.ms[0] + Math.random() * (lv.ms[1] - lv.ms[0]));
+}
+
+function startBots(room) {
+  const st = room.state;
+  for (const p of st.players.values()) {
+    if (!p.bot || !p.racingThisRound) continue;
+    p.botMem = { seen: new Set(), stack: [] };
+    const lv = MAZE_BOT[p.bot] || MAZE_BOT.hard;
+    setTimeout(() => botStep(room, p.clientId, st.roundId), COUNTDOWN_MS + lv.read * (0.8 + Math.random() * 0.4));
+  }
+}
+
+// Shared by humans and bots. Returns false when a wall is in the way.
+function applyMove(st, p, d) {
+  const cell = st.maze[p.r][p.c];
+  if (!cell[d.name]) return false;
+  const nr = p.r + d.dr;
+  const nc = p.c + d.dc;
+  if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return false;
+  p.r = nr;
+  p.c = nc;
+  if (nr === EXIT_R && nc === EXIT_C) {
+    p.finished = true;
+    p.finishMs = Date.now() - st.roundStartedAt;
+  }
+  if (allRacersFinished(st)) endRound(st);
+  return true;
+}
+
 function startRace(st, room, ctx) {
   st.seed = randomSeed();
   st.maze = generateMaze(st.seed, ROWS, COLS);
   st.distFromStart = bfsDistances(st.maze, ROWS, COLS, 0, 0);
+  st.distToExit = bfsDistances(st.maze, ROWS, COLS, EXIT_R, EXIT_C);
   st.roundId = (st.roundId || 0) + 1;
   st.roundStartedAt = Date.now() + COUNTDOWN_MS; // moves are ignored until the 3-2-1 countdown ends
   st.roundEndedAt = null;
@@ -190,6 +260,7 @@ function buildPublicState(room) {
     players: [...st.players.values()].map((p) => ({
       clientId: p.clientId,
       nickname: p.nickname,
+      bot: p.bot || undefined,
       color: p.color,
       racingThisRound: p.racingThisRound,
       r: p.r,
@@ -231,12 +302,15 @@ module.exports = {
     // Joining mid-race doesn't drop you into a race already in progress — you're added with
     // racingThisRound: false and simply wait for the next startRace (which resets every present
     // player, this one included, at the moment it fires).
-    st.players.set(client.clientId, freshPlayer(client.clientId, client.nickname, st.nextColorIdx++));
+    const p = freshPlayer(client.clientId, client.nickname, st.nextColorIdx++);
+    p.bot = client.bot || null;
+    st.players.set(client.clientId, p);
   },
 
   onLeave(room, client) {
     const st = room.state;
     st.players.delete(client.clientId);
+    dropBotsIfAlone(st.players);
     if (st.phase === 'racing' && allRacersFinished(st)) {
       endRound(st);
       // onLeave gets no ctx (unlike onMessage) — broadcast manually so remaining clients see the
@@ -255,6 +329,23 @@ module.exports = {
       if (st.phase === 'racing') return;
       startRace(st, room, ctx);
       broadcastState(room, ctx);
+      startBots(room);
+      return;
+    }
+
+    // Bots join between races (they'd have no route memory mid-race) and can be removed anytime.
+    if (data.kind === 'addBot') {
+      if (!st.players.has(ctx.senderId)) return;
+      const b = newBot(st.players, data.level);
+      if (!b) return;
+      module.exports.onJoin(room, { clientId: b.clientId, nickname: b.nickname, bot: b.level });
+      broadcastState(room, ctx);
+      return;
+    }
+    if (data.kind === 'removeBot') {
+      if (!isBotId(data.clientId) || !st.players.delete(data.clientId)) return;
+      if (st.phase === 'racing' && allRacersFinished(st)) endRound(st);
+      broadcastState(room, ctx);
       return;
     }
 
@@ -264,18 +355,7 @@ module.exports = {
       if (!p || !p.racingThisRound || p.finished) return;
       const d = DIR_BY_NAME[data.direction];
       if (!d) return;
-      const cell = st.maze[p.r][p.c];
-      if (!cell[d.name]) return; // wall blocks this direction — silent no-op
-      const nr = p.r + d.dr;
-      const nc = p.c + d.dc;
-      if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return;
-      p.r = nr;
-      p.c = nc;
-      if (nr === EXIT_R && nc === EXIT_C) {
-        p.finished = true;
-        p.finishMs = Date.now() - st.roundStartedAt;
-      }
-      if (allRacersFinished(st)) endRound(st);
+      if (!applyMove(st, p, d)) return; // wall blocks this direction — silent no-op
       broadcastState(room, ctx);
       return;
     }

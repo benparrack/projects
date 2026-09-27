@@ -6,6 +6,7 @@
 import { makeServerClock } from '../serverClock.js';
 import { sfx } from '../sfx.js';
 import { createFx, sharpCanvas } from '../canvasFx.js';
+import { createBotBar } from '../tickBots.js';
 
 const ROWS = 15; // must match server/games/mazedash.js's ROWS/COLS
 const COLS = 15;
@@ -89,6 +90,8 @@ export function mount(container, api) {
   wrap.appendChild(statusEl);
   wrap.appendChild(timerEl);
   wrap.appendChild(actionRow);
+  const botBar = createBotBar(api);
+  wrap.appendChild(botBar.el);
   wrap.appendChild(body);
   container.appendChild(wrap);
 
@@ -255,6 +258,7 @@ export function mount(container, api) {
   function renderLeaderboard() {
     lbEl.innerHTML = '';
     if (!view) return;
+    botBar.update(view.players);
     for (const entry of view.leaderboard) {
       const li = document.createElement('li');
       const you = entry.clientId === api.getClientId() ? ' (you)' : '';
