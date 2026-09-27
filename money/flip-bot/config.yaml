@@ -1,0 +1,13 @@
+mode: dry_run            # dry_run | live — only Ben changes this
+bankroll_sek: 1000
+auto_buy_max_sek: 300    # Tradera buys above this need phone approval
+max_open_flips: 3
+daily_spend_cap_sek: 600
+approval_timeout_min: 30
+min_profit_sek: 100
+max_km: 25
+home: [59.3313, 18.0598] # Stockholm T-Centralen
+poll_minutes: [3, 5]
+tradera_sell_fee_pct: 0.10   # verify
+buy_shipping_sek: 70         # PostNord, verify
+sell_packaging_sek: 15

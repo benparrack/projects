@@ -1,0 +1,8 @@
+.venv/
+.env
+*.sqlite
+__pycache__/
+inbox/*
+!inbox/.gitkeep
+logs/
+STOP

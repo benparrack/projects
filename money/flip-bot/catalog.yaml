@@ -1,0 +1,57 @@
+# fair_sek seeds are rough guesses except where verified; pricing.py prefers live comps.
+# Run `flip catalog check` to compare against Tradera sold comps once API keys exist.
+models:
+  - name: Zelda Breath of the Wild (Switch 1)
+    queries: ["zelda breath of the wild switch"]
+    must: 'breath of the wild|botw'
+    exclude: ['switch 2', 'tears', 'totk']
+    fair_sek: 399
+    unverified: false   # Tradera sold median 2026-09-27
+  - name: Zelda Tears of the Kingdom (Switch 1)
+    queries: ["zelda tears of the kingdom"]
+    must: 'tears of the kingdom|totk'
+    exclude: ['switch 2', 'breath', 'botw', 'collector']
+    fair_sek: 450
+    unverified: true
+  - name: Mario Kart 8 Deluxe
+    queries: ["mario kart 8 deluxe"]
+    must: 'mario ?kart 8'
+    exclude: ['switch 2', 'world', 'live', 'bundle', 'paket', 'konsol']
+    fair_sek: 380
+    unverified: true
+  - name: Super Mario Odyssey
+    queries: ["super mario odyssey"]
+    must: 'odyssey'
+    exclude: ['switch 2']
+    fair_sek: 330
+    unverified: true
+  - name: Animal Crossing New Horizons
+    queries: ["animal crossing new horizons"]
+    must: 'animal crossing'
+    exclude: ['switch 2', 'amiibo', 'kort', 'cards', 'konsol', 'edition']
+    fair_sek: 350
+    unverified: true
+  - name: Pokemon Scarlet / Violet
+    queries: ["pokemon scarlet", "pokemon violet"]
+    must: 'scarlet|violet'
+    exclude: ['switch 2', 'kort', 'cards', 'dlc', 'konsol']
+    fair_sek: 380
+    unverified: true
+  - name: Super Smash Bros Ultimate
+    queries: ["smash bros ultimate"]
+    must: 'smash'
+    exclude: ['switch 2', 'amiibo', 'konsol']
+    fair_sek: 380
+    unverified: true
+  - name: Nintendo Switch Pro Controller
+    queries: ["switch pro controller", "switch pro handkontroll"]
+    must: 'pro ?(controller|handkontroll|kontroll)'
+    exclude: ['switch 2', 'ps4', 'ps5', 'xbox', 'kopia', 'fake', 'tredje', 'third']
+    fair_sek: 450
+    unverified: true
+  - name: Joy-Con pair
+    queries: ["joy-con par", "joycon"]
+    must: 'joy.?con'
+    exclude: ['switch 2', 'drift', 'grip', 'laddare', 'strap', 'skal', 'konsol', 'en joy', 'vänster', 'höger', 'left', 'right']
+    fair_sek: 450
+    unverified: true
