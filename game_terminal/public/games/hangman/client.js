@@ -1,6 +1,7 @@
 // Hangman — one player picks a word, everyone else guesses letters.
 // Server plugin: ../../../server/games/hangman.js (authoritative word, per-recipient masked views).
 import { sfx } from '../sfx.js';
+import { createBotBar } from '../tickBots.js';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -57,9 +58,14 @@ export function mount(container, api) {
   root.style.gap = '12px';
   root.style.alignItems = 'center';
   root.style.width = '100%';
+  // Bots can pick the word (solo play) or help guess.
+  const botBar = createBotBar(api);
+  container.appendChild(botBar.el);
   container.appendChild(root);
 
   function nicknameFor(clientId) {
+    const bot = view && view.bots && view.bots.find((b) => b.clientId === clientId);
+    if (bot) return bot.nickname;
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
   }
@@ -70,6 +76,7 @@ export function mount(container, api) {
       root.textContent = 'Loading...';
       return;
     }
+    botBar.update(view.bots || []);
 
     const gallows = document.createElement('pre');
     gallows.textContent = GALLOWS[Math.min(view.wrongGuesses, GALLOWS.length - 1)];
