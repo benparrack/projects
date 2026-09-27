@@ -16,5 +16,6 @@ grep -q 'crazygames-sdk-v3' dist/crazygames/index.html || { echo "SDK tag not in
 cp "$src" dist/itch/index.html
 (cd dist/itch && zip -q ../cosmic_forge_itch.zip index.html)
 rm -r dist/itch
+(cd dist/crazygames && zip -q ../cosmic_forge_crazygames.zip index.html)
 
 ls -l dist dist/crazygames
