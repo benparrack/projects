@@ -535,7 +535,7 @@ day, read in real depth rather than a one-line trivia fact.
 
 ## 38. Marketplace Flip Bot
 
-**Status:** Stocked, not started — this is the same idea as the top unbuilt pick in `money/money_ideas.md`; see that file for the canonical entry.
+**Status:** Planned 2026-09-27 (`money/flip-bot/PLAN.md` — answer its 3 open questions first), not built. Same idea as the top unbuilt pick in `money/money_ideas.md`; see that file for the canonical entry.
 **Pitch:** Scan Facebook Marketplace/Craigslist for underpriced listings, estimate resale value from sold-comps, score deals, alert to phone.
 
 **Why this one (as a model test):** Stitches together scraping, fuzzy product matching, price estimation, and alerting — plus judgment about what's actually a deal vs. a scam/broken item.
