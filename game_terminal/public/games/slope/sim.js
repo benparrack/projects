@@ -4,7 +4,7 @@
 //
 // World: the ball rolls forward along +s (drawn as -Z), x is lateral, y is height. The track is a
 // chain of pieces generated lazily from a seed. Each piece is a sloped strip with a centre line
-// that may shift sideways (cx0 -> cx1), an optional bank (tilt), holes, and blocks (some moving).
+// that may shift sideways (cx0 -> cx1), an optional bank (tilt), boost pads, and blocks (some moving).
 // A 'gap' piece has no ground at all. Difficulty d in [0,1] ramps with distance and shapes widths,
 // obstacle density, jump sizes and speed; the ball always speeds up a little more after that.
 
@@ -14,9 +14,9 @@
   const G = 34; // gravity
   const R = 0.5; // ball radius
   const DT = 1 / 60; // fixed physics step
-  const STEER_ACCEL = 62;
+  const STEER_ACCEL = 50;
   const AIR_STEER = 0.55;
-  const GROUND_FRICTION = 6.5;
+  const GROUND_FRICTION = 4; // low enough that a flick keeps rolling a moment, like a real ball
   const AIR_FRICTION = 0.8;
   const MAX_VX = 13;
   const FALL_DEATH = 38; // this far below the last ground touched = gone
@@ -47,7 +47,9 @@
 
   function makeTrack(seed) {
     const T = { seed, rnd: mulberry32(seed), pieces: [], end: 0, y: 0, cx: 0, since: 0 };
-    add(T, { kind: 'start', len: 100, slope: -0.1, w: 10 });
+    const start = add(T, { kind: 'start', len: 100, slope: -0.1, w: 10 });
+    start.pads.push({ s: 55, hl: 2.4, xr: 0, hw: 2 }); // a kick right away to get the run going
+    T.boosted = true;
     return T;
   }
 
@@ -116,10 +118,9 @@
       ['jump', s > 220 ? 1.3 + 1.7 * d : 0],
       ['drop', s > 170 ? 1 + d : 0],
       ['bank', s > 380 ? 0.6 + 1.6 * d : 0],
-      ['holes', s > 480 ? 0.5 + 2 * d : 0],
       ['narrow', s > 700 ? 1.6 * d : 0],
       ['steps', s > 300 ? 0.8 + 0.8 * d : 0],
-      ['boost', s > 150 ? 1.1 : 0],
+      ['boost', 1.4 + 0.4 * d],
       ['pistons', s > 320 ? 0.9 + 1.6 * d : 0],
     ];
     let tot = 0;
@@ -192,17 +193,6 @@
     } else if (kind === 'bank') {
       const bank = (r() < 0.5 ? -1 : 1) * between(0.18, 0.26 + 0.24 * d);
       add(T, { kind, len: between(35, 55), slope: downhill(), w: width() + 1, bank, cx1: T.cx - Math.sign(bank) * between(2, 6) });
-    } else if (kind === 'holes') {
-      const w = width() + 1.5;
-      const p = add(T, { kind, len: between(40, 60), slope: downhill(), w });
-      const half = w / 2;
-      for (let z = p.s0 + 8; z < p.s1 - 8; z += between(7, 11)) {
-        const hl = between(2.5, 3.5 + 2 * d);
-        const hw = between(w * 0.3, w * 0.6);
-        const left = r() < 0.5;
-        const x0 = left ? -half : half - hw;
-        p.holes.push({ s0: z, s1: z + hl, xr0: x0, xr1: x0 + hw });
-      }
     } else if (kind === 'narrow') {
       add(T, { kind, len: between(24, 40 + 20 * d), slope: downhill() * 0.8, w: between(2.8, 3.6), cx1: r() < 0.5 ? shiftTo(3) : null });
       T.since = 1;
@@ -436,7 +426,7 @@
       if (!best || cost < best.cost) best = { tx, cost };
     }
     const err = best.tx + (L.noise ? (Math.random() * 2 - 1) * L.noise * 3 : 0) - b.x;
-    const steer = clamp(err * L.gain - b.vx * 0.12, -1, 1);
+    const steer = clamp(err * L.gain - b.vx * 0.15, -1, 1); // damped: the ball carries its sideways momentum
     mem.steer = steer;
     return steer;
   }
