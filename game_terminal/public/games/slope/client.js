@@ -295,9 +295,20 @@ export function mount(container, api) {
       const col = pieceColor(p);
       const top = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: tileMat, color: col, side: THREE.DoubleSide }));
       group.add(top);
-      // Glowing rails along both edges + a dark skirt underneath for thickness.
+      // Glowing rails along both edges, and solid walls from every edge (sides, front, back) all
+      // the way down to the valley floor, so platforms read as towers rather than floating tiles.
       const rail = [];
       const skirt = [];
+      const cols = [];
+      const topC = col.clone().multiplyScalar(0.32);
+      const botC = new THREE.Color('#07021a');
+      const floorY = (s) => Sim.heightAt(p, s, 0) - 36;
+      const wall = (a, b, sa, sb) => {
+        // a, b: [x, y, z] top corners; sa, sb: their s (for the floor height below them).
+        const ya = floorY(sa); const yb = floorY(sb);
+        skirt.push(...a, ...b, b[0], yb, b[2], ...a, b[0], yb, b[2], a[0], ya, a[2]);
+        for (const c of [topC, topC, botC, topC, botC, botC]) cols.push(c.r, c.g, c.b);
+      };
       const n = Math.max(2, Math.round(p.len / 3));
       for (const side of [-1, 1]) {
         const line = [];
@@ -307,17 +318,30 @@ export function mount(container, api) {
           line.push(new THREE.Vector3(x, y + 0.02, z));
           if (k < n) {
             const s2 = p.s0 + ((k + 1) / n) * p.len;
-            const [x2, y2, z2] = surf(p, s2, (side * p.w) / 2);
-            skirt.push(x, y, z, x2, y2, z2, x2, y2 - 1.2, z2, x, y, z, x2, y2 - 1.2, z2, x, y - 1.2, z);
+            wall([x, y, z], surf(p, s2, (side * p.w) / 2), s, s2);
           }
         }
         rail.push(line);
       }
       const railMat = new THREE.LineBasicMaterial({ color: col.clone().lerp(new THREE.Color('#ffffff'), 0.45) });
       for (const line of rail) group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(line), railMat));
+      for (const e of [p.s0, p.s1]) {
+        const nx = Math.max(1, Math.round(p.w / 2.6));
+        for (let k = 0; k < nx; k++) wall(surf(p, e, -p.w / 2 + (k / nx) * p.w), surf(p, e, -p.w / 2 + ((k + 1) / nx) * p.w), e, e);
+      }
       const sg = new THREE.BufferGeometry();
       sg.setAttribute('position', new THREE.Float32BufferAttribute(skirt, 3));
-      group.add(new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(0.25), side: THREE.DoubleSide })));
+      sg.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      group.add(new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+      // Bright edge lines down the corners so the tower shape reads at a glance.
+      const corner = [];
+      for (const e of [p.s0, p.s1]) {
+        for (const side of [-1, 1]) {
+          const [x, y, z] = surf(p, e, (side * p.w) / 2);
+          corner.push(new THREE.Vector3(x, y, z), new THREE.Vector3(x, floorY(e), z));
+        }
+      }
+      group.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(corner), railMat));
       for (const o of p.obs) {
         const geo = new THREE.BoxGeometry(o.hw * 2, o.h, o.hl * 2);
         const mesh = new THREE.Mesh(geo, obsMat.body);
@@ -563,6 +587,7 @@ export function mount(container, api) {
         camPos.set(focus.x, focus.y + up, -(focus.s - back));
       }
       camera.position.copy(camPos);
+      if (window.__slopeCamOffset) camera.position.add(window.__slopeCamOffset); // debug: {x,y,z}
       if (shake > 0) {
         camera.position.x += (Math.random() - 0.5) * shake;
         camera.position.y += (Math.random() - 0.5) * shake;
