@@ -66,3 +66,39 @@ shot after a fix.
 Ubuntu Sans (a system font, free under the Ubuntu Font Licence), rendered
 with PIL into textures. It's clean and thin, and it's already installed, so
 nothing is downloaded.
+
+## D10 — Cheats in service of the picture (logged so they're not mistaken for bugs)
+- **Sunrise in the reveal:** the sun direction is rotated during shot 4 about
+  `cross(toPlanet, sun)` so it crosses the limb exactly on `SUNRISE` (41 s).
+  Real orbital motion would take hours; the audience needs it on the beat.
+- **Probe distance:** the probe was moved to 120 000 km from the planet (was
+  230 000) so the planet fills ~60° of sky in the reveal, which reads as huge.
+- **Probe size vs. glow:** the probe is metres across, which is sub-pixel in wide
+  shots. A minimum on-screen glow size (`glow_min_px`) keeps the hero findable,
+  like a lamp seen from far away.
+- **Swarm lanterns** get the same minimum-pixel treatment. They're the payoff and
+  must read as distinct lights, not noise.
+
+## D11 — Ping shells are drawn limb-bright
+A physically "correct" glowing shell seen from inside, or face-on, lights the
+whole frame evenly and reads as a wash. The shell is drawn mostly at its limb,
+so every call and answer reads as a *ring of light*, and it fades once it has
+swept past the camera.
+
+## D12 — Approach and cascade share one viewpoint
+Both use the camera direction on the anti-sun side, looking sunward, found by a
+numeric search for "the planet point behind the ring is lit" × "ring is
+open". The ring silhouettes against the bright crescent in both shots, so the
+cascade (shot 9) rhymes with the discovery (shot 5): the same dark hoop, now
+lit.
+
+## D13 — Mix: normalise to −1 dBFS with a soft knee, and keep the loudest moment for the climax
+The shock hit at 125.2 s is the peak of the film. The beacon's answer is kept
+*below* the sunrise swell, because the turn is carried by the silence before it,
+not by its volume. No window except the first/last second drops below −50 dBFS.
+The planned near-silence after the shock (125.8–129.2) is a tinnitus tone plus
+a rumble, which is intentional rather than dead air.
+
+## D14 — One command
+`./make_film.sh` creates the venv if needed, renders the score, renders every
+shot with `--force`, and muxes. `./make_film.sh preview` does the fast pass.
