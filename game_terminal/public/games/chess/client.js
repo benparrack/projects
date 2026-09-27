@@ -517,7 +517,6 @@ export function mount(container, api) {
     historyTitle.style.opacity = '0.7';
     historyTitle.style.marginBottom = '4px';
     historyPanel.appendChild(historyTitle);
-    const history = view.moveHistory || [];
     for (let i = 0; i < history.length; i += 2) {
       const row = document.createElement('div');
       const num = i / 2 + 1;
