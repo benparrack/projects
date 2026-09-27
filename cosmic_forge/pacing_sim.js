@@ -41,6 +41,5 @@ window.runSim = async function (minutes, opts = {}) {
   const tot = state.stats.lifetimeEnergyEarned;
   const pct = k => (100 * src[k] / tot).toFixed(1) + '%';
   return { tiers, collapseAt, errs, samples, share: { click: pct('click'), bounty: pct('bounty'), goal: pct('goal') },
-    zone: state.void.zone, best: state.stats.bestZone, bosses: state.stats.bossesDefeated, relics: totalRelicsFound(), goals: state.stats.goalsCompleted,
-    journey: state.journey.map(j => formatDuration(j.t) + ' ' + j.label) };
+    zone: state.void.zone, best: state.stats.bestZone, bosses: state.stats.bossesDefeated, relics: totalRelicsFound(), goals: state.stats.goalsCompleted };
 };

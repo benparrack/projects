@@ -83,17 +83,14 @@ Measured with `pacing_sim.js`, an in-page bot that drives the real game code
 (so crits, goals, Surge, feats and Void bounties all count). Playing like a
 person (1 click/s, shopping every 5s, claiming goals every 30s) gets:
 
-- The 7 tiers at roughly 0.25 / 1.5 / 3 / 6 / 8.5 / 12 / 32 minutes.
-- Zones 10 / 20 / 30 at about 3 / 8 / 12.5 minutes, then a wall in the
-  mid-30s.
-- A first Collapse available at about 15 minutes (1B Energy).
+- The first 6 tiers at roughly 0.25 / 1.2 / 2.3 / 3.2 / 4.6 / 7.2 minutes.
+- A first Collapse available at about 8–14 minutes (1B Energy).
 
 Runs vary a lot (crits, drops and events compound), so compare tunings with
 `seed:` over several seeds, not one run. A perfect 2-clicks/s bot is roughly
-1.5x faster; a 5-clicks/s masher reaches Protostars in about 30s. The 📜 **Journey** button
-(top right) logs the active play time when you first hit each of these
-milestones, next to these targets (green is on pace, amber slower, blue
-faster), so a fresh save shows how your own run compares.
+1.5x faster; a 5-clicks/s masher reaches Protostars in about 30s. There is no
+pacing display in the game itself: players go at their own pace, and Feats
+mark progress.
 
 ## The Big Collapse (prestige)
 
@@ -110,7 +107,6 @@ is the point: each collapse seeds a strictly stronger next universe.
 | Void abilities | Click the ability bar, or keys `1`–`6` |
 | Buy quantity | x1 / x10 / x25 / Max buttons above the shop list |
 | Mute | speaker icon, top right |
-| Journey (pacing log) | 📜 icon, top right |
 | Manual save / erase save | 💾 / 🗑 icons, top right. Erase wipes everything and starts a brand-new universe |
 
 ## Notes

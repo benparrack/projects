@@ -255,11 +255,6 @@
   .arm-odd-bar { height: 7px; border-radius: 4px; background: rgba(255,255,255,0.07); overflow: hidden; }
   .arm-odd-bar b { display: block; height: 100%; }
   .armory { max-height: 62vh; overflow-y: auto; padding-right: 4px; }
-  .jr-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 13px; }
-  .jr-time { font-variant-numeric: tabular-nums; color: #ffd76a; min-width: 52px; text-align: right; }
-  .jr-l { flex: 1; text-align: left; }
-  .jr-t { font-size: 11px; opacity: 0.85; }
-  .jr-t.ok { color: #7dffb0; } .jr-t.slow { color: #ffb86b; } .jr-t.fast { color: #8fd8ff; }
 
   /* ---- Goals ---- */
   #goalsPanel { width: min(520px, 100%); padding: 10px 12px; }
@@ -602,7 +597,6 @@
     </div>
     <div id="topControls">
       <button class="icon-btn" id="muteBtn" title="Toggle sound">🔊</button>
-      <button class="icon-btn" id="journeyBtn" title="Journey: when you hit each milestone (pacing log)">📜</button>
       <button class="icon-btn" id="saveBtn" title="Save now">💾</button>
       <button class="icon-btn" id="resetBtn" title="Erase save">🗑</button>
     </div>
@@ -946,7 +940,6 @@ function defaultState() {
     abilities: {},   // id -> { readyAt, activeUntil } (epoch ms)
     relics: {},      // id -> stacked points
     relicLog: {},    // rarity id -> count found
-    journey: [],     // [{k, label, t}] first time each milestone was hit, t = play seconds (pacing log)
     void: { zone: 1, kills: 0, maxCleared: 0, farming: false, bossesThisCycle: 0 },
     daily: { lastDay: null, streak: 0, bestStreak: 0 },
     buffs: { blessingUntil: 0 },
@@ -1290,7 +1283,6 @@ function checkNewUnlocks(wasUnlockedBefore) {
     state.meta.highestTierUnlocked = tierIdx;
     if (tierIdx > state.meta.highestTierEverAcrossCycles) state.meta.highestTierEverAcrossCycles = tierIdx;
     logToast(`${STAGE_NAMES[tierIdx + 1]} begins.`, 'achievement');
-    markJourney('tier' + tierIdx, `${GENERATORS[tierIdx].name}: first one bought`);
     spawnBigBurst();
     const c = coreCenter();
     spawnShockwave(c.x, c.y, 'tier');
@@ -1374,7 +1366,6 @@ function doCollapse() {
   const gained = singularitiesOnCollapse();
   state.prestige.singularities += gained;
   state.stats.totalPrestiges++;
-  if (state.stats.totalPrestiges <= 3) markJourney('collapse' + state.stats.totalPrestiges, `Big Collapse #${state.stats.totalPrestiges}`);
   const cycleSecs = (Date.now() - (state.stats.cycleStartedAt || Date.now())) / 1000;
   if (!state.stats.fastestCycleSeconds || cycleSecs < state.stats.fastestCycleSeconds) state.stats.fastestCycleSeconds = cycleSecs;
   state.stats.cycleStartedAt = Date.now();
@@ -2452,7 +2443,6 @@ function checkAbilityUnlocks() {
   if (knownAbilityUnlocks >= 0 && n > knownAbilityUnlocks) {
     const a = ABILITIES[n - 1];
     logToast(`New ability: ${a.icon} ${a.name} (key ${n}). ${a.desc}`, 'achievement');
-    markJourney('ab_' + a.id, `Ability unlocked: ${a.name}`);
     playChime(660, 0.4);
     renderAbilityBar(true);
     const btn = document.querySelector(`.ab-btn[data-ab="${a.id}"]`);
@@ -2642,7 +2632,6 @@ function advanceZone() {
   v.kills = 0;
   v.farming = false;
   if (v.zone > state.stats.bestZone) state.stats.bestZone = v.zone;
-  if ([5, 10, 15, 20, 25, 30, 40, 50, 60, 80].includes(v.zone)) markJourney('zone' + v.zone, `Void Front: reached Zone ${v.zone}`);
   el('vfPips').classList.remove('cleared'); void el('vfPips').offsetWidth; el('vfPips').classList.add('cleared');
   checkAbilityUnlocks();
 }
@@ -3111,36 +3100,6 @@ function showArmory() {
   el('armoryClose').addEventListener('click', closeModal);
 }
 
-/* ---- journey (pacing log) ---- */
-// Target play-time (minutes) for first buying each tier, zone and Collapse, measured with an
-// in-page bot playing like a person (1 click/s, shopping every 5s, claiming goals every 30s).
-const JOURNEY_TARGETS = { tier0: 0.25, tier1: 1.5, tier2: 3, tier3: 6, tier4: 8.5, tier5: 12, tier6: 32,
-  zone10: 3, zone20: 8, zone30: 12.5, collapse1: 16 };
-
-function markJourney(k, label) {
-  if (!state.journey || state.journey.some(j => j.k === k)) return;
-  state.journey.push({ k, label, t: Math.round(state.stats.playTimeSeconds) });
-}
-
-function showJourney() {
-  const rows = state.journey.map(j => {
-    const tgt = JOURNEY_TARGETS[j.k];
-    let cmp = '';
-    if (tgt !== undefined) {
-      const d = j.t / 60 - tgt, cls = Math.abs(d) <= Math.max(1, tgt * 0.25) ? 'ok' : d > 0 ? 'slow' : 'fast';
-      cmp = `<span class="jr-t ${cls}">target ${tgt < 1 ? tgt * 60 + 's' : tgt + 'm'}</span>`;
-    }
-    return `<div class="jr-row"><span class="jr-time">${formatDuration(j.t)}</span><span class="jr-l">${j.label}</span>${cmp}</div>`;
-  }).join('') || '<p class="arm-p">Nothing yet. Milestones are logged here as you reach them.</p>';
-  showModal(`
-    <h2>📜 Journey</h2>
-    <p class="arm-p">Active play time when you first reached each milestone. Offline time isn't counted. Target colours: green on pace, amber slower, blue faster.</p>
-    <div class="armory">${rows}</div>
-    <p class="arm-p">Total play time: ${formatDuration(state.stats.playTimeSeconds)}</p>
-    <div class="modal-btn-row"><button class="modal-btn" id="journeyClose">Close</button></div>`);
-  el('journeyClose').addEventListener('click', closeModal);
-}
-
 /* ---- combat sounds ---- */
 let lastShatterAt = 0;
 function playShatter() {
@@ -3223,7 +3182,6 @@ function mergeLoadedState(loaded) {
   state.relics = Object.assign(fresh.relics, loaded.relics);
   state.relicLog = Object.assign(fresh.relicLog, loaded.relicLog);
   state.goals = Array.isArray(loaded.goals) ? loaded.goals : [];
-  state.journey = Array.isArray(loaded.journey) ? loaded.journey : [];
   // Saves from before the tutorial existed belong to players who don't need it.
   if (!loaded.tutorial && (loaded.stats && loaded.stats.totalClicks > 20)) state.tutorial.step = 99;
   if (loaded.seenAchievements === undefined) state.seenAchievements = state.achievements.unlocked.length;
@@ -4493,7 +4451,6 @@ function wireInput() {
     saveGame();
   });
 
-  el('journeyBtn').addEventListener('click', showJourney);
   el('saveBtn').addEventListener('click', () => { saveGame(); logToast('Game saved.', 'event'); });
 
   el('resetBtn').addEventListener('click', () => {
