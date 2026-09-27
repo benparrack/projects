@@ -635,7 +635,7 @@
         <div class="vf-bar"><div id="vfHpFill"></div><span id="vfHpText"></span></div>
         <div class="vf-bar" id="vfTimer"><div id="vfTimerFill"></div><span id="vfTimeText"></span></div>
         <div id="abilityBar"></div>
-        <div id="vfInfo"><span>DPS <b id="vfDps">0</b></span><span>Dominion <b id="vfDom">+0%</b></span></div>
+        <div id="vfInfo"><span title="Damage per second from your production and clicks">DPS <b id="vfDps">0</b></span><span title="Energy paid out for every enemy you destroy">Per kill <b id="vfBounty">0</b></span><span title="Permanent production bonus: +0.5% for every zone you have cleared">Dominion <b id="vfDom">+0%</b></span></div>
         <button id="vfBossBtn"></button>
       </div>
       </div>
@@ -694,8 +694,8 @@ const SUFFIXES = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'D
 // new tier unlocks around 0.5/2/4/9/15/24/38 minutes, so the first Big Collapse is
 // reachable inside one sitting instead of several hours.
 const GENERATORS = [
-  { id: 'dust',         name: 'Dust Collectors',     icon: '·',  color: 'linear-gradient(135deg, #5a4a8f, #3d2f6b)', flavor: 'Sweep stray matter into swirling clouds.',              baseCost: 10,         growth: 1.07, baseProd: 0.15,   unlock: null },
-  { id: 'protostar',    name: 'Protostar Igniters',  icon: '◦',  color: 'linear-gradient(135deg, #d08a3e, #8f4a1f)', flavor: 'Coax dust clouds to collapse under their own gravity.', baseCost: 100,        growth: 1.08, baseProd: 1.6,   unlock: { gen: 'dust', count: 10 } },
+  { id: 'dust',         name: 'Dust Collectors',     icon: '·',  color: 'linear-gradient(135deg, #5a4a8f, #3d2f6b)', flavor: 'Sweep stray matter into swirling clouds.',              baseCost: 12,         growth: 1.07, baseProd: 0.15,   unlock: null },
+  { id: 'protostar',    name: 'Protostar Igniters',  icon: '◦',  color: 'linear-gradient(135deg, #d08a3e, #8f4a1f)', flavor: 'Coax dust clouds to collapse under their own gravity.', baseCost: 120,        growth: 1.08, baseProd: 1.6,   unlock: { gen: 'dust', count: 10 } },
   { id: 'fusion',       name: 'Fusion Cores',        icon: '✷',  color: 'linear-gradient(135deg, #ffd166, #e85d04)', flavor: 'Spark true nuclear fusion — the birth of stars.',       baseCost: 1200,       growth: 1.085, baseProd: 15,    unlock: { gen: 'protostar', count: 10 } },
   { id: 'forge',        name: 'Planetary Forges',    icon: '◉',  color: 'linear-gradient(135deg, #48cae4, #0077b6)', flavor: 'Cool stellar ejecta into rock and ice — worlds form.',  baseCost: 15000,      growth: 1.09, baseProd: 140,    unlock: { gen: 'fusion', count: 10 } },
   { id: 'galactic',     name: 'Galactic Cores',      icon: '✺',  color: 'linear-gradient(135deg, #9d4edd, #5a189a)', flavor: 'Bind billions of stars into a single spiral.',          baseCost: 200000,     growth: 1.09, baseProd: 1300,   unlock: { gen: 'forge', count: 10 } },
@@ -860,7 +860,7 @@ const DAILY_REWARDS = [
 // Stellar Surge: clicking fills a meter; when full, a short frenzy.
 // The Void Front: Ignites and production both deal damage to Void enemies.
 // 10 kills clear a zone; every 5th zone is a boss you must beat within 30s.
-const VOID = { killsPerZone: 10, bossEvery: 5, bossTime: 30, hp0: 15, hpGrowth: 1.6, hpGrowthLate: 1.3, lateFrom: 25, bossMult: 10, bounty: 0.1, dominionPerZone: 0.005 };
+const VOID = { killsPerZone: 10, bossEvery: 5, bossTime: 30, hp0: 25, hpGrowth: 1.6, hpGrowthLate: 1.3, lateFrom: 25, bossMult: 10, bounty: 0.07, dominionPerZone: 0.005 };
 const BOSS_NAMES = ['The Hollow Maw', 'Entropy Wyrm', 'Null Sovereign', 'The Unmaker', 'Grief Nebula', 'Starless Titan', 'Oblivion Choir', 'The Last Dark'];
 const ENEMY_SPECIES = [
   { name: 'Void Mass', hue: 275 }, { name: 'Null Crystal', hue: 195 }, { name: 'Entropy Bloom', hue: 330 },
@@ -1410,14 +1410,33 @@ function doCollapse() {
   updateStageLabel();
 }
 
+// Feats that land close together share one toast (and one chime), so a burst
+// of early unlocks reads as a single moment instead of a wall of popups.
+const featToast = { el: null, names: [], at: 0 };
 function checkAchievements() {
+  const fresh = [];
   for (const a of ACHIEVEMENTS) {
     if (!state.achievements.unlocked.includes(a.id) && a.check(state)) {
       state.achievements.unlocked.push(a.id);
-      logToast(`Feat unlocked: ${a.name}`, 'achievement');
-      playChime(520, 0.3);
+      fresh.push(a.name);
     }
   }
+  if (!fresh.length) return;
+  const now = Date.now();
+  if (featToast.el && featToast.el.isConnected && now - featToast.at < 4000) {
+    featToast.names.push(...fresh);
+    featToast.el.lastChild.textContent = featToastText(featToast.names);
+    featToast.at = now;
+    return;
+  }
+  featToast.names = fresh; featToast.at = now;
+  logToast(`<span></span>`, 'achievement');
+  featToast.el = el('toastLog').lastChild;
+  featToast.el.lastChild.textContent = featToastText(fresh);
+  playChime(520, 0.3);
+}
+function featToastText(names) {
+  return names.length === 1 ? `Feat unlocked: ${names[0]}` : `${names.length} Feats unlocked: ${names.join(', ')}`;
 }
 
 /* =========================================================================
@@ -3004,6 +3023,7 @@ function renderVoidFront() {
   }
   const dps = currentDps();
   el('vfDps').textContent = formatNum(dps) + '/s';
+  if (runtime.enemy) el('vfBounty').textContent = '+' + formatNum(enemyBounty(runtime.enemy.zone) * (runtime.enemy.gilded ? GILDED.bounty : 1));
   el('vfDom').textContent = '+' + (Math.round((dominionMultiplier() - 1) * 1000) / 10) + '%';
   const btn = el('vfBossBtn');
   btn.classList.toggle('show', v.farming);
@@ -3087,7 +3107,7 @@ function showArmory() {
 /* ---- journey (pacing log) ---- */
 // Target play-time (minutes) for first buying each tier, zone and Collapse, measured with an
 // in-page bot playing like a person (1 click/s, shopping every 5s, claiming goals every 30s).
-const JOURNEY_TARGETS = { tier0: 0.25, tier1: 1.25, tier2: 3, tier3: 6, tier4: 8.5, tier5: 12, tier6: 32,
+const JOURNEY_TARGETS = { tier0: 0.25, tier1: 1.5, tier2: 3, tier3: 6, tier4: 8.5, tier5: 12, tier6: 32,
   zone10: 3, zone20: 8, zone30: 12.5, collapse1: 16 };
 
 function markJourney(k, label) {

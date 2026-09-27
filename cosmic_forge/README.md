@@ -18,7 +18,8 @@ full-screen "A new era" cinematic each time you reach one.
 - Random **events** (Solar Flare, Meteor Shower, Supernova, Wormhole) fire
   every 1–2.5 minutes and reward paying attention, not just idling.
 - **Feats** (achievements, 5 categories) grant small permanent production
-  bonuses that survive everything below.
+  bonuses that survive everything below. Feats unlocked within a few seconds
+  of each other share one toast, so the early burst isn't a wall of popups.
 
 ## The Void Front (combat)
 
@@ -27,9 +28,11 @@ bolt at the current Void enemy, and all Energy production streams into it as
 a continuous beam, so each economy upgrade is also a damage upgrade. Enemies
 are hex-cell formations that shatter brick-breaker style as their HP drops.
 
-- 10 kills clear a zone. Enemy HP grows x1.6 per zone up to Zone 25 (the
-  economy grows fastest early), then x1.3. Each kill pays a bounty of 10% of
-  its HP in Energy.
+- 10 kills clear a zone. Enemies start at 25 HP, which grows x1.6 per zone up
+  to Zone 25 (the economy grows fastest early), then x1.3. Each kill pays a
+  bounty of 7% of its HP in Energy, shown as "Per kill" under the enemy.
+  Clearing zones also raises **Dominion**, a permanent +0.5% production per
+  zone cleared.
 - Every 5th zone is a **boss** (x10 HP) you must beat within 30s. If you
   fail, you drop back to farming the previous zone. The "Challenge" button
   shows the DPS you need, and it glows once you can win. Save your Surge
@@ -77,12 +80,14 @@ Measured with `pacing_sim.js`, an in-page bot that drives the real game code
 (so crits, goals, Surge, feats and Void bounties all count). Playing like a
 person (1 click/s, shopping every 5s, claiming goals every 30s) gets:
 
-- The 7 tiers at roughly 0.25 / 1.25 / 3 / 6 / 8.5 / 12 / 32 minutes.
+- The 7 tiers at roughly 0.25 / 1.5 / 3 / 6 / 8.5 / 12 / 32 minutes.
 - Zones 10 / 20 / 30 at about 3 / 8 / 12.5 minutes, then a wall in the
   mid-30s.
 - A first Collapse available at about 15 minutes (1B Energy).
 
-A perfect 2-clicks/s bot is roughly 1.5x faster. The 📜 **Journey** button
+Runs vary a lot (crits, drops and events compound), so compare tunings with
+`seed:` over several seeds, not one run. A perfect 2-clicks/s bot is roughly
+1.5x faster; a 5-clicks/s masher reaches Protostars in about 30s. The 📜 **Journey** button
 (top right) logs the active play time when you first hit each of these
 milestones, next to these targets (green is on pace, amber slower, blue
 faster), so a fresh save shows how your own run compares.
