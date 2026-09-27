@@ -1,795 +1,607 @@
-// Slope-style 3D endless runner client. Renders with Three.js (lazy-loaded, see loadThree()
-// below) — a neon ball auto-runs forward along a winding, narrowing procedurally-generated
-// track; steer with Arrow keys or A/D to avoid falling off the edge or hitting a red hazard.
-//
-// IMPORTANT — server/client sync: the track-geometry functions below (hash32/segRand/
-// ensureTrack/trackHalfWidthAt/hazardAt and every constant they use) are copied VERBATIM from
-// server/games/slope.js. The server is the collision authority; this client only renders what
-// the server already decided. If the two copies ever diverge, "what you see" and "what kills
-// you" disagree — any change to the track math in slope.js must be mirrored here exactly.
+// Slope client. The ball's physics run right here at 60fps on the shared track (sim.js, also run
+// by the server for bots), so gravity, jumps and landings respond instantly; our position goes
+// to the server at 10Hz and everyone else's comes back as ghosts. Rendering: neon tile track
+// that shifts colour as it gets harder, a synthwave valley of wireframe mountains that falls away
+// with the track, a striped sun on the horizon, stars, and a chase camera that widens with speed
+// and shakes on hard landings.
+
 import { makeServerClock } from '../serverClock.js';
 import { sfx } from '../sfx.js';
-import { flashEl } from '../canvasFx.js';
+import { createBotBar } from '../tickBots.js';
 
-const SEG_LEN = 8;
-const BASE_HALF_WIDTH = 6;
-const MIN_HALF_WIDTH = 2.5;
-const NARROW_RATE = 0.0025;
-const MAX_CENTER = 40;
-const MAX_DELTA_PER_SEG = 0.6;
+const BEST_KEY = 'gt-slope-best';
 
-const HAZARD_START_SEG = 15;
-const BASE_HAZARD_CHANCE = 0.09;
-const HAZARD_RAMP = 0.001;
-const MAX_HAZARD_CHANCE = 0.45;
-const MIN_HAZARD_W = 1.5;
-const SAFE_GAP = 2.4;
-
-const GAP_START_SEG = 30;
-const GAP_LEN_SEGS = 2;
-const BASE_GAP_CHANCE = 0.03;
-const GAP_RAMP = 0.0004;
-const MAX_GAP_CHANCE = 0.18;
-const GAP_SALT_BASE = 1000000;
-
-// Mirrored verbatim from server/games/slope.js — see that file's comments for the full
-// rationale. Boost pickups are geometry-only here (client never touches p.speedBonus, that's
-// server-authoritative collection state); hazard motion needs the same elapsedMs both sides.
-const BOOST_START_SEG = 20;
-const BOOST_CHANCE = 0.035;
-const BOOST_SALT_BASE = 2000000;
-
-const MOVING_HAZARD_START_SEG = 40;
-const HAZARD_MOTION_SALT_BASE = 3000000;
-const HAZARD_OSC_PERIOD_MS = 2200;
-const HAZARD_OSC_AMPLITUDE_FRAC = 0.7;
-const HAZARD_TOGGLE_PERIOD_MS = 1800;
-const HAZARD_TOGGLE_RISE_FRAC = 0.2;
-const HAZARD_TOGGLE_HOLD_FRAC = 0.3;
-const HAZARD_TOGGLE_FALL_FRAC = 0.2;
-
-const TICK_MS = 50; // matches server's tickIntervalMs — used only for render interpolation timing
-
-function hash32(seed, i) {
-  let h = (seed ^ 0x9e3779b9) ^ Math.imul(i ^ 0x85ebca6b, 0xc2b2ae35);
-  h = Math.imul(h ^ (h >>> 16), 0x045d9f3b);
-  h = Math.imul(h ^ (h >>> 16), 0x045d9f3b);
-  h = h ^ (h >>> 16);
-  return h >>> 0;
-}
-function segRand(seed, salt) {
-  return hash32(seed, salt) / 4294967296;
-}
-function ensureTrack(track, upto) {
-  while (track.centers.length <= upto) {
-    const i = track.centers.length;
-    const prev = i === 0 ? 0 : track.centers[i - 1];
-    const delta = (segRand(track.seed, i * 4 + 0) - 0.5) * 2 * MAX_DELTA_PER_SEG;
-    let next = prev + delta;
-    if (next > MAX_CENTER) next = prev - Math.abs(delta);
-    if (next < -MAX_CENTER) next = prev + Math.abs(delta);
-    track.centers.push(next);
-  }
-}
-function trackHalfWidthAt(i) {
-  return Math.max(MIN_HALF_WIDTH, BASE_HALF_WIDTH - NARROW_RATE * i);
-}
-function gapBlockAt(seed, i) {
-  const block = Math.floor(i / GAP_LEN_SEGS);
-  const blockStartSeg = block * GAP_LEN_SEGS;
-  if (blockStartSeg < GAP_START_SEG) return false;
-  const chance = Math.min(MAX_GAP_CHANCE, BASE_GAP_CHANCE + GAP_RAMP * (blockStartSeg - GAP_START_SEG));
-  const roll = segRand(seed, GAP_SALT_BASE + block);
-  return roll < chance;
-}
-function hazardMotionType(seed, i) {
-  if (i < MOVING_HAZARD_START_SEG) return 'static';
-  const roll = segRand(seed, HAZARD_MOTION_SALT_BASE + i);
-  if (roll < 0.5) return 'static';
-  if (roll < 0.75) return 'lr';
-  return 'updown';
-}
-function hazardAt(track, i, elapsedMs) {
-  if (i < HAZARD_START_SEG) return null;
-  if (gapBlockAt(track.seed, i)) return null;
-  const chance = Math.min(MAX_HAZARD_CHANCE, BASE_HAZARD_CHANCE + HAZARD_RAMP * (i - HAZARD_START_SEG));
-  const roll = segRand(track.seed, i * 4 + 1);
-  if (roll >= chance) return null;
-  const halfWidth = trackHalfWidthAt(i);
-  const center = track.centers[i];
-  const maxW = Math.max(MIN_HAZARD_W, halfWidth * 2 - SAFE_GAP);
-  const span = Math.max(maxW - MIN_HAZARD_W, 0.001);
-  const width = Math.min(maxW, MIN_HAZARD_W + segRand(track.seed, i * 4 + 2) * span);
-  const maxOffset = Math.max(0, halfWidth - width / 2);
-  const phaseSeed = segRand(track.seed, i * 4 + 3);
-  const motion = hazardMotionType(track.seed, i);
-
-  let hazCenter;
-  let lethal = true;
-  let riseProgress = 1;
-  if (motion === 'lr') {
-    const amplitude = maxOffset * HAZARD_OSC_AMPLITUDE_FRAC;
-    const phase = (elapsedMs / HAZARD_OSC_PERIOD_MS) * 2 * Math.PI + phaseSeed * 2 * Math.PI;
-    hazCenter = center + Math.sin(phase) * amplitude;
-  } else if (motion === 'updown') {
-    const cyclePos = ((elapsedMs + phaseSeed * HAZARD_TOGGLE_PERIOD_MS) % HAZARD_TOGGLE_PERIOD_MS) / HAZARD_TOGGLE_PERIOD_MS;
-    const riseEnd = HAZARD_TOGGLE_RISE_FRAC;
-    const holdEnd = riseEnd + HAZARD_TOGGLE_HOLD_FRAC;
-    const fallEnd = holdEnd + HAZARD_TOGGLE_FALL_FRAC;
-    if (cyclePos < riseEnd) {
-      riseProgress = cyclePos / HAZARD_TOGGLE_RISE_FRAC;
-      lethal = false;
-    } else if (cyclePos < holdEnd) {
-      riseProgress = 1;
-      lethal = true;
-    } else if (cyclePos < fallEnd) {
-      riseProgress = 1 - (cyclePos - holdEnd) / HAZARD_TOGGLE_FALL_FRAC;
-      lethal = false;
-    } else {
-      return null;
-    }
-    const offset = (phaseSeed - 0.5) * 2 * maxOffset;
-    hazCenter = center + offset;
-  } else {
-    const offset = (phaseSeed - 0.5) * 2 * maxOffset;
-    hazCenter = center + offset;
-  }
-  return { start: hazCenter - width / 2, end: hazCenter + width / 2, motion, lethal, riseProgress };
-}
-function boostAt(track, i) {
-  if (i < BOOST_START_SEG) return null;
-  if (gapBlockAt(track.seed, i)) return null;
-  const roll = segRand(track.seed, BOOST_SALT_BASE + i);
-  if (roll >= BOOST_CHANCE) return null;
-  const halfWidth = trackHalfWidthAt(i);
-  const center = track.centers[i];
-  const offsetFrac = (segRand(track.seed, BOOST_SALT_BASE + i + 500000) - 0.5) * 2;
-  const pos = center + offsetFrac * Math.max(0, halfWidth - 0.6);
-  return { pos };
-}
-
-let threeLoadPromise = null;
-function loadThree() {
-  if (window.THREE) return Promise.resolve(window.THREE);
-  if (threeLoadPromise) return threeLoadPromise;
-  threeLoadPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'games/slope/three.min.js';
-    script.onload = () => resolve(window.THREE);
-    script.onerror = () => reject(new Error('Failed to load three.min.js'));
-    document.head.appendChild(script);
+function loadScript(src, global) {
+  if (window[global]) return Promise.resolve(window[global]);
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload = () => resolve(window[global]);
+    el.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(el);
   });
-  return threeLoadPromise;
 }
 
-const VISIBLE_SEGS_AHEAD = 55;
-const VISIBLE_SEGS_BEHIND = 2;
-const PLAYER_COLOR = 0x39ff14;
-const OTHER_COLORS = [0xffb000, 0x00e5ff, 0xff4dd2, 0xc792ff, 0xffee58];
-
-const GROUND_COLOR = 0x113355;
-const RAMP_COLOR = 0xffcc33; // ground segment right before a gap, cues "jump coming"
-const HAZARD_COLOR_LETHAL = 0xff3333;
-const HAZARD_EMISSIVE_LETHAL = 0x660000;
-const HAZARD_COLOR_RISING = 0xcc8833; // duller amber while an 'updown' hazard is rising/falling —
-const HAZARD_EMISSIVE_RISING = 0x332200; // not yet/no-longer lethal, should read as visually distinct
-const JUMP_HEIGHT = 2.4; // purely cosmetic arc height over a gap block — server has no Y axis
-const FALL_GRAVITY = 9; // purely cosmetic "fell off the edge" drop speed, units/s^2
-const BOOST_COLOR = 0x00ffcc;
-const BOOST_POOL_SIZE = 8;
-
-// Purely cosmetic "downhill" look — the server has no Y axis at all (collision stays lateral-
-// only, see slope.js), so this is a render-only illusion: every ground segment/ball is drawn at
-// a Y that DECREASES the further ahead it is of the local viewer's own current (fractional)
-// segment, recomputed fresh every frame relative to that viewer rather than as an ever-
-// accumulating absolute value — so it reads as a continuous slope falling away into the fog
-// without ever drifting out of a sane numeric range over a long race.
-const SLOPE_DROP_PER_SEG = 0.68; // 0.22 read as flat, 0.55 was close but asked to go a bit steeper
-function groundYAt(distance, refSegFloat) {
-  return -(distance / SEG_LEN - refSegFloat) * SLOPE_DROP_PER_SEG;
+function readBest() {
+  try { return Number(localStorage.getItem(BEST_KEY)) || 0; } catch { return 0; }
+}
+function writeBest(v) {
+  try { localStorage.setItem(BEST_KEY, String(v)); } catch { /* private mode */ }
 }
 
-// Is segment i the ground segment immediately before the start of a gap block? (Used only for
-// the ramp color cue — not gameplay.)
-function isRampSeg(seed, i) {
-  return !gapBlockAt(seed, i) && gapBlockAt(seed, i + 1);
+// Tile: dark glassy fill, bright border, faint inner cross — tinted per piece by material colour.
+function tileTexture(THREE) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 128, 128);
+  grad.addColorStop(0, '#1d1d1d');
+  grad.addColorStop(1, '#0c0c0c');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = 'rgba(255,255,255,0.25)';
+  g.lineWidth = 2;
+  g.beginPath(); g.moveTo(64, 0); g.lineTo(64, 128); g.moveTo(0, 64); g.lineTo(128, 64); g.stroke();
+  g.shadowColor = '#fff';
+  g.shadowBlur = 10;
+  g.strokeStyle = '#fff';
+  g.lineWidth = 6;
+  g.strokeRect(3, 3, 122, 122);
+  const t = new THREE.CanvasTexture(c);
+  t.anisotropy = 4;
+  return t;
 }
-// World-distance span of the gap block segment i belongs to, or null if i isn't a gap segment.
-function gapSpanAt(seed, i) {
-  if (!gapBlockAt(seed, i)) return null;
-  const block = Math.floor(i / GAP_LEN_SEGS);
-  const start = block * GAP_LEN_SEGS * SEG_LEN;
-  return { start, end: start + GAP_LEN_SEGS * SEG_LEN };
+
+function ballTexture(THREE) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#0a1a0a';
+  g.fillRect(0, 0, 256, 128);
+  g.strokeStyle = '#39ff14';
+  g.lineWidth = 7;
+  for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(i * 64 + 8, 0); g.lineTo(i * 64 + 40, 128); g.stroke(); }
+  g.fillStyle = '#b6ff9c';
+  g.fillRect(0, 58, 256, 12);
+  return new THREE.CanvasTexture(c);
+}
+
+function sunTexture(THREE) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#ffe66b');
+  grad.addColorStop(0.5, '#ff5fa2');
+  grad.addColorStop(1, '#8a2be2');
+  g.fillStyle = grad;
+  g.beginPath(); g.arc(128, 128, 120, 0, Math.PI * 2); g.fill();
+  g.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 7; i++) g.fillRect(0, 140 + i * 16, 256, 3 + i * 1.6);
+  return new THREE.CanvasTexture(c);
+}
+
+function nameSprite(THREE, text, color) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 48;
+  const g = c.getContext('2d');
+  g.font = 'bold 26px monospace';
+  g.textAlign = 'center';
+  g.fillStyle = 'rgba(0,0,0,0.55)';
+  g.fillRect(0, 6, 256, 36);
+  g.fillStyle = color;
+  g.fillText(text.slice(0, 16), 128, 34);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  sp.scale.set(3.2, 0.6, 1);
+  return sp;
+}
+
+// Cheap deterministic value noise for the mountains.
+function hash2(x, z) {
+  const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+function noise2(x, z) {
+  const xi = Math.floor(x); const zi = Math.floor(z);
+  const xf = x - xi; const zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf); const v = zf * zf * (3 - 2 * zf);
+  const a = hash2(xi, zi); const b = hash2(xi + 1, zi); const c = hash2(xi, zi + 1); const d = hash2(xi + 1, zi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
 export function mount(container, api) {
-  const serverClock = makeServerClock();
-  let lastLbKey = null;
-  let sfxState = null;
-  let lastCountdownLabel = '';
-  let view = null; // latest {phase, phaseEndsAt, seed, players, leaderboard}
-  let prevView = null;
-  let viewReceivedAt = 0;
-  let track = { seed: null, centers: [0] };
+  const clock = makeServerClock();
+  let view = null;
   let destroyed = false;
-  let heldDir = 0; // -1, 0, 1 — last sent steer direction (edge-triggered)
+  let THREE = null; let Sim = null;
+  let best = readBest();
 
+  // --- DOM ---
   const root = document.createElement('div');
-  root.style.position = 'relative';
-  root.style.width = '100%';
-  root.style.height = '600px';
-  root.style.background = '#000';
-  root.style.overflow = 'hidden';
+  root.style.cssText = 'position:relative;width:100%;height:min(72vh,640px);min-height:420px;background:#05010f;overflow:hidden;border-radius:6px;touch-action:none;user-select:none';
   container.appendChild(root);
-
-  const canvasHost = document.createElement('div');
-  canvasHost.style.width = '100%';
-  canvasHost.style.height = '100%';
-  root.appendChild(canvasHost);
-
-  const hud = document.createElement('div');
-  hud.style.position = 'absolute';
-  hud.style.top = '8px';
-  hud.style.left = '8px';
-  hud.style.color = '#39ff14';
-  hud.style.fontFamily = 'monospace';
-  hud.style.fontSize = '14px';
-  hud.style.textShadow = '0 0 4px #000';
-  hud.style.pointerEvents = 'none';
-  root.appendChild(hud);
-
-  const leaderboardEl = document.createElement('div');
-  leaderboardEl.style.position = 'absolute';
-  leaderboardEl.style.top = '8px';
-  leaderboardEl.style.right = '8px';
-  leaderboardEl.style.color = '#ffb000';
-  leaderboardEl.style.fontFamily = 'monospace';
-  leaderboardEl.style.fontSize = '13px';
-  leaderboardEl.style.textShadow = '0 0 4px #000';
-  leaderboardEl.style.pointerEvents = 'none';
-  leaderboardEl.style.textAlign = 'right';
-  root.appendChild(leaderboardEl);
-
-  const centerMsg = document.createElement('div');
-  centerMsg.style.position = 'absolute';
-  centerMsg.style.top = '50%';
-  centerMsg.style.left = '50%';
-  centerMsg.style.transform = 'translate(-50%, -50%)';
-  centerMsg.style.color = '#fff';
-  centerMsg.style.fontFamily = 'monospace';
-  centerMsg.style.fontSize = '32px';
-  centerMsg.style.textShadow = '0 0 8px #000';
-  centerMsg.style.pointerEvents = 'none';
-  centerMsg.style.textAlign = 'center';
-  centerMsg.style.whiteSpace = 'pre-line';
-  root.appendChild(centerMsg);
-
-  const hint = document.createElement('div');
-  hint.style.position = 'absolute';
-  hint.style.bottom = '8px';
-  hint.style.left = '8px';
-  hint.style.color = '#888';
-  hint.style.fontFamily = 'monospace';
-  hint.style.fontSize = '12px';
-  hint.textContent = 'STEER: ARROW KEYS or A/D';
-  root.appendChild(hint);
-
+  const host = document.createElement('div');
+  host.style.cssText = 'position:absolute;inset:0';
+  root.appendChild(host);
+  const mk = (css) => { const d = document.createElement('div'); d.style.cssText = `position:absolute;pointer-events:none;font-family:monospace;${css}`; root.appendChild(d); return d; };
+  const scoreEl = mk('top:10px;left:50%;transform:translateX(-50%);font-size:34px;font-weight:bold;color:#fff;text-shadow:0 0 12px #39ff14,0 0 2px #000;text-align:center');
+  const subEl = mk('top:52px;left:50%;transform:translateX(-50%);font-size:13px;color:#b8ffb0;text-shadow:0 0 4px #000;white-space:nowrap');
+  const boardEl = mk('top:10px;right:12px;font-size:12.5px;color:#ffd166;text-align:right;text-shadow:0 0 4px #000;line-height:1.45');
+  const liveEl = mk('top:10px;left:12px;font-size:12.5px;color:#9ef;text-shadow:0 0 4px #000;line-height:1.45');
+  const centerEl = mk('top:42%;left:50%;transform:translate(-50%,-50%);font-size:44px;font-weight:bold;color:#fff;text-align:center;white-space:pre-line;text-shadow:0 0 18px #ff2fb0,0 0 3px #000');
+  const hintEl = mk('bottom:10px;left:50%;transform:translateX(-50%);font-size:12px;color:#aaa;text-shadow:0 0 3px #000;white-space:nowrap');
+  hintEl.textContent = '← → / A D to steer · tap left/right side on touch';
+  const botBar = createBotBar(api);
+  botBar.el.style.cssText += ';position:absolute;bottom:30px;left:10px;margin:0;pointer-events:auto;font-family:monospace;font-size:12px';
+  root.appendChild(botBar.el);
   const leaveBtn = document.createElement('button');
-  leaveBtn.textContent = 'LEAVE ROOM';
-  leaveBtn.style.position = 'absolute';
-  leaveBtn.style.bottom = '8px';
-  leaveBtn.style.right = '8px';
+  leaveBtn.textContent = 'LEAVE';
+  leaveBtn.style.cssText = 'position:absolute;bottom:8px;right:10px';
   leaveBtn.addEventListener('click', () => api.leaveRoom());
   root.appendChild(leaveBtn);
 
-  function nicknameFor(clientId) {
-    if (!view) return 'someone';
-    const p = view.players.find((pl) => pl.clientId === clientId);
-    return p ? p.nickname : 'someone';
+  // --- Input ---
+  const keys = { left: false, right: false };
+  const touch = { left: false, right: false };
+  function onKey(e, down) {
+    const k = e.key.toLowerCase();
+    if (k === 'arrowleft' || k === 'a') keys.left = down;
+    else if (k === 'arrowright' || k === 'd') keys.right = down;
+    else return;
+    if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
+    e.preventDefault();
   }
-
-  function renderHud() {
-    if (!view) {
-      hud.textContent = 'Loading...';
-      return;
-    }
-    const me = view.players.find((p) => p.clientId === api.getClientId());
-    const dist = me ? Math.round(me.alive ? me.distance : me.finalDistance || 0) : 0;
-    const boosts = me ? me.boostCount || 0 : 0;
-    hud.textContent = `DISTANCE: ${dist}${boosts ? `  BOOSTS: ${boosts}` : ''}`;
-    const sfxKey = { boosts, alive: me ? me.alive : null, phase: view.phase };
-    if (sfxState) {
-      if (sfxKey.boosts > sfxState.boosts) {
-        sfx.play('eat');
-        fovKick = 10;
-        flashEl(root, 'rgba(0, 229, 255, 0.22)', 220);
-      }
-      if (sfxState.alive && sfxKey.alive === false && view.phase === 'racing') sfx.play('crash');
-      if (sfxState.phase === 'racing' && view.phase === 'results') sfx.play('point');
-    }
-    sfxState = sfxKey;
-
-    if (view.phase === 'waiting') {
-      centerMsg.textContent = 'WAITING FOR RACERS...';
-    } else if (view.phase === 'countdown') {
-      const remaining = Math.max(0, Math.ceil((view.phaseEndsAt - serverClock.now()) / 1000));
-      centerMsg.textContent = remaining > 0 ? String(remaining) : 'GO!';
-      if (centerMsg.textContent !== lastCountdownLabel) {
-        sfx.play(remaining > 0 ? 'beep' : 'go');
-        if (!REDUCED) {
-          centerMsg.animate([{ scale: 0.3, opacity: 0 }, { scale: 1.25, opacity: 1, offset: 0.6 }, { scale: 1 }], { duration: 360, easing: 'ease-out' });
-        }
-      }
-      lastCountdownLabel = centerMsg.textContent;
-    } else if (view.phase === 'racing') {
-      centerMsg.textContent = me && !me.alive ? `YOU DIED — distance: ${Math.round(me.finalDistance || 0)}` : '';
-    } else if (view.phase === 'results') {
-      const winner = view.leaderboard[0];
-      centerMsg.textContent = winner ? `ROUND OVER\nBest: ${winner.nickname} (${Math.round(winner.distance)})` : 'ROUND OVER';
-    }
-
-    // Only rebuild the leaderboard DOM when its contents actually change (this runs every frame).
-    const lbKey = JSON.stringify((view.leaderboard || []).map((e) => [e.alive, e.nickname, Math.round(e.distance)]));
-    if (lbKey === lastLbKey) return;
-    lastLbKey = lbKey;
-    leaderboardEl.innerHTML = '';
-    const title = document.createElement('div');
-    title.textContent = 'LEADERBOARD';
-    title.style.marginBottom = '4px';
-    leaderboardEl.appendChild(title);
-    for (const entry of view.leaderboard || []) {
-      const row = document.createElement('div');
-      row.textContent = `${entry.alive ? '●' : '×'} ${entry.nickname}: ${Math.round(entry.distance)}`;
-      leaderboardEl.appendChild(row);
-    }
+  const kd = (e) => onKey(e, true);
+  const ku = (e) => onKey(e, false);
+  window.addEventListener('keydown', kd);
+  window.addEventListener('keyup', ku);
+  function onPointer(e, down) {
+    if (e.target !== renderer?.domElement) return;
+    const r = root.getBoundingClientRect();
+    const left = e.clientX - r.left < r.width / 2;
+    if (down) { touch.left = left; touch.right = !left; } else { touch.left = touch.right = false; }
   }
+  const pd = (e) => onPointer(e, true);
+  const pu = (e) => onPointer(e, false);
+  root.addEventListener('pointerdown', pd);
+  window.addEventListener('pointerup', pu);
+  window.addEventListener('pointercancel', pu);
+  const steerInput = () => ((keys.right || touch.right) ? 1 : 0) - ((keys.left || touch.left) ? 1 : 0);
 
-  // --- input: edge-triggered, only send when the held direction actually changes ---
-  function currentDirFromKeys(keys) {
-    const left = keys.has('ArrowLeft') || keys.has('a') || keys.has('A');
-    const right = keys.has('ArrowRight') || keys.has('d') || keys.has('D');
-    if (left && !right) return -1;
-    if (right && !left) return 1;
-    return 0;
-  }
-  const heldKeys = new Set();
-  function updateSteer() {
-    const dir = currentDirFromKeys(heldKeys);
-    if (dir !== heldDir) {
-      heldDir = dir;
-      api.sendAction({ kind: 'steer', dir });
-    }
-  }
-  function onKeyDown(ev) {
-    if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
-    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight' || ev.key === 'ArrowUp' || ev.key === 'ArrowDown' || ev.key === ' ') ev.preventDefault();
-    heldKeys.add(ev.key);
-    updateSteer();
-  }
-  function onKeyUp(ev) {
-    heldKeys.delete(ev.key);
-    updateSteer();
-  }
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
+  // --- Scene state ---
+  let renderer; let scene; let camera; let rafId = 0;
+  let tileMat; let ballMesh; let sun; let stars; let glow;
+  let track = null; let trackSeed = null; let roundId = null;
+  const built = new Map(); // piece index -> { group, obs: [{ mesh, p, o }] }
+  const terrain = new Map(); // chunk index -> group
+  const ghosts = new Map(); // clientId -> { mesh, label, cur, tgt }
+  let ball = null; let alive = false;
+  let acc = 0; let lastFrame = 0; let lastSend = 0;
+  let camPos = null; let shake = 0; let deathAt = 0;
+  let lastCountdown = null; let newBestThisRun = false;
+  const obsMat = {};
+  const autoMem = { steer: 0, hold: 0 };
 
-  // --- Three.js scene, built once THREE is loaded ---
-  let scene, camera, renderer, rafId;
-  const groundPool = [];
-  const hazardPool = [];
-  const boostPool = [];
-  const ballMeshes = new Map(); // clientId -> mesh
-  // --- juice: speed lines overlay, local-ball trail, death debris, camera shake/FOV kick ---
-  const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const trailPool = []; // fading ghost spheres behind the local ball
-  const trailHist = [];
-  const debris = []; // { mesh, vx, vy, vz, age }
-  let shake = 0;
-  let fovKick = 0;
-  let speedNorm = 0;
-  let lastFrameAt = performance.now();
-  const deadSeen = new Set();
-  const streaks = [];
-  const fxCanvas = document.createElement('canvas');
-  fxCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
-  const fxCtx = fxCanvas.getContext('2d');
-  root.insertBefore(fxCanvas, canvasHost.nextSibling);
-  const deathAnim = new Map(); // clientId -> { startedAt } — cosmetic edge-fall timing, see below
+  const pieceColor = (p) => {
+    const d = Sim.difficulty(p.s0);
+    const c = new THREE.Color();
+    c.setHSL((0.33 - d * 0.55 + 1) % 1, 1, 0.55); // green -> cyan -> blue -> magenta -> red
+    return c;
+  };
 
-  function ensurePoolSize(pool, size, factory) {
-    while (pool.length < size) pool.push(factory());
-    for (let i = size; i < pool.length; i++) pool[i].visible = false;
-  }
-
-  function initScene(THREE) {
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x02040a);
-    scene.fog = new THREE.Fog(0x02040a, 20, 90);
-
-    camera = new THREE.PerspectiveCamera(70, canvasHost.clientWidth / Math.max(1, canvasHost.clientHeight), 0.1, 200);
-
+  function initScene() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    renderer.setSize(canvasHost.clientWidth, canvasHost.clientHeight || 600);
-    canvasHost.appendChild(renderer.domElement);
-
-    const ambient = new THREE.AmbientLight(0x8899ff, 0.7);
-    scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-    dir.position.set(5, 12, 8);
+    host.appendChild(renderer.domElement);
+    renderer.domElement.style.display = 'block';
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color('#07021a');
+    scene.fog = new THREE.Fog('#1a0433', 70, 430);
+    camera = new THREE.PerspectiveCamera(70, 1, 0.1, 1500);
+    scene.add(new THREE.HemisphereLight('#b7a4ff', '#200030', 0.9));
+    const dir = new THREE.DirectionalLight('#ffffff', 0.8);
+    dir.position.set(-3, 10, 4);
     scene.add(dir);
+    tileMat = tileTexture(THREE);
+    obsMat.body = new THREE.MeshBasicMaterial({ color: '#ff1e3c' });
+    obsMat.edge = new THREE.LineBasicMaterial({ color: '#ffd0d6' });
 
-    // Each ground plank is tilted by the track's constant downhill angle (not just translated to
-    // a different height) so consecutive planks' edges line up into one continuous ramp instead
-    // of a staircase of flat plateaus at different Y levels — SLOPE_DROP_PER_SEG is a fixed rate
-    // (world-Y drop per SEG_LEN of world-Z), so the whole track has one uniform tilt angle and a
-    // single rotation works for every plank. See groundYAt()'s comment for the drop-rate math
-    // this angle is derived from; keep both in sync if that constant ever changes.
-    const GROUND_TILT = Math.atan2(SLOPE_DROP_PER_SEG, SEG_LEN);
-    for (let i = 0; i < VISIBLE_SEGS_AHEAD + VISIBLE_SEGS_BEHIND; i++) {
-      const geo = new THREE.PlaneGeometry(1, SEG_LEN * 1.02);
-      const mat = new THREE.MeshLambertMaterial({ color: GROUND_COLOR });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.rotation.x = -Math.PI / 2 - GROUND_TILT;
-      scene.add(mesh);
-      groundPool.push(mesh);
+    const bt = ballTexture(THREE);
+    ballMesh = new THREE.Mesh(new THREE.SphereGeometry(Sim.R, 32, 18), new THREE.MeshStandardMaterial({ map: bt, emissive: '#1b5e12', emissiveMap: bt, metalness: 0.3, roughness: 0.35 }));
+    scene.add(ballMesh);
+    glow = new THREE.PointLight('#39ff14', 1.2, 9);
+    scene.add(glow);
+
+    sun = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.MeshBasicMaterial({ map: sunTexture(THREE), transparent: true, fog: false, depthWrite: false }));
+    scene.add(sun);
+    const starGeo = new THREE.BufferGeometry();
+    const pts = [];
+    for (let i = 0; i < 900; i++) {
+      const th = Math.random() * Math.PI * 2; const ph = Math.random() * Math.PI * 0.45;
+      const r = 900;
+      pts.push(Math.cos(th) * Math.cos(ph) * r, Math.sin(ph) * r + 40, Math.sin(th) * Math.cos(ph) * r);
     }
-    for (let i = 0; i < 20; i++) {
-      const geo = new THREE.BoxGeometry(1, 1.2, SEG_LEN * 0.9);
-      const mat = new THREE.MeshLambertMaterial({ color: HAZARD_COLOR_LETHAL, emissive: HAZARD_EMISSIVE_LETHAL });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.visible = false;
-      scene.add(mesh);
-      hazardPool.push(mesh);
-    }
-    for (let i = 0; i < BOOST_POOL_SIZE; i++) {
-      const geo = new THREE.TorusGeometry(0.55, 0.14, 10, 20);
-      const mat = new THREE.MeshStandardMaterial({ color: BOOST_COLOR, emissive: BOOST_COLOR, emissiveIntensity: 0.6 });
-      const mesh = new THREE.Mesh(geo, mat);
-      // TorusGeometry's default orientation already lies in the XY plane with its hole facing
-      // +Z — exactly "facing the direction of travel," so the ball runs straight through the
-      // ring's hole with no extra rotation needed.
-      mesh.visible = false;
-      scene.add(mesh);
-      boostPool.push(mesh);
-    }
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: '#ffffff', size: 1.6, sizeAttenuation: false, fog: false }));
+    scene.add(stars);
+    resize();
   }
 
-  function ballMeshFor(THREE, clientId, isLocal) {
-    let mesh = ballMeshes.get(clientId);
-    if (!mesh) {
-      const color = isLocal ? PLAYER_COLOR : OTHER_COLORS[ballMeshes.size % OTHER_COLORS.length];
-      const geo = new THREE.SphereGeometry(0.45, 16, 12);
-      const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4 });
-      mesh = new THREE.Mesh(geo, mat);
-      scene.add(mesh);
-      ballMeshes.set(clientId, mesh);
-    }
-    return mesh;
+  function resize() {
+    if (!renderer) return;
+    const w = root.clientWidth; const h = root.clientHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
   }
+  const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null;
+  if (ro) ro.observe(root);
 
-  // Interpolated (distance, lateralPos) for a player at the current render time, blending
-  // between the previous and most recent server broadcasts — avoids the raw-broadcast jitter
-  // this hub already hit (and fixed the same way) in slither.js.
-  function interpolated(clientId) {
-    const cur = view && view.players.find((p) => p.clientId === clientId);
-    if (!cur) return null;
-    if (!cur.alive) return { distance: cur.finalDistance != null ? cur.finalDistance : cur.distance, lateralPos: cur.lateralPos };
-    const prev = prevView && prevView.players.find((p) => p.clientId === clientId);
-    if (!prev || !prev.alive) return { distance: cur.distance, lateralPos: cur.lateralPos };
-    const t = Math.min(1.5, Math.max(0, (performance.now() - viewReceivedAt) / TICK_MS));
-    return {
-      distance: prev.distance + (cur.distance - prev.distance) * t,
-      lateralPos: prev.lateralPos + (cur.lateralPos - prev.lateralPos) * t,
-    };
+  // --- Track meshes ---
+  function surf(p, s, xr) {
+    return [Sim.centerAt(p, s) + xr * Math.cos(p.bank), Sim.heightAt(p, s, xr), -s];
   }
-
-  function spawnDebris(THREE, pos, color) {
-    const n = REDUCED ? 6 : 26;
-    for (let i = 0; i < n; i++) {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.16, 0.16, 0.16),
-        new THREE.MeshBasicMaterial({ color, transparent: true }),
-      );
-      mesh.position.copy(pos);
-      scene.add(mesh);
-      const a = Math.random() * Math.PI * 2;
-      const v = 3 + Math.random() * 6;
-      debris.push({ mesh, vx: Math.cos(a) * v, vy: 3 + Math.random() * 6, vz: Math.sin(a) * v - 4, age: 0 });
-    }
-  }
-
-  function updateJuice(THREE, me, dt) {
-    // Speed: distance gained per server tick, normalised between base speed (0.6) and the
-    // boosted ceiling (4.2) — see server/games/slope.js.
-    const pm = me && prevView && prevView.players.find((q) => q.clientId === me.clientId);
-    const perTick = me && me.alive && pm && pm.alive ? me.distance - pm.distance : 0;
-    const target = Math.min(1, Math.max(0, (perTick - 0.6) / 3.6));
-    speedNorm += (target - speedNorm) * Math.min(1, dt * 3);
-
-    for (let i = debris.length - 1; i >= 0; i--) {
-      const d = debris[i];
-      d.age += dt;
-      d.vy -= 18 * dt;
-      d.mesh.position.x += d.vx * dt;
-      d.mesh.position.y += d.vy * dt;
-      d.mesh.position.z += d.vz * dt;
-      d.mesh.rotation.x += dt * 8;
-      d.mesh.rotation.y += dt * 6;
-      d.mesh.material.opacity = Math.max(0, 1 - d.age / 1.4);
-      if (d.age > 1.4) {
-        scene.remove(d.mesh);
-        d.mesh.geometry.dispose();
-        d.mesh.material.dispose();
-        debris.splice(i, 1);
+  function buildPiece(i) {
+    const p = track.pieces[i];
+    const group = new THREE.Group();
+    const entry = { group, obs: [] };
+    if (!p.gap) {
+      const nS = Math.max(1, Math.round(p.len / 2.6));
+      const nX = Math.max(1, Math.round(p.w / 2.6));
+      const pos = []; const uv = []; const idx = [];
+      let v = 0;
+      for (let a = 0; a < nS; a++) {
+        for (let b = 0; b < nX; b++) {
+          const s0 = p.s0 + (a / nS) * p.len; const s1 = p.s0 + ((a + 1) / nS) * p.len;
+          const x0 = -p.w / 2 + (b / nX) * p.w; const x1 = -p.w / 2 + ((b + 1) / nX) * p.w;
+          const sm = (s0 + s1) / 2; const xm = (x0 + x1) / 2;
+          if (p.holes.some((h) => sm >= h.s0 && sm <= h.s1 && xm >= h.xr0 && xm <= h.xr1)) continue;
+          pos.push(...surf(p, s0, x0), ...surf(p, s0, x1), ...surf(p, s1, x1), ...surf(p, s1, x0));
+          uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+          idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
+          v += 4;
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      const col = pieceColor(p);
+      const top = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: tileMat, color: col, side: THREE.DoubleSide }));
+      group.add(top);
+      // Glowing rails along both edges + a dark skirt underneath for thickness.
+      const rail = [];
+      const skirt = [];
+      const n = Math.max(2, Math.round(p.len / 3));
+      for (const side of [-1, 1]) {
+        const line = [];
+        for (let k = 0; k <= n; k++) {
+          const s = p.s0 + (k / n) * p.len;
+          const [x, y, z] = surf(p, s, (side * p.w) / 2);
+          line.push(new THREE.Vector3(x, y + 0.02, z));
+          if (k < n) {
+            const s2 = p.s0 + ((k + 1) / n) * p.len;
+            const [x2, y2, z2] = surf(p, s2, (side * p.w) / 2);
+            skirt.push(x, y, z, x2, y2, z2, x2, y2 - 1.2, z2, x, y, z, x2, y2 - 1.2, z2, x, y - 1.2, z);
+          }
+        }
+        rail.push(line);
+      }
+      const railMat = new THREE.LineBasicMaterial({ color: col.clone().lerp(new THREE.Color('#ffffff'), 0.45) });
+      for (const line of rail) group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(line), railMat));
+      const sg = new THREE.BufferGeometry();
+      sg.setAttribute('position', new THREE.Float32BufferAttribute(skirt, 3));
+      group.add(new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(0.25), side: THREE.DoubleSide })));
+      for (const o of p.obs) {
+        const geo = new THREE.BoxGeometry(o.hw * 2, o.h, o.hl * 2);
+        const mesh = new THREE.Mesh(geo, obsMat.body);
+        mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), obsMat.edge));
+        group.add(mesh);
+        entry.obs.push({ mesh, p, o });
       }
     }
-    shake *= Math.pow(0.004, dt);
-    fovKick *= Math.pow(0.05, dt);
-
-    // Screen-space speed streaks: rush outward from the vanishing point, more and brighter the
-    // faster you go (boost pickups spike this via fovKick).
-    const w = root.clientWidth;
-    const h = root.clientHeight;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    if (fxCanvas.width !== Math.round(w * dpr) || fxCanvas.height !== Math.round(h * dpr)) {
-      fxCanvas.width = Math.round(w * dpr);
-      fxCanvas.height = Math.round(h * dpr);
-      fxCanvas.style.width = `${w}px`;
-      fxCanvas.style.height = `${h}px`;
-    }
-    fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    fxCtx.clearRect(0, 0, w, h);
-    if (REDUCED || view.phase !== 'racing' || !me || !me.alive) {
-      streaks.length = 0;
-      return;
-    }
-    const intensity = Math.min(1, speedNorm + fovKick / 10);
-    const want = Math.round(6 + intensity * 50);
-    while (streaks.length < want) {
-      streaks.push({ a: Math.random() * Math.PI * 2, r: 40 + Math.random() * 200, v: 0.6 + Math.random() * 0.8 });
-    }
-    streaks.length = Math.min(streaks.length, want);
-    const cx = w / 2;
-    const cy = h * 0.42;
-    const maxR = Math.hypot(w, h) / 2;
-    fxCtx.lineCap = 'round';
-    for (const st of streaks) {
-      st.r += dt * st.v * (500 + 1600 * intensity);
-      if (st.r > maxR) {
-        st.r = 40 + Math.random() * 80;
-        st.a = Math.random() * Math.PI * 2;
-      }
-      const len = 20 + 90 * intensity * (st.r / maxR);
-      const x0 = cx + Math.cos(st.a) * st.r;
-      const y0 = cy + Math.sin(st.a) * st.r;
-      fxCtx.strokeStyle = `rgba(160, 255, 140, ${(0.08 + 0.35 * intensity) * (st.r / maxR)})`;
-      fxCtx.lineWidth = 1 + 1.5 * intensity;
-      fxCtx.beginPath();
-      fxCtx.moveTo(x0, y0);
-      fxCtx.lineTo(x0 + Math.cos(st.a) * len, y0 + Math.sin(st.a) * len);
-      fxCtx.stroke();
-    }
+    scene.add(group);
+    built.set(i, entry);
   }
-
-  function updateTrail(THREE, localMesh) {
-    if (!trailPool.length) {
-      for (let i = 0; i < 10; i++) {
-        const m = new THREE.Mesh(
-          new THREE.SphereGeometry(0.45, 10, 8),
-          new THREE.MeshBasicMaterial({ color: PLAYER_COLOR, transparent: true, depthWrite: false }),
-        );
-        m.visible = false;
-        scene.add(m);
-        trailPool.push(m);
-      }
-    }
-    const alive = localMesh && localMesh.visible && !localMesh.material.transparent;
-    if (alive && !REDUCED) trailHist.unshift(localMesh.position.clone());
-    else trailHist.length = 0;
-    trailHist.length = Math.min(trailHist.length, trailPool.length * 2);
-    trailPool.forEach((m, i) => {
-      const p = trailHist[(i + 1) * 2];
-      m.visible = !!p;
-      if (!p) return;
-      m.position.copy(p);
-      const k = 1 - i / trailPool.length;
-      m.scale.setScalar(0.3 + 0.6 * k);
-      m.material.opacity = 0.35 * k * (0.4 + speedNorm);
+  function disposeGroup(g) {
+    g.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material && o.material !== obsMat.body && o.material !== obsMat.edge) o.material.dispose();
     });
+    scene.remove(g);
   }
 
-  function renderFrame() {
-    if (destroyed) return;
-    rafId = requestAnimationFrame(renderFrame);
-    if (!scene || !view) return;
-    const frameNow = performance.now();
-    const dt = Math.min(0.05, (frameNow - lastFrameAt) / 1000);
-    lastFrameAt = frameNow;
-
-    if (track.seed !== view.seed) {
-      track = { seed: view.seed, centers: [0] };
-    }
-
-    const me = view.players.find((p) => p.clientId === api.getClientId());
-    const myPos = me ? interpolated(me.clientId) : null;
-    const camDistance = myPos ? myPos.distance : 0;
-    const camLateral = myPos ? myPos.lateralPos : 0;
-
-    const startSeg = Math.max(0, Math.floor(camDistance / SEG_LEN) - VISIBLE_SEGS_BEHIND);
-    ensureTrack(track, startSeg + VISIBLE_SEGS_AHEAD + VISIBLE_SEGS_BEHIND + 2);
-
-    // Shared reference frame for the downhill illusion and moving hazards this frame — see
-    // groundYAt()'s comment and slope.js's hazard-motion comment for why these are computed
-    // fresh every frame relative to the LOCAL viewer rather than stored/accumulated.
-    const refSegFloat = camDistance / SEG_LEN;
-    const elapsedMs = view.raceStartedAt ? Math.max(0, serverClock.now() - view.raceStartedAt) : 0;
-
-    let hazardIdx = 0;
-    let boostIdx = 0;
-    for (let n = 0; n < groundPool.length; n++) {
-      const segIndex = startSeg + n;
-      const mesh = groundPool[n];
-      const center = track.centers[segIndex];
-      const halfWidth = trackHalfWidthAt(segIndex);
-      const segCenterDist = segIndex * SEG_LEN + SEG_LEN / 2;
-      const groundY = groundYAt(segCenterDist, refSegFloat);
-
-      // A gap segment has no ground at all — the ball glides over it (cosmetic Y arc below).
-      // Going off the SIDE over a gap still kills you the same as anywhere else; this only
-      // removes the floor visual, no new death condition.
-      if (gapBlockAt(track.seed, segIndex)) {
-        mesh.visible = false;
-        continue;
-      }
-      mesh.visible = true;
-      mesh.position.set(center, groundY, -segCenterDist);
-      mesh.scale.x = halfWidth * 2;
-      mesh.material.color.setHex(isRampSeg(track.seed, segIndex) ? RAMP_COLOR : GROUND_COLOR);
-
-      const haz = hazardAt(track, segIndex, elapsedMs);
-      if (haz && hazardIdx < hazardPool.length) {
-        const hMesh = hazardPool[hazardIdx++];
-        hMesh.visible = true;
-        // riseProgress < 1 only for an 'updown' hazard mid-rise/fall (static/lr are always 1) —
-        // scale its height by that and re-center so its BASE stays anchored at groundY while it
-        // visibly grows up out of the track / sinks back into it, instead of a hard on/off blink.
-        // Also tints it a duller amber while non-lethal so "still rising, not dangerous yet" and
-        // "fully up, lethal" are visually distinct, not just a size difference.
-        hMesh.scale.x = haz.end - haz.start;
-        hMesh.scale.y = haz.riseProgress;
-        hMesh.position.set((haz.start + haz.end) / 2, groundY + 0.6 * haz.riseProgress, -segCenterDist);
-        hMesh.material.color.setHex(haz.lethal ? HAZARD_COLOR_LETHAL : HAZARD_COLOR_RISING);
-        hMesh.material.emissive.setHex(haz.lethal ? HAZARD_EMISSIVE_LETHAL : HAZARD_EMISSIVE_RISING);
-      }
-
-      const boost = boostAt(track, segIndex);
-      if (boost && boostIdx < boostPool.length) {
-        const bMesh = boostPool[boostIdx++];
-        bMesh.visible = true;
-        bMesh.position.set(boost.pos, groundY + 0.9, -segCenterDist);
-        bMesh.rotation.z = performance.now() / 400; // slow spin, purely decorative
+  // Mountains: chunks along the track, a valley around it, falling away with the track height.
+  const CHUNK = 120;
+  function buildTerrain(ci) {
+    const s0 = ci * CHUNK;
+    const nx = 48; const nz = 12;
+    const W = 700;
+    const pos = [];
+    const idx = [];
+    for (let j = 0; j <= nz; j++) {
+      const s = s0 + (j / nz) * CHUNK;
+      Sim.ensure(track, s);
+      const p = Sim.pieceAt(track, s);
+      const base = Sim.heightAt(p, Math.min(s, p.s1), 0) - 34;
+      const cx = Sim.centerAt(p, Math.min(s, p.s1));
+      for (let i = 0; i <= nx; i++) {
+        const x = cx - W / 2 + (i / nx) * W;
+        const off = Math.abs(x - cx);
+        const valley = Math.max(0, (off - 55) / 120);
+        const h = valley * valley * 70 * (0.45 + noise2(x * 0.02, s * 0.02) * 0.9) + noise2(x * 0.08, s * 0.08) * 6 * valley;
+        pos.push(x, base + h, -s);
       }
     }
-    for (let i = hazardIdx; i < hazardPool.length; i++) hazardPool[i].visible = false;
-    for (let i = boostIdx; i < boostPool.length; i++) boostPool[i].visible = false;
+    for (let j = 0; j < nz; j++) {
+      for (let i = 0; i < nx; i++) {
+        const a = j * (nx + 1) + i; const b = a + 1; const c = a + nx + 1; const d = c + 1;
+        idx.push(a, c, b, b, c, d);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: '#12032b' })));
+    group.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: '#ff2fd0', wireframe: true, transparent: true, opacity: 0.55 })));
+    scene.add(group);
+    terrain.set(ci, group);
+  }
 
-    const seenIds = new Set();
+  function syncWorld(s) {
+    Sim.ensure(track, s + 420);
+    const ps = track.pieces;
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
+      const want = p.s1 > s - 40 && p.s0 < s + 420;
+      if (want && !built.has(i)) buildPiece(i);
+      else if (!want && built.has(i)) { disposeGroup(built.get(i).group); built.delete(i); }
+    }
+    const c0 = Math.floor((s - 60) / CHUNK); const c1 = Math.floor((s + 460) / CHUNK);
+    for (let c = c0; c <= c1; c++) if (!terrain.has(c) && c >= 0) buildTerrain(c);
+    for (const [c, g] of terrain) if (c < c0 || c > c1) { disposeGroup(g); terrain.delete(c); }
+  }
+
+  function resetWorld(seed) {
+    for (const e of built.values()) disposeGroup(e.group);
+    built.clear();
+    for (const g of terrain.values()) disposeGroup(g);
+    terrain.clear();
+    track = Sim.makeTrack(seed);
+    trackSeed = seed;
+    ball = Sim.newBall(track);
+    alive = true;
+    acc = 0;
+    camPos = null;
+    newBestThisRun = false;
+    syncWorld(ball.s);
+  }
+
+  // --- Ghosts ---
+  function syncGhosts() {
+    const me = api.getClientId();
+    const seen = new Set();
     for (const p of view.players) {
-      if (!p.racingThisRound) continue;
-      seenIds.add(p.clientId);
-      const pos = interpolated(p.clientId);
-      if (!pos) continue;
-      const THREE = window.THREE;
-      const mesh = ballMeshFor(THREE, p.clientId, p.clientId === api.getClientId());
-      mesh.visible = true;
-
-      let yOffset = 0;
-      if (p.alive) {
-        deathAnim.delete(p.clientId);
-        const segIndex = Math.floor(pos.distance / SEG_LEN);
-        const gap = gapSpanAt(track.seed, segIndex);
-        if (gap) {
-          const t = Math.min(1, Math.max(0, (pos.distance - gap.start) / (gap.end - gap.start)));
-          yOffset = Math.sin(t * Math.PI) * JUMP_HEIGHT;
-        }
-      } else if (p.deathReason === 'edge') {
-        // Cosmetic-only: the ball keeps dropping past the platform edge instead of just
-        // freezing/vanishing against the dark background, which used to read as hitting an
-        // invisible wall. Server has no Y axis at all — this never affects who's alive.
-        if (!deathAnim.has(p.clientId)) deathAnim.set(p.clientId, { startedAt: performance.now() });
-        const elapsedSec = (performance.now() - deathAnim.get(p.clientId).startedAt) / 1000;
-        yOffset = -0.5 * FALL_GRAVITY * elapsedSec * elapsedSec;
+      if (p.clientId === me || !p.inRound) continue;
+      seen.add(p.clientId);
+      let g = ghosts.get(p.clientId);
+      if (!g) {
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(Sim.R, 20, 12), new THREE.MeshStandardMaterial({ color: p.color, emissive: p.color, emissiveIntensity: 0.6, transparent: true, opacity: 0.75 }));
+        const label = nameSprite(THREE, p.nickname, p.color);
+        scene.add(mesh); scene.add(label);
+        g = { mesh, label, cur: { s: p.s, x: p.x, y: p.y }, tgt: { s: p.s, x: p.x, y: p.y }, vs: 0, at: performance.now() };
+        ghosts.set(p.clientId, g);
       }
-
-      const ballGroundY = groundYAt(pos.distance, refSegFloat);
-      mesh.position.set(pos.lateralPos, ballGroundY + 0.45 + yOffset, -pos.distance);
-      // Hazard crash (not an edge fall, which keeps its drop animation): shatter into debris.
-      if (!p.alive && view.phase === 'racing' && !deadSeen.has(p.clientId)) {
-        deadSeen.add(p.clientId);
-        const pp = prevView && prevView.players.find((q) => q.clientId === p.clientId);
-        const justDied = !!(pp && pp.alive);
-        if (justDied && p.deathReason !== 'edge') spawnDebris(THREE, mesh.position, mesh.material.color.getHex());
-        if (justDied && p.clientId === api.getClientId()) {
-          shake = p.deathReason === 'edge' ? 0.25 : 0.6;
-          flashEl(root);
-        }
-      } else if (p.alive) {
-        deadSeen.delete(p.clientId);
-      }
-      if (p.deathReason !== 'edge' && !p.alive) mesh.visible = false;
-      mesh.material.opacity = p.alive ? 1 : 0.25;
-      mesh.material.transparent = !p.alive;
+      const now = performance.now();
+      const dtS = (now - g.at) / 1000;
+      if (dtS > 0.02 && p.s > g.tgt.s) g.vs = (p.s - g.tgt.s) / dtS;
+      g.tgt = { s: p.s, x: p.x, y: p.y };
+      g.at = now;
+      g.alive = p.alive;
+      g.mesh.material.opacity = p.alive ? 0.75 : 0.25;
     }
-    for (const [id, mesh] of ballMeshes) {
-      if (!seenIds.has(id)) mesh.visible = false;
+    for (const [id, g] of ghosts) {
+      if (seen.has(id)) continue;
+      scene.remove(g.mesh); scene.remove(g.label);
+      g.mesh.geometry.dispose(); g.mesh.material.dispose(); g.label.material.map.dispose(); g.label.material.dispose();
+      ghosts.delete(id);
     }
-
-    // Camera follows the same downhill ground height as everything else (otherwise it'd float
-    // at a fixed world height while the ground visibly drops away beneath it) and its look-at
-    // target does too, further ahead — which is what actually produces the "looking down the
-    // slope" pitch, rather than a hardcoded tilt angle.
-    const LOOK_AHEAD_DIST = 12;
-    const camGroundY = groundYAt(camDistance - 7, refSegFloat);
-    const lookAtGroundY = groundYAt(camDistance + LOOK_AHEAD_DIST, refSegFloat);
-    updateJuice(window.THREE, me, dt);
-    updateTrail(window.THREE, me ? ballMeshes.get(me.clientId) : null);
-    const sx = REDUCED ? 0 : (Math.random() - 0.5) * shake;
-    const sy = REDUCED ? 0 : (Math.random() - 0.5) * shake;
-    camera.position.set(camLateral + sx, camGroundY + 3.2 + sy, -camDistance + 7);
-    camera.lookAt(camLateral + sx * 0.5, lookAtGroundY + 0.5, -camDistance - LOOK_AHEAD_DIST);
-    const fov = 70 + speedNorm * 12 + fovKick;
-    if (Math.abs(camera.fov - fov) > 0.05) {
-      camera.fov = fov;
-      camera.updateProjectionMatrix();
+  }
+  function drawGhosts(dt) {
+    for (const g of ghosts.values()) {
+      // Extrapolate along the run a little so 10Hz updates still look smooth.
+      const lead = g.alive ? Math.min(0.15, (performance.now() - g.at) / 1000) * g.vs : 0;
+      const k = 1 - Math.exp(-dt * 12);
+      g.cur.s += (g.tgt.s + lead - g.cur.s) * k;
+      g.cur.x += (g.tgt.x - g.cur.x) * k;
+      g.cur.y += (g.tgt.y - g.cur.y) * k;
+      g.mesh.position.set(g.cur.x, g.cur.y, -g.cur.s);
+      g.label.position.set(g.cur.x, g.cur.y + 1.3, -g.cur.s);
     }
-
-    if (renderer && canvasHost.clientWidth && renderer.domElement.clientWidth !== canvasHost.clientWidth) {
-      renderer.setSize(canvasHost.clientWidth, canvasHost.clientHeight || 600);
-      camera.aspect = canvasHost.clientWidth / Math.max(1, canvasHost.clientHeight || 600);
-      camera.updateProjectionMatrix();
-    }
-    renderer.render(scene, camera);
-    renderHud();
   }
 
-  loadThree()
-    .then((THREE) => {
+  // --- Frame ---
+  function raceTime() {
+    return view && view.raceStartAt ? (clock.now() - view.raceStartAt) / 1000 : 0;
+  }
+  function meInRound() {
+    const me = view && view.players.find((p) => p.clientId === api.getClientId());
+    return !!(me && me.inRound);
+  }
+
+  function frame(ts) {
+    if (destroyed) return;
+    rafId = requestAnimationFrame(frame);
+    const dt = Math.min(0.05, lastFrame ? (ts - lastFrame) / 1000 : 0.016);
+    lastFrame = ts;
+    if (!view || !track) { renderer.render(scene, camera); return; }
+
+    const racing = view.phase === 'racing' && meInRound();
+    if (racing && ball) {
+      acc += dt;
+      // window.__slopeAutopilot = 'expert' lets a bot drive (handy for screenshots/tests).
+      const steer = window.__slopeAutopilot ? Sim.botSteer(track, ball, raceTime(), window.__slopeAutopilot, autoMem) : steerInput();
+      let t = raceTime() - acc;
+      while (acc >= Sim.DT) {
+        const wasAlive = ball.alive;
+        const ev = Sim.step(track, ball, steer, t);
+        t += Sim.DT;
+        acc -= Sim.DT;
+        if (ev === 'launch') { if (ball.vy > 4) sfx.play('whoosh', { vol: 0.5 }); }
+        else if (ev && ev.startsWith('land:')) {
+          const impact = Number(ev.slice(5));
+          if (impact > 9) { shake = Math.min(0.6, impact / 40); sfx.play('pop', { vol: Math.min(1, impact / 25) }); }
+        }
+        if (wasAlive && !ball.alive) {
+          alive = false;
+          deathAt = performance.now();
+          sfx.play('crash');
+          api.sendAction({ kind: 'died', s: ball.s, x: ball.x, y: ball.y, cause: ball.cause });
+          const score = Math.floor(ball.s);
+          if (score > best) { best = score; writeBest(best); newBestThisRun = true; sfx.play('chime'); }
+        }
+      }
+      if (ball.alive && ts - lastSend > 100) {
+        lastSend = ts;
+        api.sendAction({ kind: 'pos', s: ball.s, x: ball.x, y: ball.y });
+      }
+    } else if (ball && !ball.alive) {
+      Sim.step(track, ball, 0, raceTime()); // keep falling for the camera
+    }
+
+    // Who does the camera follow? Us, or while spectating, the leader.
+    let focus = ball;
+    if (!meInRound() && view.players.length) {
+      const lead = [...ghosts.values()].sort((a, b) => b.cur.s - a.cur.s)[0];
+      if (lead) focus = { s: lead.cur.s, x: lead.cur.x, y: lead.cur.y, vs: 25, alive: true };
+    }
+    if (focus) syncWorld(focus.s);
+
+    // Moving blocks.
+    const t = raceTime();
+    for (const e of built.values()) {
+      for (const { mesh, p, o } of e.obs) {
+        mesh.position.set(Sim.obstacleX(p, o, view.phase === 'racing' ? t : 0), Sim.heightAt(p, o.s, o.xr) + o.h / 2, -o.s);
+      }
+    }
+    drawGhosts(dt);
+
+    if (ball) {
+      ballMesh.visible = meInRound();
+      ballMesh.position.set(ball.x, ball.y, -ball.s);
+      ballMesh.rotation.set(-ball.roll, 0, -ball.x * 0.15);
+      glow.position.copy(ballMesh.position).add(new THREE.Vector3(0, 1, 0));
+    }
+
+    if (focus) {
+      const speed = focus.vs || 20;
+      const deadFor = focus === ball && !ball.alive ? (performance.now() - deathAt) / 1000 : 0;
+      const want = new THREE.Vector3(focus.x * 0.8, focus.y + 4.3 + speed * 0.025, -(focus.s - 8.4 - speed * 0.07));
+      if (deadFor > 0) want.set(camPos ? camPos.x : want.x, camPos ? camPos.y : want.y, camPos ? camPos.z : want.z);
+      if (!camPos) camPos = want.clone();
+      camPos.lerp(want, 1 - Math.exp(-dt * 7));
+      camera.position.copy(camPos);
+      if (shake > 0) {
+        camera.position.x += (Math.random() - 0.5) * shake;
+        camera.position.y += (Math.random() - 0.5) * shake;
+        shake = Math.max(0, shake - dt * 1.8);
+      }
+      camera.lookAt(focus.x, focus.y - 0.6, -(focus.s + (deadFor > 0 ? 0 : 8)));
+      const fov = 66 + Math.min(22, Math.max(0, speed - 17) * 0.8);
+      if (Math.abs(camera.fov - fov) > 0.1) { camera.fov += (fov - camera.fov) * 0.08; camera.updateProjectionMatrix(); }
+      sun.position.set(camera.position.x, camera.position.y + 45, camera.position.z - 1100);
+      sun.lookAt(camera.position);
+      stars.position.copy(camera.position);
+    }
+
+    renderHud();
+    renderer.render(scene, camera);
+  }
+
+  // --- HUD ---
+  function renderHud() {
+    const phase = view.phase;
+    const me = view.players.find((p) => p.clientId === api.getClientId());
+    const inRound = me && me.inRound;
+    const score = ball && inRound ? Math.floor(ball.s) : 0;
+    scoreEl.textContent = inRound ? String(score) : 'SPECTATING';
+    const kmh = ball ? Math.round(ball.vs * 3.6) : 0;
+    subEl.textContent = inRound ? `${kmh} km/h · BEST ${best}` : 'You\'ll join the next run';
+
+    let msg = '';
+    if (phase === 'countdown') {
+      const left = Math.ceil((view.raceStartAt - clock.now()) / 1000);
+      msg = left > 0 ? String(left) : 'GO!';
+      if (msg !== lastCountdown) { sfx.play(left > 0 ? 'beep' : 'go'); lastCountdown = msg; }
+    } else if (phase === 'racing') {
+      if (lastCountdown !== 'GO!' && lastCountdown !== null) { sfx.play('go'); }
+      lastCountdown = null;
+      if (inRound && ball && !ball.alive) {
+        const why = ball.cause === 'block' ? 'SMASHED' : ball.cause === 'wall' ? 'CRASHED' : 'FELL OFF';
+        msg = `${why}\n${Math.floor(ball.s)}${newBestThisRun ? '\nNEW BEST!' : ''}`;
+      }
+    } else if (phase === 'results') {
+      const left = Math.max(0, Math.ceil((view.phaseEndsAt - clock.now()) / 1000));
+      const top = (view.results || []).slice(0, 5).map((r, i) => `${i + 1}. ${r.nickname}  ${r.score}`).join('\n');
+      msg = `RESULTS\n${top}\nnext run in ${left}`;
+    }
+    centerEl.style.fontSize = phase === 'results' ? '20px' : '44px';
+    centerEl.textContent = msg;
+
+    const live = view.players.filter((p) => p.inRound).map((p) => ({
+      name: p.nickname, you: p.clientId === api.getClientId(), alive: p.clientId === api.getClientId() ? !!(ball && ball.alive) : p.alive,
+      s: p.clientId === api.getClientId() && ball ? Math.floor(ball.s) : p.score,
+    })).sort((a, b) => b.s - a.s);
+    liveEl.innerHTML = live.length > 1 || phase !== 'racing'
+      ? `<b>THIS RUN</b><br>${live.map((r) => `<span style="opacity:${r.alive ? 1 : 0.45}">${r.you ? '▶ ' : ''}${esc(r.name)} ${r.s}${r.alive ? '' : ' ✕'}</span>`).join('<br>')}`
+      : '';
+    boardEl.innerHTML = view.best && view.best.length
+      ? `<b>ROOM BEST</b><br>${view.best.map((b, i) => `${i + 1}. ${esc(b.nickname)} ${b.score}`).join('<br>')}`
+      : '';
+  }
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function applyView(v) {
+    if (!v || v.kind !== 'state') return;
+    view = v;
+    clock.sync(v.serverNow);
+    botBar.update(v.players);
+    if (!THREE || !Sim) return;
+    if (v.seed != null && (v.seed !== trackSeed || v.roundId !== roundId)) {
+      roundId = v.roundId;
+      resetWorld(v.seed);
+    }
+    syncGhosts();
+  }
+
+  Promise.all([loadScript('games/slope/three.min.js', 'THREE'), loadScript('games/slope/sim.js', 'SlopeSim')])
+    .then(([T, S]) => {
       if (destroyed) return;
-      initScene(THREE);
-      renderFrame();
+      THREE = T; Sim = S;
+      initScene();
+      if (view) applyView(view);
+      rafId = requestAnimationFrame(frame);
     })
     .catch((err) => {
-      console.error('Slope: failed to load Three.js', err);
-      hud.textContent = 'Failed to load 3D renderer.';
+      console.error('Slope: failed to load', err);
+      centerEl.style.fontSize = '18px';
+      centerEl.textContent = 'Failed to load the 3D renderer.';
     });
 
   return {
-    applySnapshot(snapshot) {
-      view = snapshot;
-      if (view) serverClock.sync(view.serverNow);
-      prevView = snapshot;
-      viewReceivedAt = performance.now();
-      renderHud();
-    },
-    applyEvent(data) {
-      if (!data || data.kind !== 'state') return;
-      prevView = view || data;
-      view = data;
-      if (view) serverClock.sync(view.serverNow);
-      viewReceivedAt = performance.now();
-    },
+    applySnapshot: applyView,
+    applyEvent: applyView,
     unmount() {
       destroyed = true;
-      if (rafId) cancelAnimationFrame(rafId);
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      if (renderer) {
-        renderer.dispose();
-        if (renderer.domElement && renderer.domElement.parentNode) {
-          renderer.domElement.parentNode.removeChild(renderer.domElement);
-        }
-      }
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('keydown', kd);
+      window.removeEventListener('keyup', ku);
+      window.removeEventListener('pointerup', pu);
+      window.removeEventListener('pointercancel', pu);
+      if (ro) ro.disconnect();
+      if (renderer) renderer.dispose();
       root.remove();
     },
   };

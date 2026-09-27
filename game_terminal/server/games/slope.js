@@ -1,361 +1,100 @@
-// Slope-style 3D endless runner. Shared-track race (see FUTURE.md's "Slope-style ball runner"
-// writeup): every player in the room gets their own ball on the SAME seeded procedural track,
-// racing to survive longest. Real-time tick-loop game, same `tickIntervalMs`/`tick(room, ctx)`
-// hook as slither.js.
-//
-// IMPORTANT — server/client sync: the track-geometry functions below (hash32/segRand/ensureTrack/
-// trackHalfWidthAt/hazardAt and every constant they use) are duplicated VERBATIM in
-// public/games/slope/client.js. The server is the collision authority and the client only
-// renders — if the two copies ever diverge, "what you see" and "what kills you" disagree. Any
-// edit to the track-generation math here must be mirrored there exactly.
+// Slope — downhill ball run, raced by everyone in the room on the same seeded track. The track
+// and physics live in public/games/slope/sim.js, shared verbatim with the browser: each client
+// simulates its own ball at 60fps (so gravity, jumps and landings feel immediate) and reports its
+// position; the server runs the round clock, simulates the CPU racers with the very same physics,
+// and relays everyone's positions so riders see each other's ghosts.
 
-const TICK_MS = 50; // 20Hz, matches slither.js
+const Sim = require('../../public/games/slope/sim.js');
+const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
 
-const SEG_LEN = 8; // world units per track segment
-const BASE_HALF_WIDTH = 6;
-const MIN_HALF_WIDTH = 2.5;
-const NARROW_RATE = 0.0025; // half-width lost per segment index
-const MAX_CENTER = 40; // track center offset clamp, so the winding path can't drift forever
-const MAX_DELTA_PER_SEG = 0.6; // max center-offset change per segment (keeps curves rideable)
-
-const HAZARD_START_SEG = 15; // no hazards for the first ~120 units, a warm-up straight
-const BASE_HAZARD_CHANCE = 0.09;
-const HAZARD_RAMP = 0.001; // per segment past HAZARD_START_SEG
-const MAX_HAZARD_CHANCE = 0.45;
-const MIN_HAZARD_W = 1.5;
-const SAFE_GAP = 2.4; // guaranteed minimum passage width past any hazard (ball radius ~0.45)
-
-// Gap obstacles: a block of GAP_LEN_SEGS consecutive segments with no ground — the ball must
-// glide over them (a purely cosmetic client-side jump arc, see client.js) rather than dodge them
-// laterally. Gap blocks are always ground-safe to cross (no new death condition — going off the
-// *side* of the track over a gap still kills you the same as anywhere else, same as normal edge
-// death below), so this needs no new server-side collision logic at all, just suppressing the
-// ordinary lateral hazard on gap segments (see gapBlockAt/hazardAt).
-const GAP_START_SEG = 30; // gaps show up after hazards have had a chance to establish
-const GAP_LEN_SEGS = 2;
-const BASE_GAP_CHANCE = 0.03;
-const GAP_RAMP = 0.0004;
-const MAX_GAP_CHANCE = 0.18;
-const GAP_SALT_BASE = 1000000; // distinct salt namespace from the i*4+{0..3} salts below
-
-// Speed boosts: a small pickup at a deterministic (segment, lateral) spot. Touching one
-// PERMANENTLY raises that player's speed for the rest of the round (see p.speedBonus in
-// freshPlayer/stepPlayer) — unlike hazards/gaps this has per-player STATE (which boosts you've
-// already collected), not just geometry, so it can't be a pure function of (seed, segment) alone
-// on the collection side, only on the "where is it" side.
-const BOOST_START_SEG = 20;
-const BOOST_CHANCE = 0.035; // flat per-segment chance, not ramped — a steady trickle of rewards
-const BOOST_SALT_BASE = 2000000; // distinct namespace from gap (1e6) and hazard-motion (3e6) salts
-const BOOST_PICKUP_RADIUS = 0.6;
-const BOOST_SPEED_INCREMENT = 0.2;
-const MAX_BOOST_BONUS = 2.0; // caps total bonus around 10 boosts' worth
-
-// Hazard motion: most hazards stay static (unchanged behavior/fairness guarantees), but past
-// MOVING_HAZARD_START_SEG some become time-based — 'lr' oscillates side to side, 'updown' rises
-// out of the track, holds (lethal), then sinks back down and retracts on a timer (this game has
-// no real vertical axis for the ball to actually go over/under, so "up/down" is expressed as a
-// telegraphed danger window instead of true vertical motion — see hazardAt()'s comment for why
-// it's NOT a hard on/off toggle). Motion needs a shared elapsed-time-since-race-start clock (st.raceStartedAt
-// below) that server and client both read — unlike the rest of the track math, this is NOT purely
-// a function of (seed, segment) anymore, it also depends on "when," so both sides must agree on
-// what "when" means. Server and client each read their own Date.now(), with no clock-sync
-// mechanism between them (same as this hub's existing countdown-timer display) — harmless here
-// since the SERVER remains sole collision authority regardless of what the client renders; only
-// the client's visual sync with the actual kill moment could drift slightly, not fairness itself.
-const MOVING_HAZARD_START_SEG = 40;
-const HAZARD_MOTION_SALT_BASE = 3000000;
-const HAZARD_OSC_PERIOD_MS = 2200;
-const HAZARD_OSC_AMPLITUDE_FRAC = 0.7; // fraction of the old max lateral offset — leaves margin
-const HAZARD_TOGGLE_PERIOD_MS = 1800;
-// 'updown' hazards move through 4 sub-phases each cycle rather than a hard on/off toggle: RISE
-// (growing out of the track, NOT yet lethal — this is the player's reaction window), HOLD (fully
-// up, lethal), FALL (sinking back down, not lethal again), then retracted/absent for the rest of
-// the cycle. Fixed the "flashes on screen and kills you" bug: with no rise phase, a hazard could
-// go from completely invisible to fully lethal in a single tick, giving zero reaction time.
-const HAZARD_TOGGLE_RISE_FRAC = 0.2;
-const HAZARD_TOGGLE_HOLD_FRAC = 0.3;
-const HAZARD_TOGGLE_FALL_FRAC = 0.2;
-// remaining (1 - RISE - HOLD - FALL) fraction of the cycle is fully retracted/absent
-
-const BASE_SPEED = 0.6; // distance per tick
-const SPEED_RAMP = 0.00004; // extra speed per unit distance traveled
-const MAX_SPEED = 2.4; // ramp-only ceiling (no boosts collected)
-const MAX_SPEED_WITH_BOOST = 4.2; // hard ceiling once speedBonus is included
-
-// Steering: a gentle glide, not a snap. At 20Hz, holding a direction reaches ~90% of the
-// steady-state drift speed (LATERAL_ACCEL / (1 - LATERAL_FRICTION) ~= 1.0) after about 10 ticks
-// (~0.5s) — a deliberate ~3x slower ramp than an earlier version that reached its (higher) cap
-// within ~4 ticks and read as an instant jump. MAX_LATERAL_SPEED stays a hard safety ceiling
-// above the steady-state value, so it's a backstop, not the thing steering normally rides against.
-const LATERAL_ACCEL = 0.12;
-const MAX_LATERAL_SPEED = 1.4;
-const LATERAL_FRICTION = 0.82; // multiplicative decay applied every tick
-
+const TICK_MS = 50;
 const COUNTDOWN_MS = 3000;
-const RESULTS_PAUSE_MS = 4000;
-const LEADERBOARD_SIZE = 8;
+const RESULTS_MS = 3500;
+const STALE_MS = 4000; // a racing human silent this long (closed tab, asleep) is counted out
+const BEST_SIZE = 8;
+const BOTS_ALONE_MS = 5000; // once every human is out, bots get this long before the round ends
+const COLORS = ['#39ff14', '#00eaff', '#ff2fb0', '#ffb000', '#8c52ff', '#ff4d4d', '#ffee58', '#00ffa2'];
 
-// Deterministic 32-bit hash of (seed, i) — avalanches well enough for game-grade randomness
-// (not cryptographic). Same seed + same i always produces the same value, on server and client.
-function hash32(seed, i) {
-  let h = (seed ^ 0x9e3779b9) ^ Math.imul(i ^ 0x85ebca6b, 0xc2b2ae35);
-  h = Math.imul(h ^ (h >>> 16), 0x045d9f3b);
-  h = Math.imul(h ^ (h >>> 16), 0x045d9f3b);
-  h = h ^ (h >>> 16);
-  return h >>> 0;
+function newSeed() {
+  return (Math.random() * 0xffffffff) >>> 0;
 }
 
-function segRand(seed, salt) {
-  return hash32(seed, salt) / 4294967296;
-}
-
-// Extends st.trackCenters (a running sum of small per-segment deltas, reflected off
-// +/-MAX_CENTER so the path can't drift unboundedly) up through index `upto`, inclusive.
-function ensureTrack(st, upto) {
-  while (st.trackCenters.length <= upto) {
-    const i = st.trackCenters.length;
-    const prev = i === 0 ? 0 : st.trackCenters[i - 1];
-    const delta = (segRand(st.seed, i * 4 + 0) - 0.5) * 2 * MAX_DELTA_PER_SEG;
-    let next = prev + delta;
-    if (next > MAX_CENTER) next = prev - Math.abs(delta);
-    if (next < -MAX_CENTER) next = prev + Math.abs(delta);
-    st.trackCenters.push(next);
-  }
-}
-
-function trackHalfWidthAt(i) {
-  return Math.max(MIN_HALF_WIDTH, BASE_HALF_WIDTH - NARROW_RATE * i);
-}
-
-// True if segment `i` falls inside a "gap" block — GAP_LEN_SEGS consecutive segments with no
-// ground, always block-aligned (block = floor(i / GAP_LEN_SEGS)) so a gap is never split across
-// two independent rolls. One roll per block, salted well outside the per-segment salt range used
-// elsewhere so it can't correlate with hazard/track-curve randomness.
-function gapBlockAt(seed, i) {
-  const block = Math.floor(i / GAP_LEN_SEGS);
-  const blockStartSeg = block * GAP_LEN_SEGS;
-  if (blockStartSeg < GAP_START_SEG) return false;
-  const chance = Math.min(MAX_GAP_CHANCE, BASE_GAP_CHANCE + GAP_RAMP * (blockStartSeg - GAP_START_SEG));
-  const roll = segRand(seed, GAP_SALT_BASE + block);
-  return roll < chance;
-}
-
-// Which motion behavior segment i's hazard uses (only consulted for segments at/past
-// MOVING_HAZARD_START_SEG — earlier hazards are always 'static'). Independent per-segment roll
-// in its own salt namespace so it doesn't correlate with whether a hazard even exists there.
-function hazardMotionType(seed, i) {
-  if (i < MOVING_HAZARD_START_SEG) return 'static';
-  const roll = segRand(seed, HAZARD_MOTION_SALT_BASE + i);
-  if (roll < 0.5) return 'static';
-  if (roll < 0.75) return 'lr';
-  return 'updown';
-}
-
-// Returns null (no hazard this segment, or an 'updown' hazard currently retracted) or
-// { start, end } — a lateral sub-range (absolute, same coordinate space as
-// trackCenters/player lateral position) that kills on contact.
-//
-// `elapsedMs` is time since the current race started (Math.max(0, ...)-clamped by the caller) —
-// only consulted for 'lr'/'updown' hazards; 'static' ones (the majority, and everything before
-// MOVING_HAZARD_START_SEG) behave EXACTLY as before, fixed-offset, always leaving at least
-// SAFE_GAP of passage. 'lr' oscillates its center via a sine of elapsedMs, amplitude capped at
-// HAZARD_OSC_AMPLITUDE_FRAC of the old max offset so it never reaches the track edge even at
-// full swing — still leaves SAFE_GAP at every instant, same guarantee, just time-varying instead
-// of fixed. 'updown' reuses the exact static-position math but rises/holds/falls/retracts on a
-// timer (this game has no real vertical axis, so "up/down" reads as a telegraphed danger window
-// instead of true vertical motion) — only the HOLD sub-phase is lethal (`haz.lethal`), so a player
-// always sees it rising before it can actually kill them. Whenever it isn't lethal it's strictly
-// safer than a static hazard, so the SAFE_GAP guarantee holds trivially. Each hazard's phase is
-// offset by its own per-segment seeded value so multiple moving hazards don't all rise/fall in
-// lockstep. `haz.riseProgress` (0 = fully retracted, 1 = fully up) is for the client's rise/fall
-// animation only — 'static'/'lr' hazards are always fully up (`riseProgress: 1`) and always
-// lethal (`lethal: true`) when present at all, so callers can treat all three motion types
-// uniformly via `haz.lethal` for collision.
-function hazardAt(st, i, elapsedMs) {
-  if (i < HAZARD_START_SEG) return null;
-  if (gapBlockAt(st.seed, i)) return null;
-  const chance = Math.min(MAX_HAZARD_CHANCE, BASE_HAZARD_CHANCE + HAZARD_RAMP * (i - HAZARD_START_SEG));
-  const roll = segRand(st.seed, i * 4 + 1);
-  if (roll >= chance) return null;
-  const halfWidth = trackHalfWidthAt(i);
-  const center = st.trackCenters[i];
-  const maxW = Math.max(MIN_HAZARD_W, halfWidth * 2 - SAFE_GAP);
-  const span = Math.max(maxW - MIN_HAZARD_W, 0.001);
-  const width = Math.min(maxW, MIN_HAZARD_W + segRand(st.seed, i * 4 + 2) * span);
-  const maxOffset = Math.max(0, halfWidth - width / 2);
-  const phaseSeed = segRand(st.seed, i * 4 + 3); // reused both as the static offset AND as each
-  // moving hazard's own phase/duty-cycle offset — same source, different use per motion type.
-  const motion = hazardMotionType(st.seed, i);
-
-  let hazCenter;
-  let lethal = true;
-  let riseProgress = 1;
-  if (motion === 'lr') {
-    const amplitude = maxOffset * HAZARD_OSC_AMPLITUDE_FRAC;
-    const phase = (elapsedMs / HAZARD_OSC_PERIOD_MS) * 2 * Math.PI + phaseSeed * 2 * Math.PI;
-    hazCenter = center + Math.sin(phase) * amplitude;
-  } else if (motion === 'updown') {
-    const cyclePos = ((elapsedMs + phaseSeed * HAZARD_TOGGLE_PERIOD_MS) % HAZARD_TOGGLE_PERIOD_MS) / HAZARD_TOGGLE_PERIOD_MS;
-    const riseEnd = HAZARD_TOGGLE_RISE_FRAC;
-    const holdEnd = riseEnd + HAZARD_TOGGLE_HOLD_FRAC;
-    const fallEnd = holdEnd + HAZARD_TOGGLE_FALL_FRAC;
-    if (cyclePos < riseEnd) {
-      riseProgress = cyclePos / HAZARD_TOGGLE_RISE_FRAC;
-      lethal = false;
-    } else if (cyclePos < holdEnd) {
-      riseProgress = 1;
-      lethal = true;
-    } else if (cyclePos < fallEnd) {
-      riseProgress = 1 - (cyclePos - holdEnd) / HAZARD_TOGGLE_FALL_FRAC;
-      lethal = false;
-    } else {
-      return null; // fully retracted — nothing here at all, safe and invisible
-    }
-    const offset = (phaseSeed - 0.5) * 2 * maxOffset;
-    hazCenter = center + offset;
-  } else {
-    const offset = (phaseSeed - 0.5) * 2 * maxOffset;
-    hazCenter = center + offset;
-  }
-  return { start: hazCenter - width / 2, end: hazCenter + width / 2, motion, lethal, riseProgress };
-}
-
-// Speed boost pickup: null, or a single lateral point { pos } the ball must pass close to
-// (BOOST_PICKUP_RADIUS) to collect. Flat per-segment chance (no ramp — a steady trickle, not an
-// escalating one like hazards/gaps), independent salt namespace, and deliberately allowed to
-// land on a segment that also has a hazard (risk/reward) — a boost is optional to collect, unlike
-// a hazard's mandatory-dodge, so it doesn't need hazardAt's SAFE_GAP-style fairness guarantee.
-// Never placed on a gap segment (no ground there to stand on while collecting it).
-function boostAt(st, i) {
-  if (i < BOOST_START_SEG) return null;
-  if (gapBlockAt(st.seed, i)) return null;
-  const roll = segRand(st.seed, BOOST_SALT_BASE + i);
-  if (roll >= BOOST_CHANCE) return null;
-  const halfWidth = trackHalfWidthAt(i);
-  const center = st.trackCenters[i];
-  const offsetFrac = (segRand(st.seed, BOOST_SALT_BASE + i + 500000) - 0.5) * 2; // -1..1
-  const pos = center + offsetFrac * Math.max(0, halfWidth - 0.6);
-  return { pos };
-}
-
-function randomSeed() {
-  return Math.floor(Math.random() * 0xffffffff) >>> 0;
-}
-
-function freshPlayer(clientId, nickname) {
+function playerView(p) {
   return {
-    clientId,
-    nickname,
-    racingThisRound: false,
-    alive: false,
-    distance: 0,
-    lateralPos: 0,
-    lateralSpeed: 0,
-    steerDir: 0,
-    finalDistance: null,
-    deathReason: null, // 'edge' | 'hazard' | null — lets the client tell "fell off the side"
-    // (cosmetic falling animation) apart from "hit an obstacle" (stops in place). No death
-    // condition depends on this — it's purely a client-rendering hint.
-    speedBonus: 0, // permanent speed add-on from collected boosts, see stepPlayer/MAX_SPEED_WITH_BOOST
-    boostSegsCollected: new Set(), // segment indices already collected this round — collection
-    // has per-player STATE (unlike hazards/gaps' pure geometry), so it can't just be re-derived
-    // from (seed, segment) the way everything else on the track is.
+    clientId: p.clientId,
+    nickname: p.nickname,
+    bot: p.bot || undefined,
+    color: p.color,
+    inRound: p.inRound,
+    alive: p.alive,
+    s: Math.round(p.s * 100) / 100,
+    x: Math.round(p.x * 100) / 100,
+    y: Math.round(p.y * 100) / 100,
+    score: Math.floor(p.s),
+    cause: p.cause || null,
   };
+}
+
+function buildView(st) {
+  return {
+    kind: 'state',
+    phase: st.phase,
+    seed: st.seed,
+    roundId: st.roundId,
+    raceStartAt: st.raceStartAt,
+    phaseEndsAt: st.phaseEndsAt,
+    serverNow: Date.now(),
+    players: [...st.players.values()].map(playerView),
+    best: st.best,
+    results: st.results,
+  };
+}
+
+function broadcast(room) {
+  room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'slope', data: buildView(room.state) } });
+}
+
+function recordBest(st, p) {
+  const score = Math.floor(p.s);
+  if (score <= 0) return;
+  const i = st.best.findIndex((b) => b.nickname === p.nickname);
+  if (i !== -1) {
+    if (st.best[i].score >= score) return;
+    st.best.splice(i, 1);
+  }
+  st.best.push({ nickname: p.nickname, score, bot: !!p.bot });
+  st.best.sort((a, b) => b.score - a.score);
+  st.best.length = Math.min(st.best.length, BEST_SIZE);
 }
 
 function startCountdown(st, now) {
   st.phase = 'countdown';
-  st.phaseEndsAt = now + COUNTDOWN_MS;
-  st.raceStartedAt = now + COUNTDOWN_MS; // moving-hazard clock zeroes exactly when racing begins
-  st.seed = randomSeed();
-  st.trackCenters = [0];
+  st.humansOutAt = null;
+  st.seed = newSeed();
+  st.roundId += 1;
+  st.raceStartAt = now + COUNTDOWN_MS;
+  st.phaseEndsAt = st.raceStartAt;
+  st.track = Sim.makeTrack(st.seed);
   for (const p of st.players.values()) {
-    p.racingThisRound = true;
-    p.alive = true;
-    p.distance = 0;
-    p.lateralPos = 0;
-    p.lateralSpeed = 0;
-    p.steerDir = 0;
-    p.finalDistance = null;
-    p.deathReason = null;
-    p.speedBonus = 0;
-    p.boostSegsCollected = new Set();
+    const b = Sim.newBall(st.track);
+    Object.assign(p, { inRound: true, alive: true, s: b.s, x: b.x, y: b.y, cause: null, lastPosAt: now, ball: p.bot ? b : null, mem: { steer: 0, hold: 0 } });
   }
 }
 
-function stepPlayer(st, p, elapsedMs) {
-  const speed = Math.min(MAX_SPEED_WITH_BOOST, BASE_SPEED + p.distance * SPEED_RAMP + p.speedBonus);
-  p.distance += speed;
-  p.lateralSpeed = p.lateralSpeed * LATERAL_FRICTION + p.steerDir * LATERAL_ACCEL;
-  if (p.lateralSpeed > MAX_LATERAL_SPEED) p.lateralSpeed = MAX_LATERAL_SPEED;
-  if (p.lateralSpeed < -MAX_LATERAL_SPEED) p.lateralSpeed = -MAX_LATERAL_SPEED;
-  p.lateralPos += p.lateralSpeed;
-
-  const segIndex = Math.floor(p.distance / SEG_LEN);
-  ensureTrack(st, segIndex + 1);
-  const halfWidth = trackHalfWidthAt(segIndex);
-  const center = st.trackCenters[segIndex];
-
-  const boost = boostAt(st, segIndex);
-  if (boost && !p.boostSegsCollected.has(segIndex) && Math.abs(p.lateralPos - boost.pos) <= BOOST_PICKUP_RADIUS) {
-    p.boostSegsCollected.add(segIndex);
-    p.speedBonus = Math.min(MAX_BOOST_BONUS, p.speedBonus + BOOST_SPEED_INCREMENT);
-  }
-
-  let dead = p.lateralPos < center - halfWidth || p.lateralPos > center + halfWidth;
-  let deathReason = dead ? 'edge' : null;
-  if (!dead) {
-    const haz = hazardAt(st, segIndex, elapsedMs);
-    if (haz && haz.lethal && p.lateralPos >= haz.start && p.lateralPos <= haz.end) {
-      dead = true;
-      deathReason = 'hazard';
-    }
-  }
-  if (dead) {
-    p.alive = false;
-    p.finalDistance = p.distance;
-    p.deathReason = deathReason;
-  }
+function die(st, p, cause) {
+  if (!p.alive) return;
+  p.alive = false;
+  p.cause = cause || 'fall';
+  recordBest(st, p);
 }
 
-function buildLeaderboard(st) {
-  return [...st.players.values()]
-    .filter((p) => p.racingThisRound)
-    .map((p) => ({
-      clientId: p.clientId,
-      nickname: p.nickname,
-      alive: p.alive,
-      distance: Math.round((p.alive ? p.distance : p.finalDistance) * 10) / 10,
-    }))
-    .sort((a, b) => b.distance - a.distance)
-    .slice(0, LEADERBOARD_SIZE);
-}
-
-function buildPublicState(room) {
-  const st = room.state;
-  return {
-    phase: st.phase,
-    phaseEndsAt: st.phase === 'countdown' || st.phase === 'results' ? st.phaseEndsAt : null,
-    seed: st.seed,
-    serverNow: Date.now(),
-    raceStartedAt: st.raceStartedAt, // shared clock the client uses to render moving hazards in sync
-    players: [...st.players.values()].map((p) => ({
-      clientId: p.clientId,
-      nickname: p.nickname,
-      racingThisRound: p.racingThisRound,
-      alive: p.alive,
-      distance: Math.round(p.distance * 10) / 10,
-      lateralPos: Math.round(p.lateralPos * 100) / 100,
-      finalDistance: p.finalDistance,
-      deathReason: p.deathReason,
-      boostCount: p.boostSegsCollected.size,
-    })),
-    leaderboard: buildLeaderboard(st),
-  };
-}
-
-function broadcastState(room, ctx) {
-  ctx.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'slope', data: { kind: 'state', ...buildPublicState(room) } } });
+function endRound(st, now) {
+  st.phase = 'results';
+  st.phaseEndsAt = now + RESULTS_MS;
+  st.results = [...st.players.values()]
+    .filter((p) => p.inRound)
+    .sort((a, b) => b.s - a.s)
+    .map((p) => ({ nickname: p.nickname, score: Math.floor(p.s), bot: !!p.bot }));
 }
 
 module.exports = {
@@ -364,67 +103,123 @@ module.exports = {
 
   createInitialState() {
     return {
-      phase: 'waiting', // 'waiting' | 'countdown' | 'racing' | 'results'
+      phase: 'waiting',
+      seed: null,
+      roundId: 0,
+      raceStartAt: null,
       phaseEndsAt: null,
-      raceStartedAt: null,
-      seed: randomSeed(),
-      trackCenters: [0],
+      track: null,
       players: new Map(),
+      nextColor: 0,
+      best: [],
+      results: null,
+      tickN: 0,
     };
   },
 
   serializeSnapshot(room) {
-    return buildPublicState(room);
+    return buildView(room.state);
   },
 
   onJoin(room, client) {
-    room.state.players.set(client.clientId, freshPlayer(client.clientId, client.nickname));
+    const st = room.state;
+    st.players.set(client.clientId, {
+      clientId: client.clientId,
+      nickname: client.nickname,
+      bot: client.bot || null,
+      color: COLORS[st.nextColor++ % COLORS.length],
+      inRound: false, // joins the next round; spectates the current one
+      alive: false,
+      s: 0, x: 0, y: 0,
+      cause: null,
+      lastPosAt: 0,
+      ball: null,
+      mem: null,
+    });
   },
 
   onLeave(room, client) {
     room.state.players.delete(client.clientId);
+    dropBotsIfAlone(room.state.players);
   },
 
   onMessage(room, client, data, ctx) {
-    if (!data || typeof data.kind !== 'string') return;
-    if (data.kind === 'steer') {
-      const p = room.state.players.get(ctx.senderId);
-      if (!p) return;
-      const dir = Number(data.dir);
-      p.steerDir = dir > 0 ? 1 : dir < 0 ? -1 : 0;
+    const st = room.state;
+    const p = st.players.get(ctx.senderId);
+    if (!p || !data || typeof data.kind !== 'string') return;
+
+    if (data.kind === 'pos' || data.kind === 'died') {
+      if (st.phase !== 'racing' || !p.inRound || !p.alive || p.bot) return;
+      const now = Date.now();
+      const s = Number(data.s); const x = Number(data.x); const y = Number(data.y);
+      if (![s, x, y].every(Number.isFinite)) return;
+      // Plausibility: nobody outruns the speed curve (generous bound; this is a party game).
+      const t = (now - st.raceStartAt) / 1000;
+      const maxS = 12 + t * 55;
+      p.s = Math.max(p.s, Math.min(s, maxS));
+      p.x = x; p.y = y;
+      p.lastPosAt = now;
+      if (data.kind === 'died') die(st, p, ['fall', 'block', 'wall'].includes(data.cause) ? data.cause : 'fall');
+      return;
+    }
+
+    if (data.kind === 'addBot') {
+      const b = newBot(st.players, data.level);
+      if (!b) return;
+      module.exports.onJoin(room, { clientId: b.clientId, nickname: b.nickname, bot: b.level });
+      broadcast(room);
+      return;
+    }
+    if (data.kind === 'removeBot') {
+      if (!isBotId(data.clientId)) return;
+      st.players.delete(data.clientId);
+      broadcast(room);
     }
   },
 
-  tick(room, ctx) {
+  tick(room) {
     const st = room.state;
     const now = Date.now();
+    st.tickN++;
+    const humans = [...st.players.values()].filter((p) => !p.bot).length;
+    const prevPhase = st.phase;
 
     if (st.phase === 'waiting') {
-      if (st.players.size > 0) startCountdown(st, now);
+      if (humans > 0) startCountdown(st, now);
     } else if (st.phase === 'countdown') {
-      if (now >= st.phaseEndsAt) {
-        st.phase = 'racing';
-      }
+      if (now >= st.raceStartAt) st.phase = 'racing';
     } else if (st.phase === 'racing') {
-      const elapsedMs = Math.max(0, now - st.raceStartedAt);
-      const racers = [...st.players.values()].filter((p) => p.racingThisRound);
-      for (const p of racers) {
-        if (p.alive) stepPlayer(st, p, elapsedMs);
+      const t0 = (now - st.raceStartAt) / 1000;
+      const steps = Math.round(TICK_MS / 1000 / Sim.DT);
+      for (const p of st.players.values()) {
+        if (!p.inRound || !p.alive) continue;
+        if (p.bot) {
+          const b = p.ball;
+          for (let k = 0; k < steps && b.alive; k++) {
+            const t = t0 + k * Sim.DT;
+            Sim.step(st.track, b, Sim.botSteer(st.track, b, t, p.bot, p.mem), t);
+          }
+          p.s = b.s; p.x = b.x; p.y = b.y;
+          if (!b.alive) die(st, p, b.cause);
+        } else if (now - p.lastPosAt > STALE_MS) {
+          die(st, p, 'fall');
+        }
       }
-      if (racers.length > 0 && racers.every((p) => !p.alive)) {
-        st.phase = 'results';
-        st.phaseEndsAt = now + RESULTS_PAUSE_MS;
+      const live = [...st.players.values()].filter((p) => p.inRound && p.alive);
+      if (live.some((p) => !p.bot)) st.humansOutAt = null;
+      else if (!st.humansOutAt) st.humansOutAt = now;
+      if (!live.length || (st.humansOutAt && now - st.humansOutAt > BOTS_ALONE_MS)) {
+        for (const p of live) recordBest(st, p);
+        endRound(st, now);
       }
     } else if (st.phase === 'results') {
       if (now >= st.phaseEndsAt) {
-        st.phase = 'waiting';
-        st.phaseEndsAt = null;
+        if (humans > 0) startCountdown(st, now);
+        else st.phase = 'waiting';
       }
     }
 
-    broadcastState(room, ctx);
+    // 10Hz is plenty for ghosts (clients interpolate); phase changes go out immediately.
+    if (st.phase !== prevPhase || st.tickN % 2 === 0) broadcast(room);
   },
-
-  // Exposed for the standalone verification script only — not used by the room/ctx runtime.
-  _internal: { hash32, segRand, trackHalfWidthAt, gapBlockAt, hazardAt, hazardMotionType, boostAt, ensureTrack },
 };
