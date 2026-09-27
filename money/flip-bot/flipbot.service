@@ -1,0 +1,13 @@
+# systemd --user unit. Install: see SETUP.md step 5.
+[Unit]
+Description=Stockholm flip bot
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/projects/money/flip-bot
+ExecStart=%h/projects/money/flip-bot/.venv/bin/python %h/projects/money/flip-bot/flip.py run
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=default.target

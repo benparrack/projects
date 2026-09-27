@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""flip — Stockholm flip bot. `flip once | run | status | arrived ID | shipped ID | bought ID PRICE`."""
+"""flip — Stockholm flip bot.
+
+flip once | run | status | auth | catalog check | bought ID PRICE | arrived ID | shipped ID | approve ID | skip ID
+"""
 import logging
 import math
 import pathlib
@@ -296,6 +299,36 @@ def status_text(st, cfg):
     return "\n".join(lines)
 
 
+def set_env(key, value, path=os.path.join(ROOT, ".env")):
+    lines = [l for l in open(path).read().splitlines() if not l.startswith(key + "=")] if os.path.exists(path) else []
+    open(path, "w").write("\n".join(lines + [f"{key}={value}"]) + "\n")
+
+
+def auth(tr):
+    """One-time Tradera user consent -> token in .env (lets the bot buy and list as Ben)."""
+    if not tr:
+        sys.exit("Put TRADERA_APP_ID, TRADERA_APP_KEY and TRADERA_PUBLIC_KEY in .env first (SETUP.md step 2).")
+    import secrets
+    secret = secrets.token_hex(16)
+    print("1. Open this URL, log in to Tradera and accept:\n  ", tr.login_url(secret))
+    print("2. After accepting, Tradera redirects to your app's return URL. Copy the userId from it.")
+    user_id = input("userId: ").strip()
+    token, expires = tr.fetch_token(user_id, secret)
+    set_env("TRADERA_USER_ID", user_id)
+    set_env("TRADERA_USER_TOKEN", token)
+    print(f"Saved token to .env (expires {expires}).")
+
+
+def catalog_check(tr, models):
+    if not tr:
+        sys.exit("Needs Tradera API keys in .env (SETUP.md step 2).")
+    for m in models:
+        prices = [p for q in m.queries for p in tr.sold_comps(q, m)[0]]
+        fair, src = pricing.fair_value(m, prices)
+        flag = "  <-- seed off by >25%" if prices and abs(fair - m.fair_sek) > 0.25 * m.fair_sek else ""
+        print(f"{m.name:<40} seed {m.fair_sek:>4}  comps {fair:>4} ({src}){flag}")
+
+
 def main(argv):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     os.chdir(ROOT)
@@ -324,6 +357,10 @@ def main(argv):
                 time.sleep(20)
     elif cmd == "status":
         print(status_text(st, cfg))
+    elif cmd == "auth":
+        auth(tr)
+    elif cmd == "catalog":
+        catalog_check(tr, bot.models)
     elif cmd in ("arrived", "shipped", "bought", "skip", "approve"):
         print(bot.handle(cmd, argv[2:]))
     else:

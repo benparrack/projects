@@ -1,6 +1,6 @@
 # Up Next
 
-- **Flip bot** (`money/flip-bot/`): new session → "read money/flip-bot/BUILD.md and PROGRESS.md and continue the build".
+- **Flip bot** (`money/flip-bot/`): built and runs in dry run. Waiting on Ben: SETUP.md steps 1–3 (ntfy app, Tradera dev keys, `flip auth`). Then a short session to verify the Tradera API details listed in `money/flip-bot/PROGRESS.md`.
 
 ## Done
 - **Claude Code Usage Analyst** (`IDEAS.md` #39) — `claude_usage_analyst/` — `claude-usage` command (symlinked in `~/.local/bin`) opens a local stdlib-Python dashboard over all `~/.claude` transcripts: cost by project/sub-project/session/day/model, a live 5-hour-window limit tracker with burn rate + projected hit time + desktop notifications, per-session drill-downs (context growth, per-prompt cost, subagents, heaviest tool results), and an Insights page that simulates cheaper habits (earlier /compact, /clear on sub-project switch, trimming big tool outputs). Key finding: Pro limits track `output + 0.2×(input+cache writes)` tokens, not API dollars — calibrated automatically from real limit hits. Costs reconcile exactly with Claude Code's own `cost-state` totals. Limit % now comes live from the same endpoint `/usage` uses (OAuth token read per fetch, never stored/refreshed; estimate is the fallback). Auto-starts on `dev` via a SessionStart hook in `.claude/settings.local.json` (opens Firefox once a day). Next up per Ben: money/ side-income projects.
