@@ -37,14 +37,6 @@ installed and it's worked best in practice across these games), and mention this
 tradeoff if the user hasn't already made the call for that project. See IDEAS.md
 entry "0. 3D-Rendered Games" for the full writeup.
 
-## Session terminal
-
-A `SessionStart` hook in `.claude/settings.local.json` automatically opens a
-separate `gnome-terminal` window (working directory `/home/ben/projects`) whenever
-a Claude Code session starts here, so Ben always has a normal shell on hand
-alongside the Claude session. This is best-effort/fire-and-forget — it won't error
-or block startup if it fires more than once (e.g. on `--resume`/`--continue`).
-
 ## Git safety with concurrent sessions
 
 Ben often runs more than one Claude Code session against this repo at the
