@@ -23,6 +23,7 @@ class Listing:
     posted_at: float  # unix seconds
     url: str
     image_urls: list = field(default_factory=list)
+    extra: dict = field(default_factory=dict)  # source-specific (tradera: item_type, end_date, bin, category)
 
 
 def parse(html: str) -> list[Listing]:

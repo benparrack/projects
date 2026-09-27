@@ -2,6 +2,8 @@
 """flip — Stockholm flip bot. `flip once | run | status | arrived ID | shipped ID | bought ID PRICE`."""
 import logging
 import math
+import pathlib
+from datetime import datetime, timedelta, timezone
 import os
 import random
 import sys
@@ -15,6 +17,7 @@ import pricing
 import scorer
 import store
 from sources import blocket
+from sources.tradera import Tradera
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 log = logging.getLogger("flip")
@@ -48,8 +51,8 @@ def km(a, b):
 
 
 class Bot:
-    def __init__(self, cfg, st, models, dry_run=None, fetch=blocket.search):
-        self.cfg, self.st, self.models, self.fetch = cfg, st, models, fetch
+    def __init__(self, cfg, st, models, dry_run=None, fetch=blocket.search, tradera=None):
+        self.cfg, self.st, self.models, self.fetch, self.tr = cfg, st, models, fetch, tradera
         self.dry = cfg["mode"] != "live" if dry_run is None else dry_run
         self.alert_topic = os.environ.get("NTFY_ALERT_TOPIC", "")
         self.reply_topic = os.environ.get("NTFY_REPLY_TOPIC", "")
@@ -94,6 +97,141 @@ class Bot:
             actions=[notify.reply_button("Bought it", self.reply_topic, f"bought {fid} {offer}"),
                      notify.reply_button("Skip", self.reply_topic, f"skip {fid}")]))
 
+    # ---------------- Tradera ----------------
+    def refresh_comps(self, m):
+        if self.st.comps(m.name) is not None:
+            return
+        prices, cat = [], None
+        for q in m.queries:
+            p, c = self.tr.sold_comps(q, m)
+            prices += p
+            cat = cat or c
+        self.st.save_comps(m.name, prices)
+        if cat:
+            self.st.save_comps("cat:" + m.name, [cat])
+
+    def scan_tradera(self):
+        found = []
+        for m in self.models:
+            try:
+                self.refresh_comps(m)
+                listings = [l for q in m.queries for l in self.tr.search(q)]
+            except Exception as e:
+                log.warning("tradera %s: %s", m.name, e)
+                continue
+            fair, src = pricing.fair_value(m, self.st.comps(m.name) or ())
+            for l in listings:
+                # Buy-Now only: auctions would need end-of-auction bid scheduling (not built).
+                if not l.extra.get("bin") or catalog.match(l.title, self.models) is not m:
+                    continue
+                if not self.st.first_seen(l.source, l.id):
+                    continue
+                d = scorer.score(l, m, fair, src, self.cfg)
+                if scorer.is_deal(d, self.cfg):
+                    found.append(d)
+                    self.on_tradera_deal(d)
+        return found
+
+    def on_tradera_deal(self, d):
+        l, fid = d.listing, self.st.add_flip(d)
+        ok, why = store.can_spend(self.st, l.price_sek, self.cfg, ROOT)
+        head = f"#{fid} Tradera {l.price_sek} kr → ~{d.profit_sek} kr: {d.model.name}"
+        body = f"{l.title}\nfair {d.fair_sek} kr ({d.fair_source}) · incl. ~{self.cfg['buy_shipping_sek']} kr shipping"
+        if not ok:
+            self.st.set_state(fid, "skipped")
+            log.info("#%s not bought: %s", fid, why)
+            return
+        if d.suspicious or store.needs_approval(l.price_sek, self.cfg) or not self.tr.can_act:
+            reason = "⚠ suspiciously cheap. " if d.suspicious else ""
+            self.alert(notify.build(head, f"{reason}Approve buy?\n{body}", url=l.url, tags=["question"],
+                                    actions=[notify.reply_button("Approve", self.reply_topic, f"approve {fid}"),
+                                             notify.reply_button("Skip", self.reply_topic, f"skip {fid}")]))
+            return
+        self.execute_buy(fid)
+
+    def execute_buy(self, fid):
+        row = self.st.get(fid)
+        if row["source"] != "tradera":
+            self.st.set_state(fid, "approved")
+            return f"#{fid} approved. Contact the seller: {row['url']}"
+        if self.dry:
+            self.st.set_state(fid, "bought", cost_sek=row["ask_sek"] + self.cfg["buy_shipping_sek"])
+            msg = f"[DRY RUN] would buy #{fid} {row['model']} for {row['ask_sek']} kr"
+        elif not self.tr or not self.tr.can_act:
+            return f"#{fid}: no Tradera user token. Buy manually: {row['url']}"
+        else:
+            status = self.tr.buy(row["listing_id"], row["ask_sek"])
+            if "success" not in status.lower() and "bought" not in status.lower():
+                self.st.set_state(fid, "lost")
+                msg = f"#{fid} buy failed: {status}"
+                self.alert(notify.build("flipbot", msg))
+                return msg
+            self.st.set_state(fid, "bought", cost_sek=row["ask_sek"] + self.cfg["buy_shipping_sek"])
+            msg = f"Bought #{fid} {row['model']} for {row['ask_sek']} kr. Pay on Tradera; reply 'arrived {fid}' when it comes."
+        self.alert(notify.build("flipbot", msg, url=row["url"], tags=["shopping_cart"]))
+        return msg
+
+    def expire_approvals(self):
+        cutoff = time.time() - 60 * self.cfg["approval_timeout_min"]
+        for r in self.st.by_state("found"):
+            if r["source"] == "tradera" and r["created"] < cutoff:
+                self.st.set_state(r["id"], "skipped")
+
+    def sell_tick(self):
+        """List arrived items that have photos, reprice stale listings, pick up sold orders."""
+        now = time.time()
+        for r in self.st.by_state("arrived"):
+            photos = sorted(str(p) for p in pathlib.Path(ROOT, "inbox", str(r["id"])).glob("*")
+                            if p.suffix.lower() in (".jpg", ".jpeg", ".png"))
+            if photos:
+                self.list_flip(r, photos)
+        for r in self.st.by_state("listed"):
+            days = (now - r["updated"]) / 86400
+            floor = (r["cost_sek"] or 0) + self.cfg["min_profit_sek"] // 2
+            new = max(floor, int(r["list_price"] * 0.95))
+            if days >= 21 and new == r["list_price"]:
+                self.alert(notify.build(f"#{r['id']} unsold 21+ days", f"{r['model']} at floor {floor} kr — relist, keep or sell locally?"))
+            elif days >= 3 and new < r["list_price"]:
+                if not self.dry:
+                    self.tr.set_price(r["listing_id"], new)
+                self.st.set_state(r["id"], "listed", list_price=new)
+                log.info("#%s repriced %s -> %s", r["id"], r["list_price"], new)
+        if self.tr and self.tr.can_act and not self.dry:
+            self.poll_orders()
+
+    def list_flip(self, r, photos):
+        fair = r["fair_sek"]
+        title = f"{r['model']} – fint skick"
+        desc = (f"{r['model']}. Testad och fungerar. Säljes då den inte används längre. "
+                f"Skickas med PostNord inom 1–2 dagar efter betalning.")
+        if self.dry or not (self.tr and self.tr.can_act):
+            self.st.set_state(r["id"], "listed", list_price=fair)
+            self.alert(notify.build("flipbot", f"[DRY RUN] would list #{r['id']} '{title}' at {fair} kr with {len(photos)} photos"))
+            return
+        try:
+            cat = (self.st.comps("cat:" + r["model"], max_age=10 ** 9) or [None])[0]
+            item_type = self.tr.fixed_price_item_type()
+            _, item_id = self.tr.list_item(title, desc, fair, cat, photos, item_type)
+            self.st.set_state(r["id"], "listed", list_price=fair, listing_id=str(item_id))
+            self.alert(notify.build("flipbot", f"Listed #{r['id']} on Tradera at {fair} kr"))
+        except Exception as e:
+            self.alert(notify.build(f"#{r['id']} listing failed", f"{e}"[:300] + " — list it manually; reply 'listed' not needed."))
+            log.exception("listing failed")
+
+    def poll_orders(self):
+        since = datetime.now(timezone.utc) - timedelta(days=7)
+        listed = {r["listing_id"]: r for r in self.st.by_state("listed")}
+        orders = (self.tr.seller_orders(since) or {}).get("SellerOrders") or {}
+        for o in orders.get("SellerOrder", []) if isinstance(orders, dict) else orders:
+            items = ((o.get("Items") or {}).get("SellerOrderItem")) or []
+            for it in items:
+                r = listed.get(str(it.get("ItemId")))
+                if r:
+                    self.st.set_state(r["id"], "sold", sold_sek=o.get("SubTotal") or r["list_price"])
+                    ship = o.get("ShipTo") or {}
+                    addr = ", ".join(str(v) for v in ship.values() if v)
+                    self.alert(notify.build(f"SOLD #{r['id']} {r['model']}", f"Ship to: {addr}\nReply 'shipped {r['id']}' after drop-off.", tags=["tada"]))
+
     def handle(self, cmd, args):
         st = self.st
         if cmd == "stop":
@@ -116,8 +254,8 @@ class Bot:
             st.set_state(fid, "skipped")
             return f"#{fid} skipped."
         if cmd == "approve":
-            st.set_state(fid, "approved")
-            return f"#{fid} approved."
+            ok, why = store.can_spend(st, st.get(fid)["ask_sek"], self.cfg, ROOT)
+            return self.execute_buy(fid) if ok else f"#{fid} not bought: {why}"
         if cmd == "arrived":
             os.makedirs(os.path.join(ROOT, "inbox", str(fid)), exist_ok=True)
             st.set_state(fid, "arrived")
@@ -141,6 +279,10 @@ class Bot:
 
     def once(self):
         deals = self.scan_blocket()
+        if self.tr:
+            deals += self.scan_tradera()
+            self.expire_approvals()
+        self.sell_tick()
         log.info("scan done: %d new deals", len(deals))
         return deals
 
@@ -163,7 +305,10 @@ def main(argv):
     cmd = argv[1] if len(argv) > 1 else "once"
     if cmd in ("once", "run"):
         ensure_topics()
-    bot = Bot(cfg, st, catalog.load())
+    tr = Tradera.from_env()
+    if not tr and cmd in ("once", "run"):
+        log.info("Tradera disabled: no TRADERA_APP_ID/TRADERA_APP_KEY in .env (see SETUP.md)")
+    bot = Bot(cfg, st, catalog.load(), tradera=tr)
     if cmd == "once":
         bot.once()
     elif cmd == "run":

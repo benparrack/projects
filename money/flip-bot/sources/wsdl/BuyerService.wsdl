@@ -1,0 +1,750 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions name="BuyerServiceSoap" targetNamespace="http://api.tradera.com" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsp="http://schemas.xmlsoap.org/ws/2004/09/policy" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd" xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:wsap="http://schemas.xmlsoap.org/ws/2004/08/addressing/policy" xmlns:wsa10="http://www.w3.org/2005/08/addressing" xmlns:wsaw="http://www.w3.org/2006/05/addressing/wsdl" xmlns:wsam="http://www.w3.org/2007/05/addressing/metadata" xmlns:wsx="http://schemas.xmlsoap.org/ws/2004/09/mex" xmlns:msc="http://schemas.microsoft.com/ws/2005/12/wsdl/contract" xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soap12="http://schemas.xmlsoap.org/wsdl/soap12/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:tns="http://api.tradera.com">
+  <wsdl:types>
+    <xs:schema elementFormDefault="qualified" targetNamespace="http://api.tradera.com" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="Buy">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="1" maxOccurs="1" name="itemId" type="xs:int" />
+            <xs:element minOccurs="1" maxOccurs="1" name="buyAmount" type="xs:int" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="AuthenticationHeader" type="tns:AuthenticationHeader" />
+      <xs:complexType name="AuthenticationHeader">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="AppId" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="AppKey" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="AuthorizationHeader" type="tns:AuthorizationHeader" />
+      <xs:complexType name="AuthorizationHeader">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="UserId" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Token" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="ConfigurationHeader" type="tns:ConfigurationHeader" />
+      <xs:complexType name="ConfigurationHeader">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="Sandbox" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="MaxResultAge" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="BuyResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="BuyResult" type="tns:BuyResult" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="BuyResult">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="NextBid" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Status" type="tns:BuyStatus" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:simpleType name="BuyStatus">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="Bought" />
+          <xs:enumeration value="Ended" />
+          <xs:enumeration value="NotStarted" />
+          <xs:enumeration value="NotAllowed" />
+          <xs:enumeration value="PurchaseOwnItem" />
+          <xs:enumeration value="RegionNotAccepted" />
+          <xs:enumeration value="UnexpectedError" />
+          <xs:enumeration value="BuyItNowNoLongerAvailable" />
+          <xs:enumeration value="PriceChanged" />
+          <xs:enumeration value="ItemNotFound" />
+          <xs:enumeration value="NumberOfBuysLimitReached" />
+          <xs:enumeration value="BuyNotAvailableOnItem" />
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:element name="GetBuyerTransactions">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="request" type="tns:GetBuyerTransactionsRequest" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="GetBuyerTransactionsRequest">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="MinTransactionDate" nillable="true" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="MaxTransactionDate" nillable="true" type="xs:dateTime" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="GetBuyerTransactionsResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="GetBuyerTransactionsResult" type="tns:ArrayOfTransaction" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="ArrayOfTransaction">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="Transaction" nillable="true" type="tns:Transaction" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="Transaction">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="Id" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Date" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Amount" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="LastUpdatedDate" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="IsMarkedAsPaidConfirmed" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="IsMarkedAsShipped" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="IsShippingBooked" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="IsFeedbackLeftBySeller" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="IsFeedbackLeftByBuyer" type="xs:boolean" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Buyer" type="tns:User" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Seller" type="tns:User" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Item" type="tns:TransactionItem" />
+          <xs:element minOccurs="1" maxOccurs="1" name="IsMarkedAsPaid" type="xs:boolean" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="User">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="Id" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Alias" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="FirstName" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="LastName" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Email" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="TotalRating" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="PhoneNumber" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="MobilePhoneNumber" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Address" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ZipCode" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="City" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="CountryName" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="PersonalNumber" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="TransactionId" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="TransactionItem">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="Id" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Type" type="tns:ItemType" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Title" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="OwnReferences" type="tns:ArrayOfString" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:simpleType name="ItemType">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="Auction" />
+          <xs:enumeration value="PureBuyItNow" />
+          <xs:enumeration value="ShopItem" />
+          <xs:enumeration value="ContactOnly" />
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:complexType name="ArrayOfString">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="string" nillable="true" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="GetSellerInfo">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="1" maxOccurs="1" name="userId" type="xs:int" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="GetSellerInfoResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="GetSellerInfoResult" type="tns:SellerInfo" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="SellerInfo">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="DetailedSellerRating" type="tns:DetailedSellerRating" />
+          <xs:element minOccurs="1" maxOccurs="1" name="TotalRating" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="PositiveFeedbackPercent" nillable="true" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="PersonalMessage" type="xs:string" />
+          <xs:element minOccurs="1" maxOccurs="1" name="IsCompany" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="HasShop" type="xs:boolean" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="DetailedSellerRating">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="ItemAsDescribedCount" nillable="true" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ItemAsDescribedAverage" nillable="true" type="xs:double" />
+          <xs:element minOccurs="1" maxOccurs="1" name="CommResponsivenessCount" nillable="true" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="CommResponsivenessAverage" nillable="true" type="xs:double" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ShippingTimeCount" nillable="true" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ShippingTimeAverage" nillable="true" type="xs:double" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ShippingHandlingChargesCount" nillable="true" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ShippingHandlingChargesAverage" nillable="true" type="xs:double" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="GetBiddingInfo">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="request" type="tns:GetBiddingInfoRequest" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="GetBiddingInfoRequest">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="MinDate" nillable="true" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="MaxDate" nillable="true" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="FilterActive" type="tns:ActiveFilter" />
+          <xs:element minOccurs="1" maxOccurs="1" name="IncludeHidden" nillable="true" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="FilterLeading" type="tns:LeadingFilter" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:simpleType name="ActiveFilter">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="All" />
+          <xs:enumeration value="Active" />
+          <xs:enumeration value="Inactive" />
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:simpleType name="LeadingFilter">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="All" />
+          <xs:enumeration value="OnlyLeading" />
+          <xs:enumeration value="OnlyNotLeading" />
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:element name="GetBiddingInfoResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="GetBiddingInfoResult" type="tns:ArrayOfAuctionBiddingInfo" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="ArrayOfAuctionBiddingInfo">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="AuctionBiddingInfo" nillable="true" type="tns:AuctionBiddingInfo" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="AuctionBiddingInfo">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="Id" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ShortDescription" type="xs:string" />
+          <xs:element minOccurs="1" maxOccurs="1" name="SellerId" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="EndDate" type="xs:dateTime" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ThumbnailLink" type="xs:string" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ReservePriceReached" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="HasBuyItNowOption" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="BuyItNowPrice" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="IsEnded" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="NextBid" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="MaxBid" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="MaxBidderId" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="TotalBids" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="MaxAutoBid" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="GetMemorylistItems">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="1" maxOccurs="1" name="filterActive" type="tns:ActiveFilter" />
+            <xs:element minOccurs="1" maxOccurs="1" name="minEndDate" nillable="true" type="xs:dateTime" />
+            <xs:element minOccurs="1" maxOccurs="1" name="maxEndDate" nillable="true" type="xs:dateTime" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="GetMemorylistItemsResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="GetMemorylistItemsResult" type="tns:ArrayOfItem" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="ArrayOfItem">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="Item" nillable="true" type="tns:Item" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="Item">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="ShippingOptions" type="tns:ItemShipping" />
+          <xs:element minOccurs="0" maxOccurs="1" name="PaymentOptions" type="tns:ArrayOfInt" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ImageLinks" type="tns:ArrayOfString" />
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="Buyers" type="tns:User" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Status" type="tns:ItemStatus" />
+          <xs:element minOccurs="1" maxOccurs="1" name="StartQuantity" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="RemainingQuantity" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ItemType" type="tns:ItemType" />
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="DetailedImageLinks" type="tns:ImageLink" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Id" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="VAT" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ShortDescription" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="OwnReferences" type="tns:ArrayOfString" />
+          <xs:element minOccurs="0" maxOccurs="1" name="AttributeValues" type="tns:AttributeValues" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ItemAttributes" type="tns:ArrayOfInt" />
+          <xs:element minOccurs="0" maxOccurs="1" name="LongDescription" type="xs:string" />
+          <xs:element minOccurs="1" maxOccurs="1" name="StartDate" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="EndDate" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="CategoryId" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="OpeningBid" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ReservePrice" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ReservePriceReached" nillable="true" type="xs:boolean" />
+          <xs:element minOccurs="0" maxOccurs="1" name="BuyItNowPrice" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="NextBid" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="PaymentCondition" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ShippingCondition" type="xs:string" />
+          <xs:element minOccurs="1" maxOccurs="1" name="AcceptsPickup" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="TotalBids" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="MaxBid" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Bold" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Thumbnail" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Highlight" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="FeaturedItem" type="xs:boolean" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ItemLink" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ThumbnailLink" type="xs:string" />
+          <xs:element minOccurs="1" maxOccurs="1" name="AcceptedBuyerId" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Paypal" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="PaymentTypeId" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Seller" type="tns:User" />
+          <xs:element minOccurs="0" maxOccurs="1" name="MaxBidder" type="tns:User" />
+          <xs:element minOccurs="1" maxOccurs="1" name="UserSelectedEndDate" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Restarts" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Duration" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ReservePriceManuallySet" type="xs:boolean" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ItemShipping">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="ShippingOptionId" nillable="true" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Cost" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ShippingWeight" nillable="true" type="xs:decimal" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ShippingProductId" nillable="true" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ShippingProviderId" nillable="true" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="SellerSurcharge" nillable="true" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="SellerDiscount" nillable="true" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfInt">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="int" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ItemStatus">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="Ended" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="GotBidders" type="xs:boolean" />
+          <xs:element minOccurs="1" maxOccurs="1" name="GotWinner" type="xs:boolean" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ImageLink">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="Url" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Format" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="AttributeValues">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="TermAttributeValues" type="tns:ArrayOfTermAttributeValue" />
+          <xs:element minOccurs="0" maxOccurs="1" name="NumberAttributeValues" type="tns:ArrayOfNumberAttributeValue" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfTermAttributeValue">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="TermAttributeValue" nillable="true" type="tns:TermAttributeValue" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="TermAttributeValue">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="Id" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Name" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Values" type="tns:ArrayOfString" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfNumberAttributeValue">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="NumberAttributeValue" nillable="true" type="tns:NumberAttributeValue" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="NumberAttributeValue">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="Id" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Name" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Values" type="tns:ArrayOfDecimal" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfDecimal">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="decimal" type="xs:decimal" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="AddToMemorylist">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="itemIds" type="tns:ArrayOfInt" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="AddToMemorylistResponse">
+        <xs:complexType />
+      </xs:element>
+      <xs:element name="RemoveFromMemorylist">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="itemIds" type="tns:ArrayOfInt" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="RemoveFromMemorylistResponse">
+        <xs:complexType />
+      </xs:element>
+      <xs:element name="MarkTransactionsPaid">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="request" type="tns:ArrayOfMarkTransactionsPaidRequest" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="ArrayOfMarkTransactionsPaidRequest">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="MarkTransactionsPaidRequest" nillable="true" type="tns:MarkTransactionsPaidRequest" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="MarkTransactionsPaidRequest">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="TransactionId" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="MarkedAsPaidValue" type="xs:boolean" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="MarkTransactionsPaidResponse">
+        <xs:complexType />
+      </xs:element>
+    </xs:schema>
+  </wsdl:types>
+  <wsdl:message name="BuySoapRequest">
+    <wsdl:part name="parameters" element="tns:Buy" />
+  </wsdl:message>
+  <wsdl:message name="BuySoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="BuySoapResponse">
+    <wsdl:part name="parameters" element="tns:BuyResponse" />
+  </wsdl:message>
+  <wsdl:message name="GetBuyerTransactionsSoapRequest">
+    <wsdl:part name="parameters" element="tns:GetBuyerTransactions" />
+  </wsdl:message>
+  <wsdl:message name="GetBuyerTransactionsSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="GetBuyerTransactionsSoapResponse">
+    <wsdl:part name="parameters" element="tns:GetBuyerTransactionsResponse" />
+  </wsdl:message>
+  <wsdl:message name="GetSellerInfoSoapRequest">
+    <wsdl:part name="parameters" element="tns:GetSellerInfo" />
+  </wsdl:message>
+  <wsdl:message name="GetSellerInfoSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="GetSellerInfoSoapResponse">
+    <wsdl:part name="parameters" element="tns:GetSellerInfoResponse" />
+  </wsdl:message>
+  <wsdl:message name="GetBiddingInfoSoapRequest">
+    <wsdl:part name="parameters" element="tns:GetBiddingInfo" />
+  </wsdl:message>
+  <wsdl:message name="GetBiddingInfoSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="GetBiddingInfoSoapResponse">
+    <wsdl:part name="parameters" element="tns:GetBiddingInfoResponse" />
+  </wsdl:message>
+  <wsdl:message name="GetMemorylistItemsSoapRequest">
+    <wsdl:part name="parameters" element="tns:GetMemorylistItems" />
+  </wsdl:message>
+  <wsdl:message name="GetMemorylistItemsSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="GetMemorylistItemsSoapResponse">
+    <wsdl:part name="parameters" element="tns:GetMemorylistItemsResponse" />
+  </wsdl:message>
+  <wsdl:message name="AddToMemorylistSoapRequest">
+    <wsdl:part name="parameters" element="tns:AddToMemorylist" />
+  </wsdl:message>
+  <wsdl:message name="AddToMemorylistSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="AddToMemorylistSoapResponse">
+    <wsdl:part name="parameters" element="tns:AddToMemorylistResponse" />
+  </wsdl:message>
+  <wsdl:message name="RemoveFromMemorylistSoapRequest">
+    <wsdl:part name="parameters" element="tns:RemoveFromMemorylist" />
+  </wsdl:message>
+  <wsdl:message name="RemoveFromMemorylistSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="RemoveFromMemorylistSoapResponse">
+    <wsdl:part name="parameters" element="tns:RemoveFromMemorylistResponse" />
+  </wsdl:message>
+  <wsdl:message name="MarkTransactionsPaidSoapRequest">
+    <wsdl:part name="parameters" element="tns:MarkTransactionsPaid" />
+  </wsdl:message>
+  <wsdl:message name="MarkTransactionsPaidSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="MarkTransactionsPaidSoapResponse">
+    <wsdl:part name="parameters" element="tns:MarkTransactionsPaidResponse" />
+  </wsdl:message>
+  <wsdl:portType name="BuyerServiceSoap">
+    <wsdl:operation name="Buy">
+      <wsdl:documentation>Purchases an item that is either an auction with buy it now option, a fixed price item, or a shop item.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/Buy" name="BuySoapRequest" message="tns:BuySoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/BuyResponse" name="BuySoapResponse" message="tns:BuySoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="GetBuyerTransactions">
+      <wsdl:documentation>Returns all the buyer's transactions that have taken place within the specified constraints. The buyer in this case is the user for which the call is made for.
+            Transactions are matched on their creation date. When MinTransactionDate is omitted the last 60 days are returned; when MaxTransactionDate is omitted there is no upper bound.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/GetBuyerTransactions" name="GetBuyerTransactionsSoapRequest" message="tns:GetBuyerTransactionsSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/GetBuyerTransactionsResponse" name="GetBuyerTransactionsSoapResponse" message="tns:GetBuyerTransactionsSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="GetSellerInfo">
+      <wsdl:documentation>Returns seller information for the specified user.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/GetSellerInfo" name="GetSellerInfoSoapRequest" message="tns:GetSellerInfoSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/GetSellerInfoResponse" name="GetSellerInfoSoapResponse" message="tns:GetSellerInfoSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="GetBiddingInfo">
+      <wsdl:documentation>Returns bidding information about auctions that user has placed a bid on (but not won) during the specified period.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/GetBiddingInfo" name="GetBiddingInfoSoapRequest" message="tns:GetBiddingInfoSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/GetBiddingInfoResponse" name="GetBiddingInfoSoapResponse" message="tns:GetBiddingInfoSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="GetMemorylistItems">
+      <wsdl:documentation>Gets items that are in the user's memorylist.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/GetMemorylistItems" name="GetMemorylistItemsSoapRequest" message="tns:GetMemorylistItemsSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/GetMemorylistItemsResponse" name="GetMemorylistItemsSoapResponse" message="tns:GetMemorylistItemsSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="AddToMemorylist">
+      <wsdl:documentation>Adds items to the user's memorylist.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/AddToMemorylist" name="AddToMemorylistSoapRequest" message="tns:AddToMemorylistSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/AddToMemorylistResponse" name="AddToMemorylistSoapResponse" message="tns:AddToMemorylistSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="RemoveFromMemorylist">
+      <wsdl:documentation>Removes items from the user's memorylist.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/RemoveFromMemorylist" name="RemoveFromMemorylistSoapRequest" message="tns:RemoveFromMemorylistSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/RemoveFromMemorylistResponse" name="RemoveFromMemorylistSoapResponse" message="tns:RemoveFromMemorylistSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="MarkTransactionsPaid">
+      <wsdl:documentation>Updates the paid status flag on the specified transactions.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/MarkTransactionsPaid" name="MarkTransactionsPaidSoapRequest" message="tns:MarkTransactionsPaidSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/MarkTransactionsPaidResponse" name="MarkTransactionsPaidSoapResponse" message="tns:MarkTransactionsPaidSoapResponse" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="BuyerServiceSoap" type="tns:BuyerServiceSoap">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="Buy">
+      <soap:operation soapAction="http://api.tradera.com/Buy" style="document" />
+      <wsdl:input name="BuySoapRequest">
+        <soap:header message="tns:BuySoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:BuySoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:BuySoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="BuySoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetBuyerTransactions">
+      <soap:operation soapAction="http://api.tradera.com/GetBuyerTransactions" style="document" />
+      <wsdl:input name="GetBuyerTransactionsSoapRequest">
+        <soap:header message="tns:GetBuyerTransactionsSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:GetBuyerTransactionsSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:GetBuyerTransactionsSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetBuyerTransactionsSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetSellerInfo">
+      <soap:operation soapAction="http://api.tradera.com/GetSellerInfo" style="document" />
+      <wsdl:input name="GetSellerInfoSoapRequest">
+        <soap:header message="tns:GetSellerInfoSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:GetSellerInfoSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetSellerInfoSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetBiddingInfo">
+      <soap:operation soapAction="http://api.tradera.com/GetBiddingInfo" style="document" />
+      <wsdl:input name="GetBiddingInfoSoapRequest">
+        <soap:header message="tns:GetBiddingInfoSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:GetBiddingInfoSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:GetBiddingInfoSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetBiddingInfoSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetMemorylistItems">
+      <soap:operation soapAction="http://api.tradera.com/GetMemorylistItems" style="document" />
+      <wsdl:input name="GetMemorylistItemsSoapRequest">
+        <soap:header message="tns:GetMemorylistItemsSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:GetMemorylistItemsSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:GetMemorylistItemsSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetMemorylistItemsSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="AddToMemorylist">
+      <soap:operation soapAction="http://api.tradera.com/AddToMemorylist" style="document" />
+      <wsdl:input name="AddToMemorylistSoapRequest">
+        <soap:header message="tns:AddToMemorylistSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:AddToMemorylistSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:AddToMemorylistSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="AddToMemorylistSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="RemoveFromMemorylist">
+      <soap:operation soapAction="http://api.tradera.com/RemoveFromMemorylist" style="document" />
+      <wsdl:input name="RemoveFromMemorylistSoapRequest">
+        <soap:header message="tns:RemoveFromMemorylistSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:RemoveFromMemorylistSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:RemoveFromMemorylistSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="RemoveFromMemorylistSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="MarkTransactionsPaid">
+      <soap:operation soapAction="http://api.tradera.com/MarkTransactionsPaid" style="document" />
+      <wsdl:input name="MarkTransactionsPaidSoapRequest">
+        <soap:header message="tns:MarkTransactionsPaidSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:MarkTransactionsPaidSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:MarkTransactionsPaidSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="MarkTransactionsPaidSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:binding name="BuyerServiceSoap12" type="tns:BuyerServiceSoap">
+    <soap12:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="Buy">
+      <soap12:operation soapAction="http://api.tradera.com/Buy" style="document" />
+      <wsdl:input name="BuySoapRequest">
+        <soap12:header message="tns:BuySoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:BuySoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:BuySoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="BuySoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetBuyerTransactions">
+      <soap12:operation soapAction="http://api.tradera.com/GetBuyerTransactions" style="document" />
+      <wsdl:input name="GetBuyerTransactionsSoapRequest">
+        <soap12:header message="tns:GetBuyerTransactionsSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:GetBuyerTransactionsSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:GetBuyerTransactionsSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetBuyerTransactionsSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetSellerInfo">
+      <soap12:operation soapAction="http://api.tradera.com/GetSellerInfo" style="document" />
+      <wsdl:input name="GetSellerInfoSoapRequest">
+        <soap12:header message="tns:GetSellerInfoSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:GetSellerInfoSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetSellerInfoSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetBiddingInfo">
+      <soap12:operation soapAction="http://api.tradera.com/GetBiddingInfo" style="document" />
+      <wsdl:input name="GetBiddingInfoSoapRequest">
+        <soap12:header message="tns:GetBiddingInfoSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:GetBiddingInfoSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:GetBiddingInfoSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetBiddingInfoSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetMemorylistItems">
+      <soap12:operation soapAction="http://api.tradera.com/GetMemorylistItems" style="document" />
+      <wsdl:input name="GetMemorylistItemsSoapRequest">
+        <soap12:header message="tns:GetMemorylistItemsSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:GetMemorylistItemsSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:GetMemorylistItemsSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetMemorylistItemsSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="AddToMemorylist">
+      <soap12:operation soapAction="http://api.tradera.com/AddToMemorylist" style="document" />
+      <wsdl:input name="AddToMemorylistSoapRequest">
+        <soap12:header message="tns:AddToMemorylistSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:AddToMemorylistSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:AddToMemorylistSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="AddToMemorylistSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="RemoveFromMemorylist">
+      <soap12:operation soapAction="http://api.tradera.com/RemoveFromMemorylist" style="document" />
+      <wsdl:input name="RemoveFromMemorylistSoapRequest">
+        <soap12:header message="tns:RemoveFromMemorylistSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:RemoveFromMemorylistSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:RemoveFromMemorylistSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="RemoveFromMemorylistSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="MarkTransactionsPaid">
+      <soap12:operation soapAction="http://api.tradera.com/MarkTransactionsPaid" style="document" />
+      <wsdl:input name="MarkTransactionsPaidSoapRequest">
+        <soap12:header message="tns:MarkTransactionsPaidSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:MarkTransactionsPaidSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:MarkTransactionsPaidSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="MarkTransactionsPaidSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="BuyerServiceSoap">
+    <wsdl:port name="BuyerServiceSoap" binding="tns:BuyerServiceSoap">
+      <soap:address location="https://api.tradera.com/v3/BuyerService.asmx" />
+    </wsdl:port>
+    <wsdl:port name="BuyerServiceSoap12" binding="tns:BuyerServiceSoap12">
+      <soap12:address location="https://api.tradera.com/v3/BuyerService.asmx" />
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

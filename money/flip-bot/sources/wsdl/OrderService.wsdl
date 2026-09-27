@@ -1,0 +1,500 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions name="OrderServiceSoap" targetNamespace="http://api.tradera.com" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsp="http://schemas.xmlsoap.org/ws/2004/09/policy" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd" xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:wsap="http://schemas.xmlsoap.org/ws/2004/08/addressing/policy" xmlns:wsa10="http://www.w3.org/2005/08/addressing" xmlns:wsaw="http://www.w3.org/2006/05/addressing/wsdl" xmlns:wsam="http://www.w3.org/2007/05/addressing/metadata" xmlns:wsx="http://schemas.xmlsoap.org/ws/2004/09/mex" xmlns:msc="http://schemas.microsoft.com/ws/2005/12/wsdl/contract" xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soap12="http://schemas.xmlsoap.org/wsdl/soap12/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:tns="http://api.tradera.com">
+  <wsdl:types>
+    <xs:schema elementFormDefault="qualified" targetNamespace="http://api.tradera.com" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:import namespace="http://microsoft.com/wsdl/types/" />
+      <xs:element name="GetSellerOrders">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="request" type="tns:GetSellerOrdersRequest" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="GetSellerOrdersRequest">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="FromDate" nillable="true" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ToDate" nillable="true" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="QueryDateMode" type="tns:SellerOrderQueryDateMode" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:simpleType name="SellerOrderQueryDateMode">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="CreatedDate" />
+          <xs:enumeration value="LastUpdatedDate" />
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:element name="AuthenticationHeader" type="tns:AuthenticationHeader" />
+      <xs:complexType name="AuthenticationHeader">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="AppId" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="AppKey" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="AuthorizationHeader" type="tns:AuthorizationHeader" />
+      <xs:complexType name="AuthorizationHeader">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="UserId" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Token" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="ConfigurationHeader" type="tns:ConfigurationHeader" />
+      <xs:complexType name="ConfigurationHeader">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="Sandbox" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="MaxResultAge" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="GetSellerOrdersResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="GetSellerOrdersResult" type="tns:GetSellerOrdersResponse" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="GetSellerOrdersResponse">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="SellerOrders" type="tns:ArrayOfSellerOrder" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfSellerOrder">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="SellerOrder" nillable="true" type="tns:SellerOrder" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="SellerOrder">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="OrderId" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="CreatedDate" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ExpiresDate" nillable="true" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="LastUpdatedDate" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="SubTotal" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Seller" type="tns:SellerOrderUser" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Buyer" type="tns:SellerOrderUser" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ShipTo" type="tns:SellerOrderAddress" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Items" type="tns:ArrayOfSellerOrderItem" />
+          <xs:element minOccurs="0" maxOccurs="1" name="SellerOrderPayments" type="tns:ArrayOfSellerOrderPayment" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ShippingType" type="xs:string" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ShippingCost" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="ShippingWeight" nillable="true" type="xs:decimal" />
+          <xs:element minOccurs="1" maxOccurs="1" name="PurchaseOrderId" type="q1:guid" xmlns:q1="http://microsoft.com/wsdl/types/" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="SellerOrderUser">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="UserId" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="FirstName" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="LastName" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="AddressLine1" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="AddressLine2" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ZipCode" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="City" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="CountryName" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Email" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Phone" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Alias" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="SellerOrderAddress">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="Name" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="AddressLine1" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="AddressLine2" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="ZipCode" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="City" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="CountryName" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfSellerOrderItem">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="SellerOrderItem" nillable="true" type="tns:SellerOrderItem" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="SellerOrderItem">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="ItemId" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Type" type="tns:ItemType" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Title" type="xs:string" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Quantity" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="UnitPrice" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="VatRate" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="OwnReferences" type="tns:ArrayOfString" />
+          <xs:element minOccurs="0" maxOccurs="1" name="MerchantPartNumber" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:simpleType name="ItemType">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="Auction" />
+          <xs:enumeration value="PureBuyItNow" />
+          <xs:enumeration value="ShopItem" />
+          <xs:enumeration value="ContactOnly" />
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:complexType name="ArrayOfString">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="string" nillable="true" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfSellerOrderPayment">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="SellerOrderPayment" nillable="true" type="tns:SellerOrderPayment" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="SellerOrderPayment">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="PaymentType" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Reference" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="AdditionalInfo" type="tns:ArrayOfKeyValuePair" />
+          <xs:element minOccurs="1" maxOccurs="1" name="Amount" type="xs:int" />
+          <xs:element minOccurs="1" maxOccurs="1" name="PaidDate" type="xs:dateTime" />
+          <xs:element minOccurs="1" maxOccurs="1" name="PaymentCost" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfKeyValuePair">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="KeyValuePair" nillable="true" type="tns:KeyValuePair" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="KeyValuePair">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="Key" type="xs:string" />
+          <xs:element minOccurs="0" maxOccurs="1" name="Value" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="SetSellerOrderAsShipped">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="request" type="tns:SetSellerOrderAsShippedRequest" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="SetSellerOrderAsShippedRequest">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="OrderId" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="SetSellerOrderAsShippedResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="SetSellerOrderAsShippedResult" type="tns:SetSellerOrderAsShippedResponse" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="SetSellerOrderAsShippedResponse">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="OrderId" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="SetSellerOrderAsPaid">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="request" type="tns:SetSellerOrderAsPaidRequest" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="SetSellerOrderAsPaidRequest">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="OrderId" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="SetSellerOrderAsPaidResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="SetSellerOrderAsPaidResult" type="tns:SetSellerOrderAsPaidResponse" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="SetSellerOrderAsPaidResponse">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="OrderId" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="GetOrders">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="request" type="tns:GetOrdersRequest" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="GetOrdersRequest">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="OrderIds" type="tns:ArrayOfInt" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfInt">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="int" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="GetOrdersResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="GetOrdersResult" type="tns:GetOrdersResponse" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="GetOrdersResponse">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="SellerOrders" type="tns:ArrayOfSellerOrder" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="GetFreightLabels">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="request" type="tns:GetFreightLabelsRequest" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="GetFreightLabelsRequest">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="OrderIds" type="tns:ArrayOfInt" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="GetFreightLabelsResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="1" name="GetFreightLabelsResult" type="tns:GetFreightLabelsResponse" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="GetFreightLabelsResponse">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="1" name="FreightLabels" type="tns:ArrayOfFreightLabel" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="ArrayOfFreightLabel">
+        <xs:sequence>
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="FreightLabel" nillable="true" type="tns:FreightLabel" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="FreightLabel">
+        <xs:sequence>
+          <xs:element minOccurs="1" maxOccurs="1" name="OrderId" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="1" name="FreightLabelContent" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:schema>
+    <xs:schema elementFormDefault="qualified" targetNamespace="http://microsoft.com/wsdl/types/" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:tns="http://microsoft.com/wsdl/types/">
+      <xs:simpleType name="guid">
+        <xs:restriction base="xs:string">
+          <xs:pattern value="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:schema>
+  </wsdl:types>
+  <wsdl:message name="GetSellerOrdersSoapRequest">
+    <wsdl:part name="parameters" element="tns:GetSellerOrders" />
+  </wsdl:message>
+  <wsdl:message name="GetSellerOrdersSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="GetSellerOrdersSoapResponse">
+    <wsdl:part name="parameters" element="tns:GetSellerOrdersResponse" />
+  </wsdl:message>
+  <wsdl:message name="SetSellerOrderAsShippedSoapRequest">
+    <wsdl:part name="parameters" element="tns:SetSellerOrderAsShipped" />
+  </wsdl:message>
+  <wsdl:message name="SetSellerOrderAsShippedSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="SetSellerOrderAsShippedSoapResponse">
+    <wsdl:part name="parameters" element="tns:SetSellerOrderAsShippedResponse" />
+  </wsdl:message>
+  <wsdl:message name="SetSellerOrderAsPaidSoapRequest">
+    <wsdl:part name="parameters" element="tns:SetSellerOrderAsPaid" />
+  </wsdl:message>
+  <wsdl:message name="SetSellerOrderAsPaidSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="SetSellerOrderAsPaidSoapResponse">
+    <wsdl:part name="parameters" element="tns:SetSellerOrderAsPaidResponse" />
+  </wsdl:message>
+  <wsdl:message name="GetOrdersSoapRequest">
+    <wsdl:part name="parameters" element="tns:GetOrders" />
+  </wsdl:message>
+  <wsdl:message name="GetOrdersSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="GetOrdersSoapResponse">
+    <wsdl:part name="parameters" element="tns:GetOrdersResponse" />
+  </wsdl:message>
+  <wsdl:message name="GetFreightLabelsSoapRequest">
+    <wsdl:part name="parameters" element="tns:GetFreightLabels" />
+  </wsdl:message>
+  <wsdl:message name="GetFreightLabelsSoapRequest_Headers">
+    <wsdl:part name="AuthenticationHeader" element="tns:AuthenticationHeader" />
+    <wsdl:part name="AuthorizationHeader" element="tns:AuthorizationHeader" />
+    <wsdl:part name="ConfigurationHeader" element="tns:ConfigurationHeader" />
+  </wsdl:message>
+  <wsdl:message name="GetFreightLabelsSoapResponse">
+    <wsdl:part name="parameters" element="tns:GetFreightLabelsResponse" />
+  </wsdl:message>
+  <wsdl:portType name="OrderServiceSoap">
+    <wsdl:operation name="GetSellerOrders">
+      <wsdl:documentation>Returns all orders that have taken place within the specified constraints. The seller in this case is the user for which the call is made for.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/GetSellerOrders" name="GetSellerOrdersSoapRequest" message="tns:GetSellerOrdersSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/GetSellerOrdersResponse" name="GetSellerOrdersSoapResponse" message="tns:GetSellerOrdersSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="SetSellerOrderAsShipped">
+      <wsdl:documentation>Sets seller order as shipped. The seller in this case is the user for which the call is made for.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/SetSellerOrderAsShipped" name="SetSellerOrderAsShippedSoapRequest" message="tns:SetSellerOrderAsShippedSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/SetSellerOrderAsShippedResponse" name="SetSellerOrderAsShippedSoapResponse" message="tns:SetSellerOrderAsShippedSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="SetSellerOrderAsPaid">
+      <wsdl:documentation>Sets seller order as paid. The seller in this case is the user for which the call is made for.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/SetSellerOrderAsPaid" name="SetSellerOrderAsPaidSoapRequest" message="tns:SetSellerOrderAsPaidSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/SetSellerOrderAsPaidResponse" name="SetSellerOrderAsPaidSoapResponse" message="tns:SetSellerOrderAsPaidSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="GetOrders">
+      <wsdl:documentation>Get one or more orders by their order id. Will only return orders for the authorized user.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/GetOrders" name="GetOrdersSoapRequest" message="tns:GetOrdersSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/GetOrdersResponse" name="GetOrdersSoapResponse" message="tns:GetOrdersSoapResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="GetFreightLabels">
+      <wsdl:documentation>Get freight labels by their order id. The freight labels are pdfs encoded as BASE64 strings. Will only return freight labels for the authorized user.</wsdl:documentation>
+      <wsdl:input wsaw:Action="http://api.tradera.com/GetFreightLabels" name="GetFreightLabelsSoapRequest" message="tns:GetFreightLabelsSoapRequest" />
+      <wsdl:output wsaw:Action="http://api.tradera.com/GetFreightLabelsResponse" name="GetFreightLabelsSoapResponse" message="tns:GetFreightLabelsSoapResponse" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="OrderServiceSoap" type="tns:OrderServiceSoap">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="GetSellerOrders">
+      <soap:operation soapAction="http://api.tradera.com/GetSellerOrders" style="document" />
+      <wsdl:input name="GetSellerOrdersSoapRequest">
+        <soap:header message="tns:GetSellerOrdersSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:GetSellerOrdersSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:GetSellerOrdersSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetSellerOrdersSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="SetSellerOrderAsShipped">
+      <soap:operation soapAction="http://api.tradera.com/SetSellerOrderAsShipped" style="document" />
+      <wsdl:input name="SetSellerOrderAsShippedSoapRequest">
+        <soap:header message="tns:SetSellerOrderAsShippedSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:SetSellerOrderAsShippedSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:SetSellerOrderAsShippedSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="SetSellerOrderAsShippedSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="SetSellerOrderAsPaid">
+      <soap:operation soapAction="http://api.tradera.com/SetSellerOrderAsPaid" style="document" />
+      <wsdl:input name="SetSellerOrderAsPaidSoapRequest">
+        <soap:header message="tns:SetSellerOrderAsPaidSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:SetSellerOrderAsPaidSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:SetSellerOrderAsPaidSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="SetSellerOrderAsPaidSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetOrders">
+      <soap:operation soapAction="http://api.tradera.com/GetOrders" style="document" />
+      <wsdl:input name="GetOrdersSoapRequest">
+        <soap:header message="tns:GetOrdersSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:GetOrdersSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:GetOrdersSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetOrdersSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetFreightLabels">
+      <soap:operation soapAction="http://api.tradera.com/GetFreightLabels" style="document" />
+      <wsdl:input name="GetFreightLabelsSoapRequest">
+        <soap:header message="tns:GetFreightLabelsSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap:header message="tns:GetFreightLabelsSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap:header message="tns:GetFreightLabelsSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetFreightLabelsSoapResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:binding name="OrderServiceSoap12" type="tns:OrderServiceSoap">
+    <soap12:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="GetSellerOrders">
+      <soap12:operation soapAction="http://api.tradera.com/GetSellerOrders" style="document" />
+      <wsdl:input name="GetSellerOrdersSoapRequest">
+        <soap12:header message="tns:GetSellerOrdersSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:GetSellerOrdersSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:GetSellerOrdersSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetSellerOrdersSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="SetSellerOrderAsShipped">
+      <soap12:operation soapAction="http://api.tradera.com/SetSellerOrderAsShipped" style="document" />
+      <wsdl:input name="SetSellerOrderAsShippedSoapRequest">
+        <soap12:header message="tns:SetSellerOrderAsShippedSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:SetSellerOrderAsShippedSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:SetSellerOrderAsShippedSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="SetSellerOrderAsShippedSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="SetSellerOrderAsPaid">
+      <soap12:operation soapAction="http://api.tradera.com/SetSellerOrderAsPaid" style="document" />
+      <wsdl:input name="SetSellerOrderAsPaidSoapRequest">
+        <soap12:header message="tns:SetSellerOrderAsPaidSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:SetSellerOrderAsPaidSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:SetSellerOrderAsPaidSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="SetSellerOrderAsPaidSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetOrders">
+      <soap12:operation soapAction="http://api.tradera.com/GetOrders" style="document" />
+      <wsdl:input name="GetOrdersSoapRequest">
+        <soap12:header message="tns:GetOrdersSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:GetOrdersSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:GetOrdersSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetOrdersSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetFreightLabels">
+      <soap12:operation soapAction="http://api.tradera.com/GetFreightLabels" style="document" />
+      <wsdl:input name="GetFreightLabelsSoapRequest">
+        <soap12:header message="tns:GetFreightLabelsSoapRequest_Headers" part="AuthenticationHeader" use="literal" />
+        <soap12:header message="tns:GetFreightLabelsSoapRequest_Headers" part="AuthorizationHeader" use="literal" />
+        <soap12:header message="tns:GetFreightLabelsSoapRequest_Headers" part="ConfigurationHeader" use="literal" />
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="GetFreightLabelsSoapResponse">
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="OrderServiceSoap">
+    <wsdl:port name="OrderServiceSoap" binding="tns:OrderServiceSoap">
+      <soap:address location="https://api.tradera.com/v3/OrderService.asmx" />
+    </wsdl:port>
+    <wsdl:port name="OrderServiceSoap12" binding="tns:OrderServiceSoap12">
+      <soap12:address location="https://api.tradera.com/v3/OrderService.asmx" />
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>
