@@ -3902,11 +3902,11 @@ function confirmCollapse() {
 
 function showWelcomeBackModal(offline) {
   if (!offline) return;
-  const hours = (offline.elapsedMs / 3600000).toFixed(1);
+  const away = offline.elapsedMs >= 3600000 ? `${(offline.elapsedMs / 3600000).toFixed(1)} hours` : `${Math.max(1, Math.round(offline.elapsedMs / 60000))} minutes`;
   const cappedHours = (offline.cappedMs / 3600000).toFixed(1);
   showModal(`
     <h2>Welcome Back, Forger</h2>
-    <p>Your universe kept burning for ${hours} hours${offline.wasCapped ? ` (offline gains cap at ${cappedHours}h; Temporal Anchor raises it)` : ''}.</p>
+    <p>Your universe kept burning for ${away}${offline.wasCapped ? ` (offline gains cap at ${cappedHours}h; Temporal Anchor raises it)` : ''}.</p>
     <div class="welcome-gain">+${formatNum(offline.gained)}<span>Energy</span></div>
     <div class="modal-btn-row">
       ${Platform.adsReady ? '<button class="modal-btn gold" id="welcomeDoubleBtn">▶ Double it</button>' : ''}
@@ -4379,7 +4379,7 @@ function mainLoop(ts) {
   const dt = Math.min(0.25, (ts - runtime.lastTs) / 1000); // clamp to avoid huge jumps from tab-throttle
   runtime.lastTs = ts;
 
-  runtime.accumulator += dt * 1000;
+  if (!document.hidden) runtime.accumulator += dt * 1000; // hidden time is credited on return
   let ticks = 0;
   while (runtime.accumulator >= SIM_TICK_MS && ticks < 50) {
     simTick(SIM_TICK_MS);
@@ -4503,8 +4503,17 @@ function wireInput() {
     }
   });
 
+  // Background tabs pause requestAnimationFrame, so the main loop stops. Credit the hidden
+  // time on return exactly like offline progress, instead of silently dropping it.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) saveGame();
+    if (document.hidden) { saveGame(); runtime.hiddenAt = Date.now(); return; }
+    if (!runtime.hiddenAt) return;
+    const off = applyOfflineProgress({ savedAt: runtime.hiddenAt });
+    runtime.hiddenAt = 0;
+    runtime.lastTs = 0;
+    if (!off || off.gained <= 0) return;
+    if (off.elapsedMs >= 5 * 60000) queueModal(() => showWelcomeBackModal(off));
+    else { logToast(`While you were away: +${formatNum(off.gained)} Energy`, 'event'); popValue('energyVal'); }
   });
   window.addEventListener('beforeunload', saveGame);
   window.addEventListener('resize', resizeCanvases);
