@@ -115,6 +115,19 @@ def cmd_validate(args):
         print(f"  {cs:9.2f} {tr:9.2f}  {pretty_path(s['cwd'] or '')[:24]:<24} {a.session_title(s['id'])[:50]}")
 
 
+def cmd_calibrate(args):
+    server.add_usage_reading(args.pct)
+    records, _ = Scanner().scan()
+    a = Analysis(records, server.load_settings())
+    c = a.calibration
+    cur = a.current_block()
+    print(f"Recorded /usage reading: {args.pct:g}%")
+    if c["weights"]:
+        print("  model weights vs Sonnet: " + ", ".join(f"{f} {w:.2f}x" for f, w in c["weights"].items()))
+    if cur and cur["active"] and cur["pct"] is not None:
+        print(f"  dashboard now says {cur['pct']:.0f}% for the current window")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="claude-usage", description="Claude Code usage analyst")
     sub = p.add_subparsers(dest="cmd")
@@ -124,11 +137,15 @@ def main(argv=None):
         q.add_argument("--host", default="127.0.0.1")
         q.add_argument("--no-open", action="store_true", help="don't open a browser")
     sub.add_parser("summary", help="print a quick terminal summary")
+    pc = sub.add_parser("calibrate", help="record the %% that Claude Code's /usage shows for the current session")
+    pc.add_argument("pct", type=float)
     pv = sub.add_parser("validate", help="check costs against Claude Code's own totals")
     pv.add_argument("--top", type=int, default=10)
     args = p.parse_args(argv)
     if args.cmd == "summary":
         cmd_summary(args)
+    elif args.cmd == "calibrate":
+        cmd_calibrate(args)
     elif args.cmd == "validate":
         cmd_validate(args)
     else:

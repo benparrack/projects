@@ -470,7 +470,12 @@ views.limits = function () {
           <dt>Burn rate</dt><dd>${cur.rate_per_hour ? tok(cur.rate_per_hour) + " units/h · " + money(cur.cost_rate_per_hour) + "/h" : "idle"}</dd>
           <dt>At this pace</dt><dd>${cur.eta_limit ? `<b style="color:var(--critical)">limit at ${fmtTime(cur.eta_limit)}</b>` : `ends at ~${pct(pp)}`}</dd>
           <dt>Window cost</dt><dd>${money(b.cost)} API-equivalent</dd>
-        </dl></div>
+        </dl>
+        <form id="calib" class="mt" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="muted" style="font-size:12.5px">/usage says</span>
+          <input type="number" id="calpct" min="1" max="100" step="1" style="width:70px" placeholder="%">
+          <button type="submit">Calibrate</button><span id="calmsg" class="muted" style="font-size:12px"></span>
+        </form></div>
       <div>${chart}</div></div>
       <h3 class="mt">In this window</h3>
       <div class="hbars">${hbars(cur.sessions.map((s) => ({ label: (s.live ? "● " : "") + s.title, value: s.units, note: s.project, href: "#/session/" + s.id, color: s.live ? "var(--s1)" : "var(--seq-3)" })), { fmt: (v) => (lim ? pct((v / lim) * 100, 1) : tok(v)), max: lim || undefined })}</div>`;
@@ -496,13 +501,27 @@ views.limits = function () {
         <p class="ink2" style="margin-top:0">Anthropic doesn't publish Pro limits in tokens, so this learns yours from the times you actually hit it.
         Dollar cost turned out to be a poor predictor: your limit hits ranged from ${money(Math.min(...cal.samples.map((s) => s.cost_at_hit || 1e9)))} to ${money(Math.max(0, ...cal.samples.map((s) => s.cost_at_hit || 0)))}.
         What fits is a <b>usage unit</b>:</p>
-        <p class="note"><b>units = output tokens + ${cal.alpha} × (fresh input + cache-write tokens)${cal.beta ? ` + ${cal.beta} × cache reads` : ""}</b>, weighted by model price (Opus counts 2× Sonnet).
+        <p class="note"><b>units = output tokens + ${cal.alpha} × (fresh input + cache-write tokens)${cal.beta ? ` + ${cal.beta} × cache reads` : ""}</b>, ${Object.keys(cal.weights || {}).length ? "with model weights fit from your /usage readings (" + Object.entries(cal.weights).map(([f, w]) => `${esc(f)} ${w.toFixed(2)}× Sonnet`).join(", ") + ")." : "with every model counted equally until a /usage reading says otherwise."}
         ${cal.spread ? `Across your ${cal.clean_hits} clean limit hits this lands within <b>${pct((cal.spread - 1) * 100)}</b> of the same number, and no window that stayed under the limit exceeds it.` : ""}
         Estimated limit: <b>${lim ? tok(lim) + " units" : "unknown"}</b> per 5 hours${cal.source === "manual" ? " (set manually)" : ""}. It refits automatically every time you hit the limit again.</p>
-      </div><div><div class="tbl-wrap"><table><thead><tr><th>Limit hit</th><th class="r">Units</th><th class="r">API-eq $</th><th class="r"></th></tr></thead><tbody>${samples || `<tr><td colspan="4" class="muted">No limit hits recorded yet</td></tr>`}</tbody></table></div></div></div>
+      </div><div><div class="tbl-wrap"><table><thead><tr><th>Limit hit</th><th class="r">Units</th><th class="r">API-eq $</th><th class="r"></th></tr></thead><tbody>${samples || `<tr><td colspan="4" class="muted">No limit hits recorded yet</td></tr>`}</tbody></table></div>
+      ${(cal.readings || []).length ? `<div class="tbl-wrap mt"><table><thead><tr><th>/usage reading</th><th class="r">Said</th><th class="r">Model now says</th><th>Models</th></tr></thead><tbody>${cal.readings.slice().reverse().map((r) => `<tr><td>${fmtDT(r.ts)}</td><td class="r num">${pct(r.pct)}</td><td class="r num">${pct(r.predicted)}</td><td>${r.families.map(esc).join(", ")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <p class="muted" style="font-size:12.5px">Most accurate calibration: run <code>/usage</code> in Claude Code and enter the "current session" % above (or <code>claude-usage calibrate 44</code>), ideally after a stretch on a model you haven't calibrated yet.</p></div></div>
     </div>`;
   bindTips(main);
   bindRows(main);
+  const f = $("#calib");
+  if (f) f.onsubmit = async (e) => {
+    e.preventDefault();
+    const v = +$("#calpct").value;
+    if (!(v > 0 && v <= 100)) { $("#calmsg").textContent = "enter 1–100"; return; }
+    $("#calmsg").textContent = "saving…";
+    const r = await fetch("/api/calibrate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pct: v }) });
+    const j = await r.json();
+    if (j.error) { $("#calmsg").textContent = j.error; return; }
+    await load(true);
+    render();
+  };
 };
 
 views.insights = function () {

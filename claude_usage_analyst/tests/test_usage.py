@@ -191,6 +191,26 @@ class AnalysisTests(unittest.TestCase):
         kinds = {f["kind"] for f in self.a.findings}
         self.assertIn("big_result", kinds)
 
+    def test_model_weight_fit_from_usage_reading(self):
+        # an Opus-only window whose /usage reading implies Opus counts 1.5x the reference
+        recs = self.fx.records()
+        base = Analysis(recs, now=T0 + 3600)
+        L = base.calibration["block_limit"]
+        t = T0 + 8 * 3600
+        opus = {"session_id": "s2", "project_dir": "-proj", "is_subagent": False, "agent_id": None,
+                "agent_type": None, "agent_desc": None, "title": "opus", "slug": None, "cwd": "/x", "branch": None,
+                "version": None, "first_ts": t, "last_ts": t + 60, "prompts": [], "tools": [], "compactions": [],
+                "limit_hits": [], "api_errors": 0, "cost_state": None,
+                "requests": [{"ts": t, "model": "claude-opus-5-5", "in": 0, "cw5": 0, "cw1": 0, "cr": 0, "out": 100_000,
+                              "think": 0, "speed": None, "side": False, "text": "", "tools": [], "key": "o1|r", "i": 0}]}
+        recs = dict(recs, opus=opus)
+        units = 100_000
+        pct = units * 1.5 / L * 100
+        a = Analysis(recs, settings={"usage_readings": [{"ts": t + 30, "pct": pct}]}, now=t + 60)
+        self.assertAlmostEqual(a.calibration["weights"]["opus"], 1.5, places=3)
+        self.assertAlmostEqual(a.calibration["readings"][0]["predicted"], pct, places=3)
+        self.assertAlmostEqual(a.current_block()["pct"], pct, places=3)
+
     def test_payloads_serialize(self):
         for payload in (self.a.data_payload(), self.a.limits_payload(), self.a.insights(),
                         self.a.tools_payload(), self.a.session_detail("s1")):

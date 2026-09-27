@@ -16,6 +16,7 @@ Everything stays on `127.0.0.1`.
 ```bash
 claude-usage              # start the dashboard and open it in the browser (http://127.0.0.1:8765)
 claude-usage summary      # quick terminal summary: today, 7 days, current 5h window, top saving
+claude-usage calibrate 44 # record what /usage says (current session %) to sharpen the estimate
 claude-usage validate     # check the cost math against Claude Code's own per-session totals
 claude-usage --port 9000 --no-open
 ```
@@ -42,7 +43,12 @@ limits in tokens, so the limit is *learned from your limit hits*:
 
 - API-dollar cost is a bad predictor. Real hits ranged from $22 to $87, and one $80 window never hit.
 - `units = output + 0.2 × (fresh input + cache writes)` fits all clean hits within 8%, and no
-  non-hit window exceeds it. Units are weighted by model price, so Opus counts 2× Sonnet.
+  non-hit window exceeds it.
+- Model price is *not* a guide to model weight. An all-Opus-5.5 window read 44% on `/usage`,
+  while a 2× (price-ratio) weight predicted 84%. Per-model weights start at 1× and are fit from
+  **`/usage` readings**: enter the "current session" % in the Limits page, or run
+  `claude-usage calibrate 44`. Each reading is an exact data point for whatever models ran
+  in that window (Opus 5.5 currently fits at 1.04× Sonnet).
 - The weights and the limit refit automatically on every new hit. Hits where the window
   started well before any local activity mean usage happened on claude.ai, which can't be
   seen here, so those count only as lower bounds.

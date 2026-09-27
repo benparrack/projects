@@ -1,6 +1,7 @@
 """Turn parsed FileRecords into sessions, rows, blocks, and waste findings."""
 
 import os
+import statistics
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -17,6 +18,7 @@ DEFAULTS = {
     "weekly_limit_units": None,
     "compact_threshold": 120_000,
     "notify": True,
+    "usage_readings": None,  # [{"ts": epoch, "pct": 44}] from Claude Code's /usage
 }
 
 
@@ -28,6 +30,18 @@ def pretty_path(p):
     if p.startswith(HOME + "/"):
         return "~/" + p[len(HOME) + 1:]
     return p
+
+
+FAMILIES = ("fable", "mythos", "opus", "sonnet", "haiku")
+REF_FAMILY = "sonnet"
+
+
+def model_family(model):
+    m = model or ""
+    for f in FAMILIES:
+        if f in m:
+            return f
+    return "other"
 
 
 def floor10(ts):
@@ -96,10 +110,11 @@ class Analysis:
                 r["cost"] = sum(parts)
                 r["c_bg"] = 0.0
                 r["ctx"] = req_ctx(r)
-                w = pricing.rate_for(r["model"]).input / pricing.RATES["claude-sonnet-5"].input
-                r["u_out"] = r["out"] * w
-                r["u_in"] = (r["in"] + r["cw5"] + r["cw1"]) * w
-                r["u_cr"] = r["cr"] * w
+                # raw limit-unit components; per-family weights are applied in _calibrate
+                r["fam"] = model_family(r["model"])
+                r["u_out"] = r["out"]
+                r["u_in"] = r["in"] + r["cw5"] + r["cw1"]
+                r["u_cr"] = r["cr"]
                 r["sid"] = sid
                 r["agent"] = rec["agent_id"]
                 reqs.append(r)
@@ -299,21 +314,32 @@ class Analysis:
     # Pro/Max limits aren't published in tokens. Fitting against real limit hits
     # showed API-dollar cost is a poor predictor (hits ranged $22-$87, and an
     # $80 window never hit), while output tokens plus a fraction of fresh input
-    # predicts them tightly. The weights are refit whenever there are >= 2
-    # usable hits.
+    # predicts them tightly. Price is also a poor guide to model weight: an
+    # all-Opus-5.5 window read 44% on /usage where a 2x (price-ratio) weight
+    # predicted 84%. So per-model weights start at 1x and are fit from /usage
+    # readings the user records; hits and Sonnet-only readings fix the limit.
     ALPHAS = (0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0)
     BETAS = (0.0, 0.0005, 0.001, 0.002, 0.004)
     DEFAULT_FIT = (0.2, 0.0)
 
-    def _block_components(self, b, until=None):
-        o = i = c = 0.0
-        for r in self._block_reqs[b["i"]]:
+    def _block_components(self, bi, until=None):
+        """{family: [output, fresh input + cache writes, cache reads]} for a block."""
+        comps = defaultdict(lambda: [0.0, 0.0, 0.0])
+        for r in self._block_reqs.get(bi, ()):
             if until is not None and r["ts"] > until:
                 break
-            o += r["u_out"]
-            i += r["u_in"]
-            c += r["u_cr"]
-        return o, i, c
+            c = comps[r["fam"]]
+            c[0] += r["u_out"]
+            c[1] += r["u_in"]
+            c[2] += r["u_cr"]
+        return dict(comps)
+
+    @staticmethod
+    def _units(comps, alpha, beta, weights):
+        return sum(weights.get(f, 1.0) * (o + alpha * i + beta * c) for f, (o, i, c) in comps.items())
+
+    def _block_at(self, ts):
+        return next((b for b in self.blocks if b["start"] <= ts < b["end"]), None)
 
     def _calibrate(self):
         self._block_reqs = defaultdict(list)
@@ -324,16 +350,17 @@ class Analysis:
         # hits with a long gap between the window start and local activity had
         # usage we can't see, so they only bound the limit from below
         clean = [b for b in hit_blocks if (b["untracked_lead_min"] or 0) < 30]
-        comps_hit = {b["i"]: self._block_components(b, b["hit_ts"]) for b in hit_blocks}
-        comps_all = {b["i"]: self._block_components(b) for b in self.blocks}
+        comps_hit = {b["i"]: self._block_components(b["i"], b["hit_ts"]) for b in hit_blocks}
+        comps_all = {b["i"]: self._block_components(b["i"]) for b in self.blocks}
+        ones = {}
         alpha, beta = self.DEFAULT_FIT
         spread = None
         if len(clean) >= 2:
             best = None
             for a in self.ALPHAS:
                 for be in self.BETAS:
-                    hits = [o + a * i + be * c for o, i, c in (comps_hit[b["i"]] for b in clean)]
-                    non = [o + a * i + be * c for bi, (o, i, c) in comps_all.items()
+                    hits = [self._units(comps_hit[b["i"]], a, be, ones) for b in clean]
+                    non = [self._units(c, a, be, ones) for bi, c in comps_all.items()
                            if not self.blocks[bi]["hit_ts"]]
                     L = max(hits)
                     sp = L / max(min(hits), 1)
@@ -344,17 +371,52 @@ class Analysis:
             _, alpha, beta, spread = best
         self.fit = (alpha, beta)
 
-        def units(o, i, c):
-            return o + alpha * i + beta * c
+        # limit from hits (reference-family units)
+        hit_est = max((self._units(comps_hit[b["i"]], alpha, beta, ones) for b in clean), default=None)
+        if hit_est is None and hit_blocks:
+            hit_est = max(self._units(comps_hit[b["i"]], alpha, beta, ones) for b in hit_blocks)
+
+        # /usage readings: exact % snapshots of the current window
+        readings = []
+        for rd in self.settings.get("usage_readings") or []:
+            try:
+                ts, p = float(rd["ts"]), float(rd["pct"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            b = self._block_at(ts)
+            if b is None or p <= 0:
+                continue
+            comps = self._block_components(b["i"], ts)
+            readings.append({"ts": ts, "pct": p, "block": b["i"], "comps": comps})
+        ref_L = []
+        for rd in readings:
+            per = {f: o + alpha * i + beta * c for f, (o, i, c) in rd["comps"].items()}
+            tot = sum(per.values())
+            if tot and per.get(REF_FAMILY, 0) / tot >= 0.7:
+                ref_L.append(tot / (rd["pct"] / 100))
+        limit_est = statistics.median(ref_L) if ref_L else hit_est
+        weights = {}
+        if limit_est:
+            est_by_fam = defaultdict(list)
+            for rd in readings:
+                per = {f: o + alpha * i + beta * c for f, (o, i, c) in rd["comps"].items()}
+                tot = sum(per.values())
+                target = rd["pct"] / 100 * limit_est
+                for f, u in per.items():
+                    if f == REF_FAMILY or not tot or u / tot < 0.3:
+                        continue
+                    rest = sum(v for g, v in per.items() if g != f)
+                    w = (target - rest) / u
+                    if w > 0:
+                        est_by_fam[f].append(w)
+            weights = {f: min(10.0, max(0.1, statistics.median(v))) for f, v in est_by_fam.items()}
 
         for b in self.blocks:
-            b["units"] = units(*comps_all[b["i"]])
-            b["units_at_hit"] = units(*comps_hit[b["i"]]) if b["i"] in comps_hit else None
+            b["units"] = self._units(comps_all[b["i"]], alpha, beta, weights)
+            b["units_at_hit"] = self._units(comps_hit[b["i"]], alpha, beta, weights) if b["i"] in comps_hit else None
         for r in self.requests:
-            r["units"] = units(r["u_out"], r["u_in"], r["u_cr"])
-        est = max((b["units_at_hit"] for b in clean), default=None)
-        if est is None and hit_blocks:
-            est = max(b["units_at_hit"] for b in hit_blocks)
+            r["units"] = weights.get(r["fam"], 1.0) * (r["u_out"] + alpha * r["u_in"] + beta * r["u_cr"])
+        est = limit_est
         user = self.settings.get("block_limit_units")
         if user:
             limit, source = float(user), "manual"
@@ -362,6 +424,13 @@ class Analysis:
             limit, source = est, "calibrated"
         else:
             limit, source = None, "none"
+        reading_rows = []
+        for rd in readings:
+            pred = self._units(rd["comps"], alpha, beta, weights) / limit * 100 if limit else None
+            reading_rows.append({"ts": rd["ts"], "pct": rd["pct"], "predicted": pred,
+                                 "families": sorted(rd["comps"])})
+        self._cal_extra = {"weights": weights, "readings": reading_rows, "hit_estimate": hit_est,
+                           "reading_limit_samples": len(ref_L)}
         peak = max((b["units"] for b in self.blocks), default=0)
         self.calibration = {
             "block_limit": limit,
@@ -377,6 +446,7 @@ class Analysis:
                           "clean": b in clean} for b in hit_blocks],
             "peak_block": peak,
             "weekly_limit": self.settings.get("weekly_limit_units"),
+            **self._cal_extra,
         }
 
     def current_block(self):

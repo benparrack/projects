@@ -31,6 +31,16 @@ def load_settings():
         return dict(DEFAULTS)
 
 
+def add_usage_reading(pct, ts=None):
+    """Record a /usage '% of current session' reading for calibration."""
+    pct = float(pct)
+    if not 0 < pct <= 100:
+        raise ValueError("percentage must be between 0 and 100")
+    readings = list(load_settings().get("usage_readings") or [])
+    readings.append({"ts": ts or time.time(), "pct": pct})
+    return save_settings({"usage_readings": readings})
+
+
 def save_settings(new):
     cur = load_settings()
     for k in DEFAULTS:
@@ -42,6 +52,8 @@ def save_settings(new):
                     v = DEFAULTS[k]
             elif k == "notify":
                 v = bool(v)
+            elif k == "usage_readings":
+                v = [{"ts": float(r["ts"]), "pct": float(r["pct"])} for r in (v or [])][-50:]
             cur[k] = v
     p = settings_path()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -133,15 +145,22 @@ def make_handler(state):
 
         def do_POST(self):
             path = urlparse(self.path).path
-            if path != "/api/settings":
-                return self._json({"error": "not found"}, 404)
             n = int(self.headers.get("Content-Length") or 0)
             try:
                 data = json.loads(self.rfile.read(n) or b"{}")
             except ValueError:
                 return self._json({"error": "bad json"}, 400)
-            state.update_settings(data)
-            self._json({"ok": True, "settings": state.settings})
+            if path == "/api/settings":
+                state.update_settings(data)
+                return self._json({"ok": True, "settings": state.settings})
+            if path == "/api/calibrate":
+                try:
+                    state.settings = add_usage_reading(data.get("pct"))
+                except (TypeError, ValueError) as e:
+                    return self._json({"error": str(e)}, 400)
+                a = state.get(force=True)
+                return self._json({"ok": True, "calibration": a.calibration})
+            return self._json({"error": "not found"}, 404)
 
         def _api(self, name):
             a = state.get()
