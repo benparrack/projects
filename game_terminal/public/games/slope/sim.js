@@ -20,7 +20,9 @@
   const AIR_FRICTION = 0.8;
   const MAX_VX = 13;
   const FALL_DEATH = 38; // this far below the last ground touched = gone
-  const BOOST = 11; // speed a boost pad adds on top of whatever you had (it bleeds off over ~2s)
+  const BOOST = 8; // extra kick a boost pad gives on top, bleeding off over ~2s
+  const BONUS = 6; // cruising speed each pad adds for the rest of the run...
+  const BONUS_CAP = 12; // ...up to this much; obstacles are laid out for the fastest case
 
   function mulberry32(seed) {
     let a = seed >>> 0;
@@ -46,10 +48,9 @@
   // --- Track -------------------------------------------------------------------------------
 
   function makeTrack(seed) {
-    const T = { seed, rnd: mulberry32(seed), pieces: [], end: 0, y: 0, cx: 0, since: 0 };
+    const T = { seed, rnd: mulberry32(seed), pieces: [], end: 0, y: 0, cx: 0, since: 0, lastBoost: 0 };
     const start = add(T, { kind: 'start', len: 100, slope: -0.1, w: 10 });
     start.pads.push({ s: 55, hl: 2.4, xr: 0, hw: 2 }); // a kick right away to get the run going
-    T.boosted = true;
     return T;
   }
 
@@ -57,7 +58,7 @@
     // A centre-line shift has to be followable: its peak sideways rate (1.5x the average, from
     // the smoothstep) must stay well under what the ball can do at the speed it'll be going.
     if (o.cx1 != null) {
-      const maxShift = (o.len / (targetSpeed(T.end) * 1.2)) * 5.5 / 1.5;
+      const maxShift = (o.len / (targetSpeed(T.end) * 1.2 + BONUS_CAP)) * 5.5 / 1.5;
       o.cx1 = T.cx + clamp(o.cx1 - T.cx, -maxShift, maxShift);
     }
     const p = {
@@ -94,14 +95,14 @@
     const between = (a, b) => a + r() * (b - a);
     const width = () => clamp(between(8.5, 10) - 4.6 * d, 4.2, 10);
     const downhill = () => -between(0.12, 0.2 + 0.14 * d);
-    let kind0 = null;
+    let kind0 = T.pieces.length === 1 ? 'drop' : null; // open with a big drop into the valley
     const shiftTo = (amt) => T.cx + (r() < 0.5 ? -1 : 1) * between(amt * 0.4, amt);
 
     // Right after a boost pad the ball is going well over the speed the obstacles are sized for,
     // so what follows is open track — or a jump, which a boost just makes bigger.
     if (T.boosted) {
       T.boosted = false;
-      if (s > 220 && r() < 0.5) kind0 = 'jump';
+      if (s > 110 && r() < 0.5) kind0 = 'jump';
       else { add(T, { kind: 'plain', len: between(30, 45), slope: downhill(), w: width() }); return; }
     }
     // After anything scary, a short calm run-out so a landing is never straight into trouble.
@@ -112,15 +113,15 @@
     }
 
     const table = [
-      ['plain', 2.5],
+      ['plain', 1.6],
       ['shift', 1.2 + d],
       ['blocks', s > 140 ? 2 + 3.5 * d : 0],
-      ['jump', s > 220 ? 1.3 + 1.7 * d : 0],
-      ['drop', s > 170 ? 1 + d : 0],
+      ['jump', s > 110 ? 2.2 + 1.2 * d : 0],
+      ['drop', s > 100 ? 2 + 0.5 * d : 0],
       ['bank', s > 380 ? 0.6 + 1.6 * d : 0],
       ['narrow', s > 700 ? 1.6 * d : 0],
-      ['steps', s > 300 ? 0.8 + 0.8 * d : 0],
-      ['boost', 1.4 + 0.4 * d],
+      ['steps', s > 150 ? 1 + 0.6 * d : 0],
+      ['boost', s - T.lastBoost > 350 ? 0.9 : 0],
       ['pistons', s > 320 ? 0.9 + 1.6 * d : 0],
     ];
     let tot = 0;
@@ -137,7 +138,7 @@
       const w = width() + 0.8;
       const p = add(T, { kind, len: between(40, 70), slope: downhill(), w, cx1: r() < 0.3 ? shiftTo(4) : null });
       const gapRows = clamp(15 - 5 * d, 9, 15);
-      const v = targetSpeed(s) * 1.15;
+      const v = targetSpeed(s) * 1.15 + BONUS_CAP;
       let prevC = 0; // the last opening's position — the next must be reachable from it in time
       for (let z = p.s0 + 10; z < p.s1 - 6; z += gapRows * between(0.9, 1.25)) {
         const reach = (gapRows * 0.9 / v) * 5; // lateral units a ball can cover between rows
@@ -180,7 +181,7 @@
       const reach = v * tAir;
       const gapLen = clamp(between(0.45, 0.75) * reach, 6, reach * 0.8);
       add(T, { kind: 'gap', len: gapLen, slope: 0 });
-      const vMax = targetSpeed(s) * 1.2 + BOOST;
+      const vMax = targetSpeed(s) * 1.2 + BOOST + BONUS_CAP;
       const vyM = rampSlope * vMax;
       const reachMax = vMax * (vyM + Math.sqrt(vyM * vyM + 2 * G * drop)) / G;
       T.y = T.pieces[T.pieces.length - 2].y0 + rampSlope * rampLen; // gap keeps launch height
@@ -200,12 +201,13 @@
       // A strip of glowing chevrons; ride over one for a kick of speed.
       const w = width() + 0.5;
       const p = add(T, { kind: 'plain', len: between(34, 44), slope: downhill(), w });
-      const n = 1 + Math.floor(r() * 2);
+      const n = 1;
       for (let i = 0; i < n; i++) {
         const hw = Math.min(w / 2, between(1.4, 2.2));
         p.pads.push({ s: p.s0 + 10 + i * 13, hl: 2.4, xr: between(-w / 2 + hw, w / 2 - hw), hw });
       }
       T.boosted = true;
+      T.lastBoost = s;
     } else if (kind === 'pistons') {
       // Red blocks punching up out of the floor and sinking back, alternating sides so there's
       // always a way round one — or time it and roll straight over it while it's down.
@@ -213,7 +215,7 @@
       const p = add(T, { kind, len: between(40, 60), slope: downhill(), w });
       const half = w / 2;
       let side = r() < 0.5 ? -1 : 1;
-      const v = targetSpeed(s) * 1.2;
+      const v = targetSpeed(s) * 1.2 + BONUS_CAP;
       let z = p.s0 + 10;
       while (z < p.s1 - 6) {
         const hw = Math.min((w - 2.8) / 2, between(w * 0.2, w * (0.28 + 0.06 * d)));
@@ -275,7 +277,7 @@
 
   function newBall(T) {
     const p = T.pieces[0];
-    return { s: 4, x: 0, y: heightAt(p, 4, 0) + R, vs: targetSpeed(0) * 0.6, vx: 0, vy: 0, grounded: true, alive: true, cause: null, lastGroundY: p.y0, air: 0, roll: 0 };
+    return { s: 4, x: 0, y: heightAt(p, 4, 0) + R, vs: targetSpeed(0) * 0.6, bonus: 0, vx: 0, vy: 0, grounded: true, alive: true, cause: null, lastGroundY: p.y0, air: 0, roll: 0 };
   }
 
   // Advances one fixed step. steer in [-1, 1]. Returns an event string or null
@@ -290,7 +292,7 @@
     const p0 = pieceAt(T, b.s);
     // Forward speed: pulled toward the target speed; downhill adds a little, uphill costs a little.
     if (b.grounded) {
-      b.vs += (targetSpeed(b.s) - b.vs) * 0.9 * DT - p0.slope * G * 0.18 * DT;
+      b.vs += (targetSpeed(b.s) + b.bonus - b.vs) * 0.9 * DT - p0.slope * G * 0.18 * DT;
       b.vx += steer * STEER_ACCEL * DT + G * Math.sin(p0.bank) * -0.55 * DT;
       b.vx *= Math.exp(-GROUND_FRICTION * DT);
     } else {
@@ -341,7 +343,8 @@
         if (Math.abs(b.s - pad.s) > pad.hl || Math.abs(xr - pad.xr) > pad.hw + R * 0.5) continue;
         if (b.boostPad === pad) continue;
         b.boostPad = pad;
-        b.vs = Math.min(b.vs + BOOST, targetSpeed(b.s) + BOOST * 1.1);
+        b.bonus = Math.min(BONUS_CAP, b.bonus + BONUS);
+        b.vs = Math.max(b.vs, targetSpeed(b.s) + b.bonus) + BOOST;
         ev = 'boost';
       }
     }
