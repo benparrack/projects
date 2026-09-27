@@ -15,6 +15,9 @@ the uploads from his own accounts.
 | `cover_800x800.png` | CrazyGames square cover |
 | `itch_cover_630x500.png` | itch.io cover image |
 | `screenshot_1_early.png`, `screenshot_2_void.png`, `screenshot_3_late.png` | Store screenshots (1920×1080), early / mid / late game |
+| `preview_landscape_1920x1080.mp4` | CrazyGames landscape preview video (mandatory) |
+| `preview_portrait_1080x1620.mp4` | CrazyGames portrait (2:3) preview video (mandatory) |
+| `preview_recorder.js`, `make_videos.sh`, `cover_portrait_1080x1620.png` | Regenerate the videos (see the comments in each) |
 
 The covers follow CrazyGames' rules: title text only, no borders, no logos or
 "Play/New" badges. They are rendered from the game's own sun and planets art.
@@ -74,8 +77,9 @@ Grow a universe from a single spark: an idle clicker with a boss-fighting Void F
    `gameplayStart`/`gameplayStop` (on tab hide/show), so it qualifies for
    **Full Launch** (rewarded ads). Picking **Basic Launch** also works with the
    same file.
-7. Optional: a 15–20 s silent preview video (1080p 16:9, opening on the cover
-   frame, no cursor). CrazyGames recommends one but doesn't require it.
+7. Preview videos (mandatory): upload `preview_landscape_1920x1080.mp4` and
+   `preview_portrait_1080x1620.mp4`. Each is 19.8s, silent, real-time speed,
+   no cursor or black bars, about 10 MB, and opens on the static cover.
 8. Submit. Review usually takes a few days to a couple of weeks.
 
 Notes:
