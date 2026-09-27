@@ -179,7 +179,7 @@ def drift_probe(t):
     u = clamp01((t - 8.0) / 12.0)
     far_dir = norm(DRIFT_DIR + 0.05 * _v - 0.06 * _w)
     near_dir = norm(DRIFT_DIR + 0.55 * _w - 0.12 * _v)
-    d = np.exp(lerp(np.log(2.4), np.log(0.0075), u ** 1.25))
+    d = np.exp(lerp(np.log(1.3), np.log(0.0075), u ** 1.15))
     return PROBE0 + norm(lerp(far_dir, near_dir, smooth((u - 0.5) / 0.5))) * d
 
 
@@ -334,16 +334,20 @@ def fly_ang(t):
 
 def shot_flyover(t, s):
     ap = fly_ang(t)
-    lag = 0.55 / RING_R + 0.9 * (1 - smooth((t - 76.0) / 12.0)) / RING_R
+    u = clamp01((t - 76.0) / 12.0)
+    # high three-quarter chase: a tiny lamp streaking down a vast dead canyon,
+    # camera descending toward it as it slows for the beacon
+    lag = lerp(9.0, 2.2, smooth(u)) / RING_R
     ac = ap - lag
-    shake = value_noise1(t * 3.0, 1.0)
-    cam = ring_point(ac, h_above_floor=1.25 + 0.05 * shake, y=6.5)
-    pp = ring_point(ap, h_above_floor=0.95, y=6.0 + 0.4 * np.sin(t * 0.9))
+    shake = value_noise1(t * 2.0, 1.0)
+    cam = ring_point(ac, h_above_floor=lerp(7.5, 1.6, smooth(u)) + 0.05 * shake,
+                     y=lerp(-7.0, -2.5, smooth(u)))
+    pp = ring_point(ap, h_above_floor=0.30 + 0.03 * np.sin(t * 1.1), y=0.8 + 0.25 * np.sin(t * 0.9))
     tan, up, ax = ring_frame_at(ac)
-    fwd = norm(tan * 1.0 + up * 0.18 - ax * 0.02)
+    look_pt = pp + ring_frame_at(ap)[0] * lerp(6.0, 1.5, smooth(u))
     s["cam_pos"] = cam
-    s["cam_M"] = look_dir(fwd, up=up, roll=0.05 * np.sin(t * 0.5))
-    s["fov"] = 46.0
+    s["cam_M"] = look_at(cam, look_pt, up=up, roll=0.04 * np.sin(t * 0.5) + 0.01 * shake)
+    s["fov"] = 50.0
     s["planet"] = True
     s["ring"] = True
     s["ring_detail"] = 1.0
@@ -351,6 +355,7 @@ def shot_flyover(t, s):
     s["probe"] = True
     s["probe_pos"] = pp
     s["probe_R"] = probe_orient_to(ring_frame_at(ap)[0], up=up)
+    s["glow_min_px"] = 9.0
     return s
 
 

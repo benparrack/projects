@@ -8,10 +8,11 @@ If a session dies, read this first, then `REVIEW.md` (latest pass) and `SCRIPT.m
 - [x] All 15 shots staged (`src/scene.py`), timing in `src/timeline.py`
 - [x] Review pass 1 (picture) → fixes applied
 - [x] Score + SFX (`src/audio.py` → `output/audio/score.wav`)
-- [ ] First full preview (`output/preview.mp4`)
-- [ ] Review pass 2 (preview film: picture + audio sync)
-- [ ] Review pass 3
-- [ ] Final render `output/film.mp4` (1920×1080, 60 fps, H.264 + AAC), ffprobe check
+- [x] First full preview (`output/preview.mp4`, ~40 s render)
+- [x] Review pass 2 (preview film: picture + audio sync) → drift/flyover restaged, mix rebalanced
+- [x] Review pass 3 (final-quality stills) → approved
+- [x] README.md + one-command `./make_film.sh`
+- [ ] Final render (running: `./make_film.sh`, log in `output/final_render.log`) `output/film.mp4` (1920×1080, 60 fps, H.264 + AAC), ffprobe check
 - [ ] NEW_IDEAS.md N2 → done, TODO_FIRST.md done line
 
 ## How to resume
@@ -26,3 +27,5 @@ If a session dies, read this first, then `REVIEW.md` (latest pass) and `SCRIPT.m
 
 ## Commits so far
 - script + renderer WIP; review pass 1 look fixes.
+- score + SFX, make_film.sh, first preview.
+- pass 2/3 fixes (drift, flyover), README, review docs.
