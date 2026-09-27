@@ -53,6 +53,7 @@ function buildView(room, forClientId) {
     correctGuessers: st.correctGuessers.slice(),
     guessLog: st.guessLog.slice(-MAX_GUESS_LOG),
     roundEndsAt: st.roundEndsAt,
+    serverNow: Date.now(),
   };
 }
 

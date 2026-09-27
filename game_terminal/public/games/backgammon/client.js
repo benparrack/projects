@@ -94,7 +94,17 @@ export function mount(container, api) {
     armedDie = null;
   }
 
-  function discEl(color, i) {
+  // Only checkers that are new on a point since the last render pop in — otherwise every
+  // re-render replayed the animation on the whole board.
+  let prevCounts = {};
+  let curCounts = {};
+  let prevDiceKey = null;
+  function shouldPop(key, i) {
+    curCounts[key] = Math.max(curCounts[key] || 0, i + 1);
+    return i >= (prevCounts[key] || 0);
+  }
+
+  function discEl(color, i, animate = true) {
     const d = document.createElement('div');
     d.style.width = `${DISC}px`;
     d.style.height = `${DISC}px`;
@@ -109,7 +119,7 @@ export function mount(container, api) {
       d.style.background = 'radial-gradient(circle at 34% 30%, #ffffff, #d6d6d6 55%, #9c9c9c 100%)';
       d.style.border = '1px solid #cfcfcf';
     }
-    popIn(d, i * 25);
+    if (animate) popIn(d, i * 25);
     return d;
   }
 
@@ -177,7 +187,7 @@ export function mount(container, api) {
 
     if (pt && pt.count > 0) {
       const shown = Math.min(pt.count, 5);
-      for (let i = 0; i < shown; i++) content.appendChild(discEl(pt.color, i));
+      for (let i = 0; i < shown; i++) content.appendChild(discEl(pt.color, i, shouldPop(`p${pointNum}${pt.color}`, i)));
       if (pt.count > 5) {
         const more = document.createElement('div');
         more.textContent = `+${pt.count - 5}`;
@@ -215,7 +225,7 @@ export function mount(container, api) {
         wrap.style.boxShadow = `0 0 0 2px ${ACCENT}, 0 0 10px 1px rgba(57,255,20,0.55)`;
         wrap.addEventListener('click', () => playFrom('bar'));
       }
-      wrap.appendChild(discEl(color, 0));
+      wrap.appendChild(discEl(color, 0, shouldPop(`bar${color}`, 0)));
     }
     return wrap;
   }
@@ -228,6 +238,8 @@ export function mount(container, api) {
   }
 
   function render() {
+    prevCounts = curCounts;
+    curCounts = {};
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -343,6 +355,9 @@ export function mount(container, api) {
         diceRow.appendChild(rollBtn);
       } else {
         const uniq = uniqueRemainingDice();
+        const diceKey = `${view.turn}:${view.dice.join(',')}`;
+        const diceChanged = diceKey !== prevDiceKey;
+        prevDiceKey = diceKey;
         view.dice.forEach((d, i) => {
           const pill = document.createElement('button');
           pill.textContent = String(d);
@@ -367,7 +382,7 @@ export function mount(container, api) {
               render();
             }
           });
-          popIn(pill, i * 40);
+          if (diceChanged) popIn(pill, i * 40);
           diceRow.appendChild(pill);
         });
       }

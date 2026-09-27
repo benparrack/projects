@@ -3,6 +3,7 @@
 // top-left to the bottom-right exit wins. Server plugin: ../../../server/games/mazedash.js
 // (server sends the full maze wall data each round rather than the client regenerating it from
 // the seed — see that file's header comment for why).
+import { makeServerClock } from '../serverClock.js';
 
 const ROWS = 15; // must match server/games/mazedash.js's ROWS/COLS
 const COLS = 15;
@@ -24,6 +25,7 @@ function fmtMs(ms) {
 }
 
 export function mount(container, api) {
+  const serverClock = makeServerClock();
   const wrap = document.createElement('div');
   wrap.style.display = 'flex';
   wrap.style.flexDirection = 'column';
@@ -190,10 +192,13 @@ export function mount(container, api) {
       timerEl.textContent = '';
       return;
     }
-    if (me.finished) {
+    const untilGo = view.roundStartedAt - serverClock.now();
+    if (untilGo > 0) {
+      timerEl.textContent = `GET READY... ${Math.ceil(untilGo / 1000)}`;
+    } else if (me.finished) {
       timerEl.textContent = `FINISHED: ${fmtMs(me.finishMs)}`;
     } else {
-      timerEl.textContent = fmtMs(Date.now() - view.roundStartedAt);
+      timerEl.textContent = fmtMs(serverClock.now() - view.roundStartedAt);
     }
   }
 
@@ -212,23 +217,44 @@ export function mount(container, api) {
     api.sendAction({ kind: 'move', direction: dir });
   }
 
+  // Holding a direction keeps moving at a steady rate (our own repeat, not the OS's slow,
+  // uneven auto-repeat), so long corridors don't need a tap per cell.
+  const MOVE_REPEAT_MS = 85;
+  let heldDir = null;
+  let repeatTimer = null;
+  function stopRepeat() {
+    clearInterval(repeatTimer);
+    repeatTimer = null;
+    heldDir = null;
+  }
   function onKeyDown(ev) {
-    if (ev.repeat) return; // one move per physical keypress, not per OS auto-repeat tick
+    if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
     const dir = KEY_TO_DIR[ev.code];
     if (!dir) return;
     ev.preventDefault();
+    if (ev.repeat || dir === heldDir) return;
+    stopRepeat();
+    heldDir = dir;
     sendMove(dir);
+    repeatTimer = setInterval(() => sendMove(dir), MOVE_REPEAT_MS);
+  }
+  function onKeyUp(ev) {
+    if (KEY_TO_DIR[ev.code] === heldDir) stopRepeat();
   }
   window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', stopRepeat);
 
   return {
     applySnapshot(snapshot) {
       view = snapshot;
+      if (view) serverClock.sync(view.serverNow);
       render();
     },
     applyEvent(data) {
       if (data && data.kind === 'state') {
         view = data;
+        if (view) serverClock.sync(view.serverNow);
         render();
       }
     },
@@ -238,6 +264,9 @@ export function mount(container, api) {
     },
     unmount() {
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', stopRepeat);
+      stopRepeat();
       clearInterval(timerInterval);
       container.innerHTML = '';
     },

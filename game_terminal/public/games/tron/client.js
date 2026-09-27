@@ -339,7 +339,10 @@ export function mount(container, api) {
   }
 
   function applyTickView(view) {
-    if (lastRoundId !== null && view.roundId !== lastRoundId) trailMap.clear();
+    if (lastRoundId !== null && view.roundId !== lastRoundId) {
+      trailMap.clear();
+      lastSentDir = null; // a new round starts with a new heading — don't swallow the first key
+    }
     for (const add of view.trailAdded || []) {
       ensureTrail(add.clientId).push({ x: add.x, y: add.y });
     }

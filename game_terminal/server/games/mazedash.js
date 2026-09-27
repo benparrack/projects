@@ -117,12 +117,14 @@ function freshPlayer(clientId, nickname, colorIdx) {
   };
 }
 
+const COUNTDOWN_MS = 3000;
+
 function startRace(st, room, ctx) {
   st.seed = randomSeed();
   st.maze = generateMaze(st.seed, ROWS, COLS);
   st.distFromStart = bfsDistances(st.maze, ROWS, COLS, 0, 0);
   st.roundId = (st.roundId || 0) + 1;
-  st.roundStartedAt = Date.now();
+  st.roundStartedAt = Date.now() + COUNTDOWN_MS; // moves are ignored until the 3-2-1 countdown ends
   st.roundEndedAt = null;
   st.phase = 'racing';
   for (const p of st.players.values()) {
@@ -183,6 +185,7 @@ function buildPublicState(room) {
     seed: st.seed,
     maze: st.maze,
     roundStartedAt: st.roundStartedAt,
+    serverNow: Date.now(),
     roundEndedAt: st.roundEndedAt,
     players: [...st.players.values()].map((p) => ({
       clientId: p.clientId,
@@ -256,7 +259,7 @@ module.exports = {
     }
 
     if (data.kind === 'move') {
-      if (st.phase !== 'racing') return;
+      if (st.phase !== 'racing' || Date.now() < st.roundStartedAt) return;
       const p = st.players.get(ctx.senderId);
       if (!p || !p.racingThisRound || p.finished) return;
       const d = DIR_BY_NAME[data.direction];

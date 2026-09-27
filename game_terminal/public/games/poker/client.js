@@ -220,6 +220,7 @@ export function mount(container, api) {
         raiseInput.addEventListener('input', () => {
           raiseAmount = Number(raiseInput.value);
           amountInput.value = String(raiseAmount);
+          raiseBtn.textContent = raiseAmount >= maxRaiseTo ? 'ALL IN' : 'RAISE TO';
         });
         actions.appendChild(raiseInput);
         const amountInput = document.createElement('input');
@@ -233,6 +234,7 @@ export function mount(container, api) {
           if (!Number.isFinite(typed)) return;
           raiseAmount = Math.max(minRaiseTo, Math.min(typed, maxRaiseTo));
           raiseInput.value = String(raiseAmount);
+          raiseBtn.textContent = raiseAmount >= maxRaiseTo ? 'ALL IN' : 'RAISE TO';
         });
         amountInput.addEventListener('blur', () => {
           // Snap the displayed value back in range once they're done typing (e.g. they typed

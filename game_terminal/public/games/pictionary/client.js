@@ -2,6 +2,7 @@
 // type the word into the guess log. Server plugin: ../../../server/games/pictionary.js (segment/
 // clear events mirror drawing.js's wire format; 'state' is a per-recipient view like hangman.js's
 // — only the drawer's own view carries the actual word while a round is live).
+import { makeServerClock } from '../serverClock.js';
 
 const CANVAS_WIDTH = 640;
 const CANVAS_HEIGHT = 420;
@@ -10,6 +11,7 @@ const COLORS = ['#39ff14', '#ffb000', '#00e5ff', '#ff4dd2', '#ffffff', '#ff4d4d'
 const DEFAULT_SIZE = 4;
 
 export function mount(container, api) {
+  const serverClock = makeServerClock();
   let view = null;
   let roster = [];
   let currentColor = COLORS[0];
@@ -239,7 +241,7 @@ export function mount(container, api) {
         statusEl.textContent = `Waiting for ${drawerName} to pick a word...`;
       }
     } else if (view.phase === 'drawing') {
-      const secsLeft = view.roundEndsAt ? Math.max(0, Math.ceil((view.roundEndsAt - Date.now()) / 1000)) : 0;
+      const secsLeft = view.roundEndsAt ? Math.max(0, Math.ceil((view.roundEndsAt - serverClock.now()) / 1000)) : 0;
       if (view.isDrawer) {
         statusEl.textContent = `Draw: "${view.word ? view.word.toUpperCase() : ''}" — ${secsLeft}s left`;
       } else {
@@ -289,6 +291,7 @@ export function mount(container, api) {
   return {
     applySnapshot(snapshot) {
       view = snapshot;
+      if (view) serverClock.sync(view.serverNow);
       segments = (view && view.history) || [];
       redrawAll();
       render();
@@ -298,6 +301,7 @@ export function mount(container, api) {
       if (data.kind === 'state') {
         const prevPhase = view ? view.phase : null;
         view = data.view;
+        if (view) serverClock.sync(view.serverNow);
         // The server only ever ships full segment history inside 'state' views on join/reset —
         // live strokes arrive as their own 'segment' events. Re-sync from history only when the
         // round actually changed (a fresh round always starts with an empty history), so we don't

@@ -6,8 +6,15 @@ import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
 
 const SEAT_LABELS = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 
+const REJECT_MESSAGES = {
+  must_pass_three: 'Pick exactly three cards to pass.',
+  invalid_cards: "Those cards aren't in your hand.",
+  illegal_card: "You can't play that card — follow suit if you can, the 2♣ leads the first trick, and hearts can't lead until broken.",
+};
+
 export function mount(container, api) {
   let view = null;
+  let notice = '';
   let roster = [];
   let selectedForPass = []; // indices into myHand, up to 3
 
@@ -149,6 +156,14 @@ export function mount(container, api) {
     }
     if (controls.children.length) root.appendChild(controls);
 
+    if (notice) {
+      const n = document.createElement('div');
+      n.textContent = notice;
+      n.style.color = '#ff6b6b';
+      n.style.fontSize = '0.85em';
+      root.appendChild(n);
+    }
+
     // Current trick
     if (view.phase === 'playing' || view.phase === 'hand_over') {
       const trickRow = document.createElement('div');
@@ -160,7 +175,14 @@ export function mount(container, api) {
       trickLabel.style.opacity = '0.7';
       trickLabel.textContent = 'Trick:';
       trickRow.appendChild(trickLabel);
-      for (const entry of view.currentTrick) {
+      // Once a trick completes the server clears currentTrick immediately — keep showing the
+      // finished trick (dimmed) until the next card is led, so everyone sees what was played.
+      const showingLast = view.currentTrick.length === 0 && view.lastTrick && view.phase === 'playing';
+      if (showingLast) {
+        trickLabel.textContent = `Won by ${nicknameFor(view.seats[view.lastTrickWinnerSeat])}:`;
+        trickRow.style.opacity = '0.6';
+      }
+      for (const entry of showingLast ? view.lastTrick : view.currentTrick) {
         const col = document.createElement('div');
         col.style.display = 'flex';
         col.style.flexDirection = 'column';
@@ -265,6 +287,10 @@ export function mount(container, api) {
     applyEvent(data) {
       if (data && data.kind === 'state') {
         view = data;
+        notice = '';
+        render();
+      } else if (data && data.kind === 'actionRejected') {
+        notice = REJECT_MESSAGES[data.reason] || "You can't do that right now.";
         render();
       }
     },

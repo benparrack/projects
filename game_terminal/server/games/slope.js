@@ -337,6 +337,7 @@ function buildPublicState(room) {
     phase: st.phase,
     phaseEndsAt: st.phase === 'countdown' || st.phase === 'results' ? st.phaseEndsAt : null,
     seed: st.seed,
+    serverNow: Date.now(),
     raceStartedAt: st.raceStartedAt, // shared clock the client uses to render moving hazards in sync
     players: [...st.players.values()].map((p) => ({
       clientId: p.clientId,

@@ -9,8 +9,9 @@ const CANVAS_HEIGHT = 240;
 export function mount(container, api) {
   let view = null;
   let roster = [];
-  let canvas = null;
-  let canvasCtx = null;
+  // The in-progress task widget is cached across re-renders so another player's submit (which
+  // broadcasts new state) doesn't wipe your half-finished drawing or typed text.
+  let taskCache = { key: null, el: null };
 
   const root = document.createElement('div');
   root.style.display = 'flex';
@@ -36,7 +37,7 @@ export function mount(container, api) {
     wrap.style.gap = '6px';
     wrap.style.alignItems = 'center';
 
-    canvas = document.createElement('canvas');
+    const canvas = document.createElement('canvas');
     canvas.width = CANVAS_WIDTH;
     canvas.height = CANVAS_HEIGHT;
     canvas.style.background = '#fff';
@@ -45,7 +46,7 @@ export function mount(container, api) {
     canvas.draggable = false;
     canvas.style.userSelect = 'none';
     canvas.addEventListener('dragstart', (ev) => ev.preventDefault());
-    canvasCtx = canvas.getContext('2d');
+    const canvasCtx = canvas.getContext('2d');
     canvasCtx.lineCap = 'round';
     canvasCtx.lineWidth = 3;
     canvasCtx.strokeStyle = '#111';
@@ -129,15 +130,78 @@ export function mount(container, api) {
     return box;
   }
 
+  function buildTask(task) {
+    const box = document.createElement('div');
+    box.style.display = 'flex';
+    box.style.flexDirection = 'column';
+    box.style.gap = '10px';
+    box.style.alignItems = 'center';
+    if (task.taskType === 'prompt') {
+      const hint = document.createElement('div');
+      hint.textContent = 'Write a short prompt for someone else to draw:';
+      hint.style.fontSize = '0.85em';
+      box.appendChild(hint);
+      const form = document.createElement('form');
+      form.style.display = 'flex';
+      form.style.gap = '6px';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.maxLength = 200;
+      input.placeholder = 'e.g. a cat riding a skateboard';
+      input.style.width = '260px';
+      const submit = document.createElement('button');
+      submit.type = 'submit';
+      submit.textContent = 'SUBMIT';
+      form.appendChild(input);
+      form.appendChild(submit);
+      form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const val = input.value.trim();
+        if (!val) return;
+        api.sendAction({ kind: 'submit', content: val });
+      });
+      box.appendChild(form);
+    } else if (task.taskType === 'drawing') {
+      box.appendChild(renderPreviousEntry(task.previousEntry));
+      box.appendChild(buildCanvasWidget((dataUrl) => api.sendAction({ kind: 'submit', content: dataUrl })));
+    } else if (task.taskType === 'guess') {
+      box.appendChild(renderPreviousEntry(task.previousEntry));
+      const hint = document.createElement('div');
+      hint.textContent = 'What do you think this drawing shows?';
+      hint.style.fontSize = '0.85em';
+      box.appendChild(hint);
+      const form = document.createElement('form');
+      form.style.display = 'flex';
+      form.style.gap = '6px';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.maxLength = 200;
+      input.style.width = '260px';
+      const submit = document.createElement('button');
+      submit.type = 'submit';
+      submit.textContent = 'SUBMIT';
+      form.appendChild(input);
+      form.appendChild(submit);
+      form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const val = input.value.trim();
+        if (!val) return;
+        api.sendAction({ kind: 'submit', content: val });
+      });
+      box.appendChild(form);
+    }
+    return box;
+  }
+
   function render() {
+    const focused = taskCache.el && taskCache.el.contains(document.activeElement) ? document.activeElement : null;
     root.innerHTML = '';
-    canvas = null;
-    canvasCtx = null;
     if (!view) {
       root.textContent = 'Loading...';
       return;
     }
 
+    if (view.phase !== 'playing') taskCache = { key: null, el: null };
     const mySeat = mySeatIndex();
     const status = document.createElement('div');
     if (view.phase === 'waiting') {
@@ -187,59 +251,11 @@ export function mount(container, api) {
         waiting.textContent = 'Submitted! Waiting for everyone else...';
         waiting.style.opacity = '0.8';
         root.appendChild(waiting);
-      } else if (task.taskType === 'prompt') {
-        const hint = document.createElement('div');
-        hint.textContent = 'Write a short prompt for someone else to draw:';
-        hint.style.fontSize = '0.85em';
-        root.appendChild(hint);
-        const form = document.createElement('form');
-        form.style.display = 'flex';
-        form.style.gap = '6px';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.maxLength = 200;
-        input.placeholder = 'e.g. a cat riding a skateboard';
-        input.style.width = '260px';
-        const submit = document.createElement('button');
-        submit.type = 'submit';
-        submit.textContent = 'SUBMIT';
-        form.appendChild(input);
-        form.appendChild(submit);
-        form.addEventListener('submit', (ev) => {
-          ev.preventDefault();
-          const val = input.value.trim();
-          if (!val) return;
-          api.sendAction({ kind: 'submit', content: val });
-        });
-        root.appendChild(form);
-      } else if (task.taskType === 'drawing') {
-        root.appendChild(renderPreviousEntry(task.previousEntry));
-        root.appendChild(buildCanvasWidget((dataUrl) => api.sendAction({ kind: 'submit', content: dataUrl })));
-      } else if (task.taskType === 'guess') {
-        root.appendChild(renderPreviousEntry(task.previousEntry));
-        const hint = document.createElement('div');
-        hint.textContent = 'What do you think this drawing shows?';
-        hint.style.fontSize = '0.85em';
-        root.appendChild(hint);
-        const form = document.createElement('form');
-        form.style.display = 'flex';
-        form.style.gap = '6px';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.maxLength = 200;
-        input.style.width = '260px';
-        const submit = document.createElement('button');
-        submit.type = 'submit';
-        submit.textContent = 'SUBMIT';
-        form.appendChild(input);
-        form.appendChild(submit);
-        form.addEventListener('submit', (ev) => {
-          ev.preventDefault();
-          const val = input.value.trim();
-          if (!val) return;
-          api.sendAction({ kind: 'submit', content: val });
-        });
-        root.appendChild(form);
+      } else {
+        const key = `${view.currentRound}:${task.taskType}`;
+        if (taskCache.key !== key) taskCache = { key, el: buildTask(task) };
+        root.appendChild(taskCache.el);
+        if (focused) focused.focus();
       }
     }
 

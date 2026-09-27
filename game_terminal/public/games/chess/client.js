@@ -155,6 +155,8 @@ export function mount(container, api) {
     if (selected) {
       if (selected.r === r && selected.c === c) {
         selected = null;
+      } else if (piece && piece.color === seat) {
+        selected = { r, c }; // clicking another of your own pieces switches the selection
       } else if (isPromotionAttempt(selected, { r, c })) {
         pendingPromotion = { from: selected, to: { r, c } };
         selected = null;
@@ -197,7 +199,18 @@ export function mount(container, api) {
     render();
   }
 
+  let clockEls = {};
+  function sigWithoutClocks(v) {
+    return JSON.stringify({ ...v, clocks: null });
+  }
+  function updateClocks() {
+    for (const color of ['white', 'black']) {
+      if (clockEls[color]) clockEls[color].textContent = `${color.toUpperCase()}: ${formatClock(view.clocks[color])}`;
+    }
+  }
+
   function render() {
+    clockEls = {};
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -228,11 +241,12 @@ export function mount(container, api) {
       clockRow.style.fontSize = '1.1em';
       for (const color of ['white', 'black']) {
         const c = document.createElement('div');
-        c.textContent = `${color.toUpperCase()}: ${formatClock(view.clocks[color])}`;
         c.style.color = view.phase === 'playing' && view.turn === color ? '#39ff14' : '#888';
         c.style.fontWeight = view.phase === 'playing' && view.turn === color ? 'bold' : 'normal';
+        clockEls[color] = c;
         clockRow.appendChild(c);
       }
+      updateClocks();
       root.appendChild(clockRow);
     }
 
@@ -579,6 +593,13 @@ export function mount(container, api) {
     applyEvent(data) {
       if (!data) return;
       if (data.kind === 'state') {
+        // The server re-broadcasts once a second just to tick the clocks — patch the clock text in
+        // place for those instead of rebuilding the board (a rebuild mid-click drops the click).
+        if (view && clockEls.white && sigWithoutClocks(data) === sigWithoutClocks(view)) {
+          view = data;
+          updateClocks();
+          return;
+        }
         view = data;
         flashError = false;
         awaitingPremoveResult = false; // the pending move (ours or otherwise) resolved, not rejected

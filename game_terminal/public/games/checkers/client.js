@@ -100,6 +100,8 @@ export function mount(container, api) {
     if (selected) {
       if (selected.r === r && selected.c === c) {
         selected = null;
+      } else if (piece && piece.color === seat) {
+        selected = { r, c }; // clicking another of your own pieces switches the selection
       } else {
         api.sendAction({ kind: 'move', from: selected, to: { r, c } });
         selected = null;

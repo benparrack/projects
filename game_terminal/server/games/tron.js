@@ -119,7 +119,7 @@ function spawnParticipants(st) {
     p.x = preset.x;
     p.y = preset.y;
     p.dir = preset.dir;
-    p.pendingDir = preset.dir;
+    p.turnQueue = [];
     p.alive = true;
     p.trail = [{ x: preset.x, y: preset.y }];
     occupied.add(cellKey(preset.x, preset.y));
@@ -134,7 +134,7 @@ function resetAfterRound(st) {
     p.x = null;
     p.y = null;
     p.dir = null;
-    p.pendingDir = null;
+    p.turnQueue = [];
     p.trail = [];
   }
   st.phase = 'waiting';
@@ -158,7 +158,9 @@ function stepPlaying(st) {
   const claimCount = new Map(); // "x,y" -> number of movers landing there this tick
 
   for (const p of movers) {
-    if (p.pendingDir && p.pendingDir !== DIR_OPPOSITE[p.dir]) p.dir = p.pendingDir;
+    // One queued turn per tick, so a quick double-tap (e.g. up-then-left to U-turn) isn't lost.
+    const next = p.turnQueue.shift();
+    if (next && next !== DIR_OPPOSITE[p.dir]) p.dir = next;
     const v = DIR_VECTORS[p.dir];
     const nx = p.x + v.dx;
     const ny = p.y + v.dy;
@@ -227,7 +229,7 @@ module.exports = {
       x: null,
       y: null,
       dir: null,
-      pendingDir: null,
+      turnQueue: [],
       trail: [],
     });
   },
@@ -245,7 +247,11 @@ module.exports = {
     const p = room.state.players.get(ctx.senderId);
     if (!p || !data || typeof data.kind !== 'string') return;
     if (data.kind === 'steer') {
-      if (DIR_VECTORS[data.direction]) p.pendingDir = data.direction;
+      if (!DIR_VECTORS[data.direction] || !p.turnQueue) return;
+      const last = p.turnQueue.length ? p.turnQueue[p.turnQueue.length - 1] : p.dir;
+      // Ignore no-op and reversing inputs relative to the last queued heading; cap the buffer.
+      if (data.direction === last || data.direction === DIR_OPPOSITE[last]) return;
+      if (p.turnQueue.length < 3) p.turnQueue.push(data.direction);
     }
   },
 

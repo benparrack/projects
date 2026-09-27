@@ -7,6 +7,7 @@
 // server/games/slope.js. The server is the collision authority; this client only renders what
 // the server already decided. If the two copies ever diverge, "what you see" and "what kills
 // you" disagree — any change to the track math in slope.js must be mirrored here exactly.
+import { makeServerClock } from '../serverClock.js';
 
 const SEG_LEN = 8;
 const BASE_HALF_WIDTH = 6;
@@ -200,6 +201,8 @@ function gapSpanAt(seed, i) {
 }
 
 export function mount(container, api) {
+  const serverClock = makeServerClock();
+  let lastLbKey = null;
   let view = null; // latest {phase, phaseEndsAt, seed, players, leaderboard}
   let prevView = null;
   let viewReceivedAt = 0;
@@ -254,6 +257,7 @@ export function mount(container, api) {
   centerMsg.style.textShadow = '0 0 8px #000';
   centerMsg.style.pointerEvents = 'none';
   centerMsg.style.textAlign = 'center';
+  centerMsg.style.whiteSpace = 'pre-line';
   root.appendChild(centerMsg);
 
   const hint = document.createElement('div');
@@ -293,7 +297,7 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       centerMsg.textContent = 'WAITING FOR RACERS...';
     } else if (view.phase === 'countdown') {
-      const remaining = Math.max(0, Math.ceil((view.phaseEndsAt - Date.now()) / 1000));
+      const remaining = Math.max(0, Math.ceil((view.phaseEndsAt - serverClock.now()) / 1000));
       centerMsg.textContent = remaining > 0 ? String(remaining) : 'GO!';
     } else if (view.phase === 'racing') {
       centerMsg.textContent = me && !me.alive ? `YOU DIED — distance: ${Math.round(me.finalDistance || 0)}` : '';
@@ -302,6 +306,10 @@ export function mount(container, api) {
       centerMsg.textContent = winner ? `ROUND OVER\nBest: ${winner.nickname} (${Math.round(winner.distance)})` : 'ROUND OVER';
     }
 
+    // Only rebuild the leaderboard DOM when its contents actually change (this runs every frame).
+    const lbKey = JSON.stringify((view.leaderboard || []).map((e) => [e.alive, e.nickname, Math.round(e.distance)]));
+    if (lbKey === lastLbKey) return;
+    lastLbKey = lbKey;
     leaderboardEl.innerHTML = '';
     const title = document.createElement('div');
     title.textContent = 'LEADERBOARD';
@@ -331,6 +339,8 @@ export function mount(container, api) {
     }
   }
   function onKeyDown(ev) {
+    if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
+    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight' || ev.key === 'ArrowUp' || ev.key === 'ArrowDown' || ev.key === ' ') ev.preventDefault();
     heldKeys.add(ev.key);
     updateSteer();
   }
@@ -457,7 +467,7 @@ export function mount(container, api) {
     // groundYAt()'s comment and slope.js's hazard-motion comment for why these are computed
     // fresh every frame relative to the LOCAL viewer rather than stored/accumulated.
     const refSegFloat = camDistance / SEG_LEN;
-    const elapsedMs = view.raceStartedAt ? Math.max(0, Date.now() - view.raceStartedAt) : 0;
+    const elapsedMs = view.raceStartedAt ? Math.max(0, serverClock.now() - view.raceStartedAt) : 0;
 
     let hazardIdx = 0;
     let boostIdx = 0;
@@ -578,6 +588,7 @@ export function mount(container, api) {
   return {
     applySnapshot(snapshot) {
       view = snapshot;
+      if (view) serverClock.sync(view.serverNow);
       prevView = snapshot;
       viewReceivedAt = performance.now();
       renderHud();
@@ -586,6 +597,7 @@ export function mount(container, api) {
       if (!data || data.kind !== 'state') return;
       prevView = view || data;
       view = data;
+      if (view) serverClock.sync(view.serverNow);
       viewReceivedAt = performance.now();
     },
     unmount() {
