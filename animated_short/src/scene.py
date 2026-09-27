@@ -275,20 +275,20 @@ def shot_reveal(t, s):
 
 def shot_approach(t, s):
     u = (t - 50.0) / 12.0
-    # camera out beyond the gate, looking back at it against the planet
-    back = norm(RING_C - PL_C)
-    side = norm(np.cross(back, _v))
-    cam0 = RING_C + back * 52000 - side * 16000 + _v * 9000
-    cam = cam0 + (RING_C - cam0) * 0.10 * smooth(u)
-    tgt = RING_C + side * 900 - _v * 400
+    # camera on the anti-sun side, looking sunward: the ring silhouettes against the lit crescent
+    d = norm(-0.63 * SUN + 0.71 * _w - 0.30 * _v)
+    side = norm(np.cross(d, RING_N))
+    cam0 = RING_C + d * 30000
+    cam = cam0 + (RING_C - cam0) * 0.18 * smooth(u)
+    tgt = RING_C - side * 500
     s["cam_pos"] = cam
-    s["cam_M"] = look_at(cam, tgt, up=_v, roll=0.03)
-    s["fov"] = lerp(14.0, 12.5, u)
+    s["cam_M"] = look_at(cam, tgt, up=RING_N, roll=0.03)
+    s["fov"] = lerp(16.0, 14.0, u)
     s["planet"] = True
     s["ring"] = True
     # probe: a tiny light heading away from the camera toward the gate
     pd = norm(tgt - cam)
-    pos = cam + pd * (0.4 + 3.0 * u) + side * 0.06 - _v * 0.03
+    pos = cam + pd * (0.4 + 3.0 * u) + side * 0.06 - RING_N * 0.03
     s["probe"] = True
     s["probe_pos"] = pos
     s["probe_R"] = probe_orient_to(pd, up=_v)
@@ -378,10 +378,11 @@ def shot_contact(t, s):
     s["probe_pos"] = pc
     look = norm(-up + 0.2 * tan) if t < 95 else norm(-up * 0.5 + 0.5 * tan + 0.4 * (-norm(cam - pc)) * -1)
     s["probe_R"] = probe_orient_to(norm(lerp(tan, -up, smooth((t - 88.5) / 1.0))), up=up)
-    s["pings"] = ping_list(t, contact_probe, speed=0.35, kind=0, dur=3.5)
+    s["pings"] = ping_list(t, contact_probe, speed=0.35, kind=0, dur=3.5, inten=0.35)
     s["pings"] += ping_list(t, lambda t0: beacon_pos(), speed=0.5, kind=1,
-                            times=TL.BEACON_ANSWERS, dur=3.5, inten=1.3)
+                            times=TL.BEACON_ANSWERS, dur=3.5, inten=0.5)
     s["beacon"] = beacon_level(t)
+    s["glow_min_px"] = 7.0
     return s
 
 
@@ -413,12 +414,15 @@ def shot_cascade(t, s):
     b = ring_point(BEACON_ANG)
     # start high above the beacon looking down the arc; crane back to see the whole ring
     k = smoother(u)
-    d = lerp(700.0, 9500.0, k ** 1.3)
-    cam = b + up * lerp(250.0, 0.55 * RING_R, k) + ax * d * 0.9 - tan * lerp(300.0, 0.0, k) + ax * 120
+    # crane from above the beacon out to the approach viewpoint: whole ring against the lit crescent
+    start = b + up * 250.0 + ax * 750.0 - tan * 300.0
+    far_dir = norm(-0.63 * SUN + 0.71 * _w - 0.30 * _v)
+    end = RING_C + far_dir * 15000.0
+    cam = lerp(start, end, k ** 1.2)
     tgt = lerp(b + tan * 900 + up * 100, RING_C, smoother((u - 0.1) / 0.8))
     s["cam_pos"] = cam
-    s["cam_M"] = look_at(cam, tgt, up=up if u < 0.5 else norm(lerp(up, ax * -1, 0.0)))
-    s["fov"] = lerp(50.0, 55.0, u)
+    s["cam_M"] = look_at(cam, tgt, up=norm(lerp(up, RING_N, smooth((u - 0.2) / 0.6))))
+    s["fov"] = lerp(50.0, 42.0, smooth(u))
     s["planet"] = True
     s["ring"] = True
     s["ring_detail"] = 0.0
@@ -447,7 +451,7 @@ def shot_powerup(t, s):
     probe = gate_probe(t)
     cam = probe - up * 0.009 + ax * 0.0022 + tan * 0.0015 - up * 0.004 * u
     s["cam_pos"] = cam
-    s["cam_M"] = look_at(cam, RING_C + ax * 300, up=ax)
+    s["cam_M"] = look_at(cam, RING_C + ax * 620, up=ax)
     s["fov"] = lerp(52.0, 46.0, smooth(u))
     s["planet"] = True
     s["ring"] = True

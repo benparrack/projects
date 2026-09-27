@@ -159,23 +159,23 @@ vec3 vistaSky(vec3 rd){
     float r = length(g);
     float ang = atan(g.y, g.x);
     float arms = .5+.5*sin(ang*2. - log(r+.02)*5.5 + 1.);
-    float disc = exp(-r*1.6) * (.35 + .9*arms*smoothstep(.02,.4,r));
+    float disc = exp(-r*3.2) * (.35 + .9*arms*smoothstep(.02,.4,r));
     float dust = smoothstep(.35,.75, fbm(vec3(g*6., 1.), 5));
     disc *= 1. - .55*dust*smoothstep(.03,.25,r);
     float bulge = exp(-r*r*55.)*6. + exp(-r*9.)*1.3;
     vec3 col = vec3(0);
     float front = smoothstep(-.1, .3, c);
-    col += front * (disc*vec3(1.,.72,.45)*1.4 + bulge*vec3(1.,.85,.62));
+    col += front * (disc*vec3(1.,.72,.45)*.55 + bulge*vec3(1.,.85,.62)*.6);
     // nebula veils everywhere (colourful)
     float n1 = fbm(rd*2.5 + vec3(2.), 6);
     float n2 = fbm(rd*5.1 - vec3(4.), 5);
     float n3 = fbm(rd*1.3 + vec3(n1*2.), 4);
-    vec3 neb = mix(vec3(.05,.35,.45), vec3(.55,.12,.40), smoothstep(.3,.7,n2));
-    neb = mix(neb, vec3(.9,.45,.15), smoothstep(.55,.8,n3)*.6);
-    col += neb * pow(smoothstep(.35,.85,n1),1.5) * 1.1;
+    vec3 neb = mix(vec3(.10,.26,.34), vec3(.34,.16,.30), smoothstep(.3,.7,n2));
+    neb = mix(neb, vec3(.7,.42,.2), smoothstep(.55,.8,n3)*.6);
+    col += neb * pow(smoothstep(.4,.9,n1),1.8) * .7;
     col += vec3(.02,.03,.06);
     // dense stars
-    col += stars(rd)*1.3 + starLayer(rd, 900., .5, 5.)*.8;
+    col += stars(rd)*1.3 + starLayer(rd, 900., .5, 5.)*.25;
     return col * uVistaI;
 }
 
@@ -409,14 +409,21 @@ vec3 shadeRing(vec3 p, vec3 rd, float t, float mat, vec3 posW){
     float hup = -(rad + RW);
 
     // base albedo: dark machined metal with panel variation
-    vec2 pc = floor(vec2(u, p.y)/vec2(3.5, 3.));
+    // second surface coordinate: axial on the floor/outer faces, radial on the flat side faces
+    float fv = abs(n.y) > .7 ? rad : p.y;
+    vec2 pc = floor(vec2(u, fv)/vec2(3.5, 3.));
     float pv = hash21(pc);
-    vec3 alb = vec3(.20,.21,.23) * (.75 + .5*pv);
+    float fwp = t*gPix;
+    pv = mix(pv, .5, smoothstep(.4, 2.5, fwp));           // filter small panels at distance
+    // large-scale structure readable from far away: 40 km segments + 120 km ribs
+    float seg = hash21(vec2(floor(u/40.), 3.));
+    float rib = smoothstep(2.5 + fwp, 0., abs(fract(u/120.)-.5)*120.);
+    vec3 alb = vec3(.24,.25,.27) * (.75 + .5*pv) * (.8 + .4*seg) * (1. - .45*rib);
     if(mat == 1.) alb = vec3(.17,.17,.19);
-    if(mat == 3.) alb = vec3(.23,.22,.22)*(.8+.4*hash21(floor(vec2(u,p.y)/.8)));
+    if(mat == 3.) alb = vec3(.23,.22,.22)*(.8+.4*hash21(floor(vec2(u,fv)/.8)));
     // panel seams (screen-space aware to avoid aliasing)
     float fw = max(t*gPix*1.5, .02);
-    vec2 sv = abs(fract(vec2(u,p.y)/vec2(3.5,3.)) - .5)*vec2(3.5,3.);
+    vec2 sv = abs(fract(vec2(u,fv)/vec2(3.5,3.)) - .5)*vec2(3.5,3.);
     float seam = 1. - smoothstep(1.75-fw, 1.75, max(sv.x/1.,0.)) ;
     alb *= mix(.55, 1., smoothstep(1.75, 1.75 - .08 - fw, sv.x) * smoothstep(1.5, 1.5 - .08 - fw, sv.y));
 
@@ -435,8 +442,8 @@ vec3 shadeRing(vec3 p, vec3 rd, float t, float mat, vec3 posW){
         vec3 lv = uPbLightRg - p;
         float ld = length(lv);
         vec3 ll = lv/ld;
-        float att = 1./(1. + ld*ld*1.6);
-        col += alb * vec3(1.,.55,.22) * uPbCore * max(dot(n,ll),0.) * att * 4.5;
+        float att = 1./(1. + ld*ld*8.);
+        col += alb * vec3(1.,.55,.22) * uPbCore * max(dot(n,ll),0.) * att * 2.2;
     }
 
     // ---------------- emissive lights
@@ -773,15 +780,18 @@ void main(){
                             float sa = sw*sw*2.5 + uTime*.05;
                             vd = vd*cos(sa) + cross(ax, vd)*sin(sa) + ax*dot(ax,vd)*(1.-cos(sa));
                             vec3 inside = vistaSky(normalize(vd)) * 1.3;
-                            float vort = fbm(vec3(a*3., log(x/pr + .02)*3. - uTime*1.2, uTime*.2), 4);
-                            inside += mix(vec3(.3,.6,1.), vec3(1.,.8,.5), x/pr) * pow(vort, 3.) * 3. * smoothstep(.2, 1., x/pr);
+                            // spiral streaks (seam-free: angle enters via cos/sin, twisted by log radius)
+                            float sp = a + log(x/pr + .02)*1.6 - uTime*.6;
+                            float vort = fbm(vec3(cos(sp)*2., sin(sp)*2., log(x/pr + .02)*2. - uTime*.5), 4);
+                            float streak = smoothstep(.5, .85, vort);
+                            inside += mix(vec3(.35,.6,1.), vec3(1.,.85,.6), x/pr) * streak * 1.4 * smoothstep(.25, 1., x/pr);
                             col = inside;
                             tHit = tp;
                         }
                         // blazing rim
                         float rimd = abs(x - pr) * Rin;
                         float rimW = max(Rin*.012, gPix*tp*2.);
-                        float flick = .7 + .6*fbm(vec3(a*12., uTime*2., 0.), 3);
+                        float flick = .7 + .6*fbm(vec3(cos(a)*8., sin(a)*8., uTime*2.), 3);
                         col += mix(vec3(.5,.75,1.), vec3(1.,.9,.7), .5) * (exp(-rimd/rimW)*6. + exp(-rimd/(rimW*8.))*.8) * flick * smoothstep(0., .02, pr);
                     }
                 }
@@ -849,7 +859,8 @@ void main(){
         float g = shellGlow(rd, pg.xyz, pg.w, pp.y, tHit);
         // once the shell has swept past the camera it would wash the frame: fade it
         float inside = smoothstep(pg.w*1.02, pg.w*.8, length(pg.xyz));
-        col += pcol * g * pp.x * .08 * (1. - .9*inside);
+        g = max(g - 2.2, 0.) + .15*min(g, 2.2);   // mostly limb: a ring of light, faint face
+        col += pcol * g * pp.x * .12 * (1. - .9*inside);
     }
 
     // ------------------------------ swarm of lanterns (other side)
@@ -866,7 +877,9 @@ void main(){
             if(a < 0.) continue;
             float on = smoothstep(0., .25, a);
             float fl = .85 + .15*sin(uTime*3. + fi);
-            col += pointGlow(rd, c, .0012*(1.+dist*.3), tHit, vec3(1.,.6,.26)) * on * fl * 1.3;
+            // keep every lantern at least a few pixels wide: they are the payoff
+            float lsz = max(.0012*(1.+dist*.3), gPix*max(dot(c,rd),0.)*3.5);
+            col += pointGlow(rd, c, lsz, tHit, vec3(1.,.6,.26)) * on * fl * 2.4;
             // answer ping shell
             if(a < 3.){
                 float r = a*.06*(1. + dist);
@@ -881,13 +894,13 @@ void main(){
             vec3 p = rd*sc;
             vec3 cc = floor(p);
             vec3 h = hash33(cc + 11.*float(L));
-            if(h.x < .55){
+            if(h.x < (L==0 ? .10 : .05)){
                 vec3 sp = normalize(cc + .25 + .5*hash33(cc+4.+float(L)));
                 float d = length(rd - sp);
                 float w = max(gPix*1.1, .0006);
                 float act = h.y * 8.;
                 float on = smoothstep(act, act + .6, uSwFar*8.);
-                float br = (.4 + 1.2*h.z) * (L==0 ? 1. : .6);
+                float br = (.6 + 1.6*h.z) * (L==0 ? 1. : .6) * (.0006*.0006)/(w*w);
                 col += vec3(1.,.62,.3) * exp(-d*d/(w*w)) * on * br * (.8+.2*sin(uTime*2.+h.z*40.));
             }
         }
