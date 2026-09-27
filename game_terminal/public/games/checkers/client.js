@@ -1,6 +1,7 @@
 // Checkers — click a piece, then click a destination square. Server validates and
 // enforces mandatory captures / multi-jump; illegal attempts get a rejection flash.
 import { sfx, boardSounds } from '../sfx.js';
+import { createResults, duelResults } from '../resultsPanel.js';
 import { slideFrom, captureGhost } from '../boardFx.js';
 
 
@@ -78,6 +79,7 @@ export function mount(container, api) {
   let flipOverride = null; // null = auto (orient so your own color sits at the bottom)
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -120,6 +122,10 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? duelResults({
+      winner: view.winner, colors: ['red', 'black'], players: view.players, me: mySeat(), nameFor: nicknameFor,
+      subtitle: null, onRematch: () => api.sendAction({ kind: 'resetGame' }),
+    }) : null);
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -356,6 +362,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };

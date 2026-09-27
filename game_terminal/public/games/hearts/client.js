@@ -3,6 +3,7 @@
 // Server plugin: ../../../server/games/hearts.js
 
 import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 const SEAT_LABELS = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
@@ -20,6 +21,7 @@ export function mount(container, api) {
   let selectedForPass = []; // indices into myHand, up to 3
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -59,6 +61,11 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? seatResults({
+      seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
+      value: (i) => `${view.scores[i]} pts`, rank: (i) => view.scores[i],
+      winTitle: `${nicknameFor(view.seats[view.winnerSeat])} WINS!`, subtitle: 'Lowest score wins', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+    }) : null);
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -307,6 +314,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };

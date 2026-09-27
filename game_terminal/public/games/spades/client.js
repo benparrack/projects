@@ -5,6 +5,7 @@
 // module in this repo — same pattern as e.g. slither's client-side `computeZoom`).
 
 import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 const SEAT_LABELS = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
@@ -32,6 +33,7 @@ export function mount(container, api) {
   let lastReject = null;
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -45,6 +47,11 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? seatResults({
+      seats: view.seats, winners: [0, 1, 2, 3].filter((i) => i % 2 === view.winnerTeam), me: view.mySeat, nameFor: nicknameFor,
+      value: (i) => `${view.teamScores[i % 2]} pts`, rank: (i) => -view.teamScores[i % 2] * 10 + (i % 2),
+      winTitle: `${view.winnerTeam === 0 ? 'NORTH/SOUTH' : 'EAST/WEST'} WIN!`, subtitle: view.winnerTeam === 0 ? 'North/South take the game' : 'East/West take the game', onRematch: () => api.sendAction({ kind: 'newGame' }),
+    }) : null);
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -315,6 +322,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };

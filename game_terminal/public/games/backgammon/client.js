@@ -11,6 +11,7 @@
 // true node-reuse animation isn't attempted, but every checker/point plays a short CSS
 // pop-in/glow transition on (re)creation so state changes read as smoother than a hard cut.
 import { sfx, boardSounds } from '../sfx.js';
+import { createResults, duelResults } from '../resultsPanel.js';
 import { slideFrom, LAST_MOVE_TINT } from '../boardFx.js';
 
 
@@ -54,6 +55,7 @@ export function mount(container, api) {
   let flashError = null;
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '12px';
@@ -273,6 +275,10 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? duelResults({
+      winner: view.winner, colors: ['white', 'black'], players: view.players, me: mySeat(), nameFor: nicknameFor,
+      subtitle: 'All checkers borne off', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+    }) : null);
     prevCounts = curCounts;
     curCounts = {};
     root.innerHTML = '';
@@ -519,6 +525,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };

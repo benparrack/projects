@@ -3,6 +3,7 @@
 // testing, per this hub's grid-game convention) — the drop buttons above the board are what's
 // clickable, matching the classic "click a column" interaction.
 import { sfx, boardSounds } from '../sfx.js';
+import { createResults, duelResults } from '../resultsPanel.js';
 import { dropIn, changeTracker } from '../boardFx.js';
 
 
@@ -43,6 +44,7 @@ export function mount(container, api) {
   let flashError = null; // null, or one of REJECT_MESSAGES' keys
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -71,6 +73,10 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? duelResults({
+      winner: view.winner, colors: ['red', 'yellow'], players: view.players, me: mySeat(), nameFor: nicknameFor,
+      subtitle: 'Four in a row', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+    }) : null);
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -258,6 +264,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };

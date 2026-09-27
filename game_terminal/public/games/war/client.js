@@ -2,6 +2,7 @@
 // ties trigger a "war" (both burn a card, flip again). Server plugin: ../../../server/games/war.js
 
 import { renderCard } from '../cardCommon.js';
+import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 export function mount(container, api) {
@@ -9,6 +10,7 @@ export function mount(container, api) {
   let roster = [];
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -26,6 +28,11 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? seatResults({
+      seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
+      value: (i) => `${view.handCounts[i]} cards`, rank: (i) => -view.handCounts[i],
+      winTitle: `${nicknameFor(view.seats[view.winnerSeat])} WINS!`, subtitle: 'Took the whole deck', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+    }) : null);
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -140,6 +147,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };

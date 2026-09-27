@@ -2,6 +2,7 @@
 // Server plugin: ../../../server/games/poker.js
 
 import { renderCard } from '../cardCommon.js';
+import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 // Mirrors server/games/poker.js's HAND_NAMES (category index -> display name) — duplicated here
@@ -15,6 +16,7 @@ export function mount(container, api) {
   let confirmingFold = false; // FOLD sits right next to CALL — this guards against a misclick
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -34,6 +36,11 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? seatResults({
+      seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
+      value: (i) => `${view.chips[i]} chips`, rank: (i) => -view.chips[i],
+      winTitle: `${nameAt(view.winnerSeat)} WINS!`, subtitle: 'Took every chip on the table', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+    }) : null);
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -297,6 +304,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };

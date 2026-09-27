@@ -3,6 +3,7 @@
 // Server plugin: ../../../server/games/crazyeights.js
 
 import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 const SUITS = ['S', 'H', 'D', 'C'];
@@ -13,6 +14,7 @@ export function mount(container, api) {
   let pendingEightIndex = null; // index into hand awaiting a suit choice
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -39,6 +41,11 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? seatResults({
+      seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
+      value: (i) => `${view.handCounts[i]} left`, rank: (i) => view.handCounts[i],
+      winTitle: `${nicknameFor(view.seats[view.winnerSeat])} WINS!`, subtitle: 'Emptied their hand first', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+    }) : null);
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -247,6 +254,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };

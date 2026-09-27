@@ -3,6 +3,7 @@
 // let the play ride. Server plugin: ../../../server/games/bs.js
 
 import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 export function mount(container, api) {
@@ -11,6 +12,7 @@ export function mount(container, api) {
   let selected = new Set();
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -31,6 +33,11 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? seatResults({
+      seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
+      value: (i) => `${view.handCounts[i]} left`, rank: (i) => view.handCounts[i],
+      winTitle: `${nameAt(view.winnerSeat)} WINS!`, subtitle: 'Emptied their hand unchallenged', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+    }) : null);
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -216,6 +223,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };

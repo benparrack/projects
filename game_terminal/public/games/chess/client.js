@@ -4,6 +4,7 @@
 // FLIP BOARD override; `flipped` only ever changes what's rendered where — board coordinates
 // (dataset.row/col, onSquareClick args) always stay in the server's own r/c space.
 import { sfx, boardSounds } from '../sfx.js';
+import { createResults, duelResults } from '../resultsPanel.js';
 import { slideFrom, captureGhost, changeTracker, LAST_MOVE_TINT, CHECK_GLOW } from '../boardFx.js';
 
 const CELL = 44;
@@ -75,6 +76,7 @@ export function mount(container, api) {
   let showEvalBar = false; // post-game recap toggle
 
   const root = document.createElement('div');
+  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -213,6 +215,10 @@ export function mount(container, api) {
   }
 
   function render() {
+    results.update(view && view.phase === 'game_over' ? duelResults({
+      winner: view.winner, colors: ['white', 'black'], players: view.players, me: mySeat(), nameFor: nicknameFor,
+      subtitle: { checkmate: 'Checkmate', resignation: 'By resignation', timeout: 'On time', stalemate: 'Stalemate' }[view.winReason] || null, onRematch: () => api.sendAction({ kind: 'resetGame' }),
+    }) : null);
     clockEls = {};
     root.innerHTML = '';
     if (!view) {
@@ -651,6 +657,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      results.destroy();
       container.innerHTML = '';
     },
   };
