@@ -34,9 +34,9 @@ const CSS = `
 }
 .gt-card.ace .pip { font-size: 36px; }
 .gt-card .court {
-  position: absolute; inset: 14px 9px; display: flex; flex-direction: column;
+  position: absolute; inset: 5px 15px; display: flex; flex-direction: column;
   align-items: center; justify-content: center; line-height: 1;
-  border: 1px solid currentColor; border-radius: 3px; font-size: 18px;
+  border: 1px solid currentColor; border-radius: 3px; font-size: 17px;
   background: repeating-linear-gradient(135deg, transparent 0 3px, rgba(193,18,31,.07) 3px 5px);
 }
 .gt-card:not(.red) .court {
@@ -48,7 +48,7 @@ const CSS = `
 .gt-card.small .ix.br { display: none; }
 .gt-card.small .pip { font-size: 18px; padding: 8px 0 0 6px; }
 .gt-card.small.ace .pip { font-size: 24px; }
-.gt-card.small .court { inset: 12px 5px 5px 8px; font-size: 13px; }
+.gt-card.small .court { inset: 4px 4px 4px 13px; font-size: 13px; }
 .gt-card.small .court span:last-child { font-size: 10px; }
 .gt-card.back {
   border: 2px solid #e8e8e8;
