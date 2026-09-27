@@ -10,6 +10,7 @@
 // round is live/just-decided.
 
 import { sfx } from '../sfx.js';
+import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
 
 // Kept in sync by hand with server/games/shooter.js constants (no shared module in this repo,
 // same convention as slither's SERVER_TICK_MS/START_LENGTH).
@@ -408,6 +409,35 @@ export function mount(container, api) {
   seatRow.appendChild(lobbySettingsBtn);
   lobby.appendChild(seatRow);
 
+  // CPU opponent: fills whichever seat is free; its level can be changed while it's seated.
+  const botRow = document.createElement('div');
+  botRow.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+  lobby.appendChild(botRow);
+  let botRowKey = null;
+  function renderBotRow(st) {
+    const botSeat = st.seats.a === 'BOT' ? 'a' : st.seats.b === 'BOT' ? 'b' : null;
+    const free = !st.seats.a ? 'a' : !st.seats.b ? 'b' : null;
+    const key = `${botSeat}|${free}|${botSeat ? (st.botLevels || {})[botSeat] : ''}`;
+    if (key === botRowKey) return;
+    botRowKey = key;
+    botRow.textContent = '';
+    const mk = (text, onClick) => {
+      const b = document.createElement('button');
+      b.textContent = text;
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    if (botSeat) {
+      botRow.append(mk('REMOVE BOT', () => api.sendAction({ kind: 'removeBot', seat: botSeat })),
+        levelSelect((st.botLevels || {})[botSeat], (level) => api.sendAction({ kind: 'setBotLevel', seat: botSeat, level })));
+    } else if (free) {
+      botRow.append(mk('PLAY VS BOT', () => {
+        const seat = !latestState.seats.a ? 'a' : 'b';
+        api.sendAction({ kind: 'sit', seat, bot: true, level: preferredLevel() });
+      }), levelSelect(preferredLevel()));
+    }
+  }
+
   const resultLine = document.createElement('p');
   resultLine.style.margin = '0';
   resultLine.style.opacity = '0.9';
@@ -448,6 +478,7 @@ export function mount(container, api) {
     seatBBtn.disabled = !!st.seats.b;
     leaveSeatBtn.hidden = !mySeat;
     rematchBtn.hidden = !(st.phase === 'game_over' && mySeat);
+    renderBotRow(st);
 
     if (st.phase === 'game_over') {
       if (st.matchWinReason === 'opponent_disconnected') {
@@ -464,6 +495,7 @@ export function mount(container, api) {
   }
 
   function nicknameFor(st, seat) {
+    if (st.seats[seat] === 'BOT') return `🤖 CPU (${levelLabel((st.botLevels || {})[seat])})`;
     const p = st.players[seat];
     return (p && p.nickname) || '(empty)';
   }

@@ -141,6 +141,106 @@ function rayIntersectsSphere(ox, oy, oz, dx, dy, dz, cx, cy, cz, radius) {
   return null;
 }
 
+// --- CPU duelist. Runs inside tick() and drives the same inputs a client would (moveInput, yaw/
+// pitch, fire through resolveFire), so it obeys every server rule. Levels differ in reaction time
+// once the enemy comes into view, turn speed, aim wobble, weapon choice and movement tricks.
+const { setBotLevel, botLevelOf } = require('./ai/levels');
+const BOT = 'BOT';
+const SHOOTER_BOT = {
+  easy: { react: 750, turn: 2.6, err: 0.085, head: 0, weapons: false, strafe: 0.35, jump: 0, slide: 0 },
+  medium: { react: 480, turn: 4.2, err: 0.05, head: 0, weapons: true, strafe: 0.7, jump: 0, slide: 0 },
+  hard: { react: 300, turn: 7, err: 0.028, head: 0.15, weapons: true, strafe: 1, jump: 0.15, slide: 0.1 },
+  expert: { react: 190, turn: 11, err: 0.016, head: 0.35, weapons: true, strafe: 1, jump: 0.25, slide: 0.25 },
+};
+
+function hasLineOfSight(ax, ay, az, bx, by, bz) {
+  const dx = bx - ax; const dy = by - ay; const dz = bz - az;
+  const len = Math.hypot(dx, dy, dz) || 1;
+  for (const pl of PILLARS) {
+    const t = rayIntersectsPillar(ax, ay, az, dx / len, dy / len, dz / len, pl);
+    if (t !== null && t < len) return false;
+  }
+  return true;
+}
+
+function angleDiff(a, b) {
+  let d = a - b;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+function driveBot(room, ctx, seat, now) {
+  const st = room.state;
+  const me = st.players[seat];
+  const foe = st.players[otherSeat(seat)];
+  if (!me || !me.alive || !foe) return;
+  const lv = SHOOTER_BOT[botLevelOf(st, seat)] || SHOOTER_BOT.hard;
+  const b = me.bot || (me.bot = { seenAt: 0, errYaw: 0, errPitch: 0, errAt: 0, strafeDir: 1, strafeUntil: 0, aimHead: false });
+  const dt = TICK_MS / 1000;
+  const eyeY = me.y + (me.crouching || me.sliding ? CROUCH_EYE_HEIGHT : EYE_HEIGHT);
+  const foeLow = foe.crouching || foe.sliding;
+  const bodyY = foe.y + (foeLow ? CROUCH_BODY_HITBOX_Y : BODY_HITBOX_Y);
+  const headY = foe.y + (foeLow ? CROUCH_EYE_HEIGHT : EYE_HEIGHT);
+  const dx = foe.x - me.x; const dz = foe.z - me.z;
+  const dist = Math.hypot(dx, dz);
+  const visible = foe.alive && hasLineOfSight(me.x, eyeY, me.z, foe.x, bodyY, foe.z);
+  if (!visible) b.seenAt = 0;
+  else if (!b.seenAt) { b.seenAt = now; b.aimHead = Math.random() < lv.head; }
+
+  // Aim: turn toward the target at a capped rate, with a wobble that re-rolls every ~0.4s.
+  if (now > b.errAt) {
+    b.errAt = now + 300 + Math.random() * 250;
+    b.errYaw = (Math.random() * 2 - 1) * lv.err;
+    b.errPitch = (Math.random() * 2 - 1) * lv.err * 0.6;
+  }
+  const ty = b.aimHead ? headY : bodyY;
+  const wantYaw = Math.atan2(-dx, -dz) + b.errYaw;
+  const wantPitch = Math.atan2(ty - eyeY, dist) + b.errPitch;
+  const maxTurn = lv.turn * dt;
+  const dYaw = angleDiff(wantYaw, me.yaw);
+  me.yaw += Math.max(-maxTurn, Math.min(maxTurn, dYaw));
+  me.pitch += Math.max(-maxTurn, Math.min(maxTurn, wantPitch - me.pitch));
+
+  // Weapon by range: shotgun up close, sniper far away, pistol otherwise.
+  if (lv.weapons && now - me.lastFireAt > 400) {
+    const want = dist < 7 ? 'shotgun' : dist > 17 ? 'sniper' : 'pistol';
+    if (me.weapon !== want) me.weapon = want;
+  }
+  me.zoomed = me.weapon === 'sniper' && visible && lv.weapons;
+  const w = WEAPONS[me.weapon];
+  if (me.ammo[me.weapon] <= 0 && me.reloadEndsAt[me.weapon] === null) me.reloadEndsAt[me.weapon] = now + w.reloadTime;
+  // Reload a half-empty gun while the enemy is out of sight.
+  if (!visible && me.ammo[me.weapon] < w.magSize / 2 && me.reloadEndsAt[me.weapon] === null) me.reloadEndsAt[me.weapon] = now + w.reloadTime;
+
+  // Movement: close in when out of view or out of the weapon's range, back off when too close,
+  // and strafe side to side while shooting.
+  const ideal = me.weapon === 'shotgun' ? 4 : me.weapon === 'sniper' ? 20 : 11;
+  let fwd = !visible ? 1 : dist > ideal + 3 ? 0.8 : dist < ideal - 3 ? -0.6 : 0;
+  if (now > b.strafeUntil) {
+    b.strafeUntil = now + 450 + Math.random() * 900;
+    b.strafeDir = Math.random() < 0.5 ? -1 : 1;
+  }
+  let strafe = visible || Math.random() < 0.3 ? b.strafeDir * lv.strafe : 0;
+  // Out of sight behind a pillar: sidestep around it rather than pushing into it.
+  if (!visible && dist < 30) strafe = b.strafeDir;
+  if (Math.abs(me.x) > ARENA_BOUND - 2 || Math.abs(me.z) > ARENA_BOUND - 2) fwd = 1; // off the walls
+  me.moveInput = { fwd, strafe };
+  if (visible && me.y <= 0.001 && Math.random() < lv.jump * dt) me.velY = JUMP_VELOCITY;
+  if (visible && !me.sliding && me.y <= 0.001 && now - me.lastSlideAt > SLIDE_COOLDOWN_MS && Math.random() < lv.slide * dt) {
+    const f = { x: -Math.sin(me.yaw), z: -Math.cos(me.yaw) };
+    const r = { x: Math.cos(me.yaw), z: -Math.sin(me.yaw) };
+    me.velX = r.x * b.strafeDir * SLIDE_SPEED; me.velZ = r.z * b.strafeDir * SLIDE_SPEED;
+    void f;
+    me.sliding = true; me.slideStartedAt = now; me.lastSlideAt = now;
+  }
+
+  // Fire once the reaction time has passed and the crosshair is close enough to the target.
+  const onTarget = Math.abs(angleDiff(wantYaw, me.yaw)) < 0.05 + lv.err && Math.abs(wantPitch - me.pitch) < 0.06 + lv.err;
+  const inRange = me.weapon !== 'shotgun' || dist < 12;
+  if (visible && now - b.seenAt >= lv.react && onTarget && inRange) resolveFire(room, ctx, seat, me, null);
+}
+
 function freshPlayer(spawn) {
   const ammo = {};
   const reloadEndsAt = {};
@@ -182,7 +282,8 @@ function buildStatePayload(room) {
   for (const seat of SEATS) {
     const p = st.players[seat];
     const clientId = st.seats[seat];
-    const nickname = clientId && room.clients.has(clientId) ? room.clients.get(clientId).nickname : null;
+    const nickname = clientId === BOT ? `🤖 CPU (${botLevelOf(st, seat)[0].toUpperCase()}${botLevelOf(st, seat).slice(1)})`
+      : clientId && room.clients.has(clientId) ? room.clients.get(clientId).nickname : null;
     players[seat] = p ? {
       clientId, nickname,
       x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch,
@@ -203,6 +304,7 @@ function buildStatePayload(room) {
     winsNeeded: WINS_NEEDED,
     wins: st.wins,
     seats: st.seats,
+    botLevels: st.botLevels || {},
     lastRoundWinnerSeat: st.lastRoundWinnerSeat,
     matchWinner: st.matchWinner,
     matchWinReason: st.matchWinReason,
@@ -294,8 +396,13 @@ module.exports = {
       const seat = data.seat === 'a' || data.seat === 'b' ? data.seat : null;
       if (!seat) return;
       if (st.seats[seat]) return;
-      if (st.seats.a === senderId || st.seats.b === senderId) return;
-      st.seats[seat] = senderId;
+      if (data.bot) {
+        st.seats[seat] = BOT;
+        setBotLevel(st, seat, data.level);
+      } else {
+        if (st.seats.a === senderId || st.seats.b === senderId) return;
+        st.seats[seat] = senderId;
+      }
       if (st.seats.a && st.seats.b) {
         resetMatch(st);
         beginRound(st);
@@ -317,6 +424,19 @@ module.exports = {
         resetMatch(st);
         broadcastState(room, ctx);
       }
+      return;
+    }
+
+    if (data.kind === 'setBotLevel' || data.kind === 'removeBot') {
+      const s = data.seat === 'a' || data.seat === 'b' ? data.seat : null;
+      if (!s || st.seats[s] !== BOT) return;
+      if (data.kind === 'setBotLevel') setBotLevel(st, s, data.level);
+      else {
+        st.seats[s] = null;
+        st.phase = 'waiting';
+        resetMatch(st);
+      }
+      broadcastState(room, ctx);
       return;
     }
 
@@ -443,6 +563,8 @@ module.exports = {
       for (const seat of SEATS) {
         const p = st.players[seat];
         if (!p || !p.alive) continue;
+        if (st.seats[seat] === BOT) driveBot(room, ctx, seat, now);
+        if (st.phase !== 'playing') break; // the bot's shot may have ended the round
         // Checked for every weapon, not just the equipped one: a reload keeps counting down in
         // the background after switching away (see freshPlayer's reloadEndsAt comment).
         for (const id of WEAPON_IDS) {
