@@ -174,7 +174,12 @@ module.exports = {
     if (data.kind === 'draw') {
       if (st.hasDrawnThisTurn) return;
       reshuffleIfNeeded(st);
-      if (st.drawPile.length === 0) return; // truly nothing left anywhere — rare edge case, no-op
+      if (st.drawPile.length === 0) {
+        // Truly nothing left anywhere (rare) — count it as having drawn so the player can pass.
+        st.hasDrawnThisTurn = true;
+        broadcastState(room, ctx);
+        return;
+      }
       st.hands[seatIdx].push(st.drawPile.pop());
       st.hasDrawnThisTurn = true;
       st.lastAction = { kind: 'draw', seatIdx };

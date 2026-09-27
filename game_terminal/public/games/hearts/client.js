@@ -2,7 +2,7 @@
 // it's a "no pass" hand) pick 3 cards to pass; then play by clicking a legal card on your turn.
 // Server plugin: ../../../server/games/hearts.js
 
-import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { renderCard, SUIT_GLYPH, isBot, botName, addBotButton, removeBotButton, markBotSeat } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
@@ -29,6 +29,7 @@ export function mount(container, api) {
   container.appendChild(root);
 
   function nicknameFor(clientId) {
+    if (isBot(clientId)) return botName(clientId);
     if (!clientId) return null;
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
@@ -132,16 +133,23 @@ export function mount(container, api) {
           pass.textContent = view.passSubmittedSeats[i] ? 'passed' : 'choosing...';
           box.appendChild(pass);
         }
-      } else if (mySeat === -1 && view.phase === 'waiting') {
-        const btn = document.createElement('button');
-        btn.textContent = 'SIT';
-        btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seatIdx: i }));
-        box.appendChild(btn);
+      } else if (view.phase === 'waiting') {
+        if (mySeat === -1) {
+          const btn = document.createElement('button');
+          btn.textContent = 'SIT';
+          btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seatIdx: i }));
+          box.appendChild(btn);
+        }
+        box.appendChild(addBotButton(api, i, '+ BOT'));
       } else {
         const empty = document.createElement('div');
         empty.style.opacity = '0.4';
         empty.textContent = '(empty)';
         box.appendChild(empty);
+      }
+      if (isBot(view.seats[i])) {
+        markBotSeat(box, view.seats[i], i);
+        if (view.phase === 'waiting' || view.phase === 'game_over') box.appendChild(removeBotButton(api, i));
       }
       seatRow.appendChild(box);
     });
@@ -156,7 +164,7 @@ export function mount(container, api) {
       leaveBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
       controls.appendChild(leaveBtn);
     }
-    if (view.phase === 'waiting' && view.seats.every(Boolean) && mySeat === 0) {
+    if (view.phase === 'waiting' && view.seats.every(Boolean) && mySeat !== -1) {
       const startBtn = document.createElement('button');
       startBtn.textContent = 'START GAME';
       startBtn.addEventListener('click', () => api.sendAction({ kind: 'startGame' }));

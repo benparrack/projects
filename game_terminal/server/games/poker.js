@@ -464,4 +464,6 @@ module.exports = {
       broadcastState(room, ctx);
     }
   },
+
+  _internal: { evaluate7, BIG_BLIND },
 };

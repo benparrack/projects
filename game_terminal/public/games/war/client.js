@@ -1,7 +1,7 @@
 // War — 2 players, no decisions to make: click FLIP each round, higher card takes the pile,
 // ties trigger a "war" (both burn a card, flip again). Server plugin: ../../../server/games/war.js
 
-import { renderCard } from '../cardCommon.js';
+import { renderCard, isBot, botName, botSeatControls } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
@@ -18,6 +18,7 @@ export function mount(container, api) {
   container.appendChild(root);
 
   function nicknameFor(clientId) {
+    if (isBot(clientId)) return botName(clientId);
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
   }
@@ -66,6 +67,7 @@ export function mount(container, api) {
       leaveBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
       seatRow.appendChild(leaveBtn);
     }
+    seatRow.appendChild(botSeatControls(api, view.seats, 2, view.phase));
     root.appendChild(seatRow);
 
     if (view.seats.length > 0) {

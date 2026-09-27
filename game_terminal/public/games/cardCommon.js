@@ -70,8 +70,17 @@ const CSS = `
 }
 .gt-card.back.gt-card-in { animation-name: gt-card-flip; }
 @keyframes gt-card-flip { from { opacity: 0; transform: scaleX(.2); } }
+.gt-bot-add {
+  border: 1px dashed #3ad7ff; color: #3ad7ff; background: rgba(58,215,255,0.06);
+  animation: gt-bot-glow 2.4s ease-in-out infinite;
+}
+.gt-bot-add:hover { background: rgba(58,215,255,0.16); }
+.gt-bot-rm { border-color: #ff5a5a; color: #ff8a8a; font-size: .8em; padding: 2px 8px; }
+@keyframes gt-bot-glow { 50% { box-shadow: 0 0 10px rgba(58,215,255,.45); } }
+.gt-bot-new { animation: gt-bot-pop .45s cubic-bezier(.3,1.6,.5,1); }
+@keyframes gt-bot-pop { from { transform: scale(.4); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .gt-card, .gt-card.gt-card-in { animation: none; transition: none; }
+  .gt-card, .gt-card.gt-card-in, .gt-bot-add, .gt-bot-new { animation: none; transition: none; }
 }
 `;
 
@@ -82,6 +91,54 @@ function ensureStyles() {
   const tag = document.createElement('style');
   tag.textContent = CSS;
   document.head.appendChild(tag);
+}
+
+// --- CPU players (see server/games/cardBots.js): a bot's seat id is 'bot-<Name>'. ---
+export const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
+export const botName = (id) => `🤖 ${id.slice(4)}`;
+
+// "+ ADD BOT" (optionally for a specific seat) — glowing dashed button.
+export function addBotButton(api, seat, label = '+ ADD BOT') {
+  ensureStyles();
+  const b = document.createElement('button');
+  b.className = 'gt-bot-add';
+  b.textContent = label;
+  b.title = 'Fill this seat with a computer player';
+  b.addEventListener('click', () => api.sendAction(seat === undefined ? { kind: 'addBot' } : { kind: 'addBot', seat }));
+  return b;
+}
+
+export function removeBotButton(api, seat, label = '✕') {
+  ensureStyles();
+  const b = document.createElement('button');
+  b.className = 'gt-bot-rm';
+  b.textContent = label;
+  b.title = 'Remove this bot';
+  b.addEventListener('click', () => api.sendAction({ kind: 'removeBot', seat }));
+  return b;
+}
+
+// Seat-list games (War, Crazy Eights, BS, Poker): one add button plus a remove chip per bot.
+// Bots can join only before a game starts; they can be removed between games too.
+export function botSeatControls(api, seats, maxSeats, phase) {
+  const frag = document.createDocumentFragment();
+  if (phase !== 'waiting' && phase !== 'game_over') return frag;
+  seats.forEach((id, i) => {
+    if (isBot(id)) frag.appendChild(removeBotButton(api, i, `✕ ${botName(id)}`));
+  });
+  if (phase === 'waiting' && seats.length < maxSeats) frag.appendChild(addBotButton(api));
+  return frag;
+}
+
+// Pop a seat element in the first time a given bot shows up in it.
+const seenBots = new Set();
+export function markBotSeat(el, id, seat) {
+  if (!isBot(id)) return;
+  const k = `${id}@${seat}`;
+  if (seenBots.has(k)) return;
+  seenBots.add(k);
+  ensureStyles();
+  el.classList.add('gt-bot-new');
 }
 
 // Card clients rebuild their whole DOM on every update, so an entry animation must only play for

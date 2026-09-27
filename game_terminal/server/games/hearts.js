@@ -349,4 +349,6 @@ module.exports = {
       broadcastState(room, ctx);
     }
   },
+
+  _internal: { legalCards },
 };

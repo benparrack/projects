@@ -2,7 +2,7 @@
 // they're the required rank. Anyone else can CALL BS; the next player in turn order can instead
 // let the play ride. Server plugin: ../../../server/games/bs.js
 
-import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { renderCard, SUIT_GLYPH, isBot, botName, botSeatControls } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
@@ -20,6 +20,7 @@ export function mount(container, api) {
   container.appendChild(root);
 
   function nicknameFor(clientId) {
+    if (isBot(clientId)) return botName(clientId);
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
   }
@@ -73,12 +74,13 @@ export function mount(container, api) {
       leaveBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
       seatRow.appendChild(leaveBtn);
     }
-    if (view.phase === 'waiting' && view.seats.length >= 2 && mySeat === 0) {
+    if (view.phase === 'waiting' && view.seats.length >= 2 && mySeat !== -1) {
       const startBtn = document.createElement('button');
       startBtn.textContent = 'START GAME';
       startBtn.addEventListener('click', () => api.sendAction({ kind: 'startGame' }));
       seatRow.appendChild(startBtn);
     }
+    seatRow.appendChild(botSeatControls(api, view.seats, 6, view.phase));
     root.appendChild(seatRow);
 
     const players = document.createElement('div');

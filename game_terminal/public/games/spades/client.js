@@ -4,7 +4,7 @@
 // Legal-card highlighting below mirrors the server's `legalCardIndices` by hand (no shared
 // module in this repo — same pattern as e.g. slither's client-side `computeZoom`).
 
-import { renderCard, SUIT_GLYPH } from '../cardCommon.js';
+import { renderCard, SUIT_GLYPH, isBot, botName, addBotButton, removeBotButton, markBotSeat } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
@@ -41,6 +41,7 @@ export function mount(container, api) {
   container.appendChild(root);
 
   function nicknameFor(clientId) {
+    if (isBot(clientId)) return botName(clientId);
     if (!clientId) return null;
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
@@ -121,15 +122,22 @@ export function mount(container, api) {
         if (view.phase === 'playing' && i === view.turnIdx) {
           box.style.outline = '2px solid #39ff14';
         }
-      } else if (view.phase === 'waiting' && mySeat === -1) {
-        const btn = document.createElement('button');
-        btn.textContent = `SIT ${SEAT_LABELS[i]}`;
-        btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: i }));
-        box.appendChild(btn);
+      } else if (view.phase === 'waiting') {
+        if (mySeat === -1) {
+          const btn = document.createElement('button');
+          btn.textContent = `SIT ${SEAT_LABELS[i]}`;
+          btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: i }));
+          box.appendChild(btn);
+        }
+        box.appendChild(addBotButton(api, i, '+ BOT'));
       } else {
         name.textContent = '(empty)';
         name.style.opacity = '0.5';
         box.appendChild(name);
+      }
+      if (isBot(view.seats[i])) {
+        markBotSeat(box, view.seats[i], i);
+        if (view.phase === 'waiting' || view.phase === 'game_over') box.appendChild(removeBotButton(api, i));
       }
       seatRow.appendChild(box);
     });

@@ -21,7 +21,7 @@ const pictionary = require('./pictionary');
 const slope = require('./slope');
 const mazedash = require('./mazedash');
 
-module.exports = {
+const registry = {
   [drawing.type]: drawing,
   [hangman.type]: hangman,
   [checkers.type]: checkers,
@@ -42,3 +42,8 @@ module.exports = {
   [slope.type]: slope,
   [mazedash.type]: mazedash,
 };
+
+// CPU players for the card games — patches those plugins' onMessage in place (see cardBots.js).
+require('./cardBots').installCardBots(registry);
+
+module.exports = registry;
