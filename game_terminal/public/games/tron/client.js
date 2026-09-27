@@ -3,7 +3,7 @@
 // trail; steer with arrow keys/WASD (or the on-screen D-pad) to avoid walls, trails, and other
 // players. Last one alive wins the round.
 import { sfx } from '../sfx.js';
-import { createFx, flashEl } from '../canvasFx.js';
+import { createFx, flashEl, sharpCanvas } from '../canvasFx.js';
 
 const GRID_W = 128;
 const GRID_H = 96;
@@ -63,11 +63,9 @@ export function mount(container, api) {
   canvasWrap.style.position = 'relative';
 
   const canvas = document.createElement('canvas');
-  canvas.width = CANVAS_WIDTH;
-  canvas.height = CANVAS_HEIGHT;
   canvas.style.background = '#05080a';
   canvas.style.touchAction = 'none';
-  const ctx = canvas.getContext('2d');
+  const ctx = sharpCanvas(canvas, CANVAS_WIDTH, CANVAS_HEIGHT);
   const fx = createFx();
   let sparkClock = 0;
 

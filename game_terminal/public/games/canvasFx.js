@@ -132,3 +132,17 @@ export function flashEl(el, color = 'rgba(255,40,40,0.45)', ms = 260) {
   el.appendChild(f);
   f.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, easing: 'ease-out' }).onfinish = () => f.remove();
 }
+
+// Size a fixed-layout canvas for the screen's pixel density so it isn't blurry on HiDPI/zoomed
+// displays. The canvas keeps its CSS size of w×h and the returned context is pre-scaled, so all
+// drawing code keeps working in w×h units (it must not call setTransform/resetTransform).
+export function sharpCanvas(canvas, w, h) {
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}

@@ -409,6 +409,7 @@ export function mount(container, api) {
     camera = new THREE.PerspectiveCamera(70, canvasHost.clientWidth / Math.max(1, canvasHost.clientHeight), 0.1, 200);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     renderer.setSize(canvasHost.clientWidth, canvasHost.clientHeight || 600);
     canvasHost.appendChild(renderer.domElement);
 
@@ -530,10 +531,14 @@ export function mount(container, api) {
     // faster you go (boost pickups spike this via fovKick).
     const w = root.clientWidth;
     const h = root.clientHeight;
-    if (fxCanvas.width !== w || fxCanvas.height !== h) {
-      fxCanvas.width = w;
-      fxCanvas.height = h;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (fxCanvas.width !== Math.round(w * dpr) || fxCanvas.height !== Math.round(h * dpr)) {
+      fxCanvas.width = Math.round(w * dpr);
+      fxCanvas.height = Math.round(h * dpr);
+      fxCanvas.style.width = `${w}px`;
+      fxCanvas.style.height = `${h}px`;
     }
+    fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     fxCtx.clearRect(0, 0, w, h);
     if (REDUCED || view.phase !== 'racing' || !me || !me.alive) {
       streaks.length = 0;
@@ -739,7 +744,7 @@ export function mount(container, api) {
       camera.updateProjectionMatrix();
     }
 
-    if (renderer && canvasHost.clientWidth && renderer.domElement.width !== canvasHost.clientWidth) {
+    if (renderer && canvasHost.clientWidth && renderer.domElement.clientWidth !== canvasHost.clientWidth) {
       renderer.setSize(canvasHost.clientWidth, canvasHost.clientHeight || 600);
       camera.aspect = canvasHost.clientWidth / Math.max(1, canvasHost.clientHeight || 600);
       camera.updateProjectionMatrix();

@@ -3,7 +3,7 @@
 // Unlike the other games, the server drives the world on its own schedule; this client
 // just sends steering/boost intent and renders whatever state snapshot arrives.
 import { sfx } from '../sfx.js';
-import { createFx, flashEl } from '../canvasFx.js';
+import { createFx, flashEl, sharpCanvas } from '../canvasFx.js';
 
 const FOOD_COLORS = ['#ffb000', '#39ff14', '#00e5ff', '#ff4fd8', '#ffe14d', '#ff6b3d'];
 
@@ -100,12 +100,10 @@ export function mount(container, api) {
   canvasWrap.style.position = 'relative';
 
   const canvas = document.createElement('canvas');
-  canvas.width = CANVAS_WIDTH;
-  canvas.height = CANVAS_HEIGHT;
   canvas.style.background = '#05080a';
   canvas.style.touchAction = 'none';
   canvas.style.cursor = 'crosshair';
-  const ctx = canvas.getContext('2d');
+  const ctx = sharpCanvas(canvas, CANVAS_WIDTH, CANVAS_HEIGHT);
   // Effects are spawned in WORLD coordinates and drawn under the camera transform.
   const fx = createFx();
   let boostClock = 0;
@@ -138,15 +136,13 @@ export function mount(container, api) {
   // doesn't leave players unable to tell where threats or open food-rich space are relative to
   // their own position (playtest request: "add minimap").
   const minimap = document.createElement('canvas');
-  minimap.width = MINIMAP_SIZE;
-  minimap.height = MINIMAP_SIZE;
   minimap.style.position = 'absolute';
   minimap.style.top = `${MINIMAP_MARGIN}px`;
   minimap.style.right = `${MINIMAP_MARGIN}px`;
   minimap.style.background = 'rgba(5, 8, 10, 0.75)';
   minimap.style.border = '1px solid #1f8f0c';
   minimap.style.pointerEvents = 'none';
-  const minimapCtx = minimap.getContext('2d');
+  const minimapCtx = sharpCanvas(minimap, MINIMAP_SIZE, MINIMAP_SIZE);
 
   canvasWrap.appendChild(canvas);
   canvasWrap.appendChild(overlay);
