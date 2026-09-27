@@ -199,6 +199,7 @@ function buildPublicState(room) {
   return {
     phase: st.phase,
     players: st.players,
+    botLevels: st.botLevels || {},
     points: st.points,
     bar: st.bar,
     borneOff: st.borneOff,
@@ -208,6 +209,57 @@ function buildPublicState(room) {
     winner: st.winner,
     lastMove: st.lastMove,
   };
+}
+
+const { think } = require('./ai');
+const { setBotLevel, botLevelOf } = require('./ai/levels');
+
+const BOT = 'BOT';
+
+function send(room) {
+  room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'backgammon', data: { kind: 'state', ...buildPublicState(room) } } });
+}
+
+// Bot turn: roll after a short pause, ask the engine for the whole turn, then play it one checker
+// at a time so humans can follow. Every step re-validates (game reset / seat change mid-turn).
+function maybeScheduleBotMove(room) {
+  const st = room.state;
+  if (st.phase !== 'playing' || st.players[st.turn] !== BOT) return;
+  const color = st.turn;
+  const stillMine = () => room.state === st && st.phase === 'playing' && st.turn === color && st.players[color] === BOT;
+  setTimeout(() => {
+    if (!stillMine()) return;
+    if (st.dice.length === 0) {
+      const d1 = rollDie();
+      const d2 = rollDie();
+      st.dice = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
+      st.lastRoll = [d1, d2];
+      maybeAdvanceTurn(st);
+      send(room);
+      if (!stillMine()) return maybeScheduleBotMove(room);
+    }
+    const input = { points: st.points, bar: st.bar, borneOff: st.borneOff, color, dice: st.dice.slice(), level: botLevelOf(st, color) };
+    const play = (legs) => {
+      if (!stillMine()) return;
+      const leg = legs.shift();
+      let ok = leg && st.dice.includes(leg.die) && applyMove(st, color, leg.from, leg.die);
+      if (!ok) {
+        // Engine result unusable: fall back to any legal leg.
+        outer: for (const die of [...new Set(st.dice)]) {
+          for (const from of ['bar', ...Array.from({ length: 24 }, (_, i) => i + 1)]) {
+            if (computeMove(st, color, from, die).legal) { ok = applyMove(st, color, from, die); legs.length = 0; break outer; }
+          }
+        }
+      }
+      maybeAdvanceTurn(st);
+      send(room);
+      if (stillMine()) setTimeout(() => play(legs), 550);
+      else maybeScheduleBotMove(room);
+    };
+    setTimeout(() => {
+      think('backgammon', input).then((r) => play((r && r.legs) || []), () => play([]));
+    }, 700);
+  }, 500 + Math.random() * 300);
 }
 
 function broadcastState(room, ctx) {
@@ -273,9 +325,32 @@ module.exports = {
       const seat = data.seat === 'white' || data.seat === 'black' ? data.seat : null;
       if (!seat) return;
       if (st.players[seat]) return;
-      if (st.players.white === ctx.senderId || st.players.black === ctx.senderId) return;
-      st.players[seat] = ctx.senderId;
+      if (data.bot) {
+        st.players[seat] = BOT;
+        setBotLevel(st, seat, data.level);
+      } else {
+        if (st.players.white === ctx.senderId || st.players.black === ctx.senderId) return;
+        st.players[seat] = ctx.senderId;
+      }
       if (st.players.white && st.players.black) startGame(st);
+      broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
+      return;
+    }
+
+    if (data.kind === 'setBotLevel') {
+      const seat = data.seat === 'white' || data.seat === 'black' ? data.seat : null;
+      if (!seat || st.players[seat] !== BOT) return;
+      setBotLevel(st, seat, data.level);
+      broadcastState(room, ctx);
+      return;
+    }
+
+    if (data.kind === 'removeBot') {
+      const seat = data.seat === 'white' || data.seat === 'black' ? data.seat : null;
+      if (!seat || st.players[seat] !== BOT) return;
+      st.players[seat] = null;
+      resetToWaiting(st);
       broadcastState(room, ctx);
       return;
     }
@@ -301,6 +376,7 @@ module.exports = {
       if (st.phase !== 'game_over') return;
       startGame(st);
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
       return;
     }
 
@@ -315,6 +391,7 @@ module.exports = {
       st.lastRoll = [d1, d2];
       maybeAdvanceTurn(st); // handles the "rolled but nothing playable at all" dead-turn case
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
       return;
     }
 
@@ -330,6 +407,7 @@ module.exports = {
       if (!ok) return reject('illegal_move');
       maybeAdvanceTurn(st);
       broadcastState(room, ctx);
+      maybeScheduleBotMove(room);
       return;
     }
   },

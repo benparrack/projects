@@ -12,6 +12,7 @@
 // pop-in/glow transition on (re)creation so state changes read as smoother than a hard cut.
 import { sfx, boardSounds } from '../sfx.js';
 import { createResults, duelResults } from '../resultsPanel.js';
+import { preferredLevel, levelSelect } from '../botLevel.js';
 import { slideFrom, LAST_MOVE_TINT } from '../boardFx.js';
 
 
@@ -66,6 +67,7 @@ export function mount(container, api) {
 
   function nicknameFor(clientId) {
     if (!clientId) return null;
+    if (clientId === 'BOT') return '(bot)';
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
   }
@@ -328,6 +330,7 @@ export function mount(container, api) {
     const seatRow = document.createElement('div');
     seatRow.style.display = 'flex';
     seatRow.style.gap = '18px';
+    seatRow.style.flexWrap = 'wrap';
     seatRow.style.alignItems = 'center';
     for (const color of ['white', 'black']) {
       const box = document.createElement('div');
@@ -359,6 +362,19 @@ export function mount(container, api) {
         btn.style.marginLeft = '4px';
         btn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color }));
         box.appendChild(btn);
+      }
+      if (!view.players[color]) {
+        const botBtn = document.createElement('button');
+        botBtn.textContent = 'PLAY VS BOT';
+        botBtn.addEventListener('click', () => api.sendAction({ kind: 'sit', seat: color, bot: true, level: preferredLevel() }));
+        box.appendChild(botBtn);
+        box.appendChild(levelSelect(preferredLevel()));
+      } else if (view.players[color] === 'BOT') {
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'REMOVE BOT';
+        removeBtn.addEventListener('click', () => api.sendAction({ kind: 'removeBot', seat: color }));
+        box.appendChild(removeBtn);
+        box.appendChild(levelSelect((view.botLevels || {})[color], (level) => api.sendAction({ kind: 'setBotLevel', seat: color, level })));
       }
       seatRow.appendChild(box);
     }
