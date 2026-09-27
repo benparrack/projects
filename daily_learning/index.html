@@ -4,309 +4,475 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Daily Learning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+    --bg: #111317;
+    --bg-glow: rgba(120, 100, 200, 0.10);
+    --surface: #181b21;
+    --surface-2: #1f232a;
+    --border: #2a2f38;
+    --border-soft: #22262e;
+    --text: #ecebe7;
+    --text-body: #d6d4ce;
+    --muted: #9a9aa3;
+    --faint: #6b6d76;
+    --accent: #b9a3f0;
+    --accent-strong: #9a80ea;
+    --accent-ink: #15121f;
+    --danger: #e0707a;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 40px rgba(0,0,0,0.35);
+    --cat: var(--accent);
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: "Fraunces", Georgia, serif;
+    --font-body: "Source Serif 4", Georgia, serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f6f4ef;
+      --bg-glow: rgba(140, 110, 220, 0.10);
+      --surface: #ffffff;
+      --surface-2: #f3f1ec;
+      --border: #e2ded5;
+      --border-soft: #ece9e2;
+      --text: #1d1c1a;
+      --text-body: #2e2d2a;
+      --muted: #6c6a64;
+      --faint: #9a978f;
+      --accent: #6d4fd1;
+      --accent-strong: #5a3dbd;
+      --accent-ink: #ffffff;
+      --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 10px 30px rgba(60,40,20,0.08);
+    }
+  }
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
     margin: 0;
-    background: #14161a;
-    color: #e8e8e8;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 24px 16px 60px;
+    background:
+      radial-gradient(1200px 500px at 50% -200px, var(--bg-glow), transparent 70%),
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
     min-height: 100vh;
   }
-  #app { width: 100%; max-width: 700px; }
+  button { font-family: inherit; }
+  [hidden] { display: none !important; }
+
+  #progress {
+    position: fixed; top: 0; left: 0; height: 3px; width: 0;
+    background: var(--cat);
+    z-index: 10;
+    transition: width 0.1s linear;
+  }
+
+  #app { width: 100%; max-width: 760px; margin: 0 auto; padding: 28px 16px 80px; }
+
+  /* ---------- header ---------- */
   header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    gap: 8px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
   }
-  h1 {
-    font-size: 20px;
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 38px; height: 38px; border-radius: 11px;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+    color: var(--accent-ink);
+    box-shadow: 0 4px 14px rgba(140, 110, 230, 0.3);
+  }
+  .brand h1 {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 21px; margin: 0; letter-spacing: -0.01em;
+  }
+  #todayLabel { font-size: 13px; color: var(--muted); margin-top: 1px; }
+  .stats { display: flex; gap: 8px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 500; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pill svg { color: #f0a050; }
+  .pill.learned svg { color: var(--accent); }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border-radius: 10px;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+  .btn.primary {
+    background: var(--accent); border-color: transparent; color: var(--accent-ink);
     font-weight: 600;
-    margin: 0;
-    color: #f0f0f0;
-    letter-spacing: 0.02em;
   }
-  #streak {
-    font-size: 13px;
-    color: #b8a0d0;
-    background: #23262c;
-    border: 1px solid #33373f;
-    border-radius: 999px;
-    padding: 4px 12px;
+  .btn.primary:hover { background: var(--accent-strong); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); background: var(--surface-2); }
+  .btn.recording { background: var(--danger); border-color: transparent; color: #fff; }
+  .btn.lg { padding: 13px 28px; font-size: 15px; border-radius: 12px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
   }
-  #controls { margin-bottom: 16px; }
-  button.action {
-    padding: 8px 16px;
-    border-radius: 6px;
-    border: none;
-    background: #3a3040;
-    color: #e8e8e8;
-    font-size: 13px;
-    cursor: pointer;
+
+  /* ---------- wheel ---------- */
+  #wheelSection { padding: 36px 24px 32px; text-align: center; }
+  #wheelSection h2 {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 30px; margin: 0 0 6px; letter-spacing: -0.015em;
   }
-  button.action:hover { background: #4a3d54; }
-  button.action:disabled { opacity: 0.5; cursor: default; }
-  button.action.recording { background: #5a2a2a; }
-  button.action.recording:hover { background: #6a3232; }
-  button.action.secondary { background: #23262c; border: 1px solid #33373f; }
-  button.action.secondary:hover { background: #2b2e35; }
-  #categoryPanel {
-    margin-bottom: 16px;
-    background: #1c1e24;
-    border: 1px solid #33373f;
-    border-radius: 10px;
-    padding: 12px 16px;
-  }
-  #categoryPanel summary { cursor: pointer; font-size: 13px; color: #b8b8b8; outline: none; }
-  #categoryList { list-style: none; margin: 12px 0 0; padding: 0; }
-  #categoryList li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 8px;
-    font-size: 13px;
-    color: #ddd;
-    border-bottom: 1px solid #262a30;
-  }
-  #categoryList li:last-child { border-bottom: none; }
-  .removeCategoryBtn {
-    background: none;
-    border: none;
-    color: #a06060;
-    font-size: 16px;
-    cursor: pointer;
-    padding: 0 6px;
-    line-height: 1;
-  }
-  .removeCategoryBtn:hover { color: #d08080; }
-  #addCategoryRow { display: flex; gap: 8px; margin-top: 12px; }
-  #newCategoryInput {
-    flex: 1;
-    min-width: 0;
-    background: #14161a;
-    border: 1px solid #33373f;
-    border-radius: 6px;
-    color: #e8e8e8;
-    padding: 6px 10px;
-    font-size: 13px;
-  }
-  #categoryHint { font-size: 12px; color: #666; margin-top: 10px; }
-  #wheelSection { margin-bottom: 20px; text-align: center; }
-  #wheelStage {
-    position: relative;
-    width: 280px;
-    height: 280px;
-    margin: 0 auto 16px;
-  }
+  #wheelSection .sub { color: var(--muted); margin: 0 0 28px; }
+  #wheelStage { position: relative; width: 320px; height: 320px; max-width: 100%; margin: 0 auto 26px; }
   #wheelCanvas {
-    display: block;
-    width: 280px;
-    height: 280px;
+    display: block; width: 100%; height: 100%;
     border-radius: 50%;
-    transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+    box-shadow: 0 0 0 6px var(--surface-2), 0 0 0 7px var(--border), 0 18px 50px rgba(0,0,0,0.35);
+    transition: transform 4.2s cubic-bezier(0.15, 0.7, 0.1, 1);
+  }
+  #wheelHub {
+    position: absolute; left: 50%; top: 50%; width: 58px; height: 58px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    display: grid; place-items: center; color: var(--accent);
   }
   #wheelPointer {
-    position: absolute;
-    top: -4px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 10px solid transparent;
-    border-right: 10px solid transparent;
-    border-top: 16px solid #e8dcf0;
-    z-index: 2;
-    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.4));
+    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 13px solid transparent; border-right: 13px solid transparent;
+    border-top: 24px solid var(--text);
+    z-index: 2; filter: drop-shadow(0 3px 4px rgba(0,0,0,0.4));
   }
-  #wheelResult { font-size: 15px; color: #d8c8ea; min-height: 20px; margin-top: 4px; }
-  #categoryBadge {
-    display: inline-block;
-    font-size: 12px;
-    color: #d8c8ea;
-    background: #2a2035;
-    border: 1px solid #4a3d5c;
-    border-radius: 999px;
-    padding: 3px 10px;
-    margin-bottom: 10px;
+  #wheelResult { min-height: 24px; margin-top: 16px; font-size: 15px; color: var(--muted); }
+  #wheelResult strong { color: var(--cat); font-weight: 600; }
+
+  /* ---------- topic ---------- */
+  #toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  #toolbar .spacer { flex: 1; }
+  #topicCard { overflow: hidden; }
+  #loading { padding: 60px 24px; text-align: center; color: var(--muted); }
+  .spinner {
+    width: 26px; height: 26px; margin: 0 auto 14px;
+    border: 3px solid var(--border); border-top-color: var(--cat);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
   }
-  #topicCard {
-    background: #1c1e24;
-    border: 1px solid #33373f;
-    border-radius: 10px;
-    padding: 24px;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
-    min-height: 120px;
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #heroImg {
+    display: flex; justify-content: center; align-items: center;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border-soft);
+    max-height: 340px; overflow: hidden;
   }
-  #loading { color: #888; font-size: 14px; }
-  #thumb {
-    max-width: 100%;
-    max-height: 280px;
-    display: block;
-    margin: 0 auto 16px;
-    border-radius: 6px;
-    border: 1px solid #33373f;
+  #thumb { display: block; max-width: 100%; max-height: 340px; object-fit: contain; }
+  #articleHead { padding: 32px 40px 0; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--cat);
   }
-  #title { font-size: 22px; margin: 0 0 4px; color: #f0f0f0; }
-  #description { font-size: 14px; color: #a8a0b8; margin: 0 0 16px; font-style: italic; }
-  #extract { font-size: 15px; line-height: 1.6; color: #d4d4d4; }
-  #extract p { margin: 0 0 14px; }
-  #extract h3, #extract h4 { color: #f0f0f0; margin: 20px 0 8px; }
-  #extract h3 { font-size: 17px; }
-  #extract h4 { font-size: 15px; color: #cfc0dc; }
+  .eyebrow .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cat); }
+  #title {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 40px; line-height: 1.1; letter-spacing: -0.02em;
+    margin: 12px 0 8px; text-wrap: balance;
+  }
+  #description { font-size: 16px; color: var(--muted); margin: 0 0 14px; }
+  #meta { display: flex; gap: 14px; font-size: 13px; color: var(--faint); flex-wrap: wrap; }
+  #why {
+    margin: 24px 0 0;
+    padding: 16px 18px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--cat) 12%, transparent);
+    border-left: 3px solid var(--cat);
+  }
+  #why .label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--cat); margin-bottom: 4px;
+  }
+  #why .text { font-family: var(--font-body); font-size: 18px; line-height: 1.45; color: var(--text); }
+  #toc { margin: 24px 0 0; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); }
+  #toc summary {
+    cursor: pointer; list-style: none; padding: 14px 0;
+    font-size: 13px; font-weight: 500; color: var(--muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  #toc summary::-webkit-details-marker { display: none; }
+  #toc summary .chev { transition: transform 0.2s; }
+  #toc[open] summary .chev { transform: rotate(90deg); }
+  #tocList { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 0 16px; margin: 0; list-style: none; }
+  #tocList a {
+    display: block; font-size: 13px; color: var(--text); text-decoration: none;
+    padding: 5px 11px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--border-soft);
+  }
+  #tocList a:hover { border-color: var(--cat); }
+
+  #extract {
+    padding: 8px 40px 8px;
+    font-family: var(--font-body);
+    font-size: 18.5px; line-height: 1.7; color: var(--text-body);
+  }
+  #extract p { margin: 0 0 1.05em; max-width: 66ch; }
+  #extract > p:first-child::first-letter {
+    font-family: var(--font-display); font-weight: 600;
+    float: left; font-size: 3.4em; line-height: 0.9; padding: 6px 10px 0 0; color: var(--cat);
+  }
+  #extract h3, #extract h4 { font-family: var(--font-display); color: var(--text); scroll-margin-top: 20px; }
+  #extract h3 { font-size: 25px; font-weight: 600; margin: 1.6em 0 0.5em; letter-spacing: -0.01em; }
+  #extract h4 { font-size: 19px; font-weight: 500; margin: 1.3em 0 0.4em; }
+  #articleFoot { padding: 8px 40px 36px; }
   #wikiLink {
-    display: inline-block;
-    margin-top: 8px;
-    font-size: 13px;
-    color: #b8a0d0;
-    text-decoration: none;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 14px; font-weight: 500; color: var(--cat); text-decoration: none;
   }
   #wikiLink:hover { text-decoration: underline; }
-  #relatedSection {
-    margin-top: 24px;
-    padding-top: 20px;
-    border-top: 1px solid #33373f;
+  #relatedSection { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border-soft); }
+  .section-label {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 12px;
   }
-  #relatedSection h3 { font-size: 14px; color: #b8b8b8; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.04em; }
-  #relatedList { list-style: none; margin: 0; padding: 0; }
-  #relatedList li { margin-bottom: 8px; font-size: 14px; line-height: 1.5; }
-  #relatedList a { color: #b8a0d0; text-decoration: none; }
-  #relatedList a:hover { text-decoration: underline; }
-  .relatedDesc { color: #888; }
-  #reflectionCard {
-    background: #1c1e24;
-    border: 1px solid #33373f;
-    border-radius: 10px;
-    padding: 20px 24px;
-    margin-top: 16px;
+  #relatedList { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #relatedList a {
+    display: block; height: 100%; text-decoration: none;
+    padding: 12px 14px; border-radius: 12px;
+    background: var(--surface-2); border: 1px solid var(--border-soft);
+    transition: border-color 0.15s;
   }
-  #reflectionCard h3 { font-size: 14px; color: #b8b8b8; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  #relatedList a:hover { border-color: var(--cat); }
+  #relatedList .rt { color: var(--text); font-weight: 600; font-size: 14px; }
+  #relatedList .rd {
+    color: var(--muted); font-size: 13px; line-height: 1.45; margin-top: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+
+  /* ---------- reflection / panels ---------- */
+  .panel { margin-top: 16px; padding: 22px 26px; }
+  .panel h3 {
+    font-family: var(--font-display); font-weight: 600; font-size: 19px;
+    margin: 0 0 4px;
+  }
+  .panel .hint { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
   #recordRow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  #recordTimer { font-size: 13px; color: #a8a0b8; font-variant-numeric: tabular-nums; }
-  #recordStatus { font-size: 13px; color: #888; margin-top: 8px; min-height: 16px; }
-  #recordingPlayer { width: 100%; margin-top: 12px; }
-  #noRecordingNote { font-size: 13px; color: #666; margin-top: 4px; }
-  #historyPanel {
-    margin-top: 20px;
-    background: #1c1e24;
-    border: 1px solid #33373f;
-    border-radius: 10px;
-    padding: 12px 16px;
+  #recordTimer { font-size: 14px; color: var(--danger); font-variant-numeric: tabular-nums; font-weight: 500; }
+  #recordStatus { font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 16px; }
+  #recordingPlayer { width: 100%; margin-top: 8px; }
+  #noRecordingNote { font-size: 13px; color: var(--faint); margin-top: 4px; }
+
+  details.panel > summary {
+    cursor: pointer; list-style: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
-  #historyPanel summary {
-    cursor: pointer;
-    font-size: 13px;
-    color: #b8b8b8;
-    outline: none;
-  }
-  #historyList {
-    list-style: none;
-    margin: 12px 0 0;
-    padding: 0;
-    max-height: 260px;
-    overflow-y: auto;
-  }
-  #historyList li { margin-bottom: 4px; }
+  details.panel > summary::-webkit-details-marker { display: none; }
+  details.panel > summary h3 { margin: 0; }
+  details.panel > summary .chev { color: var(--muted); transition: transform 0.2s; }
+  details.panel[open] > summary .chev { transform: rotate(90deg); }
+  .count { color: var(--muted); font-family: var(--font-ui); font-weight: 400; font-size: 14px; margin-left: 6px; }
+
+  #historyList { list-style: none; margin: 16px 0 0; padding: 0; max-height: 340px; overflow-y: auto; }
   button.historyItem {
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    color: #ccc;
+    width: 100%; text-align: left; cursor: pointer;
+    display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 12px;
+    background: none; border: none; border-radius: 10px;
+    padding: 10px 10px; color: var(--text); font-size: 14px;
+  }
+  button.historyItem:hover { background: var(--surface-2); }
+  .hcat { width: 10px; height: 10px; border-radius: 50%; }
+  .htitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .htitle small { color: var(--muted); margin-left: 6px; font-size: 12px; }
+  .hright { display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .hmic { color: var(--danger); display: none; }
+  .hmic.on { display: inline; }
+
+  #categoryList { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  #categoryList li {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 6px 6px 12px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--border-soft);
     font-size: 13px;
-    padding: 6px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
   }
-  button.historyItem:hover { background: #23262c; color: #f0f0f0; }
-  #historyList .hdate { color: #888; font-variant-numeric: tabular-nums; }
-  #historyList .hdot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #a06060;
-    flex: none;
-    visibility: hidden;
+  #categoryList .cdot { width: 8px; height: 8px; border-radius: 50%; }
+  .removeCategoryBtn {
+    background: none; border: none; color: var(--faint); cursor: pointer;
+    width: 22px; height: 22px; border-radius: 50%; font-size: 15px; line-height: 1;
   }
-  #historyList .hdot.has-recording { visibility: visible; }
-  footer {
-    margin-top: 20px;
-    font-size: 12px;
-    color: #666;
-    text-align: center;
+  .removeCategoryBtn:hover { color: var(--danger); background: var(--surface); }
+  #addCategoryRow { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  #newCategoryInput {
+    flex: 1; min-width: 160px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: 9px 12px; font-size: 14px; font-family: inherit;
+  }
+  #newCategoryInput:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #categoryHint { font-size: 13px; color: var(--faint); margin-top: 10px; line-height: 1.5; }
+
+  footer { margin-top: 32px; font-size: 13px; color: var(--faint); text-align: center; line-height: 1.6; }
+
+  @media (max-width: 600px) {
+    #app { padding-top: 20px; }
+    #articleHead { padding: 24px 20px 0; }
+    #extract { padding: 8px 20px; font-size: 17.5px; }
+    #articleFoot { padding: 8px 20px 28px; }
+    #title { font-size: 31px; }
+    #relatedList { grid-template-columns: 1fr; }
+    .panel { padding: 18px 18px; }
+    #wheelSection h2 { font-size: 25px; }
+    #wheelStage { width: 280px; height: 280px; }
   }
 </style>
 </head>
 <body>
+<div id="progress"></div>
 <div id="app">
   <header>
-    <h1>Daily Learning</h1>
-    <div id="streak">— day streak</div>
-  </header>
-  <div id="controls">
-    <button class="action" id="newTopicBtn">Spin for new topic</button>
-    <button class="action secondary" id="manageCategoriesBtn">Manage categories</button>
-    <button class="action secondary" id="backToTodayBtn" hidden>Back to today</button>
-  </div>
-  <details id="categoryPanel">
-    <summary>Categories</summary>
-    <ul id="categoryList"></ul>
-    <div id="addCategoryRow">
-      <input id="newCategoryInput" placeholder="Add a category…" maxlength="40">
-      <button class="action secondary" id="addCategoryBtn">Add</button>
-    </div>
-    <div id="categoryHint">Keep at least 2 categories so the wheel has something to spin.</div>
-  </details>
-  <div id="wheelSection" hidden>
-    <div id="wheelStage">
-      <div id="wheelPointer"></div>
-      <canvas id="wheelCanvas" width="280" height="280"></canvas>
-    </div>
-    <button class="action" id="spinBtn">Spin the wheel</button>
-    <div id="wheelResult"></div>
-  </div>
-  <div id="topicCard">
-    <div id="loading">Loading a new topic…</div>
-    <div id="content" hidden>
-      <div id="categoryBadge" hidden></div>
-      <img id="thumb" hidden>
-      <h2 id="title"></h2>
-      <p id="description"></p>
-      <div id="extract"></div>
-      <a id="wikiLink" target="_blank" rel="noopener">Read the full article on Wikipedia →</a>
-      <div id="relatedSection" hidden>
-        <h3>Go deeper</h3>
-        <ul id="relatedList"></ul>
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>
+      </div>
+      <div>
+        <h1>Daily Learning</h1>
+        <div id="todayLabel"></div>
       </div>
     </div>
-  </div>
-  <div id="reflectionCard">
-    <h3>Talk about what you learned</h3>
-    <div id="recordRow">
-      <button class="action" id="recordBtn">Record reflection</button>
-      <span id="recordTimer"></span>
+    <div class="stats">
+      <span class="pill" title="Consecutive days learned">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3.5 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9.5z"/></svg>
+        <span id="streak">0 days</span>
+      </span>
+      <span class="pill learned" title="Topics learned">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        <span id="learnedCount">0 learned</span>
+      </span>
     </div>
-    <div id="recordStatus"></div>
-    <audio id="recordingPlayer" controls hidden></audio>
-    <div id="noRecordingNote">No reflection recorded for this day yet.</div>
+  </header>
+
+  <section id="wheelSection" class="card" hidden>
+    <h2>What will you learn today?</h2>
+    <p class="sub">Spin for a subject, and you'll get one topic that's worth knowing.</p>
+    <div id="wheelStage">
+      <div id="wheelPointer"></div>
+      <canvas id="wheelCanvas"></canvas>
+      <div id="wheelHub">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z"/></svg>
+      </div>
+    </div>
+    <button class="btn primary lg" id="spinBtn">Spin the wheel</button>
+    <div id="wheelResult"></div>
+  </section>
+
+  <div id="topicView">
+    <div id="toolbar">
+      <button class="btn" id="rerollBtn" title="Swap today's topic for another from the same subject">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+        <span id="rerollLabel">Another topic</span>
+      </button>
+      <button class="btn" id="newTopicBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 3"/></svg>
+        Spin again
+      </button>
+      <span class="spacer"></span>
+      <button class="btn ghost" id="backToTodayBtn" hidden>← Back to today</button>
+    </div>
+
+    <article id="topicCard" class="card">
+      <div id="loading"><div class="spinner"></div><span id="loadingText">Loading…</span></div>
+      <div id="content" hidden>
+        <div id="heroImg" hidden><img id="thumb" alt=""></div>
+        <div id="articleHead">
+          <div class="eyebrow" id="categoryBadge"><span class="dot"></span><span id="categoryName"></span></div>
+          <h2 id="title"></h2>
+          <p id="description"></p>
+          <div id="meta"></div>
+          <div id="why" hidden>
+            <div class="label">Why it's worth knowing</div>
+            <div class="text" id="whyText"></div>
+          </div>
+          <details id="toc" hidden>
+            <summary>
+              <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>
+              In this article
+            </summary>
+            <ul id="tocList"></ul>
+          </details>
+        </div>
+        <div id="extract"></div>
+        <div id="articleFoot">
+          <a id="wikiLink" target="_blank" rel="noopener">
+            Read the full article on Wikipedia
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>
+          </a>
+          <div id="relatedSection" hidden>
+            <div class="section-label">Go deeper</div>
+            <ul id="relatedList"></ul>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <section id="reflectionCard" class="card panel">
+      <h3>Say it back</h3>
+      <p class="hint">Explaining what you just read out loud is one of the best ways to make it stick.</p>
+      <div id="recordRow">
+        <button class="btn primary" id="recordBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v5"/></svg>
+          <span id="recordLabel">Record reflection</span>
+        </button>
+        <span id="recordTimer"></span>
+      </div>
+      <div id="recordStatus"></div>
+      <audio id="recordingPlayer" controls hidden></audio>
+      <div id="noRecordingNote">No reflection recorded for this day yet.</div>
+    </section>
   </div>
-  <details id="historyPanel">
-    <summary>History (<span id="historyCount">0</span> <span id="historyDayWord">days</span> learned)</summary>
+
+  <details id="historyPanel" class="card panel">
+    <summary>
+      <h3>History<span class="count" id="historyCount"></span></h3>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+    </summary>
     <ul id="historyList"></ul>
   </details>
-  <footer>Spin the wheel once a day to pick a category, then a random Wikipedia topic from it. Revisits show the same topic until you spin again.</footer>
+
+  <details id="categoryPanel" class="card panel">
+    <summary>
+      <h3>Subjects<span class="count" id="categoryCount"></span></h3>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+    </summary>
+    <ul id="categoryList"></ul>
+    <div id="addCategoryRow">
+      <input id="newCategoryInput" placeholder="Add your own subject (e.g. Architecture)…" maxlength="40">
+      <button class="btn" id="addCategoryBtn">Add</button>
+      <button class="btn ghost" id="resetCategoriesBtn">Reset to defaults</button>
+    </div>
+    <div id="categoryHint">The built-in subjects draw from a hand-picked list of useful, interesting topics. Custom subjects search Wikipedia's featured and good-quality articles instead.</div>
+  </details>
+
+  <footer>One topic a day. Revisits show the same topic until you spin again.</footer>
 </div>
+
+<script src="topics.js"></script>
 <script>
+  const CURATED = new Map(TOPIC_POOL.map(c => [c.name, c]));
+  const END_SECTIONS = /^(see also|references|notes|footnotes|further reading|external links|bibliography|sources|citations|notes and references|references and notes|explanatory notes|works cited|gallery)$/i;
+
   let history = {};
   let categories = [];
   let wheelRotation = 0;
@@ -316,10 +482,33 @@
   let recordStartMs = null;
   let recordTimerHandle = null;
 
-  function todayKey() {
-    return new Date().toISOString().slice(0, 10);
+  const $ = id => document.getElementById(id);
+
+  // Local-date key (not UTC), so the day rolls over at local midnight.
+  function dateKey(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function todayKey() { return dateKey(new Date()); }
+
+  function formatDate(key, opts) {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, opts);
   }
 
+  function colorForCategory(name) {
+    if (!name) return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    const c = CURATED.get(name);
+    if (c) return c.color;
+    let h = 0;
+    for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return 'hsl(' + (h % 360) + ', 55%, 62%)';
+  }
+
+  function setCategoryColor(name) {
+    document.documentElement.style.setProperty('--cat', colorForCategory(name));
+  }
+
+  // ---------- server persistence ----------
   async function loadHistoryFromServer() {
     try {
       const res = await fetch('/api/history');
@@ -327,8 +516,8 @@
       history = await res.json();
     } catch (e) {
       history = {};
-      document.getElementById('loading').textContent =
-        'Could not reach the local server — run "npm start" in daily_learning/ and open this page via its http://localhost address.';
+      $('loadingText').textContent =
+        'Could not reach the local server. Run "npm start" in daily_learning/ and open this page via its http://localhost address.';
     }
   }
 
@@ -339,16 +528,17 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(topic)
       });
-    } catch (e) { /* best-effort — topic still renders from memory */ }
+    } catch (e) { /* best-effort; topic still renders from memory */ }
   }
 
   async function loadCategoriesFromServer() {
+    categories = TOPIC_POOL.map(c => c.name);
     try {
       const res = await fetch('/api/categories');
       if (!res.ok) throw new Error('bad response');
       const data = await res.json();
       if (Array.isArray(data) && data.length) categories = data;
-    } catch (e) { /* fall back to whatever is already in memory */ }
+    } catch (e) { /* keep defaults */ }
   }
 
   async function saveCategoriesToServer() {
@@ -358,143 +548,173 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(categories)
       });
-    } catch (e) { /* best-effort — categories still work from memory */ }
+    } catch (e) { /* best-effort */ }
   }
 
+  // ---------- subjects panel ----------
   function renderCategoryList() {
-    const list = document.getElementById('categoryList');
+    const list = $('categoryList');
     list.innerHTML = '';
+    $('categoryCount').textContent = categories.length;
     categories.forEach((cat, i) => {
       const li = document.createElement('li');
+      const dot = document.createElement('span');
+      dot.className = 'cdot';
+      dot.style.background = colorForCategory(cat);
       const span = document.createElement('span');
       span.textContent = cat;
       const removeBtn = document.createElement('button');
       removeBtn.textContent = '×';
       removeBtn.className = 'removeCategoryBtn';
-      removeBtn.title = 'Remove category';
+      removeBtn.title = 'Remove subject';
       removeBtn.addEventListener('click', () => removeCategory(i));
-      li.appendChild(span);
-      li.appendChild(removeBtn);
+      li.append(dot, span, removeBtn);
       list.appendChild(li);
     });
   }
 
+  function categoriesChanged() {
+    saveCategoriesToServer();
+    renderCategoryList();
+    drawWheel();
+  }
+
   function removeCategory(index) {
     if (categories.length <= 2) {
-      document.getElementById('categoryHint').textContent = 'Keep at least 2 categories so the wheel has something to spin.';
+      $('categoryHint').textContent = 'Keep at least 2 subjects so the wheel has something to spin.';
       return;
     }
     categories.splice(index, 1);
-    saveCategoriesToServer();
-    renderCategoryList();
-    drawWheel();
+    categoriesChanged();
   }
 
   function addCategory() {
-    const input = document.getElementById('newCategoryInput');
+    const input = $('newCategoryInput');
     const val = input.value.trim();
     if (!val) return;
-    if (categories.some(c => c.toLowerCase() === val.toLowerCase())) { input.value = ''; return; }
-    categories.push(val);
-    saveCategoriesToServer();
     input.value = '';
-    renderCategoryList();
-    drawWheel();
+    if (categories.some(c => c.toLowerCase() === val.toLowerCase())) return;
+    categories.push(val);
+    categoriesChanged();
   }
 
-  function colorForSlice(i, n) {
-    const hue = Math.round((360 / n) * i);
-    return 'hsl(' + hue + ', 55%, 42%)';
+  function resetCategories() {
+    categories = TOPIC_POOL.map(c => c.name);
+    categoriesChanged();
   }
 
+  // ---------- wheel ----------
   function drawWheel() {
-    const canvas = document.getElementById('wheelCanvas');
+    const canvas = $('wheelCanvas');
+    const cssSize = canvas.clientWidth || 320;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.height = Math.round(cssSize * dpr);
     const ctx = canvas.getContext('2d');
-    const size = canvas.width;
-    const cx = size / 2, cy = size / 2, r = size / 2 - 4;
-    ctx.clearRect(0, 0, size, size);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cx = cssSize / 2, cy = cssSize / 2, r = cssSize / 2;
+    ctx.clearRect(0, 0, cssSize, cssSize);
     const n = categories.length;
     if (!n) return;
-    const sliceAngle = (2 * Math.PI) / n;
+    const slice = (2 * Math.PI) / n;
+    const fontSize = n > 14 ? 10 : n > 10 ? 11.5 : 13;
     categories.forEach((cat, i) => {
-      const start = -Math.PI / 2 + i * sliceAngle;
-      const end = start + sliceAngle;
+      const start = -Math.PI / 2 + i * slice;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, r, start, end);
+      ctx.arc(cx, cy, r, start, start + slice);
       ctx.closePath();
-      ctx.fillStyle = colorForSlice(i, n);
+      ctx.fillStyle = colorForCategory(cat);
       ctx.fill();
-      ctx.strokeStyle = '#14161a';
-      ctx.lineWidth = 2;
+      // subtle alternating shade so adjacent similar hues still separate
+      if (i % 2) { ctx.fillStyle = 'rgba(0,0,0,0.07)'; ctx.fill(); }
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+      ctx.lineWidth = 1;
       ctx.stroke();
       ctx.save();
       ctx.translate(cx, cy);
-      ctx.rotate(start + sliceAngle / 2);
+      ctx.rotate(start + slice / 2);
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#fff';
-      ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      ctx.fillText(cat, r - 10, 4);
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(18,16,24,0.88)';
+      ctx.font = '600 ' + fontSize + 'px Inter, -apple-system, sans-serif';
+      let label = cat;
+      const maxW = r - 44;
+      while (ctx.measureText(label).width > maxW && label.length > 3) label = label.slice(0, -2) + '…';
+      ctx.fillText(label, r - 14, 0);
       ctx.restore();
     });
   }
 
   function showWheel() {
-    document.getElementById('wheelSection').hidden = false;
-    document.getElementById('topicCard').hidden = true;
-    document.getElementById('reflectionCard').hidden = true;
-    document.getElementById('wheelResult').textContent = '';
+    $('wheelSection').hidden = false;
+    $('topicView').hidden = true;
+    $('wheelResult').textContent = '';
+    setCategoryColor(null);
     drawWheel();
+    updateProgress();
   }
 
   function hideWheel() {
-    document.getElementById('wheelSection').hidden = true;
-    document.getElementById('topicCard').hidden = false;
-    document.getElementById('reflectionCard').hidden = false;
+    $('wheelSection').hidden = true;
+    $('topicView').hidden = false;
   }
 
   function spinWheel() {
     if (categories.length < 2) {
-      document.getElementById('wheelResult').textContent = 'Add at least 2 categories to spin.';
+      $('wheelResult').textContent = 'Add at least 2 subjects to spin.';
       return;
     }
-    const spinBtn = document.getElementById('spinBtn');
+    const spinBtn = $('spinBtn');
     spinBtn.disabled = true;
-    document.getElementById('wheelResult').textContent = '';
+    $('wheelResult').textContent = '';
     const n = categories.length;
     const chosenIndex = Math.floor(Math.random() * n);
-    const sliceAngleDeg = 360 / n;
-    const centerDeg = chosenIndex * sliceAngleDeg + sliceAngleDeg / 2;
+    const sliceDeg = 360 / n;
+    // land somewhere inside the slice, not dead-center, so it feels less mechanical
+    const centerDeg = chosenIndex * sliceDeg + sliceDeg * (0.2 + Math.random() * 0.6);
     const extraSpins = 5 + Math.floor(Math.random() * 3);
     const targetMod = (360 - centerDeg) % 360;
     const baseFull = Math.floor(wheelRotation / 360) * 360;
     let finalRotation = baseFull + extraSpins * 360 + targetMod;
     if (finalRotation <= wheelRotation) finalRotation += 360;
     wheelRotation = finalRotation;
-    const canvas = document.getElementById('wheelCanvas');
+    const canvas = $('wheelCanvas');
     canvas.style.transform = 'rotate(' + wheelRotation + 'deg)';
+    let done = false;
     const onEnd = () => {
+      if (done) return;
+      done = true;
       canvas.removeEventListener('transitionend', onEnd);
-      const chosenCategory = categories[chosenIndex];
-      document.getElementById('wheelResult').textContent = 'Landed on: ' + chosenCategory;
-      spinBtn.disabled = false;
-      finishSpin(chosenCategory);
+      const chosen = categories[chosenIndex];
+      setCategoryColor(chosen);
+      const res = $('wheelResult');
+      res.innerHTML = '';
+      res.append('Landed on ');
+      const strong = document.createElement('strong');
+      strong.textContent = chosen;
+      res.append(strong);
+      setTimeout(() => {
+        spinBtn.disabled = false;
+        hideWheel();
+        loadToday(chosen);
+      }, 700);
     };
     canvas.addEventListener('transitionend', onEnd);
+    // transitionend can be skipped (e.g. tab in background mid-spin), so don't rely on it alone
+    setTimeout(onEnd, 4500);
   }
 
-  async function finishSpin(category) {
-    hideWheel();
-    await loadToday(category);
+  // ---------- Wikipedia fetching ----------
+  async function wikiQuery(params) {
+    const res = await fetch('https://en.wikipedia.org/w/api.php?format=json&origin=*&' + params);
+    if (!res.ok) throw new Error('wiki query failed');
+    return res.json();
   }
 
   async function fetchFullExtract(title) {
     try {
-      const url = 'https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&format=json&origin=*&titles=' + encodeURIComponent(title);
-      const res = await fetch(url);
-      const data = await res.json();
-      const pages = data.query && data.query.pages;
-      const page = pages && Object.values(pages)[0];
+      const data = await wikiQuery('action=query&prop=extracts&explaintext=1&redirects=1&titles=' + encodeURIComponent(title));
+      const page = data.query && data.query.pages && Object.values(data.query.pages)[0];
       return (page && page.extract) || null;
     } catch (e) {
       return null;
@@ -502,21 +722,15 @@
   }
 
   function cleanSnippet(snippet) {
-    const stripped = (snippet || '').replace(/<[^>]+>/g, '');
     const el = document.createElement('textarea');
-    el.innerHTML = stripped;
+    el.innerHTML = (snippet || '').replace(/<[^>]+>/g, '');
     return el.value;
   }
 
   async function fetchRelated(title) {
     try {
-      const url = 'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
-        encodeURIComponent('morelike:' + title) + '&srlimit=4&format=json&origin=*';
-      const res = await fetch(url);
-      if (!res.ok) return [];
-      const data = await res.json();
-      const results = (data.query && data.query.search) || [];
-      return results.map(r => ({
+      const data = await wikiQuery('action=query&list=search&srlimit=4&srsearch=' + encodeURIComponent('morelike:' + title));
+      return ((data.query && data.query.search) || []).map(r => ({
         title: r.title,
         description: cleanSnippet(r.snippet),
         url: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(r.title.replace(/ /g, '_'))
@@ -526,133 +740,144 @@
     }
   }
 
-  async function fetchRandomTopic() {
-    for (let i = 0; i < 6; i++) {
-      try {
-        const res = await fetch('https://en.wikipedia.org/api/rest_v1/page/random/summary');
-        if (!res.ok) continue;
-        const data = await res.json();
-        if (data.type !== 'standard') continue;
-        if (!data.extract || data.extract.length < 200) continue;
-        const [full, related] = await Promise.all([
-          fetchFullExtract(data.title),
-          fetchRelated(data.title)
-        ]);
-        return {
-          date: todayKey(),
-          title: data.title,
-          description: data.description || '',
-          extract: full || data.extract,
-          thumbnail: (data.thumbnail && data.thumbnail.source) || (data.originalimage && data.originalimage.source) || null,
-          url: (data.content_urls && data.content_urls.desktop && data.content_urls.desktop.page) || null,
-          related
-        };
-      } catch (e) { /* try again */ }
-    }
-    throw new Error('Could not find a topic after several tries');
-  }
-
-  async function searchWikipedia(params) {
-    const url = 'https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&' + params;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('search failed');
-    return res.json();
-  }
-
   async function fetchPageSummary(title) {
     try {
       const res = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title.replace(/ /g, '_')));
       if (!res.ok) return null;
       const data = await res.json();
-      if (data.type !== 'standard') return null;
-      if (!data.extract || data.extract.length < 200) return null;
+      if (data.type !== 'standard' || !data.extract) return null;
       return data;
     } catch (e) {
       return null;
     }
   }
 
-  async function pickTitleFromCategory(category) {
-    const inCategoryQuery = 'srsearch=' + encodeURIComponent('incategory:"' + category + '"');
-    const countData = await searchWikipedia(inCategoryQuery + '&srlimit=1');
-    const total = (countData.query && countData.query.searchinfo && countData.query.searchinfo.totalhits) || 0;
-    if (total > 0) {
-      const offset = Math.floor(Math.random() * Math.min(total, 500));
-      const pickData = await searchWikipedia(inCategoryQuery + '&srlimit=1&sroffset=' + offset);
-      const results = (pickData.query && pickData.query.search) || [];
-      if (results[0]) return results[0].title;
+  function learnedTitles() {
+    const seen = new Set();
+    Object.values(history).forEach(h => { if (h && h.topic) seen.add(h.topic.title.toLowerCase()); });
+    return seen;
+  }
+
+  // Curated subject: pick an unseen [title, why] pair from the hand-picked pool.
+  function pickCurated(category, exclude) {
+    const pool = CURATED.get(category).topics;
+    const seen = learnedTitles();
+    let fresh = pool.filter(([t]) => !seen.has(t.toLowerCase()) && !exclude.has(t));
+    if (!fresh.length) fresh = pool.filter(([t]) => !exclude.has(t)); // whole subject done: allow repeats
+    return fresh.length ? fresh[Math.floor(Math.random() * fresh.length)] : null;
+  }
+
+  // Custom subject: search Wikipedia's featured, then good, articles on it, so we get quality depth rather than stubs.
+  async function pickCustom(category, exclude) {
+    const seen = learnedTitles();
+    for (const quality of ['Featured article', 'Good article', null]) {
+      const q = category + (quality ? ' hastemplate:"' + quality + '"' : '');
+      try {
+        const data = await wikiQuery('action=query&list=search&srlimit=30&srsearch=' + encodeURIComponent(q));
+        const hits = ((data.query && data.query.search) || [])
+          .map(r => r.title)
+          .filter(t => !seen.has(t.toLowerCase()) && !exclude.has(t) && !/^list of/i.test(t));
+        if (hits.length >= (quality ? 3 : 1)) return [hits[Math.floor(Math.random() * Math.min(hits.length, 15))], null];
+      } catch (e) { /* try next tier */ }
     }
-    // Fallback for categories with no direct Wikipedia category page: plain keyword search.
-    const kwData = await searchWikipedia('srsearch=' + encodeURIComponent(category) + '&srlimit=20');
-    const kwResults = (kwData.query && kwData.query.search) || [];
-    if (kwResults.length) return kwResults[Math.floor(Math.random() * kwResults.length)].title;
     return null;
   }
 
   async function fetchTopicForCategory(category) {
+    const exclude = new Set();
+    const isCurated = CURATED.has(category);
     for (let i = 0; i < 6; i++) {
-      try {
-        const title = await pickTitleFromCategory(category);
-        if (!title) break;
-        const summary = await fetchPageSummary(title);
-        if (!summary) continue;
-        const [full, related] = await Promise.all([
-          fetchFullExtract(summary.title),
-          fetchRelated(summary.title)
-        ]);
-        return {
-          date: todayKey(),
-          title: summary.title,
-          description: summary.description || '',
-          extract: full || summary.extract,
-          thumbnail: (summary.thumbnail && summary.thumbnail.source) || (summary.originalimage && summary.originalimage.source) || null,
-          url: (summary.content_urls && summary.content_urls.desktop && summary.content_urls.desktop.page) || null,
-          related,
-          category
-        };
-      } catch (e) { /* try again */ }
+      const pick = isCurated ? pickCurated(category, exclude) : await pickCustom(category, exclude);
+      if (!pick) break;
+      const [title, why] = pick;
+      exclude.add(title);
+      const summary = await fetchPageSummary(title);
+      if (!summary) continue;
+      const [full, related] = await Promise.all([fetchFullExtract(summary.title), fetchRelated(summary.title)]);
+      return {
+        date: todayKey(),
+        title: summary.title,
+        description: summary.description || '',
+        why: why || null,
+        extract: full || summary.extract,
+        thumbnail: (summary.originalimage && summary.originalimage.width <= 1600 && summary.originalimage.source) ||
+                   (summary.thumbnail && summary.thumbnail.source) || null,
+        url: (summary.content_urls && summary.content_urls.desktop && summary.content_urls.desktop.page) || null,
+        related,
+        category
+      };
     }
-    // Last resort: fall back to a fully random topic, still tagged with the spun category.
-    const fallback = await fetchRandomTopic();
-    fallback.category = category;
-    return fallback;
+    // Custom subject came up empty: fall back to a random curated subject so the day is never wasted.
+    if (!isCurated) {
+      const fallback = TOPIC_POOL[Math.floor(Math.random() * TOPIC_POOL.length)].name;
+      return fetchTopicForCategory(fallback);
+    }
+    throw new Error('Could not load a topic');
+  }
+
+  // ---------- rendering ----------
+  // Turn Wikipedia's plain-text extract into blocks, dropping reference-style tail
+  // sections and headings with no body text under them.
+  function parseExtract(text) {
+    const blocks = [];
+    for (let line of text.split(/\n+/)) {
+      line = line.trim();
+      if (!line) continue;
+      const m = line.match(/^(={2,5})\s*(.+?)\s*\1$/);
+      if (m) {
+        const level = m[1].length;
+        if (level === 2 && END_SECTIONS.test(m[2])) break;
+        blocks.push({ type: level <= 2 ? 'h3' : 'h4', text: m[2] });
+      } else {
+        blocks.push({ type: 'p', text: line });
+      }
+    }
+    return blocks.filter((b, i) => {
+      if (b.type === 'p') return true;
+      // keep a heading only if some paragraph appears before the next heading of the same or higher rank
+      for (let j = i + 1; j < blocks.length; j++) {
+        if (blocks[j].type === 'p') return true;
+        if (b.type === 'h4' || blocks[j].type === 'h3') return false;
+      }
+      return false;
+    });
   }
 
   function renderRelated(related) {
-    const section = document.getElementById('relatedSection');
-    const list = document.getElementById('relatedList');
+    const list = $('relatedList');
     list.innerHTML = '';
-    if (!related || !related.length) {
-      section.hidden = true;
-      return;
-    }
-    section.hidden = false;
-    related.forEach(r => {
+    $('relatedSection').hidden = !(related && related.length);
+    (related || []).forEach(r => {
       const li = document.createElement('li');
       const a = document.createElement('a');
       a.href = r.url;
       a.target = '_blank';
       a.rel = 'noopener';
-      a.textContent = r.title;
-      li.appendChild(a);
+      const t = document.createElement('div');
+      t.className = 'rt';
+      t.textContent = r.title;
+      a.appendChild(t);
       if (r.description) {
-        const span = document.createElement('span');
-        span.className = 'relatedDesc';
-        span.textContent = ' — ' + r.description;
-        li.appendChild(span);
+        const d = document.createElement('div');
+        d.className = 'rd';
+        d.textContent = r.description;
+        a.appendChild(d);
       }
+      li.appendChild(a);
       list.appendChild(li);
     });
   }
 
   function renderReflection() {
     const isToday = viewingDate === todayKey();
-    document.getElementById('recordRow').hidden = !isToday;
-    document.getElementById('backToTodayBtn').hidden = isToday;
-    document.getElementById('recordStatus').textContent = '';
+    $('recordRow').hidden = !isToday;
+    $('backToTodayBtn').hidden = isToday;
+    $('rerollBtn').hidden = !isToday;
+    $('newTopicBtn').hidden = !isToday;
+    $('recordStatus').textContent = '';
     const rec = history[viewingDate] && history[viewingDate].recording;
-    const player = document.getElementById('recordingPlayer');
-    const note = document.getElementById('noRecordingNote');
+    const player = $('recordingPlayer');
+    const note = $('noRecordingNote');
     if (rec) {
       player.src = '/api/recording/' + encodeURIComponent(viewingDate) + '?t=' + encodeURIComponent(rec.recordedAt);
       player.hidden = false;
@@ -666,70 +891,87 @@
   }
 
   function render(topic) {
+    hideWheel();
     viewingDate = topic.date;
-    const badge = document.getElementById('categoryBadge');
-    if (topic.category) {
-      badge.textContent = topic.category;
-      badge.hidden = false;
-    } else {
-      badge.hidden = true;
-    }
-    document.getElementById('title').textContent = topic.title;
-    document.getElementById('description').textContent = topic.description;
-    const thumb = document.getElementById('thumb');
+    setCategoryColor(topic.category);
+    $('categoryBadge').hidden = !topic.category;
+    $('categoryName').textContent = topic.category || '';
+    $('rerollLabel').textContent = topic.category ? 'Another ' + topic.category + ' topic' : 'Another topic';
+    $('title').textContent = topic.title;
+    $('description').textContent = topic.description ? topic.description.charAt(0).toUpperCase() + topic.description.slice(1) : '';
+    $('description').hidden = !topic.description;
+
+    const thumb = $('thumb');
     if (topic.thumbnail) {
       thumb.src = topic.thumbnail;
-      thumb.hidden = false;
+      $('heroImg').hidden = false;
     } else {
-      thumb.hidden = true;
+      thumb.removeAttribute('src');
+      $('heroImg').hidden = true;
     }
-    const extractEl = document.getElementById('extract');
+
+    $('why').hidden = !topic.why;
+    $('whyText').textContent = topic.why || '';
+
+    const blocks = parseExtract(topic.extract || '');
+    const extractEl = $('extract');
+    const tocList = $('tocList');
     extractEl.innerHTML = '';
-    topic.extract.split(/\n+/).forEach(p => {
-      p = p.trim();
-      if (!p) return;
-      const heading = p.match(/^(={1,4})\s*(.+?)\s*\1$/);
-      if (heading) {
-        const level = heading[1].length;
-        const el = document.createElement(level <= 2 ? 'h3' : 'h4');
-        el.textContent = heading[2];
-        extractEl.appendChild(el);
-        return;
+    tocList.innerHTML = '';
+    let words = 0;
+    blocks.forEach((b, i) => {
+      const el = document.createElement(b.type);
+      el.textContent = b.text;
+      if (b.type === 'p') words += b.text.split(/\s+/).length;
+      if (b.type === 'h3') {
+        el.id = 'sec-' + i;
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = '#sec-' + i;
+        a.textContent = b.text;
+        li.appendChild(a);
+        tocList.appendChild(li);
       }
-      const el = document.createElement('p');
-      el.textContent = p;
       extractEl.appendChild(el);
     });
-    const link = document.getElementById('wikiLink');
-    link.href = topic.url || ('https://en.wikipedia.org/wiki/' + encodeURIComponent(topic.title.replace(/ /g, '_')));
+    const sections = tocList.children.length;
+    $('toc').hidden = sections < 2;
+    $('toc').open = false;
+    const minutes = Math.max(1, Math.round(words / 230));
+    const isToday = topic.date === todayKey();
+    $('meta').textContent = [
+      minutes + ' min read',
+      sections ? sections + ' section' + (sections === 1 ? '' : 's') : null,
+      isToday ? null : formatDate(topic.date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    ].filter(Boolean).join('  ·  ');
+
+    $('wikiLink').href = topic.url || ('https://en.wikipedia.org/wiki/' + encodeURIComponent(topic.title.replace(/ /g, '_')));
     renderRelated(topic.related);
     renderReflection();
-    document.getElementById('content').hidden = false;
-    document.getElementById('loading').hidden = true;
+    $('content').hidden = false;
+    $('loading').hidden = true;
+    updateProgress();
   }
 
-  function computeStreak(history) {
-    let streak = 0;
+  function computeStreak() {
     const cursor = new Date();
-    for (;;) {
-      const key = cursor.toISOString().slice(0, 10);
-      if (history[key] && history[key].topic) {
-        streak++;
-        cursor.setUTCDate(cursor.getUTCDate() - 1);
-      } else {
-        break;
-      }
+    // Today not done yet doesn't break the streak; count back from yesterday.
+    if (!(history[dateKey(cursor)] && history[dateKey(cursor)].topic)) cursor.setDate(cursor.getDate() - 1);
+    let streak = 0;
+    while (history[dateKey(cursor)] && history[dateKey(cursor)].topic) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
     }
     return streak;
   }
 
-  function renderHistory(history) {
+  function renderHistory() {
     const dates = Object.keys(history).filter(d => history[d] && history[d].topic).sort().reverse();
-    document.getElementById('historyCount').textContent = dates.length;
-    document.getElementById('historyDayWord').textContent = dates.length === 1 ? 'day' : 'days';
-    const streak = computeStreak(history);
-    document.getElementById('streak').textContent = streak + ' day' + (streak === 1 ? '' : 's') + ' streak';
-    const list = document.getElementById('historyList');
+    $('historyCount').textContent = dates.length;
+    $('learnedCount').textContent = dates.length + ' learned';
+    const streak = computeStreak();
+    $('streak').textContent = streak + ' day' + (streak === 1 ? '' : 's');
+    const list = $('historyList');
     list.innerHTML = '';
     dates.forEach(d => {
       const entry = history[d];
@@ -737,52 +979,66 @@
       const btn = document.createElement('button');
       btn.className = 'historyItem';
       const dot = document.createElement('span');
-      dot.className = 'hdot' + (entry.recording ? ' has-recording' : '');
-      dot.title = entry.recording ? 'Reflection recorded' : '';
-      const dateSpan = document.createElement('span');
-      dateSpan.className = 'hdate';
-      dateSpan.textContent = d;
-      btn.appendChild(dot);
-      btn.appendChild(dateSpan);
-      const label = entry.topic.title + (entry.topic.category ? ' · ' + entry.topic.category : '');
-      btn.appendChild(document.createTextNode(label));
-      btn.addEventListener('click', () => render(entry.topic));
+      dot.className = 'hcat';
+      dot.style.background = colorForCategory(entry.topic.category);
+      const title = document.createElement('span');
+      title.className = 'htitle';
+      title.textContent = entry.topic.title;
+      if (entry.topic.category) {
+        const small = document.createElement('small');
+        small.textContent = entry.topic.category;
+        title.appendChild(small);
+      }
+      const right = document.createElement('span');
+      right.className = 'hright';
+      right.innerHTML = '<svg class="hmic' + (entry.recording ? ' on' : '') + '" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/></svg>';
+      right.append(formatDate(d, { month: 'short', day: 'numeric' }));
+      btn.append(dot, title, right);
+      btn.addEventListener('click', () => { render(entry.topic); window.scrollTo({ top: 0 }); });
       li.appendChild(btn);
       list.appendChild(li);
     });
   }
 
+  function setBusy(busy) {
+    $('rerollBtn').disabled = busy;
+    $('newTopicBtn').disabled = busy;
+  }
+
   async function loadToday(category) {
     const key = todayKey();
-    const btn = document.getElementById('newTopicBtn');
-    btn.disabled = true;
-    document.getElementById('loading').hidden = false;
-    document.getElementById('loading').textContent = category
-      ? 'Finding a ' + category + ' topic…'
-      : 'Loading a new topic…';
-    document.getElementById('content').hidden = true;
+    setBusy(true);
+    setCategoryColor(category);
+    $('loading').hidden = false;
+    $('loadingText').textContent = 'Finding a ' + category + ' topic…';
+    $('content').hidden = true;
     try {
-      const topic = category ? await fetchTopicForCategory(category) : await fetchRandomTopic();
+      const topic = await fetchTopicForCategory(category);
       history[key] = Object.assign({}, history[key], { topic });
       await saveTopicToServer(key, topic);
       render(topic);
-      renderHistory(history);
+      renderHistory();
     } catch (e) {
-      document.getElementById('loading').textContent = 'Could not load a topic — check your connection and try again.';
+      $('loadingText').textContent = 'Could not load a topic. Check your connection and try again.';
     } finally {
-      btn.disabled = false;
+      setBusy(false);
     }
   }
 
-  function formatTimer(ms) {
-    const totalSec = Math.floor(ms / 1000);
-    const m = Math.floor(totalSec / 60);
-    const s = totalSec % 60;
-    return m + ':' + String(s).padStart(2, '0');
+  function updateProgress() {
+    const bar = $('progress');
+    if (!$('wheelSection').hidden) { bar.style.width = '0'; return; }
+    const el = $('topicCard');
+    const rect = el.getBoundingClientRect();
+    const total = rect.height - window.innerHeight;
+    const pct = total <= 0 ? (rect.top < 0 ? 100 : 0) : Math.min(100, Math.max(0, (-rect.top / total) * 100));
+    bar.style.width = pct + '%';
   }
 
-  function setRecordStatus(text) {
-    document.getElementById('recordStatus').textContent = text;
+  // ---------- voice reflection ----------
+  function formatTimer(ms) {
+    const s = Math.floor(ms / 1000);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
 
   async function startRecording() {
@@ -790,7 +1046,7 @@
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-      setRecordStatus('Could not access the microphone: ' + e.message);
+      $('recordStatus').textContent = 'Could not access the microphone: ' + e.message;
       return;
     }
     recordedChunks = [];
@@ -799,74 +1055,75 @@
     mediaRecorder.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
       clearInterval(recordTimerHandle);
-      document.getElementById('recordTimer').textContent = '';
-      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-      await uploadRecording(viewingDate, blob);
+      $('recordTimer').textContent = '';
+      await uploadRecording(viewingDate, new Blob(recordedChunks, { type: 'audio/webm' }));
     };
     mediaRecorder.start();
     recordStartMs = Date.now();
     recordTimerHandle = setInterval(() => {
-      document.getElementById('recordTimer').textContent = formatTimer(Date.now() - recordStartMs);
+      $('recordTimer').textContent = '● ' + formatTimer(Date.now() - recordStartMs);
     }, 250);
-    const btn = document.getElementById('recordBtn');
-    btn.textContent = 'Stop recording';
-    btn.classList.add('recording');
-    setRecordStatus('');
+    $('recordLabel').textContent = 'Stop recording';
+    $('recordBtn').classList.add('recording');
+    $('recordStatus').textContent = '';
   }
 
   function stopRecording() {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-    const btn = document.getElementById('recordBtn');
-    btn.textContent = 'Record reflection';
-    btn.classList.remove('recording');
+    $('recordLabel').textContent = 'Record reflection';
+    $('recordBtn').classList.remove('recording');
   }
 
   async function uploadRecording(date, blob) {
-    setRecordStatus('Saving reflection…');
+    $('recordStatus').textContent = 'Saving reflection…';
     try {
       const res = await fetch('/api/recording/' + encodeURIComponent(date), { method: 'POST', body: blob });
       if (!res.ok) throw new Error('upload failed');
       const data = await res.json();
       history[date] = Object.assign({}, history[date], { recording: data.recording });
       if (viewingDate === date) renderReflection();
-      renderHistory(history);
-      setRecordStatus('Saved.');
+      renderHistory();
+      $('recordStatus').textContent = 'Saved.';
     } catch (e) {
-      setRecordStatus('Could not save the recording.');
+      $('recordStatus').textContent = 'Could not save the recording.';
     }
   }
 
-  document.getElementById('newTopicBtn').addEventListener('click', () => showWheel());
-  document.getElementById('backToTodayBtn').addEventListener('click', () => {
+  // ---------- wiring ----------
+  $('newTopicBtn').addEventListener('click', showWheel);
+  $('rerollBtn').addEventListener('click', () => {
     const today = history[todayKey()];
-    if (today && today.topic) { hideWheel(); render(today.topic); }
+    const cat = today && today.topic && today.topic.category;
+    if (cat && categories.includes(cat)) loadToday(cat);
     else showWheel();
   });
-  document.getElementById('recordBtn').addEventListener('click', () => {
+  $('backToTodayBtn').addEventListener('click', () => {
+    const today = history[todayKey()];
+    if (today && today.topic) render(today.topic);
+    else showWheel();
+    window.scrollTo({ top: 0 });
+  });
+  $('recordBtn').addEventListener('click', () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
     else startRecording();
   });
-  document.getElementById('spinBtn').addEventListener('click', spinWheel);
-  document.getElementById('manageCategoriesBtn').addEventListener('click', () => {
-    const panel = document.getElementById('categoryPanel');
-    panel.open = !panel.open;
-  });
-  document.getElementById('addCategoryBtn').addEventListener('click', addCategory);
-  document.getElementById('newCategoryInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') addCategory();
-  });
+  $('spinBtn').addEventListener('click', spinWheel);
+  $('addCategoryBtn').addEventListener('click', addCategory);
+  $('resetCategoriesBtn').addEventListener('click', resetCategories);
+  $('newCategoryInput').addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(); });
+  $('categoryPanel').addEventListener('toggle', () => { if (!$('wheelSection').hidden) drawWheel(); });
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  window.addEventListener('resize', () => { drawWheel(); updateProgress(); });
 
   (async function init() {
+    $('todayLabel').textContent = formatDate(todayKey(), { weekday: 'long', month: 'long', day: 'numeric' });
     await Promise.all([loadHistoryFromServer(), loadCategoriesFromServer()]);
-    renderHistory(history);
+    renderHistory();
     renderCategoryList();
-    drawWheel();
-    const key = todayKey();
-    if (history[key] && history[key].topic) {
-      render(history[key].topic);
-    } else {
-      showWheel();
-    }
+    if (document.fonts) document.fonts.ready.then(drawWheel);
+    const today = history[todayKey()];
+    if (today && today.topic) render(today.topic);
+    else showWheel();
   })();
 </script>
 </body>

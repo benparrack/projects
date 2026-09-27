@@ -292,6 +292,14 @@ each day (validated non-disambiguation, filtered for stub-length extracts),
 shows the full plain-text article with section headings restored, and caches
 it in `localStorage` so revisits show the same topic until you ask for a new
 one. Tracks a per-day history log and a consecutive-day streak counter.
+2026-09-27: topics now come from a hand-curated pool (`topics.js`, ~276
+articles across 12 subjects: Money, Mind, Health, How Things Work, Thinking
+Tools, History, Space & Physics, Life & Nature, Earth & Climate, Philosophy,
+Food Science, Tech), each with a "why it's worth knowing" line, and unseen
+topics are preferred. This replaced the random/`incategory:` picks, which
+kept landing on junk like film stubs or "Biography". Custom subjects search
+Featured/Good articles only. The page was also restyled (editorial serif
+reading view, light/dark, TOC, reading time, reroll-within-subject).
 **Pitch:** A daily-habit page for learning something new — one random topic a
 day, read in real depth rather than a one-line trivia fact.
 
@@ -444,3 +452,136 @@ day, read in real depth rather than a one-line trivia fact.
 - Combo scoring: track chain depth per cascade for escalating combo multipliers.
 - Move validation: ensure the board always has at least one possible match (regenerate/shuffle if not) so the player is never stuck.
 - Polish: fall animation timing, clear particle effects, combo popup text — this is genuinely where most of the "fun" lives for this genre.
+
+---
+
+> **Entries 33–42** came from a 2026-09-27 brainstorm of "limit-test the new model" ideas —
+> each picked to stress long autonomous runs, checkable correctness, and from-scratch
+> engineering while still producing something usable. Each has an objective "done when" bar.
+
+## 33. Game Boy / NES Emulator
+
+**Status:** Stocked, not started.
+**Pitch:** A from-scratch emulator (browser/JS or Rust→WASM) that plays real ROMs — CPU, PPU (graphics), APU (audio), memory mappers/cartridge types, gamepad input, save states.
+
+**Why this one:** Hardest pure-engineering test on the list — cycle-level accuracy where one wrong flag bit breaks everything, and public test ROMs make success objective rather than vibes-based.
+
+**What it needs when resumed:**
+- Done when: passes blargg's `cpu_instrs` (Game Boy) or matches the `nestest` log (NES); plays a homebrew/legally-owned ROM with sound.
+- Pick one system first (Game Boy is smaller: SM83 CPU, simpler PPU, MBC1/3/5 mappers).
+- Debug tooling early: instruction trace log diffable against reference emulator logs.
+- Stretch: rewind, fast-forward, gamepad API, link-cable-over-websocket via `game_terminal`.
+
+---
+
+## 34. Strong Card/Board Game AI ("Hard Bot" for game_terminal)
+
+**Status:** Stocked, not started.
+**Pitch:** Replace/augment `game_terminal`'s uniform-random bots with a genuinely strong AI — ISMCTS (information-set Monte Carlo tree search) for hidden-info games like Hearts/Spades, expectimax or self-play-trained eval for Backgammon, alpha-beta for Checkers/Connect 4.
+
+**Why this one:** Requires real algorithm design (hidden information, determinization, time budgets on a shared server tick) plus measurable tuning, and ships directly as a "PLAY VS HARD BOT" option friends actually use.
+
+**What it needs when resumed:**
+- Done when: bot win rate vs. the existing random bot is ~95%+ over a few hundred simulated games, and it's competitive against Ben.
+- Headless simulation harness to pit bots against each other (reuse server game-logic modules).
+- Must respect server CPU budget (Render free tier) — iteration/time cap per move, maybe a worker thread.
+- See `game_terminal/FUTURE.md` for the existing `'BOT'` seat sentinel convention.
+
+---
+
+## 35. Netcode Upgrade: Prediction + Rollback + Lag Compensation
+
+**Status:** Stocked, not started.
+**Pitch:** Give `game_terminal`'s real-time games (Arena Duel, TRON, Slither) client-side prediction, server reconciliation, entity interpolation, and hit-scan lag compensation, plus a debug "simulate 150ms/jitter/packet loss" mode.
+
+**Why this one:** Netcode is notoriously easy to get subtly wrong (rubber-banding, desync, favor-the-shooter edge cases); the difference is immediately felt by real players.
+
+**What it needs when resumed:**
+- Done when: at simulated 150ms RTT, local movement feels instant with no visible snap-back, and remote players move smoothly.
+- Input sequence numbers + server acks; client replays unacked inputs after each authoritative snapshot.
+- Deterministic shared simulation step between client and server (share the physics module).
+- Server-side rewind of hitboxes for Arena Duel shots.
+
+---
+
+## 36. Tiny Programming Language + Browser Playground
+
+**Status:** Stocked, not started.
+**Pitch:** Lexer → parser → type checker → bytecode compiler → VM, with a web playground (editor, error squiggles, step-through debugger showing the VM stack). Optional angle: make it a scripting language for writing `game_terminal` bots.
+
+**Why this one:** Deep, interlocking system where every stage depends on the last; a large test corpus of programs (expected output/expected error) makes correctness objective.
+
+**What it needs when resumed:**
+- Done when: a suite of ~100+ test programs pass, including closures, recursion, and type errors with good messages.
+- Language design decisions up front: static vs. dynamic typing, first-class functions, structs.
+- Stretch: garbage collector, REPL, compile to WASM.
+
+---
+
+## 37. Personal Finance Dashboard (from bank CSV exports)
+
+**Status:** Stocked, not started.
+**Pitch:** A local-only tool that ingests raw bank/credit card CSV exports, auto-categorizes transactions, detects recurring subscriptions, flags anomalies, and forecasts cash flow.
+
+**Why this one:** Real bank CSVs are messy (inconsistent formats per bank, merchant name noise like `SQ *COFFEE 0423 SEATTLE`), so it tests robust data wrangling; and it's genuinely useful for a student budget.
+
+**What it needs when resumed:**
+- Done when: import of Ben's actual exports produces categories he agrees with ≥90% of the time, with a correction UI that learns rules.
+- Per-bank CSV format adapters, dedup across overlapping exports.
+- Subscription detection: same merchant, regular interval, similar amount.
+- Fully local (no uploading financial data anywhere).
+
+---
+
+## 38. Marketplace Flip Bot
+
+**Status:** Stocked, not started — this is the same idea as the top unbuilt pick in `money/money_ideas.md`; see that file for the canonical entry.
+**Pitch:** Scan Facebook Marketplace/Craigslist for underpriced listings, estimate resale value from sold-comps, score deals, alert to phone.
+
+**Why this one (as a model test):** Stitches together scraping, fuzzy product matching, price estimation, and alerting — plus judgment about what's actually a deal vs. a scam/broken item.
+
+---
+
+## 39. Claude Code Usage Analyst
+
+**Status:** In progress (started 2026-09-27) — see `claude_usage_analyst/`.
+**Pitch:** Parse local Claude Code transcripts (`~/.claude/projects/**/*.jsonl`) into a dashboard: cost/tokens by project, session, and day; which sessions blew up on cache reads; tool-call patterns; actionable habit suggestions.
+
+**Why this one:** Directly serves the token/context discipline goals in this repo's `CLAUDE.md` (cache-read tokens dominate cost), using Ben's own real data.
+
+---
+
+## 40. One-Prompt Complete Game (no follow-ups)
+
+**Status:** Stocked, not started.
+**Pitch:** A test of full autonomy: from a single prompt, produce a complete, polished game — e.g. a Vampire Survivors-like or a Zelda-like with 3 levels, a boss, save system, sound, title screen — with the model self-playtesting via Playwright and polishing without any steering.
+
+**What it needs when resumed:**
+- Write the prompt with an explicit "done when" checklist, then walk away; evaluate on first play.
+- Afterwards ask the model to list what it'd do with 4 more hours, and check that list for honesty.
+
+---
+
+## 41. Jackbox-Style Phone Party Game
+
+**Status:** Stocked, not started.
+**Pitch:** TV/laptop shows a shared "host" screen; everyone joins on their phone via room code and plays 3 original party mini-games (e.g. a prompt/answer voting game, a drawing-bluff game, a quick-reaction game).
+
+**Why this one:** Fits `game_terminal`'s multiplayer infrastructure (could live there as a new category), and it's built for actual game nights with friends.
+
+**What it needs when resumed:**
+- Two distinct client views (host screen vs. phone controller), phone-first touch UI.
+- Timers, voting, scoring across rounds; audience/late-join handling.
+- 3 original mini-game designs — the design quality is most of the fun.
+
+---
+
+## 42. Chess Engine + Measured Elo
+
+**Status:** Stocked, not started.
+**Pitch:** A from-scratch chess engine — bitboards, magic-bitboard move generation, alpha-beta with iterative deepening, transposition table, quiescence search, hand-tuned eval — with UCI support, then its strength measured by playing Stockfish at fixed skill levels.
+
+**Why this one:** Gives a hard number for "how good did it get"; perft tests make move-gen correctness objective. Could replace `game_terminal`'s random chess bot.
+
+**What it needs when resumed:**
+- Done when: perft matches reference counts on standard positions; estimated Elo reported from a match series (e.g. via `cutechess-cli` vs. Stockfish `Skill Level` settings).

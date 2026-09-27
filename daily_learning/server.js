@@ -8,7 +8,7 @@ const DATA_DIR = path.join(ROOT, 'data');
 const RECORDINGS_DIR = path.join(DATA_DIR, 'recordings');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const CATEGORIES_FILE = path.join(DATA_DIR, 'categories.json');
-const DEFAULT_CATEGORIES = ['Science', 'History', 'Technology', 'Art', 'Nature', 'Space', 'Mythology', 'Music', 'Geography', 'Sports'];
+const DEFAULT_CATEGORIES = require('./topics.js').map(c => c.name);
 
 fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
 
