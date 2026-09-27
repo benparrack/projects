@@ -8,20 +8,42 @@ a category Ben knows for well under what it resells for, so he can buy it and
 resell it for profit. This is an alerting tool for personal use only. It never
 buys, messages sellers, or posts listings.
 
-## Answer these first (they change the design)
+## Decisions (2026-09-27)
 
-1. **Which country/city?** This machine's clock is on CEST. If Ben is in
-   Europe, Craigslist is nearly useless there and the right sources are local:
-   Kleinanzeigen (DE), Marktplaats (NL), Leboncoin (FR), Wallapop (ES), Vinted
-   (clothing, EU-wide), and Facebook Marketplace everywhere. In the US, use
-   Craigslist, FB Marketplace, and OfferUp.
-2. **Which 1–2 categories?** Pick ones Ben can judge condition in and actually
-   resell: e.g. GPUs/consoles/phones (liquid, easy to price, lots of
-   competition), or tools/instruments/camera lenses (less competition, but
-   pricing needs more judgment). Start narrow. A handful of exact models is
-   much easier than a whole category.
-3. **How much time/cash?** Flipping needs capital tied up in inventory plus
-   time for pickups. Set a max buy price per item (e.g. €300) as a config value.
+- **Where:** Stockholm, Sweden. Ben is studying abroad there for about 3 more
+  months, until roughly the end of December 2026. The whole buy → resell loop
+  has to finish in Stockholm before he leaves, so no slow-moving stock and
+  nothing bulky he can't carry on the T-bana.
+- **Budget:** about $100, roughly 1,000 SEK in total. That covers one or two
+  items at a time. Set `max_buy` around 800 SEK. Realistic profit is about
+  100–400 SEK per flip, so this is a learning run worth maybe a few hundred
+  dollars, not real income yet. It gets his first profitable flips done, and
+  the pipeline can be reused at home.
+- **Categories:** Ben doesn't have strong ones yet and is willing to research.
+  Pick **cheap, fast-selling, easy-to-check, portable** items. Candidates:
+  Nintendo Switch games and accessories (Pro controllers, Joy-Cons, docks),
+  retail LEGO sets (BrickLink price guide gives free sold data), and older
+  AirPods/Kindles (watch for fakes). Choose 5–10 exact models after checking
+  sold prices.
+- **Sources:**
+  - **Blocket.se** is Sweden's main classifieds site and the source to scrape.
+    It has no official public API, but its web frontend uses an internal JSON
+    search API, and a community `blocket_api` Python package exists. Check at
+    build time whether it still works without login.
+  - **Tradera.com** is Sweden's eBay-style auction site. It has an **official
+    developer API** (free registration, rate-limited) with *ended* auctions,
+    so it can supply real sold-price comps. That solves the auto-pricing
+    problem below, maybe as early as the MVP. It's also the easiest place to
+    resell.
+  - Facebook Marketplace stays out, as below.
+- **Swedish red-flag words:** trasig/trasiga (broken), defekt, reservdelar (for
+  parts), "säljes som den är" (sold as-is), byte/bytes (swap), endast kartong
+  (box only), låst/spärrad (locked), "läs beskrivning" (read description).
+- **Tax/visa note:** selling your own used stuff occasionally is fine in
+  Sweden. Buying specifically to resell at a profit can count as business
+  activity to Skatteverket, and the student residence permit may matter too.
+  At a few flips over 3 months this is very unlikely to be an issue, but Ben
+  should look it up before scaling.
 
 ## Architecture (same shape as `../sports-arb-scanner/`)
 
