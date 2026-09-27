@@ -7,6 +7,7 @@ A local dashboard for your own Claude Code usage. It reads the transcripts in
 - **how close you are to your plan limit**, as a live 5-hour window with burn rate and projected hit time
 - **what was avoidable**, found by replaying real sessions with cheaper habits
 - **per-session drill-downs** showing context growth, each prompt and its cost, subagents and the heaviest tool results
+- **how many tokens you've used**: a total-tokens tile and an all-time cumulative growth chart with milestone markers (100M, 1B, …) and a "next milestone in ~N days" pace estimate
 
 It uses only the Python standard library and a single-page HTML UI, with no build step and no dependencies.
 Everything stays on `127.0.0.1`.

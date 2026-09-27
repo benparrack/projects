@@ -226,6 +226,34 @@ views.overview = function () {
   const sess = new Set(rows.map((r) => r[C.session]));
   const cr = rows.reduce((a, r) => a + r[C.c_cr], 0);
   const out = rows.reduce((a, r) => a + r[C.out], 0);
+  const tokSum = (r) => r[C.in] + r[C.cw] + r[C.cr] + r[C.out];
+  const totalTok = rows.reduce((a, r) => a + tokSum(r), 0);
+  // all-time token growth (project filter applies, date range doesn't: the point is watching it grow)
+  const pi = $("#project").value ? d.projects.indexOf($("#project").value) : -1;
+  const growth = [], dayTok = {};
+  let run = 0;
+  for (const r of d.rows) {
+    if (pi >= 0 && r[C.project] !== pi) continue;
+    const k = dayKey(r[0]);
+    dayTok[k] = (dayTok[k] || 0) + tokSum(r);
+  }
+  for (const k of Object.keys(dayTok).sort()) { run += dayTok[k]; growth.push([new Date(k + "T23:59:59") / 1000, run, k]); }
+  const lifetime = run;
+  const milestones = [];
+  for (const m of [1e6, 1e7, 1e8, 2.5e8, 5e8, 1e9, 2.5e9, 5e9, 1e10, 2.5e10, 5e10, 1e11]) {
+    const hit = growth.find((g) => g[1] >= m);
+    if (hit && growth[0][1] < m) milestones.push({ t: hit[0], label: tok(m), color: "var(--s3)" });
+  }
+  const last7 = growth.filter((g) => g[0] >= Date.now() / 1000 - 7 * 86400);
+  const weekTok = last7.reduce((a, g) => a + dayTok[g[2]], 0);
+  const nextM = [1e6, 1e7, 1e8, 2.5e8, 5e8, 1e9, 2.5e9, 5e9, 1e10, 2.5e10, 5e10, 1e11, 1e12].find((m) => m > lifetime);
+  const eta = nextM && weekTok ? Math.ceil((nextM - lifetime) / (weekTok / 7)) : null;
+  const growthChart = growth.length > 1 ? lineChart({
+    series: [{ points: growth, color: "var(--s1)", label: "Cumulative tokens", area: true }],
+    xfmt: fmtDate, height: 200, vmarks: milestones.slice(-4),
+    tipFn: (t) => { const i = nearest(growth, t); if (i == null) return null; const g = growth[i];
+      return tipRows(fmtDay(g[2]), [["var(--s1)", "Total so far", tok(g[1])], ["", "That day", tok(dayTok[g[2]])]]); },
+  }) : `<div class="empty">Not enough history yet</div>`;
   const t0 = rows.length ? rows[0][0] : 0;
   const prompts = Object.entries(d.prompts_by_day).filter(([k]) => rows.length && k >= dayKey(t0)).reduce((a, [, v]) => a + v, 0);
   // daily buckets
@@ -290,9 +318,15 @@ views.overview = function () {
     <div class="tile"><div class="k">Sessions</div><div class="v">${sess.size}</div><div class="d">${prompts} prompts typed</div></div>
     <div class="tile"><div class="k">Cost per prompt</div><div class="v">${money(prompts ? total / prompts : null)}</div><div class="d">${prompts ? (rows.length / prompts).toFixed(1) : "–"} requests per prompt</div></div>
     <div class="tile"><div class="k">Spent on cache reads</div><div class="v">${pct(total ? (cr / total) * 100 : null)}</div><div class="d">re-reading context each turn</div></div>
+    <div class="tile"><div class="k">Total tokens</div><div class="v">${tok(totalTok)}</div><div class="d" data-tip="${esc(tipRows("Tokens in range", [["var(--s1)", "Cache reads", tok(rows.reduce((a, r) => a + r[C.cr], 0))], ["var(--s2)", "Cache writes", tok(rows.reduce((a, r) => a + r[C.cw], 0))], ["var(--s3)", "Output", tok(out)], ["var(--s4)", "Fresh input", tok(rows.reduce((a, r) => a + r[C.in], 0))]]))}">${tok(lifetime)} all time</div></div>
     <div class="tile"><div class="k">Output tokens</div><div class="v">${tok(out)}</div><div class="d">what drives your Pro limit</div></div>
   </div>
   <div class="card">
+    <div class="card-h"><h2>Tokens over time</h2><span class="muted">all time, cumulative${pi >= 0 ? " · " + esc(d.projects[pi]) : ""}</span>
+      <div class="right muted">${tok(lifetime)} total · ${tok(weekTok)} in the last 7 days${eta ? ` · ${tok(nextM)} in ~${eta} day${eta === 1 ? "" : "s"} at this pace` : ""}</div></div>
+    ${growthChart}
+  </div>
+  <div class="card mt">
     <div class="card-h"><h2>Daily cost</h2>
       <div class="seg" id="ovmode"><button data-m="component" class="${mode === "component" ? "on" : ""}">By cost type</button><button data-m="project" class="${mode === "project" ? "on" : ""}">By project</button></div>
       <div class="right">${legend(series)}</div></div>
