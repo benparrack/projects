@@ -37,6 +37,121 @@ function cornerSpawns() {
   ];
 }
 
+const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+
+// --- CPU riders. Each tick, before movement, a bot picks straight / left / right:
+//   easy    looks a few cells ahead only, reacts late and wanders;
+//   medium  flood-fills each option and takes the roomiest (capped look);
+//   hard    full flood fill + treats cells an enemy head could reach next tick as deadly;
+//   expert  hard + Voronoi territory (cells it reaches before any rival), so it cuts players off.
+const BOT_LEVELS = {
+  easy: { look: 6, fill: 0, headOn: false, voronoi: false, wander: 0.03, lag: 0.35 },
+  medium: { look: 0, fill: 250, headOn: false, voronoi: false, wander: 0.02, lag: 0.1 },
+  hard: { look: 0, fill: 4000, headOn: true, voronoi: false, wander: 0.01, lag: 0 },
+  expert: { look: 0, fill: 4000, headOn: true, voronoi: true, wander: 0, lag: 0 },
+};
+const TER_DIST = new Int32Array(GRID_W * GRID_H);
+const TER_OWNER = new Int8Array(GRID_W * GRID_H);
+const FLOOD_SEEN = new Uint8Array(GRID_W * GRID_H);
+const LEFT_OF = { up: 'left', left: 'down', down: 'right', right: 'up' };
+const RIGHT_OF = { up: 'right', right: 'down', down: 'left', left: 'up' };
+
+function steerBots(st) {
+  const bots = [...st.players.values()].filter((p) => p.bot && p.inRound && p.alive);
+  if (!bots.length) return;
+  const W = GRID_W; const H = GRID_H;
+  const grid = new Uint8Array(W * H);
+  for (const p of st.players.values()) if (p.inRound) for (const c of p.trail) grid[c.y * W + c.x] = 1;
+  const free = (x, y, g = grid) => x >= 0 && y >= 0 && x < W && y < H && !g[y * W + x];
+  const rivals = (me) => [...st.players.values()].filter((p) => p !== me && p.inRound && p.alive);
+
+  function flood(g, x, y, cap) {
+    const seen = FLOOD_SEEN.fill(0);
+    const q = [y * W + x]; seen[q[0]] = 1;
+    let n = 0;
+    while (q.length && n < cap) {
+      const i = q.pop(); n++;
+      const cx = i % W; const cy = (i - cx) / W;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = cx + dx; const ny = cy + dy;
+        if (!free(nx, ny, g)) continue;
+        const k = ny * W + nx;
+        if (!seen[k]) { seen[k] = 1; q.push(k); }
+      }
+    }
+    return n;
+  }
+  // Cells I reach strictly before every rival (multi-source BFS), from my candidate next cell.
+  function territory(g, me, x, y) {
+    const dist = TER_DIST.fill(-1);
+    const owner = TER_OWNER.fill(-1);
+    let q = [];
+    const push = (k, o) => { dist[k] = 0; owner[k] = o; q.push(k); };
+    push(y * W + x, 0);
+    for (const r of rivals(me)) {
+      const k = r.y * W + r.x;
+      if (dist[k] === -1) push(k, 1);
+    }
+    let mine = 0; let d = 0;
+    while (q.length) {
+      const nq = [];
+      d++;
+      for (const i of q) {
+        const cx = i % W; const cy = (i - cx) / W;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + dx; const ny = cy + dy;
+          if (!free(nx, ny, g)) continue;
+          const k = ny * W + nx;
+          if (dist[k] === -1) { dist[k] = d; owner[k] = owner[i]; nq.push(k); if (owner[i] === 0) mine++; }
+          else if (dist[k] === d && owner[k] !== owner[i]) { if (owner[k] === 0) mine--; owner[k] = 2; }
+        }
+      }
+      q = nq;
+    }
+    return mine;
+  }
+
+  for (const b of bots) {
+    const lv = BOT_LEVELS[b.bot] || BOT_LEVELS.hard;
+    if (b.turnQueue.length) continue;
+    if (lv.lag && Math.random() < lv.lag) continue; // slow reactions
+    const danger = new Uint8Array(W * H);
+    if (lv.headOn) {
+      for (const r of rivals(b)) {
+        for (const d of Object.values(DIR_VECTORS)) {
+          const nx = r.x + d.dx; const ny = r.y + d.dy;
+          if (nx >= 0 && ny >= 0 && nx < W && ny < H) danger[ny * W + nx] = 1;
+        }
+      }
+    }
+    const opts = [b.dir, LEFT_OF[b.dir], RIGHT_OF[b.dir]].map((dir, k) => {
+      const v = DIR_VECTORS[dir];
+      const x = b.x + v.dx; const y = b.y + v.dy;
+      if (!free(x, y)) return { dir, score: -1e9 };
+      let score;
+      if (lv.look) {
+        let run = 0;
+        while (run < lv.look && free(x + v.dx * run, y + v.dy * run)) run++;
+        score = run * 10;
+      } else {
+        grid[y * W + x] = 1;
+        const room = flood(grid, x, y, lv.fill);
+        score = room * 10;
+        if (lv.voronoi && room > 40) score = room * 2 + territory(grid, b, x, y) * 10;
+        grid[y * W + x] = 0;
+      }
+      if (danger[y * W + x]) score -= 5e5;
+      if (k === 0) score += 5; // mild preference for going straight
+      score += Math.random() * 3;
+      return { dir, score };
+    });
+    opts.sort((p, q) => q.score - p.score);
+    let choice = opts[0];
+    if (lv.wander && Math.random() < lv.wander && opts[1].score > opts[0].score * 0.6 && opts[1].score > 0) choice = opts[1];
+    if (choice.dir !== b.dir) b.turnQueue.push(choice.dir);
+  }
+}
+
 function cellKey(x, y) {
   return `${x},${y}`;
 }
@@ -62,6 +177,7 @@ function buildPlayersSummary(st) {
     else status = p.alive ? 'alive' : 'dead';
     players.push({
       clientId: p.clientId,
+      bot: p.bot || undefined,
       nickname: p.nickname,
       color: p.color,
       status,
@@ -223,6 +339,7 @@ module.exports = {
     st.players.set(client.clientId, {
       clientId: client.clientId,
       nickname: client.nickname,
+      bot: client.bot || null,
       color: COLOR_PALETTE[st.nextColorIdx++ % COLOR_PALETTE.length],
       inRound: false,
       alive: false,
@@ -241,11 +358,21 @@ module.exports = {
   // check same as a real crash would be.
   onLeave(room, client) {
     room.state.players.delete(client.clientId);
+    dropBotsIfAlone(room.state.players);
   },
 
   onMessage(room, client, data, ctx) {
     const p = room.state.players.get(ctx.senderId);
     if (!p || !data || typeof data.kind !== 'string') return;
+    if (data.kind === 'addBot') {
+      const b = newBot(room.state.players, data.level);
+      if (b) module.exports.onJoin(room, { clientId: b.clientId, nickname: b.nickname, bot: b.level });
+      return;
+    }
+    if (data.kind === 'removeBot') {
+      if (isBotId(data.clientId)) room.state.players.delete(data.clientId);
+      return;
+    }
     if (data.kind === 'steer') {
       if (!DIR_VECTORS[data.direction] || !p.turnQueue) return;
       const last = p.turnQueue.length ? p.turnQueue[p.turnQueue.length - 1] : p.dir;
@@ -276,6 +403,7 @@ module.exports = {
         st.phase = 'playing';
       }
     } else if (st.phase === 'playing') {
+      steerBots(st);
       stepPlaying(st);
       const aliveCount = [...st.players.values()].filter((p) => p.inRound && p.alive).length;
       if (aliveCount <= 1) {

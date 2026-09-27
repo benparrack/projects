@@ -4,6 +4,7 @@
 // players. Last one alive wins the round.
 import { sfx } from '../sfx.js';
 import { createFx, flashEl, sharpCanvas } from '../canvasFx.js';
+import { createBotBar } from '../tickBots.js';
 
 const GRID_W = 128;
 const GRID_H = 96;
@@ -407,6 +408,7 @@ export function mount(container, api) {
     viewReceivedAt = performance.now();
     lastView = view;
     renderPlayers(view);
+    botBar.update(view.players);
     statusEl.textContent = statusLabel(view);
     draw(view);
   }
@@ -416,6 +418,8 @@ export function mount(container, api) {
   statusEl.style.fontSize = '0.9em';
   statusEl.style.fontWeight = 'bold';
   wrap.insertBefore(statusEl, body);
+  const botBar = createBotBar(api);
+  wrap.insertBefore(botBar.el, body);
 
   function applySnapshotView(snapshot) {
     trailMap.clear();
