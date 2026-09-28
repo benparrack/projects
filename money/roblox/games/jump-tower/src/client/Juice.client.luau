@@ -132,7 +132,7 @@ end)
 -- Current height, just under the meter.
 local heightLabel = Ui.label({
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 1, 6),
+	Position = UDim2.new(0.5, 0, 1, 20),
 	Size = UDim2.fromOffset(70, 22),
 	Text = "0m",
 	Parent = meter,

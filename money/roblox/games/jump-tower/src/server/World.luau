@@ -316,6 +316,7 @@ local function buildTower(folder: Folder): { [number]: Part }
 
 		local anchor = model:FindFirstChild("Cap") :: Part
 		anchor:SetAttribute("LedgeTop", p.top) -- the client makes ledges one-way (see OneWayLedges)
+		anchor:SetAttribute("Need", p.need) -- Guide.client colours labels / points at the next ledge
 		-- Requirement printed on all four sides of the ledge: readable while you look up at it,
 		-- out of the way once you're standing on it.
 		local needText = if p.need < 1 then "START" else `⬆ {Formulas.abbreviate(math.ceil(p.need))}`
@@ -332,6 +333,7 @@ local function buildTower(folder: Folder): { [number]: Part }
 			label.Font = Enum.Font.FredokaOne
 			label.TextScaled = true
 			label.TextColor3 = Color3.new(1, 1, 1)
+			label.Name = "NeedLabel"
 			label.Text = needText
 			label.Parent = gui
 			gui.Parent = anchor
