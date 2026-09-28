@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Game Boy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app">
+  <section class="shell" id="shell">
+    <div class="bezel">
+      <div class="bezel-top"><span class="stripe"></span><span class="bezel-label">DOT MATRIX WITH STEREO SOUND</span><span class="stripe"></span></div>
+      <div class="bezel-body">
+        <div class="power"><i id="power-led"></i><span>BATTERY</span></div>
+        <div class="screen-wrap" id="screen-wrap">
+          <canvas id="screen" width="160" height="144"></canvas>
+          <div class="drop-hint" id="drop-hint">Drop a .gb / .gbc ROM here</div>
+          <div class="overlay" id="overlay" hidden></div>
+        </div>
+      </div>
+    </div>
+    <div class="brand"><i>POCKET</i><b>BOY</b><sup>JS</sup></div>
+    <div class="controls" id="touch">
+      <div class="dpad">
+        <button data-btn="up" class="d-up" aria-label="Up"></button>
+        <button data-btn="left" class="d-left" aria-label="Left"></button>
+        <span class="d-mid"></span>
+        <button data-btn="right" class="d-right" aria-label="Right"></button>
+        <button data-btn="down" class="d-down" aria-label="Down"></button>
+      </div>
+      <div class="ab">
+        <div><button data-btn="b" class="round">B</button></div>
+        <div><button data-btn="a" class="round">A</button></div>
+      </div>
+      <div class="startsel">
+        <div><button data-btn="select" class="pill"></button><span>SELECT</span></div>
+        <div><button data-btn="start" class="pill"></button><span>START</span></div>
+      </div>
+    </div>
+    <div class="speaker"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  </section>
+
+  <aside class="panel">
+    <h1>Game Boy <small>/ Color</small></h1>
+    <p class="status" id="status">No cartridge</p>
+
+    <div class="row">
+      <label class="btn primary">Open ROM…<input type="file" id="file" accept=".gb,.gbc,.zip,application/octet-stream" hidden></label>
+      <button class="btn" id="btn-pause" disabled>Pause</button>
+      <button class="btn" id="btn-reset" disabled>Reset</button>
+    </div>
+
+    <h2>Homebrew library</h2>
+    <ul class="library" id="library"></ul>
+
+    <h2>Save states</h2>
+    <div class="slots" id="slots"></div>
+    <div class="row">
+      <button class="btn" id="btn-save" disabled>Save <kbd>F5</kbd></button>
+      <button class="btn" id="btn-load" disabled>Load <kbd>F8</kbd></button>
+      <button class="btn" id="btn-shot" disabled>Screenshot</button>
+    </div>
+
+    <h2>Options</h2>
+    <div class="opts">
+      <label>Volume <input type="range" id="volume" min="0" max="1" step="0.05" value="0.8"></label>
+      <label>DMG palette
+        <select id="palette"><option value="green">Classic green</option><option value="pocket">Pocket</option><option value="gray">Grayscale</option></select>
+      </label>
+      <label><input type="checkbox" id="cc" checked> GBC color correction</label>
+      <label><input type="checkbox" id="blend"> LCD ghosting (frame blend)</label>
+      <label>Fast-forward
+        <select id="ffspeed"><option value="2">2×</option><option value="4" selected>4×</option><option value="8">8×</option></select>
+      </label>
+      <div class="row">
+        <button class="btn" id="btn-full">Fullscreen</button>
+        <button class="btn" id="btn-export" disabled>Export save</button>
+        <label class="btn" id="lbl-import">Import save<input type="file" id="import" accept=".sav" hidden></label>
+      </div>
+    </div>
+
+    <details class="help">
+      <summary>Controls</summary>
+      <table>
+        <tr><td>D-pad</td><td>Arrows / WASD</td></tr>
+        <tr><td>A / B</td><td>X or K / Z or J</td></tr>
+        <tr><td>Start / Select</td><td>Enter / Shift or Backspace</td></tr>
+        <tr><td>Fast-forward</td><td>hold Space or Tab</td></tr>
+        <tr><td>Rewind</td><td>hold R</td></tr>
+        <tr><td>Pause</td><td>P or Esc</td></tr>
+        <tr><td>States</td><td>F5 save · F8 load · 1–4 slot</td></tr>
+        <tr><td>Gamepad</td><td>standard mapping; RT ff, LT rewind</td></tr>
+      </table>
+      <p>Battery saves are stored in your browser automatically.</p>
+    </details>
+    <p class="fps" id="fps"></p>
+  </aside>
+</main>
+<div class="toast" id="toast"></div>
+<script type="module" src="ui.js"></script>
+</body>
+</html>
