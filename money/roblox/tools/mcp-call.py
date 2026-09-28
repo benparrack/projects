@@ -2,6 +2,7 @@
 """Call Roblox Studio MCP tools from the shell (fallback when the MCP tools aren't loaded in Claude Code).
 
   tools/mcp-call.py <tool> '<json args>'   # studio_id is filled in automatically
+  tools/mcp-call.py <tool> @args.json      # same, args read from a file
   tools/mcp-call.py --list
   tools/mcp-call.py --stop                 # stop the background daemon
 
@@ -140,7 +141,10 @@ def main():
         for t in request({"list": True})["tools"]:
             print(t["name"], json.dumps(t["inputSchema"].get("properties", {}))[:400])
         return
-    args = json.loads(a[1]) if len(a) > 1 else {}
+    raw = a[1] if len(a) > 1 else "{}"
+    if raw.startswith("@"):  # @file: read the JSON args from a file (for big payloads)
+        raw = open(raw[1:]).read()
+    args = json.loads(raw)
     res = request({"name": a[0], "args": args})
     if "error" in res:
         print("ERROR", json.dumps(res["error"]))

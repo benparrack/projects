@@ -1,0 +1,32 @@
+{
+  "name": "steal-a-satellite",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "Server": { "$path": "src/server" },
+      "ServerLib": { "$path": "../../lib/server" }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterUseJumpPower": true,
+        "CharacterJumpPower": 55,
+        "CharacterWalkSpeed": 24,
+        "CameraMaxZoomDistance": 120
+      },
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/client" }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "Gravity": 196.2,
+        "StreamingEnabled": false
+      }
+    },
+    "SoundService": {},
+    "Lighting": {}
+  }
+}
