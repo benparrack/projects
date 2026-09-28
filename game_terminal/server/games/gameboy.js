@@ -7,7 +7,9 @@
 // the bundled homebrew library can be watched — custom ROMs a player opened locally never leave
 // their browser.
 
-const LIBRARY = new Set(['ucity', 'libbet', 'big2small']); // must match client.js LIBRARY ids
+const LIBRARY = new Set([
+  'ucity', 'libbet', 'big2small', 'tobudx', 'porklike', 'shocklobster', 'geometrix', 'adjustris', '2048',
+]); // must match client.js LIBRARY ids
 const MAX_KEY_LEN = 60000;   // base64 chars; stays under the 64 KB WS maxPayload with the envelope
 const MAX_INPUTS = 256;      // per 'inp' batch
 

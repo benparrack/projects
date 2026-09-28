@@ -10,6 +10,12 @@ const LIBRARY = [ // ids must match server/games/gameboy.js LIBRARY
   { id: 'ucity', file: 'ucity.gbc', name: 'µCITY', note: 'city builder · GBC' },
   { id: 'libbet', file: 'libbet.gb', name: 'LIBBET', note: 'puzzle · GB' },
   { id: 'big2small', file: 'big2small.gb', name: 'BIG2SMALL', note: 'puzzle · GBC' },
+  { id: 'tobudx', file: 'tobudx.gb', name: 'TOBU TOBU GIRL DX', note: 'arcade platformer · GBC' },
+  { id: 'porklike', file: 'porklike.gb', name: 'PORKLIKE', note: 'roguelike · GB' },
+  { id: 'shocklobster', file: 'shocklobster.gb', name: 'SHOCK LOBSTER', note: 'action · GB' },
+  { id: 'geometrix', file: 'geometrix.gbc', name: 'GEOMETRIX', note: 'puzzle · GBC' },
+  { id: 'adjustris', file: 'adjustris.gb', name: 'ADJUSTRIS', note: 'falling blocks · GB' },
+  { id: '2048', file: '2048.gb', name: '2048', note: 'puzzle · GB' },
 ];
 const ROM_BASE = new URL('./roms/', import.meta.url);
 const FLUSH_MS = 50; // spectator input batches
