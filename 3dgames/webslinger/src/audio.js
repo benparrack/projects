@@ -9,7 +9,9 @@ export class Audio {
     this.out = ctx.createGain(); this.out.gain.value = this.vol;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.ratio.value = 4;
-    this.out.connect(comp).connect(ctx.destination);
+    // slow-mo muffles everything
+    this.lp = ctx.createBiquadFilter(); this.lp.type = "lowpass"; this.lp.frequency.value = 20000; this.lp.Q.value = 0.5;
+    this.out.connect(this.lp).connect(comp).connect(ctx.destination);
     // shared noise
     const len = ctx.sampleRate * 2;
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -35,6 +37,11 @@ export class Audio {
     this.cityG = ctx.createGain(); this.cityG.gain.value = 0.12;
     city.connect(lp).connect(this.cityG).connect(this.out); city.start();
     this.hornT = 3;
+  }
+
+  setFocus(k) {
+    if (!this.ctx) return;
+    this.lp.frequency.setTargetAtTime(20000 * Math.pow(700 / 20000, k), this.ctx.currentTime, 0.05);
   }
 
   setVolume(v) { this.vol = v; if (this.out) this.out.gain.value = v; }
@@ -99,6 +106,35 @@ export class Audio {
         this.noiseBurst({ dur: 1.0, f0: 2500, f1: 300, q: 0.5, gain: 0.6, type: "lowpass", attack: 0.01 });
         break;
       case "noanchor": this.tone({ f0: 220, f1: 180, dur: 0.12, gain: 0.08, type: "triangle" }); break;
+      case "trick":
+        this.noiseBurst({ dur: 0.4, f0: 700, f1: 2400, q: 1.2, gain: 0.22, attack: 0.08 });
+        break;
+      case "closeCall":
+        this.noiseBurst({ dur: 0.35, f0: 3000, f1: 600, q: 1.5, gain: 0.3, attack: 0.02 });
+        break;
+      case "bail":
+        this.tone({ f0: 180, f1: 60, dur: 0.4, gain: 0.3, type: "sawtooth" });
+        this.noiseBurst({ dur: 0.4, f0: 800, f1: 100, q: 0.7, gain: 0.4, type: "lowpass" });
+        break;
+      case "bank": {
+        // rising arpeggio, longer for bigger combos (speed = combo size 0..1)
+        const n = 3 + Math.round(speed * 4);
+        for (let i = 0; i < n; i++) this.tone({ f0: 523 * 2 ** ([0, 4, 7, 12, 16, 19, 24][i] / 12), dur: 0.3, gain: 0.09, type: "triangle", when: i * 0.05 });
+        break;
+      }
+      case "ring":
+        this.tone({ f0: 880, f1: 1320, dur: 0.18, gain: 0.12, type: "sine" });
+        this.tone({ f0: 1320, dur: 0.25, gain: 0.07, type: "triangle", when: 0.05 });
+        break;
+      case "raceStart":
+        [0, 0.12].forEach((w) => this.tone({ f0: 660, dur: 0.1, gain: 0.12, type: "square", when: w }));
+        this.tone({ f0: 1320, dur: 0.35, gain: 0.12, type: "square", when: 0.24 });
+        break;
+      case "finish":
+        [0, 4, 7, 12, 7, 12].forEach((s2, i) => this.tone({ f0: 523 * 2 ** (s2 / 12), dur: 0.4, gain: 0.12, type: "triangle", when: i * 0.1 }));
+        break;
+      case "focusOn": this.tone({ f0: 300, f1: 90, dur: 0.5, gain: 0.18, type: "sine" }); break;
+      case "focusOff": this.tone({ f0: 90, f1: 300, dur: 0.35, gain: 0.12, type: "sine" }); break;
       case "token":
         [0, 4, 7, 12].forEach((s, i) => this.tone({ f0: 660 * 2 ** (s / 12), dur: 0.35, gain: 0.12, type: "triangle", when: i * 0.06 }));
         break;

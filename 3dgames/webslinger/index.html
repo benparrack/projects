@@ -25,6 +25,8 @@
     <div><b>Space</b> jump (hold to charge) · jump off a swing for a boost</div>
     <div><b>Right mouse</b> / <b>E</b> zip to a ledge and launch</div>
     <div><b>Q</b> web-dash (3) · <b>Ctrl</b> / <b>C</b> dive</div>
+    <div><b>F</b> air trick (+ direction) · <b>Tab</b> / <b>middle mouse</b> hold for slow-mo</div>
+    <div><b>G</b> ring race (fly through a gold ring to start) · <b>M</b> map</div>
     <div><b>T</b> time of day · <b>V</b> look (cinematic / realistic / comic) · <b>P</b> hide HUD · <b>Esc</b> settings</div>
   </div>
   <div class="hint">Best in Chrome — Firefox on Linux/X11 has a pointer-lock bug that can stick the mouse. Gamepads work too.</div>
@@ -37,10 +39,29 @@
   <div id="cross"></div>
   <div id="chargeBar"><div id="charge"></div></div>
   <div id="marker"></div>
+  <div id="focusBar"><div id="focus"></div></div>
+  <canvas id="map"></canvas>
+  <div id="combo"><div id="comboPts"></div><div id="comboFeed"></div></div>
+  <div id="comboPop"><div></div><div class="sub"></div></div>
+  <div id="race" class="hidden"><div id="raceName"></div><div id="raceTime"></div><div id="raceInfo"></div></div>
+  <div id="ringPtr"><div class="arr">▲</div><span></span></div>
 </div>
-<div id="toast"></div>
+<div id="toast"><div></div><div class="sub"></div></div>
 <div id="stats" class="hidden"></div>
-<div id="help" class="hidden"></div>
+<div id="help" class="hidden">
+  <h3>Controls</h3>
+  <div><b>Hold left mouse / Shift</b> swing — keep holding to chain, let go on the upswing to fly</div>
+  <div><b>Space</b> jump (hold to charge) · jump off a swing for a boost</div>
+  <div><b>Right mouse / E</b> zip to the ledge you aim at and launch</div>
+  <div><b>Q</b> web-dash (3 charges) · <b>Ctrl / C</b> dive</div>
+  <div><b>F</b> air trick: W front flip · S backflip · A/D corkscrew · none 360. Land before it finishes and you bail</div>
+  <div><b>Tab / middle mouse</b> hold for slow-mo (blue bar)</div>
+  <div><b>G</b> drop in at the next ring race (again to cancel) · gold beacons mark the starts</div>
+  <div><b>M</b> map · <b>T</b> time of day · <b>V</b> look · <b>P</b> hide HUD · <b>R</b> respawn · <b>F3</b> stats</div>
+  <h3>Style</h3>
+  <div>Everything off the ground scores: swings, big flings, tricks, near misses, close calls, low swoops, wall runs, tokens, rings. The multiplier grows as you chain moves; the combo banks when you stay on your feet, and is lost if you bail or fall in the river.</div>
+  <div class="small">Gamepad: RT swing · A jump · LT zip · X dash · B dive · Y trick · RB slow-mo · LB time · Back race · Start menu</div>
+</div>
 
 <div id="menu" class="hidden">
   <div class="panel">
@@ -57,8 +78,10 @@
     <label>Field of view <input type="range" id="s-fov" min="55" max="95" step="1"></label>
     <label>Motion blur / aberration <input type="range" id="s-motion" min="0" max="1.5" step="0.05"></label>
     <label>Volume <input type="range" id="s-vol" min="0" max="1" step="0.05"></label>
+    <h3>Ring races</h3>
+    <div id="raceList"></div>
     <button id="resume">Resume</button>
-    <div class="small">F3 performance stats · R respawn</div>
+    <div class="small">H controls · F3 performance stats · R respawn · <a id="reset" href="#" onclick="return false">Reset progress</a></div>
   </div>
 </div>
 <script type="module" src="src/main.js"></script>

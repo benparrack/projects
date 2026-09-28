@@ -4,7 +4,7 @@ export class Input {
     this.el = el;
     this.keys = new Set();
     this.pressed = new Set();     // edge-triggered this frame
-    this.mouse = { dx: 0, dy: 0, l: false, r: false, lp: false, rp: false };
+    this.mouse = { dx: 0, dy: 0, l: false, r: false, m: false, lp: false, rp: false };
     this.sens = 1;
     this.invertY = false;
     this.locked = false;
@@ -16,15 +16,17 @@ export class Input {
       if (["Space", "Tab", "ControlLeft"].includes(e.code)) e.preventDefault();
     });
     addEventListener("keyup", (e) => this.keys.delete(e.code));
-    addEventListener("blur", () => { this.keys.clear(); this.mouse.l = this.mouse.r = false; });
+    addEventListener("blur", () => { this.keys.clear(); this.mouse.l = this.mouse.r = this.mouse.m = false; });
     el.addEventListener("mousedown", (e) => {
       if (!this.locked) return;
       if (e.button === 0) { this.mouse.l = true; this.mouse.lp = true; }
       if (e.button === 2) { this.mouse.r = true; this.mouse.rp = true; }
+      if (e.button === 1) { this.mouse.m = true; e.preventDefault(); }
     });
     addEventListener("mouseup", (e) => {
       if (e.button === 0) this.mouse.l = false;
       if (e.button === 2) this.mouse.r = false;
+      if (e.button === 1) this.mouse.m = false;
     });
     el.addEventListener("contextmenu", (e) => e.preventDefault());
     addEventListener("mousemove", (e) => {
@@ -35,7 +37,7 @@ export class Input {
     });
     document.addEventListener("pointerlockchange", () => {
       this.locked = document.pointerLockElement === el;
-      if (!this.locked) { this.mouse.l = this.mouse.r = false; this.keys.clear(); }
+      if (!this.locked) { this.mouse.l = this.mouse.r = this.mouse.m = false; this.keys.clear(); }
     });
   }
 
@@ -61,6 +63,8 @@ export class Input {
       pad: false,
       menu: P.has("Escape"), time: P.has("KeyT"), comic: P.has("KeyV"), photo: P.has("KeyP"),
       respawn: P.has("KeyR"), help: P.has("KeyH"),
+      trick: P.has("KeyF"), focus: k.has("Tab") || this.mouse.m,
+      race: P.has("KeyG"), map: P.has("KeyM"),
     };
     if (k.has("KeyW") || k.has("ArrowUp")) s.mz += 1;
     if (k.has("KeyS") || k.has("ArrowDown")) s.mz -= 1;
@@ -81,14 +85,18 @@ export class Input {
       s.mx += lx; s.mz -= ly;
       s.lookX += rx * Math.abs(rx) * 0.05 * this.sens;
       s.lookY += ry * Math.abs(ry) * 0.035 * this.sens * (this.invertY ? -1 : 1);
-      // RT swing, A jump, LT zip, B dive, X dash, Y time, Start menu
+      // RT swing, A jump, LT zip, B dive, X dash, Y trick, RB focus (slow-mo),
+      // LB time of day, Back race, Start menu
       s.swing ||= (gp.buttons[7]?.value || 0) > 0.3;
       s.swingP ||= (gp.buttons[7]?.value || 0) > 0.3 && !this.padPrev[7];
       s.jump ||= b(0); s.jumpP ||= e(0);
       s.zip ||= e(6);
       s.dive ||= b(1);
       s.dash ||= e(2);
-      s.time ||= e(3);
+      s.trick ||= e(3);
+      s.focus ||= b(5);
+      s.time ||= e(4);
+      s.race ||= e(8);
       s.menu ||= e(9);
       this.padPrev = gp.buttons.map((x, i) => (i === 7 ? x.value > 0.3 : x.pressed));
     }

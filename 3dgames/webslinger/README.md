@@ -23,13 +23,47 @@ Games").
 | RMB / E | Web-zip to the point you're looking at |
 | Q | Air dash |
 | Ctrl / C | Dive |
+| F (+ W/S/A/D) | Air trick: front flip, backflip, corkscrew, or a 360 with no direction. Land before it finishes and you bail |
+| Tab / middle mouse (hold) | Slow-mo focus. Drains in about 3.5 s and refills faster while you're comboing |
+| G | Drop in at the next ring race. Press again to cancel |
+| M | Toggle the minimap |
 | T | Cycle time of day (golden hour, sunset, blue hour, night, dawn, morning, midday) |
 | V | Cycle look: Cinematic, Realistic (AgX, SSAO, eye adaptation), Comic book |
 | P | Photo mode |
 | R | Respawn |
 | H | Help |
 | F3 | Stats |
-| Esc | Menu (quality and settings, including the **Swing assist** toggle) |
+| Esc | Menu: quality and settings (including the **Swing assist** toggle), the ring race list with bests, and resetting progress |
+
+Gamepad: RT swing · A jump · LT zip · X dash · B dive · Y trick · RB slow-mo · LB time of day · Back race · Start menu.
+
+## Game features
+
+- **Style combos** (`src/style.js`): everything you do off the ground adds points.
+  - Moves that score: swings, big flings (over 42 m/s), jump-offs, tricks, near
+    misses (grazes), close calls (a wall within 4.5 m beside you at speed), street
+    swoops and rooftop skims, top speed, wall runs, launches, tokens and race rings.
+  - The multiplier grows by 1 for every 3 moves, up to ×10. The same move repeated
+    back to back is worth half each time.
+  - The combo banks after 0.6 s on your feet and gets a rank from Nice to Legendary.
+  - A bail or respawn loses the combo. The best combo and the lifetime total are
+    saved.
+- **Ring races** (`src/courses.js` builds them, `src/race.js` runs them): 4
+  courses, Avenue Sprint, Crosstown Zigzag, Skyline Dive and Park Loop.
+  - Each course is 20–36 rings built from street waypoints. Ring heights are clamped
+    under the local skyline and each ring is nudged clear of buildings.
+  - Gold light columns mark the start rings. Fly through one to start the clock.
+  - An edge-of-screen pointer and the minimap show the next ring. A split delta
+    against your best run is shown at each ring.
+  - The best run is saved with its splits and a ghost (20 Hz), which you race
+    against.
+- **Minimap** (`src/minimap.js`): heading-up, and shows tokens, race starts or the
+  active route, and the ghost.
+- **Slow-mo, speed lines**: slow-mo scales the simulation timestep by 0.3. It also
+  desaturates and cools the image in `post.js` and sweeps an audio lowpass. Speed
+  lines stream out from the motion-blur centre above about 34 m/s.
+- **Progress**: collected tokens persist in localStorage. Reset it from the Esc menu
+  with a two-click confirm.
 
 ## How it works
 
@@ -94,11 +128,14 @@ Open `?debug` to get `window.WS`:
 - `WS.fake = {mz:1, swing:true, swingP:true}` injects input.
 - `WS.setTimePreset(i)` sets the time of day.
 - `WS.view = [px,py,pz, lx,ly,lz, fov]` sets the title camera.
-- `player`, `chase`, `sky`, `post`, `renderer`, `csm`, `world` and `city` are also
-  exposed.
+- `WS.goRace()` drops you at the next race.
+- `player`, `chase`, `sky`, `post`, `renderer`, `csm`, `world`, `city`, `style` and
+  `races` are also exposed.
 
 Tests: `node tests/city.test.mjs`, `node tests/swing.test.mjs`,
-`node tests/flow.test.mjs [assist 0|1]`.
+`node tests/flow.test.mjs [assist 0|1]`, `node tests/style.test.mjs`.
+- The style test runs a trick bot and a bail, checks that combos bank, and checks ring
+  counts and gaps for each race course.
 - The swing test runs a headless bot through the city and reports swings, maximum
   speed and distance.
 - The flow test runs a player-like bot down avenues, a street and a diagonal. It

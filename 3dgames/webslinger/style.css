@@ -47,3 +47,40 @@ button:hover { transform: scale(1.04); }
 .panel label:has(input[type=checkbox]) { justify-content: flex-start; }
 .panel select, .panel input[type=range] { width: 170px; }
 .panel .small { font-size: 12px; opacity: .55; }
+#toast .sub { font-size: 14px; font-weight: 600; letter-spacing: .04em; opacity: .8; text-align: center; margin-top: 4px; text-transform: none; }
+#toast > div:first-child { text-align: center; }
+#focusBar { position: absolute; left: 32px; bottom: 62px; width: 96px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.12); overflow: hidden; }
+#focusBar.full { opacity: .45; }
+#focus { height: 100%; width: 100%; background: #7fd8ff; box-shadow: 0 0 8px #7fd8ff; }
+#map { position: absolute; right: 26px; top: 22px; width: 180px; height: 180px; border-radius: 50%; }
+#combo { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity .2s;
+  text-shadow: 0 2px 12px rgba(0,0,0,.7); }
+#combo.on { opacity: 1; }
+#comboPts { font-size: 30px; font-weight: 900; font-style: italic; }
+#comboPts b { color: #ffd27a; margin-left: 4px; }
+#comboFeed { font-size: 14px; font-weight: 700; letter-spacing: .03em; margin-top: 4px; }
+#comboFeed span { color: #9fe8ff; }
+#comboPop { position: absolute; left: 50%; bottom: 20%; transform: translate(-50%, 10px) scale(.9); text-align: center; opacity: 0;
+  transition: opacity .25s, transform .25s; text-shadow: 0 2px 16px rgba(0,0,0,.7); pointer-events: none; }
+#comboPop.on { opacity: 1; transform: translate(-50%, 0) scale(1); }
+#comboPop > div:first-child { font-size: 40px; font-weight: 900; font-style: italic; color: #ffd27a; }
+#comboPop.lost > div:first-child { color: #ff5a6a; text-transform: uppercase; }
+#comboPop .sub { font-size: 15px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+#race { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); text-align: center; text-shadow: 0 2px 10px rgba(0,0,0,.7); }
+#raceName { font-size: 13px; letter-spacing: .15em; text-transform: uppercase; opacity: .8; font-weight: 700; }
+#raceTime { font-size: 34px; font-weight: 900; font-style: italic; font-variant-numeric: tabular-nums; }
+#raceInfo { font-size: 14px; font-weight: 700; }
+#raceInfo .ahead { color: #6dff9a; } #raceInfo .behind { color: #ff6a6a; }
+#ringPtr { position: absolute; transform: translate(-50%, -50%); display: none; text-align: center; color: #7ff0ff; font-weight: 800; font-size: 12px;
+  text-shadow: 0 1px 6px #000; }
+#ringPtr .arr { font-size: 18px; opacity: 0; }
+#ringPtr.edge .arr { opacity: 1; }
+#help { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(10,12,20,.9); padding: 22px 28px; border-radius: 14px;
+  max-width: 640px; display: grid; gap: 7px; font-size: 14px; line-height: 1.4; box-shadow: 0 20px 60px rgba(0,0,0,.5); pointer-events: none; }
+#help h3 { margin: 6px 0 2px; font-style: italic; } #help b { color: #ffd27a; }
+#help .small, .panel .small a { font-size: 12px; opacity: .6; color: inherit; }
+.panel h3 { margin: 6px 0 0; font-size: 15px; font-style: italic; }
+.race-row { display: grid; grid-template-columns: 1fr 70px 56px; align-items: center; gap: 10px; font-size: 14px; }
+.race-row .best { font-variant-numeric: tabular-nums; opacity: .8; text-align: right; }
+.race-row button { font-size: 12px; padding: 5px 12px; box-shadow: none; }
+.panel { max-height: 94vh; overflow-y: auto; }

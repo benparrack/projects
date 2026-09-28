@@ -13,6 +13,9 @@ import { Character } from "./character.js";
 import { Webs } from "./web.js";
 import { Audio } from "./audio.js";
 import { Traffic, Tokens } from "./traffic.js";
+import { Style } from "./style.js";
+import { Races, fmtTime } from "./race.js";
+import { Minimap } from "./minimap.js";
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -57,6 +60,7 @@ const S = {
   timeFlow: store.get("timeFlow", false),
   dynRes: store.get("dynRes", true),
   motion: store.get("motion", 1),
+  map: store.get("map", true),
 };
 const Q = QUALITY[S.quality] || QUALITY.high;
 
@@ -87,6 +91,12 @@ const player = new Player(world);
 const hero = new Character(scene);
 const webs = new Webs(scene);
 const chase = new ChaseCam(camera, world);
+const style = new Style(world);
+style.best = store.get("bestCombo", 0); style.total = store.get("totalStyle", 0);
+const races = new Races(scene, world);
+const minimap = new Minimap($("map"));
+// collected tokens persist between visits
+for (const i of store.get("tokensGot", [])) { const k = tokens.list[i]; if (k && !k.got) { k.got = true; k.t = 1; tokens.count++; } }
 chase.baseFov = S.fov;
 const input = new Input(canvas);
 input.sens = S.sens; input.invertY = S.invertY;
@@ -217,7 +227,11 @@ resize();
 
 // ------------------------------------------------------------------ UI
 let toastT = 0;
-function toast(msg) { const el = $("toast"); el.textContent = msg; el.classList.add("on"); toastT = 1.6; }
+function toast(msg, sub = "", dur = 1.6) {
+  const el = $("toast");
+  el.firstElementChild.textContent = msg; el.lastElementChild.textContent = sub;
+  el.classList.add("on"); toastT = dur;
+}
 let playing = false, paused = true;
 function startPlay() {
   audio.start(); audio.setVolume(S.volume);
@@ -261,11 +275,87 @@ function bindSettings() {
 }
 bindSettings();
 $("tokTotal").textContent = tokens.list.length;
+$("tok").textContent = tokens.count;
+$("map").classList.toggle("hidden", !S.map);
+
+// pause-menu race list (Go = drop in front of that start ring) and progress reset
+function raceList() {
+  $("raceList").innerHTML = races.courses.map((c, i) =>
+    `<div class="race-row"><span>${c.name}</span><span class="best">${c.best ? fmtTime(c.best) : "—"}</span><button data-race="${i}">Go</button></div>`).join("") +
+    `<div class="race-row"><span>Best combo</span><span class="best">${style.best.toLocaleString()}</span><span></span></div>`;
+}
+$("raceList").addEventListener("click", (e) => {
+  const i = e.target.dataset?.race;
+  if (i === undefined) return;
+  races.pick = +i;
+  goRace();
+  startPlay();
+});
+let resetArm = 0;
+$("reset").addEventListener("click", () => {
+  if (performance.now() - resetArm > 3000) { resetArm = performance.now(); $("reset").textContent = "Click again to reset everything"; return; }
+  try { for (const k of Object.keys(localStorage)) if (/^webslinger\.(race\d|tokensGot|bestCombo|totalStyle)/.test(k)) localStorage.removeItem(k); } catch { /* private mode */ }
+  location.reload();
+});
+document.addEventListener("pointerlockchange", () => { if (document.pointerLockElement !== canvas) { raceList(); $("reset").textContent = "Reset progress"; } });
+raceList();
+
+// ------------------------------------------------------------------ combo / race HUD
+let popT = 0;
+function comboPop(big, small, cls) {
+  const el = $("comboPop");
+  el.className = "on " + cls;
+  el.firstElementChild.textContent = big; el.lastElementChild.textContent = small;
+  popT = 2.2;
+}
+let comboKey = "";
+function drawCombo(dt) {
+  const el = $("combo");
+  if (popT > 0) { popT -= dt; if (popT <= 0) $("comboPop").className = ""; }
+  el.classList.toggle("on", style.active);
+  if (!style.active) return;
+  const key = style.points + "|" + style.mult + "|" + style.feed.length + "|" + (style.feed[0]?.name || "");
+  if (key !== comboKey) {
+    comboKey = key;
+    $("comboPts").innerHTML = `${style.points.toLocaleString()} <b>×${style.mult}</b>`;
+    $("comboFeed").innerHTML = style.feed.slice(0, 4).map((f, i) => `<div style="opacity:${1 - i * 0.22}">${f.name} <span>+${f.pts}</span></div>`).join("");
+  }
+}
+function drawRace() {
+  const A = races.active, el = $("race"), ptr = $("ringPtr");
+  el.classList.toggle("hidden", !A);
+  if (!A) { ptr.style.display = "none"; return; }
+  $("raceName").textContent = A.c.name;
+  $("raceTime").textContent = fmtTime(A.t);
+  const d = races.lastDelta;
+  $("raceInfo").innerHTML = `Ring ${A.k} / ${A.c.rings.length}` + (d == null ? "" : ` · <span class="${d <= 0 ? "ahead" : "behind"}">${d <= 0 ? "−" : "+"}${Math.abs(d).toFixed(2)}</span>`);
+  // pointer to the next ring, pinned to the screen edge when it's off-screen
+  const r = races.next();
+  tmpV.set(r.x, r.y, r.z).project(camera);
+  let sx = tmpV.x, sy = tmpV.y;
+  const behind = tmpV.z > 1;
+  if (behind) { sx = -sx; sy = -sy; if (Math.hypot(sx, sy) < 0.05) sy = -1; }
+  const on = !behind && Math.abs(sx) < 0.9 && Math.abs(sy) < 0.85;
+  if (!on) { const m = Math.max(Math.abs(sx) / 0.9, Math.abs(sy) / 0.85); sx /= m; sy /= m; }
+  ptr.style.display = "block";
+  ptr.style.left = ((sx * 0.5 + 0.5) * innerWidth) + "px";
+  ptr.style.top = ((-sy * 0.5 + 0.5) * innerHeight) + "px";
+  ptr.classList.toggle("edge", !on);
+  ptr.firstElementChild.style.transform = on ? "" : `rotate(${Math.atan2(sx, sy)}rad)`;
+  ptr.lastElementChild.textContent = Math.round(Math.hypot(r.x - player.p.x, r.y - player.p.y, r.z - player.p.z)) + " m";
+}
 
 // ------------------------------------------------------------------ loop
 let last = performance.now(), time = 0;
 let frames = 0, fpsT = 0, fps = 60, slowT = 0, fastT = 0, lastResChange = 0, cooldown = 0;
 let mainWeb = null, flash = 0, statsOn = false;
+let focusMeter = 1, focusK = 0, focusOn = false;
+function goRace() {
+  const yaw = races.teleport(player);
+  chase.yaw = yaw; chase.pitch = -0.05;
+  chase.target.set(player.p.x, player.p.y + 0.9, player.p.z);
+  if (mainWeb) { webs.letGo(mainWeb); mainWeb = null; }
+}
 const tmpV = new THREE.Vector3();
 const titleCam = { a: 0 };
 const ctl = { mx: 0, mz: 0, lookX: 0, lookY: 0, swing: false, swingP: false, jump: false, jumpP: false, zip: false, dash: false, dive: false };
@@ -280,7 +370,7 @@ function handleEvents(speed) {
     } else if (e === "release" || e === "releaseJump" || e === "landHard" || e === "land" || e === "wall" || e === "respawn") {
       if (mainWeb) { webs.letGo(mainWeb); mainWeb = null; }
       if (e === "landHard") chase.shake = 1;
-      if (e === "respawn") { flash = 1; post.adaptReset = true; toast("Back to the city"); }
+      if (e === "respawn") { flash = 1; post.adaptReset = true; toast("Back to the city"); races.cancel(); races.msg = null; }
     } else if (e === "zip") {
       if (mainWeb) webs.letGo(mainWeb);
       mainWeb = webs.shoot(hero.handPos.r, tmpV.set(player.zipT.x, player.zipT.y, player.zipT.z));
@@ -318,26 +408,53 @@ function tick(now) {
   if (c.help) $("help").classList.toggle("hidden");
   if (input.keys.has("F3")) { input.keys.delete("F3"); statsOn = !statsOn; $("stats").classList.toggle("hidden", !statsOn); }
 
-  let speed = 0;
+  let speed = 0, sdt = dt;
   if (playing && !paused) {
+    // focus (slow motion): hold Tab / middle mouse / RB; drains in ~3.5 s, refills slowly
+    const want = c.focus && focusMeter > 0.02;
+    if (want) focusMeter = Math.max(0, focusMeter - dt / 3.5);
+    else focusMeter = Math.min(1, focusMeter + dt * (style.active ? 0.14 : 0.1));
+    if (want !== focusOn) { focusOn = want; audio.play(want ? "focusOn" : "focusOff"); }
+    focusK += ((want ? 1 : 0) - focusK) * (1 - Math.exp(-dt * (want ? 10 : 6)));
+    audio.setFocus(focusK);
+    sdt = dt * (1 - 0.7 * focusK);
+    if (c.race) { if (races.active) races.cancel(); else goRace(); }
     Object.assign(ctl, c);
     ctl.yaw = chase.yaw;
     ctl.fwd = chase.fwd;
     ctl.camPos = camera.position;
-    player.update(dt, ctl);
-    hero.update(dt, player, c, time);
-    speed = chase.update(dt, player, c, S);
+    player.update(sdt, ctl);
+    hero.update(sdt, player, c, time);
+    speed = chase.update(sdt, player, c, S);
+    style.events(player.events, player);
     handleEvents(speed);
+    style.update(sdt, player);
+    for (const e of style.sfx) audio.play(e);
+    style.sfx.length = 0;
+    if (style.banked) {
+      const b = style.banked;
+      store.set("bestCombo", style.best); store.set("totalStyle", style.total);
+      comboPop(`+${b.pts.toLocaleString()}`, b.best ? `${b.rank}! · new best combo` : `${b.rank}! · ×${b.mult}`, "bank");
+      audio.play("bank", Math.min(1, Math.log10(Math.max(10, b.pts)) / 5));
+    }
+    if (style.lost) { comboPop(style.lost.why, style.lost.pts ? `lost ${style.lost.pts.toLocaleString()}` : "", "lost"); if (style.lost.why === "Bailed") audio.play("bail"); }
     if (mainWeb) {
       if (player.state === "swing" || player.state === "zip") mainWeb.a.copy(player.state === "swing" && player.hand < 0 ? hero.handPos.l : hero.handPos.r);
     }
-    const got = tokens.update(dt, time, player.p, camera);
+    const got = tokens.update(sdt, time, player.p, camera);
     if (got) {
       audio.play(tokens.count === tokens.list.length ? "allTokens" : "token");
       $("tok").textContent = tokens.count;
+      store.set("tokensGot", tokens.list.map((k, i) => (k.got ? i : -1)).filter((i) => i >= 0));
       flash = 0.25;
+      style.add("Token", 500);
       toast(tokens.count === tokens.list.length ? "Every token found!" : `Token ${tokens.count} / ${tokens.list.length}`);
     }
+    const rev = races.update(sdt, time, player);
+    if (rev === "start") audio.play("raceStart");
+    else if (rev === "ring") { audio.play("ring"); style.add("Ring", 100, true); }
+    else if (rev === "finish") { audio.play("finish"); style.add("Race finish", 1000); flash = 0.3; }
+    if (races.msg) { toast(races.msg.big, races.msg.small, rev === "finish" ? 4 : 2.2); races.msg = null; }
     audio.update(dt, speed, player.p.y);
     if (S.timeFlow) applyTime(hour + dt / 60);   // one game hour per real minute
   } else {
@@ -355,8 +472,8 @@ function tick(now) {
     }
     tokens.update(0, time, { x: 1e9, y: 0, z: 0 }, camera);
   }
-  traffic.update(dt);
-  webs.update(dt, camera);
+  traffic.update(sdt);
+  webs.update(sdt, camera);
 
   // HUD
   if (playing) {
@@ -377,6 +494,12 @@ function tick(now) {
       }
     }
     $("charge").style.width = (player.charge / 0.75 * 100) + "%";
+    $("focus").style.width = (focusMeter * 100) + "%";
+    $("focusBar").classList.toggle("full", focusMeter >= 1);
+    if (c.map) { S.map = !S.map; store.set("map", S.map); $("map").classList.toggle("hidden", !S.map); }
+    minimap.update(dt, player, chase.yaw, tokens, races);
+    drawCombo(dt);
+    drawRace();
   }
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $("toast").classList.remove("on"); }
 
@@ -414,6 +537,9 @@ function tick(now) {
   flash = Math.max(0, flash - dt * 2);
   pc.uFlash.value = flash * 0.5;
   pc.uLetterbox.value = playing ? 0 : 0.06;
+  const lines = Math.min(1, Math.max(0, (speed - 34) / 26)) * Math.min(1, S.motion) * (S.look === "realistic" ? 0.35 : 1);
+  pc.uLines.value += (lines - pc.uLines.value) * Math.min(1, dt * 4);
+  pc.uFocus.value = focusK;
   // blur centre follows the travel direction on screen
   if (speed > 5) {
     tmpV.set(player.v.x, player.v.y, player.v.z).normalize().multiplyScalar(200).add(camera.position).project(camera);
@@ -453,4 +579,4 @@ window.WS = {
   // headless-ish testing: enter play mode without pointer lock; WS.fake = {swing: true, ...} overrides input
   play: () => { playing = true; paused = false; $("title").classList.add("hidden"); $("hud").classList.remove("hidden"); },
   fake: null,
-  tick: (n = 1, ms = 16.7) => { for (let i = 0; i < n; i++) tick(last + ms); },  player, chase, camera, post, sky, applyTime, setTimePreset, setLook, S, renderer, input, csm, world, city };
+  tick: (n = 1, ms = 16.7) => { for (let i = 0; i < n; i++) tick(last + ms); },  player, chase, camera, post, sky, applyTime, setTimePreset, setLook, S, renderer, input, csm, world, city, style, races, goRace };

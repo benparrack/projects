@@ -150,7 +150,7 @@ uniform sampler2D tScene; uniform sampler2D tBloom; uniform sampler2D tRays; uni
 uniform vec2 uRes; uniform float uTime;
 uniform float uExposure, uBloom, uRays, uSpeed, uCA, uVignette, uGrain, uSat, uContrast, uComic, uWarm;
 uniform float uNear, uFar; uniform vec2 uBlurCenter; uniform float uFlash; uniform vec3 uFlashCol;
-uniform float uLetterbox;
+uniform float uLetterbox; uniform float uLines; uniform float uFocus;
 uniform sampler2D tAO; uniform vec2 uAOTexel; uniform float uAO;
 uniform sampler2D tAdapt; uniform float uAdapt; uniform float uKey; uniform float uTonemap;
 
@@ -252,6 +252,24 @@ void main(){
     col = mix(col, vec3(0.03, 0.02, 0.05), ink);
     col = mix(col, col * vec3(1.05, 0.97, 1.03), 0.5);
   }
+  // slow-mo: cooler, desaturated, darker edges
+  if (uFocus > 0.0) {
+    float lf = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    col = mix(col, vec3(lf) * vec3(0.88, 1.0, 1.18), uFocus * 0.45);
+  }
+  // speed lines streaming out from the direction of travel (ink-dark in comic)
+  if (uLines > 0.0) {
+    vec2 d = fromC * vec2(uRes.x / uRes.y, 1.0);
+    float ang = atan(d.y, d.x) * 40.0;
+    float slot = floor(ang), lane = fract(ang);
+    float h = hash(vec2(slot, 17.0));
+    float r = length(d);
+    float s = fract(r * 1.2 - uTime * (1.6 + h * 1.8) + h * 13.0);
+    float streak = smoothstep(0.0, 0.08, s) * (1.0 - smoothstep(0.18, 0.45, s));
+    float thin = 1.0 - smoothstep(0.08, 0.3, abs(lane - 0.5));
+    float a = streak * thin * step(0.55, h) * smoothstep(0.28, 0.75, r) * uLines;
+    col = mix(col, uComic > 0.5 ? vec3(0.03, 0.02, 0.05) : vec3(1.0), a * 0.35);
+  }
   // hit / collect flash
   col = mix(col, uFlashCol, uFlash);
   // vignette
@@ -306,7 +324,7 @@ export class Post {
       uRays: { value: 0.5 }, uSpeed: { value: 0 }, uCA: { value: 1 }, uVignette: { value: 0.35 }, uGrain: { value: 0.012 },
       uSat: { value: 1.08 }, uContrast: { value: 1.06 }, uComic: { value: 0 }, uWarm: { value: 0.6 },
       uNear: { value: 0.1 }, uFar: { value: 1000 }, uBlurCenter: { value: new THREE.Vector2(0.5, 0.5) },
-      uFlash: { value: 0 }, uFlashCol: { value: new THREE.Color(1, 1, 1) }, uLetterbox: { value: 0 },
+      uFlash: { value: 0 }, uFlashCol: { value: new THREE.Color(1, 1, 1) }, uLetterbox: { value: 0 }, uLines: { value: 0 }, uFocus: { value: 0 },
     });
     Object.assign(this.comp.uniforms, {
       tAO: { value: null }, uAOTexel: { value: new THREE.Vector2() }, uAO: { value: 0 },

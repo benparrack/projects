@@ -51,6 +51,9 @@ export class Player {
     this.charge = 0; this.chargeHeld = false;
     this.releaseT = 9; this.groundT = 0; this.airT = 0; this.stateT = 0;
     this.flip = 0; this.roll = 0; this.landHard = 0;
+    // air tricks (F / pad Y): the stick picks the trick. Landing on the ground
+    // before it finishes is a bail.
+    this.trick = ""; this.trickT = 0; this.trickDur = 0; this.lastTrick = "";
     this.facing = 0;             // yaw of the body
     this.events = [];
     this.lastSwingSide = 1;
@@ -69,6 +72,7 @@ export class Player {
     this.v.x = this.v.y = this.v.z = 0;
     this.state = "ground";
     this.stateT = 0;
+    this.trick = ""; this.trickT = 0; this.flip = 0;
   }
 
   emit(e) { this.events.push(e); }
@@ -108,6 +112,10 @@ export class Player {
     this.flip = Math.max(0, this.flip - dt); this.roll = Math.max(0, this.roll - dt);
     this.landHard = Math.max(0, this.landHard - dt * 2);
     this.noAnchorT = Math.max(0, this.noAnchorT - dt);
+    if (this.trickT > 0) {
+      this.trickT -= dt;
+      if (this.trickT <= 0) this.endTrick(true);
+    }
     const onRope = this.state === "swing";
     if (this.state === "ground" || onRope) {
       this.dashRegen += dt;
@@ -120,9 +128,10 @@ export class Player {
       if (c.dash && this.state !== "ground" && this.state !== "zip" && this.dash > 0) this.airDash(c);
       if (c.swingP && this.state !== "swing" && this.state !== "zip") this.tryAttach(c, true);
       if (c.respawn) { this.respawn(); return; }
+      if (c.trick && this.state === "air" && this.trickT <= 0) this.startTrick(c);
     }
     // hold swing to keep chaining: re-fire on the way down
-    if (c.swing && (this.state === "air") && this.releaseT > 0.28 && this.v.y < 3 && this.airT > 0.12 && this.noAnchorT <= 0)
+    if (c.swing && (this.state === "air") && this.releaseT > 0.28 && this.v.y < 3 && this.airT > 0.12 && this.noAnchorT <= 0 && this.trickT <= 0)
       this.tryAttach(c, false);
 
     switch (this.state) {
@@ -207,12 +216,35 @@ export class Player {
   }
 
   land(vy) {
+    // still mid-trick (with some leeway at the end): bail
+    if (this.trickT > this.trickDur * 0.2) {
+      this.trickT = 0; this.trick = "";
+      this.roll = 0.55; this.landHard = 0.6;
+      this.v.x *= 0.35; this.v.z *= 0.35;
+      this.emit("bail");
+    } else if (this.trickT > 0) this.endTrick(true);
     if (vy < -24) { this.roll = 0.55; this.landHard = 1; this.emit("landHard"); }
     else this.emit(vy < -8 ? "land" : "step");
     this.v.y = 0;
     this.charge = 0; this.chargeHeld = false;
     this.set("ground"); this.groundT = 0;
     this.dash = Math.min(P.DASH, this.dash + 1);
+  }
+
+  startTrick(c) {
+    const t = c.mz < -0.4 ? "back" : Math.abs(c.mx) > 0.4 ? (c.mx > 0 ? "twistR" : "twistL") : c.mz > 0.4 ? "front" : "spin";
+    this.trick = t; this.trickDur = t === "spin" ? 0.5 : 0.62; this.trickT = this.trickDur;
+    this.flip = 0;
+    // a little pop so there's air to finish it in
+    if (this.v.y < 4) this.v.y = Math.max(this.v.y + 5, 4);
+    this.emit("trick");
+  }
+
+  /** finish (done) or cut short a trick; a nearly finished one still counts */
+  endTrick(done) {
+    if (!this.trick) return;
+    if (done || this.trickT < this.trickDur * 0.3) { this.lastTrick = this.trick; this.emit("trickDone"); }
+    this.trick = ""; this.trickT = 0;
   }
 
   gravity(dt, gk = 1, dk = 1) {
@@ -274,6 +306,7 @@ export class Player {
     // keep the along-wall component
     const vn = this.v.x * nx + this.v.z * nz;
     this.v.x -= vn * nx; this.v.z -= vn * nz;
+    this.endTrick(false);
     this.set("wall");
     this.emit("wall");
     return true;
@@ -468,6 +501,7 @@ export class Player {
     this.hand = a.side;
     this.lastSwingSide = a.side;
     this.attachT = 0; this.webT = 0;
+    this.endTrick(false);
     this.set("swing");
     this.stats.swings++;
     this.emit("thwip");
@@ -677,6 +711,7 @@ export class Player {
     this.zipSpeed = Math.max(18, len(this.v) * 0.6);
     this.webT = 0;
     this.set("zip");
+    this.endTrick(false);
     this.emit("zip");
   }
 

@@ -230,7 +230,8 @@ export class Character {
     } else {
       // air: blend tuck/fall/dive by vertical speed and input
       const diving = c.dive && v.y < 5;
-      if (pl.flip > 0) put(POSES.flip);
+      if (pl.trickT > 0) put(pl.trick === "front" || pl.trick === "back" ? POSES.flip : pl.trick === "spin" ? POSES.air : POSES.dive);
+      else if (pl.flip > 0) put(POSES.flip);
       else if (diving) put(POSES.dive);
       else {
         const fall = Math.min(1, Math.max(0, (-v.y - 4) / 20));
@@ -243,7 +244,7 @@ export class Character {
         // head-first along the velocity
         up.set(v.x, v.y, v.z).normalize();
         fwd.set(0, -1, 0);
-      } else if (-v.y > 12 && pl.flip <= 0) {
+      } else if (-v.y > 12 && pl.flip <= 0 && pl.trickT <= 0) {
         // skydiving belly-down, leaning with the fall
         const f = Math.min(1, (-v.y - 12) / 20);
         up.set(-Math.sin(pl.facing) * f, 1 - f * 0.85, -Math.cos(pl.facing) * f).normalize();
@@ -256,7 +257,13 @@ export class Character {
     this.basis(up, fwd);
     this.q.slerp(this.qt, 1 - Math.exp(-(st === "swing" ? 16 : 10) * dt));
     this.body.quaternion.copy(this.q);
-    if (pl.flip > 0 || pl.roll > 0) {
+    if (pl.trickT > 0 && st === "air") {
+      const f = 1 - pl.trickT / pl.trickDur, e = f * f * (3 - 2 * f), a = e * Math.PI * 2;
+      if (pl.trick === "front") this.body.rotateX(-a);
+      else if (pl.trick === "back") this.body.rotateX(a);
+      else if (pl.trick === "spin") this.body.rotateY(a);
+      else this.body.rotateZ(pl.trick === "twistR" ? -a : a);
+    } else if (pl.flip > 0 || pl.roll > 0) {
       const dur = pl.flip > 0 ? 0.75 : 0.55, rem = pl.flip > 0 ? pl.flip : pl.roll;
       const f = 1 - rem / dur, e = f * f * (3 - 2 * f);
       this.flipAngle = -e * Math.PI * 2;
