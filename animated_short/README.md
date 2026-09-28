@@ -23,7 +23,7 @@ them and muxes the audio.
 | Profile | Resolution / fps | Samples per frame | Time on an RTX 4060 |
 |---|---|---|---|
 | preview | 640×360 / 30 | 1 | ~40 s + ~85 s audio |
-| final | 1920×1080 / 60 | 6 (AA + motion blur) | see `PROGRESS.md` for the measured time |
+| final | 1920×1080 / 60 | 6 (AA + motion blur) | 7 m 56 s total (~85 s audio + 396 s shots/encode), ~1 GB file |
 
 ## Requirements
 

@@ -12,8 +12,10 @@ If a session dies, read this first, then `REVIEW.md` (latest pass) and `SCRIPT.m
 - [x] Review pass 2 (preview film: picture + audio sync) → drift/flyover restaged, mix rebalanced
 - [x] Review pass 3 (final-quality stills) → approved
 - [x] README.md + one-command `./make_film.sh`
-- [ ] Final render (running: `./make_film.sh`, log in `output/final_render.log`) `output/film.mp4` (1920×1080, 60 fps, H.264 + AAC), ffprobe check
-- [ ] NEW_IDEAS.md N2 → done, TODO_FIRST.md done line
+- [x] Final render `output/film.mp4`: ffprobe says h264 High 1920×1080 60/1, aac LC 48 kHz stereo, 176.000 s, 10 560 frames, ~1.04 GB. `./make_film.sh` takes 7 m 56 s end to end (audio ~85 s + shots 396 s). `output/film.mp4` (1920×1080, 60 fps, H.264 + AAC), ffprobe check
+- [x] NEW_IDEAS.md N2 → done, TODO_FIRST.md done line
+
+**Status: DONE (2026-09-28).**
 
 ## How to resume
 - One shot after a fix: `.venv/bin/python src/render.py shot <name> --profile preview`
@@ -29,3 +31,4 @@ If a session dies, read this first, then `REVIEW.md` (latest pass) and `SCRIPT.m
 - script + renderer WIP; review pass 1 look fixes.
 - score + SFX, make_film.sh, first preview.
 - pass 2/3 fixes (drift, flyover), README, review docs.
+- sub-sample clamp fix (final-render crash), final docs.

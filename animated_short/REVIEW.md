@@ -77,3 +77,13 @@ preview in motion. Known and accepted weaknesses:
 - The synth timbres are clean rather than rich.
 
 Approved for the final render.
+
+### Final render incident
+The first final render crashed at the start of shot 11 (dive). With 6 motion-blur
+sub-samples, the first frame of a shot samples up to ¼ frame *before* the shot
+begins. That makes the shot's `u` slightly negative, and in Python
+`(-x) ** 2.6` is a complex number. The preview never hit this because it uses
+1 sample. Fix: `world_state` clamps `t` into the shot's own range (a cut
+shouldn't blur across itself anyway). A sweep over every shot's first and last 3
+frames × 6 sub-samples now gives 0 non-finite uniforms. The whole film was
+re-rendered from scratch with the fix.
