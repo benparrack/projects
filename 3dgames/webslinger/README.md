@@ -78,6 +78,21 @@ Gamepad: RT swing · A jump · LT zip · X dash · B dive · Y trick · RB slow-
 - **Slow-mo, speed lines**: slow-mo scales the simulation timestep by 0.3. It also
   desaturates and cools the image in `post.js` and sweeps an audio lowpass. Speed
   lines stream out from the motion-blur centre above about 34 m/s.
+- **Life and feel** (`src/fx.js`, `src/birds.js`, `web.js`, `camera.js`, `audio.js`):
+  - Particles, lit by the same sun and sky colours as the city: landing dust (a
+    hard landing kicks up a big ring), a puff of concrete and chips where each web
+    strikes, grit off the wall while wall-running, spray and droplets when you hit
+    the river, and loose feathers.
+  - Pigeons: about 950 birds in 156 flocks. They sit on the parapets of clear
+    rooftop ledges and peck in the park. Swinging past fast, a hard landing, or a
+    web striking nearby scatters them with a wing-flutter sound. They circle above
+    the local skyline and then glide back to their perch. They steer away from
+    buildings with a raycast probe.
+  - The web twangs: a standing-wave wobble when it strikes and when it catches your
+    weight, with a rope creak.
+  - Camera: g-force sag and lift on the swing's bottom and top, a wind buffet that
+    grows past about 28 m/s, and a small handheld drift.
+  - Audio: distant sirens every minute or two, quieter the higher you are.
 - **Progress**: collected tokens persist in localStorage. Reset it from the Esc menu
   with a two-click confirm.
 
@@ -149,7 +164,8 @@ Open `?debug` to get `window.WS`:
   `races` are also exposed.
 
 Tests: `node tests/city.test.mjs`, `node tests/swing.test.mjs`,
-`node tests/flow.test.mjs [assist 0|1]`, `node tests/style.test.mjs`, `node tests/aim.test.mjs`.
+`node tests/flow.test.mjs [assist 0|1]`, `node tests/style.test.mjs`, `node tests/aim.test.mjs`, `node tests/birds.test.mjs`.
+- The birds test checks that perches sit on a surface, flocks scatter and settle back home, flying pigeons stay out of buildings (at most 3% of samples), web hits spook them, and particles fade.
 - The aim test checks that looking at mast tips locks the web, that aiming 20° off
   doesn't, and that swings from poles run cleanly. It also re-runs the flow bot with the camera pitched up, so pole locks
   can't wreck normal swinging.

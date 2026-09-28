@@ -36,7 +36,7 @@ export class Audio {
     const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 300;
     this.cityG = ctx.createGain(); this.cityG.gain.value = 0.12;
     city.connect(lp).connect(this.cityG).connect(this.out); city.start();
-    this.hornT = 3;
+    this.hornT = 3; this.sirenT = 25 + Math.random() * 40;
   }
 
   setFocus(k) {
@@ -144,6 +144,50 @@ export class Audio {
     }
   }
 
+  /** pigeons bursting off a ledge: a clatter of wingbeats (g = distance gain) */
+  flutter(g) {
+    if (!this.ctx || g < 0.005) return;
+    let w = 0;
+    for (let i = 0; i < 14; i++) {
+      w += 0.025 + Math.random() * 0.05;
+      this.noiseBurst({ dur: 0.035, f0: 2200 + Math.random() * 900, f1: 700, q: 0.9, gain: g * (0.5 + Math.random() * 0.5) * (1 - i / 18), attack: 0.002, when: w });
+    }
+  }
+
+  /** a web tip striking concrete / glass (g = distance gain) */
+  webHit(g) {
+    if (!this.ctx || g < 0.005) return;
+    this.noiseBurst({ dur: 0.05, f0: 2600, f1: 1200, q: 1.2, gain: g * 0.5, attack: 0.001 });
+    this.tone({ f0: 210, f1: 120, dur: 0.07, gain: g * 0.35, type: "sine" });
+  }
+
+  /** the rope taking your weight: a short fibrous creak, deeper for bigger loads */
+  creak(k) {
+    if (!this.ctx) return;
+    const f = 120 - k * 40;
+    this.tone({ f0: f, f1: f * 0.8, dur: 0.16, gain: 0.05 + k * 0.06, type: "sawtooth" });
+    this.noiseBurst({ dur: 0.14, f0: 900, f1: 500, q: 4, gain: 0.05 + k * 0.05, attack: 0.01 });
+  }
+
+  /** a siren somewhere across town: wails in and out over several seconds */
+  siren(g) {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = "triangle"; o.frequency.value = 760;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.35 + Math.random() * 0.3;
+    const lg = ctx.createGain(); lg.gain.value = 170;
+    lfo.connect(lg).connect(o.frequency);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1400;
+    const env = ctx.createGain(); env.gain.value = 0;
+    const dur = 7 + Math.random() * 5;
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(g, t + dur * 0.45);
+    env.gain.linearRampToValueAtTime(0, t + dur);
+    // the doppler-ish drift of a passing vehicle
+    o.detune.setValueAtTime(40, t); o.detune.linearRampToValueAtTime(-60, t + dur);
+    o.connect(lp).connect(env).connect(this.out);
+    o.start(t); lfo.start(t); o.stop(t + dur + 0.1); lfo.stop(t + dur + 0.1);
+  }
+
   update(dt, speed, height) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
@@ -154,6 +198,8 @@ export class Audio {
     this.wind[1].bp.frequency.setTargetAtTime(1200 + s * 2200, t, 0.1);
     // the city is louder near the street
     this.cityG.gain.setTargetAtTime(0.03 + 0.14 * Math.max(0, 1 - height / 150), t, 0.5);
+    this.sirenT -= dt;
+    if (this.sirenT < 0) { this.sirenT = 50 + Math.random() * 80; this.siren(0.018 * Math.max(0.25, 1 - height / 250)); }
     this.hornT -= dt;
     if (this.hornT < 0) {
       this.hornT = 6 + Math.random() * 14;

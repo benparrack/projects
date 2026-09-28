@@ -1,6 +1,8 @@
 // Chase camera: mouse/stick orbit around the player with a critically-damped
 // follow, speed-driven FOV kick and pull-back, a gentle auto-align behind the
 // direction of travel while swinging, collision pull-in, and screen shake.
+// It also feels the physics: the camera sinks a little under the g-load at the
+// bottom of a swing and floats at the top, and wind buffets it at high speed.
 import * as THREE from "three";
 
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
@@ -21,6 +23,7 @@ export class ChaseCam {
     this.lastLook = 0;
     this.lastHead = null;
     this.turnRate = 0;
+    this.pvy = 0; this.gAcc = 0; this.gOff = 0;
   }
 
   update(dt, pl, c, opts) {
@@ -52,12 +55,21 @@ export class ChaseCam {
     const fovW = this.baseFov + Math.min(1, Math.max(0, speed - 12) / 40) * 22;
     this.fov = damp(this.fov, fovW, 3, dt);
 
+    // g-load: vertical acceleration beyond free fall (rope pull at the bottom of
+    // a swing, a jump-off kick); the operator "sinks" under it, floats at the top
+    const inAir = pl.state === "swing" || pl.state === "air";
+    if (dt > 0) {
+      const exc = inAir ? (v.y - this.pvy) / dt + 22 : 0;
+      this.gAcc = damp(this.gAcc, THREE.MathUtils.clamp(exc, -40, 80), 7, dt);
+    }
+    this.pvy = v.y;
+    this.gOff = damp(this.gOff, -THREE.MathUtils.clamp(this.gAcc * 0.011, -0.22, 0.55), 5, dt);
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     this.fwd.set(-Math.sin(this.yaw) * cp, sp, -Math.cos(this.yaw) * cp);
     // right-shoulder offset
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
     const shoulder = 0.9;
-    const ox = this.target.x + rx * shoulder, oz = this.target.z + rz * shoulder, oy = this.target.y + 0.35;
+    const ox = this.target.x + rx * shoulder, oz = this.target.z + rz * shoulder, oy = this.target.y + 0.35 + this.gOff;
     // collision: cast from the pivot back toward the camera
     let d = this.dist;
     const bx = -this.fwd.x, by = -this.fwd.y, bz = -this.fwd.z;
@@ -71,6 +83,12 @@ export class ChaseCam {
     const s = this.shake * this.shake * 0.35;
     const t = performance.now() / 1000;
     cam.position.x += Math.sin(t * 47) * s; cam.position.y += Math.sin(t * 59 + 1) * s; cam.position.z += Math.sin(t * 53 + 2) * s;
+    // wind buffeting at speed (irregular: three incommensurate wobbles) and a
+    // barely-there handheld drift the rest of the time
+    const buf = Math.max(0, Math.min(1, (speed - 28) / 35)) ** 2 * 0.045 * (opts.motion ?? 1);
+    const hh = 0.012;
+    cam.position.x += (Math.sin(t * 13.1) + Math.sin(t * 21.7 + 2)) * buf + Math.sin(t * 0.37) * hh;
+    cam.position.y += (Math.sin(t * 17.3 + 1) + Math.sin(t * 27.1)) * buf + Math.sin(t * 0.29 + 1) * hh;
     this.tmp.copy(cam.position).add(this.fwd);
     cam.up.set(0, 1, 0);
     cam.lookAt(this.tmp);

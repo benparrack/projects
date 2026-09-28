@@ -1,7 +1,8 @@
 // Web strands: camera-facing ribbons rebuilt on the CPU each frame. A strand
 // shoots out from the hand to its anchor (tip travels at ~300 m/s with a slight
 // wobble), stays taut while swinging (sagging when slack), and after release
-// drops away from the hand and fades, left hanging from the building.
+// drops away from the hand and fades, left hanging from the building. It rings
+// (a decaying standing wave) when it strikes and when it takes your weight.
 import * as THREE from "three";
 
 const SEG = 28, POOL = 10;
@@ -27,7 +28,7 @@ void main(){
 class Strand {
   constructor() {
     this.a = new THREE.Vector3(); this.b = new THREE.Vector3();
-    this.tip = 1; this.sag = 0; this.alpha = 0; this.life = 0; this.attached = false; this.free = true;
+    this.tip = 1; this.sag = 0; this.twang = 0; this.twT = 0; this.alpha = 0; this.life = 0; this.attached = false; this.free = true;
     this.fall = new THREE.Vector3();
   }
 }
@@ -62,13 +63,14 @@ export class Webs {
     this.g = g;
     this.strands = Array.from({ length: POOL }, () => new Strand());
     this.main = null;
+    this.hits = [];     // web tips that just struck a surface: {x, y, z, dx, dy, dz} (dir from hand)
     this.tmp = new THREE.Vector3(); this.t2 = new THREE.Vector3(); this.t3 = new THREE.Vector3();
   }
 
   get() {
     let s = this.strands.find((x) => x.free);
     if (!s) s = this.strands.reduce((a, b) => (a.alpha < b.alpha ? a : b));
-    s.free = false; s.tip = 0; s.sag = 0; s.alpha = 1; s.life = 0; s.attached = true;
+    s.free = false; s.tip = 0; s.sag = 0; s.twang = 0; s.alpha = 1; s.life = 0; s.attached = true;
     s.fall.set(0, 0, 0);
     return s;
   }
@@ -79,6 +81,9 @@ export class Webs {
     s.a.copy(from); s.b.copy(to);
     return s;
   }
+
+  /** set the strand vibrating (k ~ 0..1) */
+  pluck(s, k) { if (s && k > s.twang) { s.twang = k; s.twT = 0; } }
 
   letGo(s) {
     if (!s) return;
@@ -93,7 +98,15 @@ export class Webs {
       if (!s.free) {
         s.life += dt;
         const len = s.a.distanceTo(s.b);
+        const was = s.tip;
         s.tip = Math.min(1, s.tip + dt * 320 / Math.max(len, 1));
+        if (was < 1 && s.tip >= 1 && s.attached) {
+          // the strike: the strand snaps taut and rings
+          this.pluck(s, 0.8);
+          this.hits.push({ x: s.b.x, y: s.b.y, z: s.b.z, dx: (s.b.x - s.a.x) / len, dy: (s.b.y - s.a.y) / len, dz: (s.b.z - s.a.z) / len });
+        }
+        s.twT += dt;
+        s.twang *= Math.exp(-dt * 4.5);
         if (!s.attached) {
           // the loose end falls & the strand fades out
           s.fall.y -= 9 * dt;
@@ -126,6 +139,13 @@ export class Webs {
         const px = dist * 0.0009;
         const w = Math.max(0.018, px);
         const side = tan.cross(toC.normalize()).normalize().multiplyScalar(w);
+        if (s.twang > 0.002 && s.tip >= 1) {
+          // standing wave (fundamental + a bit of the 2nd harmonic), across the view
+          const om = 38 + 900 / Math.max(len, 8);
+          const amp = s.twang * Math.min(0.7, len * 0.012);
+          const disp = amp * (Math.sin(Math.PI * f) * Math.cos(om * s.twT) + 0.35 * Math.sin(2 * Math.PI * f) * Math.cos(om * 2.1 * s.twT + 1));
+          p.addScaledVector(side, disp / w);
+        }
         this.pos[k * 3] = p.x - side.x; this.pos[k * 3 + 1] = p.y - side.y; this.pos[k * 3 + 2] = p.z - side.z;
         this.pos[k * 3 + 3] = p.x + side.x; this.pos[k * 3 + 4] = p.y + side.y; this.pos[k * 3 + 5] = p.z + side.z;
         const a = s.alpha * Math.min(1, 0.018 / w + 0.35) * (i === SEG && s.tip < 1 ? 0.5 : 1);

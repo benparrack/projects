@@ -19,6 +19,11 @@
   - Fix, same day: swinging broke in real play. The "look up at a building picks that spot" bonus kept swinging players into walls, so it's removed. Pole locks now preview the whole arc, and rooftop masts no longer collide.
   - H pauses on the controls page.
   - Tests: `tests/aim.test.mjs`.
+  Life & feel pass 2026-09-28:
+  - Particles (`src/fx.js`): landing dust, web-impact puffs and chips, wall-run grit, river splash and feathers, all lit by the sky.
+  - About 950 pigeons (`src/birds.js`): they sit on ledges and peck in the park, scatter when you swing past, land hard or a web hits near them, circle above the skyline, then glide home.
+  - A web twang on impact and on the catch, a rope creak, camera g-force sag and wind buffet, and distant sirens.
+  - Tests: `tests/birds.test.mjs`.
 
   `./serve.sh` → localhost:8084. Play in Chrome because of pointer lock. Note: the vendored `CSMShader.js` carries a required patch (see README).
 - **Stockholm in 3D** (`NEW_IDEAS.md` N5) — `stockholm3d/` — a browser 3D explorer of central Stockholm built from open data. A Python pipeline turns the OSM extract and the Copernicus GLO-30 DEM into compact 500 m tiles (~40 MB): 0.56M-triangle buildings at real heights with procedural windows, a bare-earth heightmap, ground textures, water carved from coastline+DEM+land evidence, bridges/piers, and ~90k trees. The three.js viewer (vendored, no build step) has the real sun for any date/time (NOAA algorithm, Swedish DST, real sunrise/sunset), Rayleigh sky, shadows, stars on sidereal time, lit windows and streets at night, and seasons with snow and autumn leaves. Camera modes: map, fly, and street-level walk with wall collision. Also: search, 20 framed landmarks, click-a-building info with Wikipedia/OSM links, and a shareable URL hash. Run `./build.sh` (data is git-ignored), then `./serve.sh` → localhost:8083.

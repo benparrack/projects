@@ -16,6 +16,8 @@ import { Traffic, Tokens } from "./traffic.js";
 import { Style } from "./style.js";
 import { Races, fmtTime } from "./race.js";
 import { Minimap } from "./minimap.js";
+import { FX } from "./fx.js";
+import { Birds } from "./birds.js";
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -90,6 +92,10 @@ const tokens = new Tokens(scene, city.tokens);
 const player = new Player(world);
 const hero = new Character(scene);
 const webs = new Webs(scene);
+const fx = new FX(scene);
+const birds = new Birds(scene, city, world);
+const disturb = [];   // things that spook pigeons this frame: {x, y, z, r}
+let prevAttachT = 0, gritT = 0;
 const chase = new ChaseCam(camera, world);
 const style = new Style(world);
 style.best = store.get("bestCombo", 0); style.total = store.get("totalStyle", 0);
@@ -432,7 +438,12 @@ function handleEvents(speed) {
       mainWeb = webs.shoot(hand, tmpV.set(player.anchor.x, player.anchor.y, player.anchor.z));
     } else if (e === "release" || e === "releaseJump" || e === "landHard" || e === "land" || e === "wall" || e === "respawn") {
       if (mainWeb) { webs.letGo(mainWeb); mainWeb = null; }
-      if (e === "landHard") chase.shake = 1;
+      if (e === "landHard") {
+        chase.shake = 1;
+        fx.dust(player.p.x, player.p.y - PP.HY, player.p.z, 1, player.v.x, player.v.z);
+        disturb.push({ x: player.p.x, y: player.p.y, z: player.p.z, r: 30 });
+      } else if (e === "land") fx.dust(player.p.x, player.p.y - PP.HY, player.p.z, 0.3, player.v.x, player.v.z);
+      else if (e === "wall") fx.grit(player.p.x, player.p.y - 0.4, player.p.z, 0, 0);
       if (e === "respawn") { flash = 1; post.adaptReset = true; toast("Back to the city"); races.cancel(); races.msg = null; }
     } else if (e === "zip") {
       if (mainWeb) webs.letGo(mainWeb);
@@ -446,7 +457,8 @@ function handleEvents(speed) {
         setTimeout(() => webs.letGo(s), 180);
       }
       chase.shake = 0.3;
-    } else if (e === "superjump") chase.shake = 0.35;
+    } else if (e === "superjump") { chase.shake = 0.35; fx.dust(player.p.x, player.p.y - PP.HY, player.p.z, 0.7); }
+    else if (e === "splash") fx.splash(player.p.x, G.WATER_Y, player.p.z, Math.min(1.5, 0.6 + Math.abs(player.v.y) / 30));
   }
   player.events.length = 0;
 }
@@ -505,6 +517,26 @@ function tick(now) {
     if (mainWeb) {
       if (player.state === "swing" || player.state === "zip") mainWeb.a.copy(player.state === "swing" && player.hand < 0 ? hero.handPos.l : hero.handPos.r);
     }
+    // the rope takes your weight: it rings and creaks, harder the faster you hit it
+    if (player.state === "swing" && prevAttachT < 0.16 && player.attachT >= 0.16) {
+      const k = Math.min(1, Math.hypot(player.v.x, player.v.y, player.v.z) / 50);
+      webs.pluck(mainWeb, 0.45 + 0.55 * k);
+      audio.creak(k);
+    }
+    prevAttachT = player.state === "swing" ? player.attachT : 0;
+    // grit off the wall under your feet while wall-running
+    if (player.state === "wall") {
+      gritT -= sdt;
+      if (gritT < 0 && Math.hypot(player.v.x, player.v.y, player.v.z) > 4) { gritT = 0.07; const n = player.wallN; fx.grit(player.p.x - n.x * PP.HX, player.p.y - PP.HY + 0.2, player.p.z - n.z * PP.HX, n.x, n.z); }
+    }
+    birds.update(sdt, player, disturb);
+    disturb.length = 0;
+    for (const e of birds.events) {
+      const d = camera.position.distanceTo(tmpV.set(e.x, e.y, e.z));
+      audio.flutter(0.35 * Math.max(0, 1 - d / 70) * Math.min(1, e.n / 6));
+      if (d < 90) fx.feathers(e.x, e.y + 0.3, e.z);
+    }
+    birds.events.length = 0;
     const got = tokens.update(sdt, time, player.p, camera);
     if (got) {
       audio.play(tokens.count === tokens.list.length ? "allTokens" : "token");
@@ -538,6 +570,15 @@ function tick(now) {
   }
   traffic.update(sdt);
   webs.update(sdt, camera);
+  for (const h of webs.hits) {
+    // concrete puffs back toward the thrower where the web strikes; spooks pigeons nearby
+    fx.impact(h.x, h.y, h.z, -h.dx * 0.8, -h.dy * 0.8 + 0.2, -h.dz * 0.8);
+    const d = camera.position.distanceTo(tmpV.set(h.x, h.y, h.z));
+    audio.webHit(0.5 * Math.max(0, 1 - d / 110));
+    disturb.push({ x: h.x, y: h.y, z: h.z, r: 10 });
+  }
+  webs.hits.length = 0;
+  fx.update(sdt, camera, post.sceneRT ? post.sceneRT.height : innerHeight);
 
   // HUD
   if (playing) {
@@ -644,4 +685,4 @@ window.WS = {
   // headless-ish testing: enter play mode without pointer lock; WS.fake = {swing: true, ...} overrides input
   play: () => { playing = true; paused = false; $("title").classList.add("hidden"); $("hud").classList.remove("hidden"); },
   fake: null,
-  tick: (n = 1, ms = 16.7) => { for (let i = 0; i < n; i++) tick(last + ms); },  player, chase, camera, post, sky, applyTime, setTimePreset, setLook, S, renderer, input, csm, world, city, style, races, goRace };
+  tick: (n = 1, ms = 16.7) => { for (let i = 0; i < n; i++) tick(last + ms); },  player, chase, camera, post, sky, applyTime, setTimePreset, setLook, S, renderer, input, csm, world, city, style, races, goRace, fx, birds, webs };
