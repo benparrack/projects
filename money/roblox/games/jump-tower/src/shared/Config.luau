@@ -23,12 +23,16 @@ Config.Zones = {
 }
 
 Config.PillarsPerZone = 5
-Config.PillarSize = 16 -- top face is PillarSize x PillarSize studs
-Config.PillarSpacing = 20 -- centre-to-centre distance along the spiral
-Config.SpiralStartRadius = 110
-Config.SpiralRadiusGrowth = 0.9 -- studs of extra radius per pillar
+-- The tower is a central core with square ledges spiralling up around it.
+Config.CoreRadius = 34
+Config.PillarSize = 20 -- ledge top face is PillarSize x PillarSize studs
+Config.LedgeGap = 5 -- horizontal gap between consecutive ledges' edges
+Config.PlazaRadius = 110
+Config.SpawnPoint = { 0, 4, 80 } -- on the plaza ring, facing the core
 -- Each step's rise is at most this fraction of the zone's full jump height, so the requirement shown is never tighter than the real one.
 Config.StepSlack = 0.92
+-- ...minus this many studs, so the small early hops aren't pixel-perfect.
+Config.StepMargin = 3
 
 Config.Gravity = 196.2
 Config.WalkSpeed = 22

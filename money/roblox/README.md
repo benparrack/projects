@@ -31,6 +31,11 @@ Tools are pinned in `rokit.toml`; `rokit install` restores them.
 4. Claude ↔ Studio: `tools/studio-mcp.sh` runs Studio's own `StudioMCP.exe` inside the running
    Vinegar sandbox. It's registered with Claude Code as the `roblox-studio` MCP server
    (local scope for /home/ben/projects). In Studio, enable it under Assistant → Manage MCP Servers.
+   If the tools don't appear in a Claude session (e.g. `/mcp` connected before Studio registered),
+   `tools/mcp-call.py <tool> '<json>'` calls them from the shell through a background daemon.
+   Screenshots land in `build/shots/`.
+5. Studio playtests: `tools/studio-run.sh <file>` runs a Luau file in the running playtest. The file's
+   `.client`/`.server` suffix picks the datamodel. Each game keeps these in `tests/studio/`.
 
 Gotcha: never kill Vinegar mid-download. It then treats the half-written Studio as installed
 ("Bad EXE format"). Fix it by deleting `~/.var/app/org.vinegarhq.Vinegar/data/vinegar/versions/<ver>`.
@@ -38,4 +43,4 @@ Gotcha: never kill Vinegar mid-download. It then treats the half-written Studio 
 ## Games
 | Game | Status |
 |---|---|
-| `games/jump-tower` (+1 Jump Tower) | v1 code complete, tests pass. Needs a Studio playtest, then publish. |
+| `games/jump-tower` (+1 Jump Tower) | v1 playtested in Studio: all 40 steps physically climbable, server flow verified. Next: publish, then fill in the pass/product ids. |

@@ -1,5 +1,5 @@
 --!strict
--- Builds the whole map from code: lighting, spawn plaza, lava sea and the pillar spiral.
+-- Builds the whole map from code: lighting, spawn plaza, lava sea, the core and its ledge spiral.
 
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -88,20 +88,26 @@ local function setupLighting()
 	clouds.Parent = workspace.Terrain
 end
 
-local function buildPlaza(folder: Folder)
-	part({
+local function spawnCFrame(): CFrame
+	local sp = Config.SpawnPoint
+	return CFrame.lookAt(Vector3.new(sp[1], 0.5, sp[3]), Vector3.new(0, 0.5, 0))
+end
+
+local function buildPlaza(folder: Folder): Part
+	local r = Config.PlazaRadius
+	local plaza = part({
 		Name = "Plaza",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(4, 180, 180),
+		Size = Vector3.new(4, r * 2, r * 2),
 		CFrame = CFrame.new(0, -2, 0) * CFrame.Angles(0, 0, math.pi / 2),
 		Material = Enum.Material.Slate,
-		Color = Color3.fromRGB(70, 75, 95),
+		Color = Color3.fromRGB(78, 84, 106),
 		Parent = folder,
 	})
 	part({
 		Name = "PlazaRim",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(3.6, 184, 184),
+		Size = Vector3.new(3.6, r * 2 + 4, r * 2 + 4),
 		CFrame = CFrame.new(0, -2.3, 0) * CFrame.Angles(0, 0, math.pi / 2),
 		Material = Enum.Material.Neon,
 		Color = Color3.fromRGB(90, 200, 255),
@@ -111,20 +117,30 @@ local function buildPlaza(folder: Folder)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "Spawn"
 	spawn.Anchored = true
-	spawn.Size = Vector3.new(14, 1, 14)
-	spawn.CFrame = CFrame.new(0, 0.5, 0)
-	spawn.Material = Enum.Material.Neon
-	spawn.Color = Color3.fromRGB(90, 200, 255)
+	spawn.Size = Vector3.new(12, 1, 12)
+	spawn.CFrame = spawnCFrame()
+	spawn.Material = Enum.Material.Slate
+	spawn.Color = Color3.fromRGB(45, 80, 125)
 	spawn.Duration = 0
 	spawn.Neutral = true
 	spawn.TopSurface = Enum.SurfaceType.Smooth
 	spawn.Parent = folder
+	part({
+		Name = "SpawnTrim",
+		Size = Vector3.new(12.6, 0.6, 12.6),
+		CFrame = spawn.CFrame - Vector3.new(0, 0.3, 0),
+		Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(90, 200, 255),
+		CanCollide = false,
+		Parent = folder,
+	})
 
-	-- Big title sign facing the first pillar.
+	-- Title sign behind the spawn, readable from the plaza and from the tower.
+	local signPos = spawnCFrame().Position + Vector3.new(0, 14, 22)
 	local sign = part({
 		Name = "TitleSign",
-		Size = Vector3.new(40, 14, 1),
-		CFrame = CFrame.new(-40, 12, 0) * CFrame.Angles(0, math.pi / 2, 0),
+		Size = Vector3.new(44, 15, 1),
+		CFrame = CFrame.lookAt(signPos, Vector3.new(0, signPos.Y, 0)),
 		Material = Enum.Material.SmoothPlastic,
 		Color = Color3.fromRGB(25, 25, 40),
 		Parent = folder,
@@ -150,6 +166,7 @@ local function buildPlaza(folder: Folder)
 		sub.Parent = gui
 		gui.Parent = sign
 	end
+	return plaza
 end
 
 -- Returns the lava part (the game listens to its Touched event).
@@ -158,87 +175,138 @@ local function buildLava(folder: Folder): Part
 		Name = "Lava",
 		Size = Vector3.new(2048, 20, 2048),
 		CFrame = CFrame.new(0, LAVA_TOP - 10, 0),
-		Material = Enum.Material.CrackedLava,
-		Color = Color3.fromRGB(255, 90, 30),
+		Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(255, 85, 20),
 		Parent = folder,
 	})
+end
+
+-- Central core: stacked cylinder segments, banded in each zone's colour over that zone's height range.
+local function buildCore(folder: Folder, pillars: { TowerLayout.Pillar })
+	local core = Instance.new("Model")
+	core.Name = "Core"
+	local r = Config.CoreRadius
+	local zoneTop: { number } = {}
+	for _, p in pillars do
+		zoneTop[p.zone] = p.top
+	end
+	local bottom = -4
+	for zi, zone in Config.Zones do
+		local top = zoneTop[zi] + (if zi == #Config.Zones then 30 else 0)
+		local color = rgb(zone.color):Lerp(Color3.fromRGB(40, 40, 60), 0.45)
+		while bottom < top do
+			local h = math.min(MAX_PART, top - bottom)
+			part({
+				Name = "Segment",
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(h, r * 2, r * 2),
+				CFrame = CFrame.new(0, bottom + h / 2, 0) * CFrame.Angles(0, 0, math.pi / 2),
+				Material = Enum.Material.Concrete,
+				Color = color,
+				Parent = core,
+			})
+			bottom += h
+		end
+		-- Glowing ring marking the zone boundary.
+		part({
+			Name = "Band",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(3, r * 2 + 1, r * 2 + 1),
+			CFrame = CFrame.new(0, top, 0) * CFrame.Angles(0, 0, math.pi / 2),
+			Material = Enum.Material.Neon,
+			Color = rgb(zone.color),
+			CanCollide = false,
+			Parent = core,
+		})
+	end
+	core.Parent = folder
 end
 
 -- Returns winPads[zone] = pad part.
 local function buildTower(folder: Folder): { [number]: Part }
 	local winPads = {}
 	local size = Config.PillarSize
-	for _, p in TowerLayout.build() do
+	local pillars = TowerLayout.build()
+	buildCore(folder, pillars)
+	for _, p in pillars do
 		local zone = Config.Zones[p.zone]
 		local color = rgb(zone.color)
-		local angle = math.atan2(p.z, p.x)
-		local basis = CFrame.new(p.x, 0, p.z) * CFrame.Angles(0, -angle, 0)
+		-- Face the ledge's outer edge away from the core.
+		local basis = CFrame.lookAt(Vector3.new(p.x, 0, p.z), Vector3.new(p.x * 2, 0, p.z * 2))
 		local model = Instance.new("Model")
-		model.Name = `Pillar{p.index}`
+		model.Name = `Ledge{p.index}`
 
-		-- Column, stacked because parts max out at 2048 studs.
-		local columnColor = color:Lerp(Color3.fromRGB(30, 30, 45), 0.55)
-		local bottom = LAVA_TOP - 8
-		local columnTop = p.top - 2
-		while bottom < columnTop do
-			local h = math.min(MAX_PART, columnTop - bottom)
-			part({
-				Name = "Column",
-				Size = Vector3.new(size - 1, h, size - 1),
-				CFrame = basis + Vector3.new(0, bottom + h / 2, 0),
-				Material = Enum.Material.SmoothPlastic,
-				Color = columnColor,
-				Parent = model,
-			})
-			bottom += h
-		end
 		part({
 			Name = "Cap",
-			Size = Vector3.new(size, 2, size),
-			CFrame = basis + Vector3.new(0, p.top - 1, 0),
+			Size = Vector3.new(size, 4, size),
+			CFrame = basis + Vector3.new(0, p.top - 2, 0),
 			Material = Enum.Material.SmoothPlastic,
 			Color = color,
 			Parent = model,
 		})
 		part({
 			Name = "Trim",
-			Size = Vector3.new(size + 0.4, 0.5, size + 0.4),
-			CFrame = basis + Vector3.new(0, p.top - 2.1, 0),
+			Size = Vector3.new(size + 0.4, 0.6, size + 0.4),
+			CFrame = basis + Vector3.new(0, p.top - 4.2, 0),
 			Material = Enum.Material.Neon,
 			Color = color,
 			CanCollide = false,
 			Parent = model,
 		})
+		-- Support strut into the core, purely visual.
+		part({
+			Name = "Strut",
+			Size = Vector3.new(4, 4, size * 0.6),
+			CFrame = basis * CFrame.new(0, p.top - 6, size * 0.35) * CFrame.Angles(math.rad(35), 0, 0),
+			Material = Enum.Material.Metal,
+			Color = Color3.fromRGB(60, 62, 80),
+			CanCollide = false,
+			Parent = model,
+		})
 
 		local anchor = model:FindFirstChild("Cap") :: Part
-		billboard(
-			anchor,
-			`⬆ {Formulas.abbreviate(math.ceil(p.need))}`,
-			Color3.new(1, 1, 1),
-			UDim2.fromOffset(120, 40),
-			Vector3.new(0, 5, 0),
-			120
-		)
+		anchor:SetAttribute("LedgeTop", p.top) -- the client makes ledges one-way (see OneWayLedges)
+		-- Requirement printed on all four sides of the ledge: readable while you look up at it,
+		-- out of the way once you're standing on it.
+		local needText = if p.need < 1 then "START" else `⬆ {Formulas.abbreviate(math.ceil(p.need))}`
+		for _, face in { Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right } do
+			local gui = Instance.new("SurfaceGui")
+			gui.Face = face
+			gui.LightInfluence = 0
+			gui.PixelsPerStud = 20
+			gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+			local label = Instance.new("TextLabel")
+			label.Size = UDim2.fromScale(1, 1)
+			label.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
+			label.BackgroundTransparency = 0.25
+			label.Font = Enum.Font.FredokaOne
+			label.TextScaled = true
+			label.TextColor3 = Color3.new(1, 1, 1)
+			label.Text = needText
+			label.Parent = gui
+			gui.Parent = anchor
+		end
 		if p.step == 1 then
 			billboard(
 				anchor,
 				`ZONE {p.zone} · {string.upper(zone.name)}`,
 				color,
-				UDim2.fromOffset(360, 70),
-				Vector3.new(0, 14, 0),
-				600
+				UDim2.fromScale(36, 7),
+				Vector3.new(0, 13, 0),
+				900
 			)
 		end
 		if p.isZoneEnd then
 			local pad = part({
 				Name = "WinPad",
-				Size = Vector3.new(size - 3, 0.6, size - 3),
+				Size = Vector3.new(size - 4, 0.6, size - 4),
 				CFrame = basis + Vector3.new(0, p.top + 0.3, 0),
 				Material = Enum.Material.Neon,
 				Color = Color3.fromRGB(255, 215, 60),
 				Parent = model,
 			})
 			pad:SetAttribute("Zone", p.zone)
+			pad:SetAttribute("LedgeTop", p.top) -- one-way too, or you'd bonk your head on it from below
 			local sparkles = Instance.new("ParticleEmitter")
 			sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 			sparkles.Rate = 12
@@ -252,9 +320,9 @@ local function buildTower(folder: Folder): { [number]: Part }
 				pad,
 				`🏆 WIN +{Formulas.abbreviate(zone.wins)}`,
 				Color3.fromRGB(255, 225, 90),
-				UDim2.fromOffset(200, 50),
-				Vector3.new(0, 9, 0),
-				400
+				UDim2.fromScale(18, 4.5),
+				Vector3.new(0, 8, 0),
+				500
 			)
 			winPads[p.zone] = pad
 		end
@@ -263,17 +331,17 @@ local function buildTower(folder: Folder): { [number]: Part }
 	return winPads
 end
 
-export type Built = { lava: Part, winPads: { [number]: Part } }
+export type Built = { lava: Part, plaza: Part, winPads: { [number]: Part }, spawn: CFrame }
 
 function World.build(): Built
 	setupLighting()
 	local folder = Instance.new("Folder")
 	folder.Name = "Map"
 	folder.Parent = workspace
-	buildPlaza(folder)
+	local plaza = buildPlaza(folder)
 	local lava = buildLava(folder)
 	local winPads = buildTower(folder)
-	return { lava = lava, winPads = winPads }
+	return { lava = lava, plaza = plaza, winPads = winPads, spawn = spawnCFrame() + Vector3.new(0, 4, 0) }
 end
 
 return World

@@ -159,7 +159,7 @@ local function checkpointCFrame(session: Session): CFrame
 	if p then
 		return CFrame.new(p.x, p.top + 4, p.z)
 	end
-	return CFrame.new(0, 4, 0)
+	return built.spawn
 end
 
 local function teleport(player: Player, cf: CFrame)
@@ -387,6 +387,22 @@ built.lava.Touched:Connect(function(hit)
 	end
 end)
 
+-- Falling off a ledge lands you back on the plaza. If you had a checkpoint, a hard landing
+-- (faster than your own jump could produce) sends you back to it instead of making you re-climb.
+built.plaza.Touched:Connect(function(hit)
+	local player = playerFromHit(hit)
+	local session = player and sessions[player]
+	if not player or not session or session.checkpoint == 0 then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if root and humanoid and root.AssemblyLinearVelocity.Y < -(humanoid.JumpPower + 60) then
+		sendToCheckpoint(player)
+	end
+end)
+
 local lastZone = #Config.Zones
 for zone, pad in built.winPads do
 	pad.Touched:Connect(function(hit)
@@ -408,8 +424,13 @@ for zone, pad in built.winPads do
 		if zone == lastZone then
 			data.clears += 1
 			notify(player, `🌟 TOWER CLEARED! +{Formulas.abbreviate(wins)} Wins`, "big")
-			resetRun(session)
-			task.delay(2.5, teleport, player, CFrame.new(0, 4, 0))
+			-- Reset only when we send them home, so standing on the pad meanwhile can't pay again.
+			task.delay(2.5, function()
+				if sessions[player] == session then
+					resetRun(session)
+					teleport(player, built.spawn)
+				end
+			end)
 		else
 			notify(player, `Zone {zone} cleared! +{Formulas.abbreviate(wins)} Wins`, "reward")
 		end
@@ -431,13 +452,13 @@ function actions.rebirth(player, session)
 	data.jump = 0
 	data.rebirths += 1
 	resetRun(session)
-	teleport(player, CFrame.new(0, 4, 0))
+	teleport(player, built.spawn)
 	notify(player, `REBIRTH! Jump gain is now x{Formulas.abbreviate(1 + data.rebirths)}`, "big")
 end
 
 function actions.spawn(player, session)
 	resetRun(session)
-	teleport(player, CFrame.new(0, 4, 0))
+	teleport(player, built.spawn)
 end
 
 function actions.gift(player, session)
@@ -507,6 +528,29 @@ actionRemote.OnServerEvent:Connect(function(player, name, arg)
 	handler(player, session, arg)
 	refresh(player)
 end)
+
+-- Studio-only test hook: ServerStorage.Debug:Invoke(player, patch) merges fields into the
+-- player's data (and session) and returns a snapshot. Never created in live servers.
+if RunService:IsStudio() then
+	local debug = Instance.new("BindableFunction")
+	debug.Name = "Debug"
+	debug.OnInvoke = function(player: Player, patch: { [string]: any }?)
+		local session = sessions[player]
+		if not session then
+			return nil
+		end
+		for k, v in (patch or {}) :: { [string]: any } do
+			if (session :: any)[k] ~= nil and k ~= "profile" then
+				(session :: any)[k] = v
+			else
+				session.profile.data[k] = v
+			end
+		end
+		refresh(player)
+		return { data = session.profile.data, checkpoint = session.checkpoint, runZones = session.runZones }
+	end
+	debug.Parent = game:GetService("ServerStorage")
+end
 
 -- The +1 tick ----------------------------------------------------------------------------
 

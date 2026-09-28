@@ -383,7 +383,7 @@ end
 
 local left = Ui.new("Frame", {
 	AnchorPoint = Vector2.new(0, 0.5),
-	Position = UDim2.new(0, 10, 0.5, 0),
+	Position = UDim2.new(0, 10, 0.5, 40), -- nudged down to clear the default chat window
 	Size = UDim2.fromOffset(120, 300),
 	BackgroundTransparency = 1,
 	Parent = gui,
@@ -429,7 +429,7 @@ local shownJump = 0
 local function updateHud()
 	local jump = attr("Jump", 0)
 	local gain = attr("Gain", 1)
-	gainLabel.Text = `+{abbreviate(gain)}/s`
+	gainLabel.Text = `+{Formulas.rate(gain)}/s`
 	winsLabel.Text = `🏆 {abbreviate(attr("Wins", 0))}`
 
 	local need, zone = Formulas.nextZoneNeed(jump)

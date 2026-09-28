@@ -65,6 +65,14 @@ test("abbreviate", function()
 	eq(Formulas.abbreviate(-5000), "-5,000")
 end)
 
+test("rate keeps small boosts visible", function()
+	eq(Formulas.rate(1), "1")
+	eq(Formulas.rate(1.25), "1.25")
+	eq(Formulas.rate(2.2), "2.2")
+	eq(Formulas.rate(99.999), "99.99")
+	eq(Formulas.rate(12345), "12.3K")
+end)
+
 -- Tower layout ---------------------------------------------------------------------------
 
 local pillars = TowerLayout.build()
@@ -94,18 +102,20 @@ test("requirements never decrease along the spiral", function()
 	end
 end)
 
-test("pillars don't overlap each other or the plaza", function()
-	local half = Config.PillarSize / 2
+test("ledges hug the core, sit over the plaza, and never stack too tightly", function()
 	for i, a in pillars do
 		local r = math.sqrt(a.x * a.x + a.z * a.z)
-		assert(r - half * math.sqrt(2) > 92, `pillar {i} intrudes on the plaza`)
+		assert(math.abs(r - (Config.CoreRadius + Config.PillarSize / 2)) < 1e-6, `ledge {i} off the core`)
+		assert(r + Config.PillarSize < Config.PlazaRadius, `ledge {i} not over the plaza`)
 		for j = i + 1, #pillars do
 			local b = pillars[j]
 			local d = math.sqrt((a.x - b.x) ^ 2 + (a.z - b.z) ^ 2)
-			-- Neighbours share (almost) the same heading, so their boxes only need PillarSize apart;
-			-- anything else could be at any relative angle.
-			local minD = if j == i + 1 then Config.PillarSize + 2 else Config.PillarSize * math.sqrt(2)
-			assert(d >= minD, `pillars {i} and {j} overlap (d={d})`)
+			if j == i + 1 then
+				assert(d >= Config.PillarSize + Config.LedgeGap - 1e-6, `ledges {i} and {j} too close (d={d})`)
+			elseif d < Config.PillarSize * math.sqrt(2) then
+				-- Footprints can overlap a lap later; then there must be plenty of headroom.
+				assert(b.top - a.top > 40, `ledge {j} hangs too low over ledge {i}`)
+			end
 		end
 	end
 end)

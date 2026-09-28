@@ -1,5 +1,5 @@
 --!strict
--- Deterministic tower geometry: an upward spiral of pillars around the spawn plaza.
+-- Deterministic tower geometry: ledges ("pillars") spiralling up around a central core.
 -- Pure data (no Instances), so server, client and tests all agree on it.
 
 local Config = if script then require(script.Parent.Config) else require("./Config")
@@ -22,7 +22,10 @@ local TowerLayout = {}
 function TowerLayout.build(): { Pillar }
 	local pillars: { Pillar } = {}
 	local n = Config.PillarsPerZone
-	local angle = 0
+	-- Ledges hug the core; consecutive ones are PillarSize + LedgeGap apart (chord length).
+	local radius = Config.CoreRadius + Config.PillarSize / 2
+	local angleStep = 2 * math.asin((Config.PillarSize + Config.LedgeGap) / 2 / radius)
+	local angle = math.pi / 2 - angleStep -- first ledge sits right in front of the spawn (+Z)
 	local top = 0
 	local prevNeed = 0
 	local index = 0
@@ -32,10 +35,9 @@ function TowerLayout.build(): { Pillar }
 			-- Requirement ramps from the previous zone's need to this zone's need across its steps.
 			local t = (step - 1) / (n - 1)
 			local need = prevNeed + (zone.need - prevNeed) * t
-			local rise = Formulas.jumpHeight(need) * Config.StepSlack
+			local rise = Formulas.jumpHeight(need) * Config.StepSlack - Config.StepMargin
 			top += rise
-			local radius = Config.SpiralStartRadius + Config.SpiralRadiusGrowth * index
-			angle += Config.PillarSpacing / radius
+			angle += angleStep
 			table.insert(pillars, {
 				index = index,
 				zone = zi,

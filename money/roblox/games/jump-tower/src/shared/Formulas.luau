@@ -112,4 +112,14 @@ function Formulas.abbreviate(n: number): string
 	return s .. SUFFIXES[i]
 end
 
+-- Per-second rates: small values keep up to two decimals so boosts like +25% stay visible.
+function Formulas.rate(n: number): string
+	if n >= 100 then
+		return Formulas.abbreviate(n)
+	end
+	local s = string.format("%.2f", math.floor(n * 100 + 1e-6) / 100)
+	s = s:gsub("0+$", ""):gsub("%.$", "")
+	return s
+end
+
 return Formulas
