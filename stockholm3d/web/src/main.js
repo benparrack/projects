@@ -180,12 +180,27 @@ for (const l of manifest.labels) {
   addLabel(l.name, l.x, heightAt(l.x, l.z) + 40, l.z, l.rank ? "minor" : "", l.rank ? 250 : 700, l.rank ? 3500 : 11000);
 }
 for (const l of manifest.landmarks) addLabel(l.name, l.x, l.ground + l.height + 12, l.z, "landmark", 0, 3000);
+const occRay = new THREE.Raycaster();
+let occNext = 0;
 function updateLabels() {
   const walking = rig.mode === "walk";
+  // at street level, test a few labels per update for being hidden behind buildings
+  if (walking && labels.length) {
+    for (let n = 0; n < 4; n++) {
+      const l = labels[occNext = (occNext + 1) % labels.length];
+      if (!l.landmark) continue;
+      const to = l.o.position.clone().sub(camera.position);
+      const d = to.length();
+      if (d > 1200) continue;
+      occRay.set(camera.position, to.divideScalar(d));
+      occRay.far = Math.max(1, d - 40);  // don't count the landmark itself
+      l.occluded = occRay.intersectObjects(world.pickables, false).length > 0;
+    }
+  }
   for (const l of labels) {
     const d = camera.position.distanceTo(l.o.position);
-    // at street level district names float through buildings; keep only nearby landmarks
-    const a = walking && (!l.landmark || d > 1200) ? 0 : d < l.minD ? 0 : d > l.maxD ? 0 : Math.min(1, (d - l.minD) / (l.minD * 0.5 + 1), (l.maxD - d) / (l.maxD * 0.3));
+    // at street level district names float through buildings; keep only nearby, visible landmarks
+    const a = walking && (!l.landmark || d > 1200 || l.occluded) ? 0 : d < l.minD ? 0 : d > l.maxD ? 0 : Math.min(1, (d - l.minD) / (l.minD * 0.5 + 1), (l.maxD - d) / (l.maxD * 0.3));
     l.el.style.opacity = a.toFixed(2);
     l.o.visible = a > 0.02;
   }
@@ -356,6 +371,7 @@ function frame(now) {
   const L = utcToStockholm(state.ms);
   // fewer windows lit after midnight
   shared.uLitShare.value = L.minutes > 60 && L.minutes < 330 ? 0.18 : 0.5;
+  if (world.dirty) { atmos.shadowDirty = true; world.dirty = false; }
   atmos.update(pos, state.ms, camera, rig.focus(), rig.distance());
   atmos.sky.material.uniforms.time.value = now / 1000;
   world.animate(now / 1000);
@@ -369,7 +385,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // debugging / automated screenshots
-window.s3d = { THREE, scene, camera, rig, world, state, atmos, manifest, landmarkView, toLocal, toLatLon,
+window.s3d = { THREE, renderer, scene, camera, rig, world, state, atmos, manifest, landmarkView, toLocal, toLatLon,
   setTime(iso) { const [d, t] = iso.split("T"); const [h, m] = t.split(":").map(Number); setLocal(d, h * 60 + m); },
   view(name) { const l = manifest.landmarks.find((x) => x.name === name); const v = landmarkView(l); camera.position.copy(v.pos); rig.orbit.target.copy(v.target); camera.lookAt(v.target); rig.orbit.update(); },
   groundPending: () => world.queue.pending };

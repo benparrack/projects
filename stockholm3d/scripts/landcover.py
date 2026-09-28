@@ -26,11 +26,11 @@ CLASSES = [
     ("pitch", (98, 142, 80), lambda t: t.get("leisure") in ("pitch", "stadium")),
     ("track", (170, 88, 70), lambda t: t.get("leisure") == "track"),
     ("parking", (120, 120, 122), lambda t: t.get("amenity") == "parking"),
-    ("square", (186, 178, 164), lambda t: t.get("place") == "square" or t.get("highway") in ("pedestrian", "footway")
+    ("square", (174, 167, 155), lambda t: t.get("place") == "square" or t.get("highway") in ("pedestrian", "footway")
         or "area:highway" in t),
     ("pier", (138, 118, 96), lambda t: t.get("man_made") in ("pier", "quay", "breakwater")),
 ]
-BASE_RGB = (168, 164, 156)  # generic urban ground: asphalt/paving mix
+BASE_RGB = (152, 149, 143)  # generic urban ground: asphalt/paving mix
 WATER_RGB = (46, 74, 92)
 
 # Road widths in metres and colours; roads draw over ground cover.
@@ -41,7 +41,7 @@ ROAD_W = {
     "road": 6, "footway": 2.5, "cycleway": 2.5, "path": 1.8, "steps": 2.5, "track": 3, "bridleway": 2,
 }
 ROAD_RGB = (82, 84, 88)
-FOOT_RGB = (196, 186, 170)
+FOOT_RGB = (180, 172, 160)
 PATH_RGB = (176, 160, 128)
 RAIL_RGB = (108, 98, 90)
 

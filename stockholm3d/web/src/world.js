@@ -34,11 +34,13 @@ export class World {
     placeholder.colorSpace = THREE.SRGBColorSpace;
     placeholder.needsUpdate = true;
     const N = 50;  // quads per side (10 m)
+    const V = (N + 1) * (N + 1), SK = 4 * (N + 1);  // grid + skirt vertices
     const { hm } = this;
     const maxX = hm.x0 + (hm.cols - 1) * hm.step, maxZ = hm.z0 + (hm.rows - 1) * hm.step;
+    this.terrainLods = [1, 2, 5, 10].map((k) => terrainIndex(N, k));
     for (let i = 0; i < this.g.nx; i++) for (let j = 0; j < this.g.nz; j++) {
       const x0 = this.g.x0 + i * this.T, z0 = this.g.z0 + j * this.T;
-      const pos = new Float32Array((N + 1) * (N + 1) * 3), uv = new Float32Array((N + 1) * (N + 1) * 2);
+      const pos = new Float32Array((V + SK) * 3), uv = new Float32Array((V + SK) * 2);
       const nrm = new Float32Array(pos.length);
       for (let r = 0; r <= N; r++) for (let c = 0; c <= N; c++) {
         const k = r * (N + 1) + c;
@@ -50,35 +52,40 @@ export class World {
         const n = new THREE.Vector3(hm.at(x - e, z) - hm.at(x + e, z), 2 * e, hm.at(x, z - e) - hm.at(x, z + e)).normalize();
         nrm.set([n.x, n.y, n.z], k * 3);
       }
-      const idx = [];
-      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-        const a = r * (N + 1) + c, b = a + 1, d = a + N + 1, e = d + 1;
-        idx.push(a, d, b, b, d, e);
-      }
+      // skirt: a copy of each border vertex 4 m lower hides cracks between LODs
+      skirtVertices(N).forEach((g, s) => {
+        const d = V + s;
+        pos.set([pos[g * 3], pos[g * 3 + 1] - 4, pos[g * 3 + 2]], d * 3);
+        nrm.set(nrm.subarray(g * 3, g * 3 + 3), d * 3);
+        uv.set(uv.subarray(g * 2, g * 2 + 2), d * 2);
+      });
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
       geo.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
       geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-      geo.setIndex(idx);
+      geo.setIndex(this.terrainLods[0]);
       geo.computeBoundingSphere();
       const mat = terrainMaterial(placeholder);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
       this.scene.add(mesh);
-      this.terrainTiles.set(`${i}_${j}`, { i, j, mesh, mat, blob: null, res: 0, want: 0, busy: false });
+      this.terrainTiles.set(`${i}_${j}`, { i, j, mesh, mat, blob: null, res: 0, want: 0, busy: false, lod: 0 });
     }
   }
 
-  // ground texture LOD: 1024 px near the camera, 512 mid-range, 256 far
+  // ground texture LOD: 2048 px (separate hi-res file) right around a low camera,
+  // 1024 near, 512 mid-range, 256 far
   async updateGround(camPos) {
     for (const t of this.terrainTiles.values()) {
       const c = this.tileCentre(t.i, t.j);
       const d = Math.hypot(c.x - camPos.x, c.z - camPos.z) - this.T * 0.7;
       const alt = Math.max(camPos.y, 0);
       const e = Math.hypot(Math.max(d, 0), alt * 0.6);
-      t.want = e < 900 ? 1024 : e < 2600 ? 512 : 256;
+      t.want = e < 260 ? 2048 : e < 900 ? 1024 : e < 2600 ? 512 : 256;
       t.dist = e;
+      const lod = e < 1500 ? 0 : e < 3500 ? 1 : e < 7000 ? 2 : 3;
+      if (lod !== t.lod) { t.lod = lod; t.mesh.geometry.setIndex(this.terrainLods[lod]); }
       if (t.want !== t.res && !t.busy) {
         t.busy = true;
         this.queue.push(e + (t.res ? 5000 : 0), () => this.loadGround(t)).finally(() => { t.busy = false; });
@@ -88,22 +95,24 @@ export class World {
   }
 
   async loadGround(t) {
-    if (!t.blob) {
-      const r = await fetch(`${DATA}ground/g_${t.i}_${t.j}.webp`);
-      if (!r.ok) return;
-      t.blob = await r.blob();
-    }
     const res = t.want;
+    const hi = res > 1024;
+    if (hi ? !t.hblob : !t.blob) {
+      const r = await fetch(`${DATA}ground/${hi ? "h" : "g"}_${t.i}_${t.j}.webp`);
+      if (!r.ok) return;
+      if (hi) t.hblob = await r.blob(); else t.blob = await r.blob();
+    }
     // Firefox garbles alpha (the street-light mask) when resizing with "medium"/"high"
     // quality and premultiplyAlpha "none", so skip resizing at native size and use "low" otherwise.
     const opts = { premultiplyAlpha: "none", colorSpaceConversion: "none", imageOrientation: "none" };
     if (res < 1024) Object.assign(opts, { resizeWidth: res, resizeHeight: res, resizeQuality: "low" });
-    const bmp = await createImageBitmap(t.blob, opts);
+    const bmp = await createImageBitmap(hi ? t.hblob : t.blob, opts);
+    if (!hi) t.hblob = null;  // drop the big blob once we've moved away
     const tex = new THREE.Texture(bmp);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.flipY = false;
     tex.premultiplyAlpha = false;
-    tex.anisotropy = 8;
+    tex.anisotropy = 16;
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.needsUpdate = true;
     const old = t.mat.map;
@@ -142,6 +151,7 @@ export class World {
     const cib = new THREE.InterleavedBuffer(tile.color, 4);
     geo.setAttribute("color", new THREE.InterleavedBufferAttribute(cib, 3, 0, true));
     geo.setAttribute("aSeed", new THREE.InterleavedBufferAttribute(cib, 1, 3, true));
+    geo.setAttribute("aBase", new THREE.BufferAttribute(this.buildingBases(tile), 2));
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
     const mesh = new THREE.Mesh(geo, this.buildingMat);
@@ -149,8 +159,34 @@ export class World {
     mesh.matrixAutoUpdate = false;
     mesh.userData = { owner: tile.owner, infoUrl, info: null, structure: isStructure };
     this.scene.add(mesh);
+    this.dirty = true;
     this.pickables.push(mesh);
     this.meshTiles.push(mesh);
+  }
+
+  /** Per-vertex (base height, sits-on-terrain) of each vertex's building, so the
+   *  facade shader can align floors and draw a ground floor. */
+  buildingBases(tile) {
+    const { position: P, owner, T } = tile;
+    const minY = new Map(), at = new Map();
+    for (let t = 0; t < T; t++) {
+      const o = owner[t];
+      for (let k = 0; k < 3; k++) {
+        const y = P[t * 9 + k * 3 + 1];
+        if (!(minY.get(o) <= y)) { minY.set(o, y); at.set(o, t * 9 + k * 3); }
+      }
+    }
+    const grounded = new Map();
+    for (const [o, y] of minY) {
+      const i = at.get(o);
+      grounded.set(o, y < this.hm.at(P[i], P[i + 2]) + 1.5 ? 1 : 0);
+    }
+    const out = new Float32Array(T * 6);
+    for (let t = 0; t < T; t++) {
+      const o = owner[t], y = minY.get(o), g = grounded.get(o);
+      for (let k = 0; k < 3; k++) { out[t * 6 + k * 2] = y; out[t * 6 + k * 2 + 1] = g; }
+    }
+    return out;
   }
 
   async infoFor(mesh, faceIndex) {
@@ -203,6 +239,7 @@ export class World {
       im.matrixAutoUpdate = false;
       this.scene.add(im);
       this.treeChunks.push(im);
+      this.dirty = true;
     }
   }
 
@@ -214,7 +251,8 @@ export class World {
   cull(camPos) {
     for (const im of this.treeChunks) {
       const c = im.boundingSphere.center;
-      im.visible = Math.hypot(c.x - camPos.x, c.z - camPos.z) < 3200 + camPos.y * 2;
+      const v = Math.hypot(c.x - camPos.x, c.z - camPos.z) < 3200 + camPos.y * 2;
+      if (v !== im.visible) { im.visible = v; this.dirty = true; }
     }
   }
 
@@ -297,4 +335,30 @@ function coniferGeometry() {
   const low = new THREE.ConeGeometry(5, 6, 7, 1, true).translate(0, 4.5, 0);
   const high = new THREE.ConeGeometry(3.4, 5, 7, 1, true).translate(0, 7.5, 0);
   return merge([withAttrs(trunk, 0, [0.33, 0.26, 0.2]), withAttrs(low, 1, [1, 1, 1]), withAttrs(high, 1, [0.92, 0.95, 0.92])]);
+}
+
+// border vertex of each skirt vertex: top row, bottom row, left column, right column
+function skirtVertices(N) {
+  const out = [];
+  for (let c = 0; c <= N; c++) out.push(c);
+  for (let c = 0; c <= N; c++) out.push(N * (N + 1) + c);
+  for (let r = 0; r <= N; r++) out.push(r * (N + 1));
+  for (let r = 0; r <= N; r++) out.push(r * (N + 1) + N);
+  return out;
+}
+
+/** Index buffer for a terrain tile using every k-th grid vertex, plus skirts. */
+function terrainIndex(N, k) {
+  const V = (N + 1) * (N + 1), idx = [];
+  for (let r = 0; r < N; r += k) for (let c = 0; c < N; c += k) {
+    const a = r * (N + 1) + c, b = a + k, d = a + k * (N + 1), e = d + k;
+    idx.push(a, d, b, b, d, e);
+  }
+  for (let side = 0; side < 4; side++) for (let t = 0; t < N; t += k) {
+    const s0 = side * (N + 1) + t, s1 = s0 + k;
+    const g = skirtVertices(N);
+    const a = g[s0], b = g[s1], sa = V + s0, sb = V + s1;
+    idx.push(a, sa, b, b, sa, sb, a, b, sa, b, sb, sa);  // both windings
+  }
+  return new THREE.BufferAttribute(V + 4 * (N + 1) > 65535 ? new Uint32Array(idx) : new Uint16Array(idx), 1);
 }

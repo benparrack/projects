@@ -10,7 +10,8 @@ from pathlib import Path
 
 import numpy as np
 import shapely
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter, ImageChops
+from shapely.ops import substring
 from shapely.strtree import STRtree
 from shapely.geometry import box
 
@@ -24,8 +25,11 @@ from buildings import earcut_poly  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / "data" / "work"
 OUT = ROOT / "web" / "data"
-PX = 1024     # output texture size per tile
-SS = 2        # supersampling for anti-aliased edges
+PX = 1024     # standard texture size per tile (g_i_j.webp)
+HX = 2048     # hi-res variant for walking/low flying (h_i_j.webp)
+SS = 2        # supersampling for anti-aliased edges (relative to HX)
+CURB_RGB = (128, 126, 122)
+MARK_RGB = (222, 222, 216)
 
 G = {}
 
@@ -70,12 +74,28 @@ def init():
             else:
                 col, lit = ROAD_RGB, 1.0
             order = 0 if col is PATH_RGB else (1 if col is FOOT_RGB else 2 + w)
-            lines.append((order, l["geom"], w, col, lit, None))
+            kind = None
+            if (t.get("footway") == "crossing" or t.get("highway") == "crossing") and \
+                    t.get("crossing") not in ("unmarked", "no", "informal") and t.get("crossing_ref") != "none":
+                kind = "zebra"
+            elif col is ROAD_RGB and hw in ("motorway", "trunk", "primary", "secondary", "tertiary"):
+                try:
+                    lanes = int(str(t.get("lanes", "2")).split(";")[0])
+                except ValueError:
+                    lanes = 2
+                kind = ("lanes", lanes, t.get("oneway") in ("yes", "1", "-1") or hw == "motorway")
+            lines.append((order, l["geom"], w, col, lit, kind))
         elif rw:
             w = 3.2 if rw in ("rail", "narrow_gauge") else 2.6
             lines.append((1.5, l["geom"], w + 1.4, RAIL_RGB, 0.0, "rail"))
     lines.sort(key=lambda x: x[0])
     G["lines"] = lines
+    blds = [b["geom"] for b in feats["buildings"]
+            if b["tags"].get("building") not in ("roof", "carport") and b["tags"].get("building:part") != "roof"
+            and str(b["tags"].get("layer", "0")).lstrip("-") == str(b["tags"].get("layer", "0"))
+            and b["tags"].get("location") != "underground"]
+    G["blds"] = blds
+    G["btree"] = STRtree(blds)
     G["ltree"] = STRtree([x[1] for x in lines])
     G["terr"] = Terrain()
 
@@ -86,7 +106,7 @@ def draw_tile(key):
     x0 = terr.x0 + i * TILE_SIZE
     z0 = terr.z0 + j * TILE_SIZE
     frame = box(x0 - 20, z0 - 20, x0 + TILE_SIZE + 20, z0 + TILE_SIZE + 20)
-    N = PX * SS
+    N = HX * SS
     s = N / TILE_SIZE
     img = Image.new("RGB", (N, N), BASE_RGB)
     lit = Image.new("L", (N, N), 0)
@@ -123,28 +143,93 @@ def draw_tile(key):
         c, g = G["areas"][idx]
         if CLASSES[c][0] == "pier":
             fill(g, CLASSES[c][1])
-    for idx in sorted(G["ltree"].query(frame)):
-        _, g, w, col, lv, kind = G["lines"][idx]
-        for part in getattr(g.intersection(frame.buffer(30)), "geoms", [g.intersection(frame.buffer(30))]):
-            if part.geom_type != "LineString" or part.is_empty:
-                continue
+    def parts(g):
+        g = g.intersection(frame.buffer(30))
+        return [p for p in getattr(g, "geoms", [g]) if p.geom_type == "LineString" and not p.is_empty]
+
+    def dashes(line, on, off, trim=0.0):
+        L = line.length
+        a = trim
+        while a + on <= L - trim:
+            yield substring(line, a, a + on)
+            a += on + off
+
+    sel = [G["lines"][k] for k in sorted(G["ltree"].query(frame))]
+    roads = [x for x in sel if x[3] is ROAD_RGB]
+    # paths, footways, rails first; then curbs under all roads, then roads, then markings
+    for _, g, w, col, lv, kind in [x for x in sel if x[3] is not ROAD_RGB]:
+        for part in parts(g):
             pts = px(part.coords)
-            wpx = max(1, int(round(w * s)))
-            d.line(pts, fill=col, width=wpx, joint="curve")
+            d.line(pts, fill=col, width=max(1, int(round(w * s))), joint="curve")
             if lv:
-                dl.line(pts, fill=int(255 * lv), width=wpx + int(6 * s), joint="curve")
+                dl.line(pts, fill=int(255 * lv), width=int((w + 6) * s), joint="curve")
             if kind == "rail":
                 for off in (-0.72, 0.72):
                     op = part.offset_curve(off)
                     if not op.is_empty and op.geom_type == "LineString":
                         d.line(px(op.coords), fill=(70, 66, 64), width=max(1, int(0.25 * s)))
-    img = img.resize((PX, PX), Image.LANCZOS)
-    lit = lit.resize((PX, PX), Image.LANCZOS)
-    rgba = img.copy()
-    rgba.putalpha(lit)
-    buf = io.BytesIO()
-    rgba.save(buf, "WEBP", quality=82, method=5, exact=True)  # keep RGB under alpha=0
-    (OUT / "ground" / f"g_{i}_{j}.webp").write_bytes(buf.getvalue())
+    for _, g, w, col, lv, kind in roads:
+        for part in parts(g):
+            d.line(px(part.coords), fill=CURB_RGB, width=int(round((w + 0.7) * s)), joint="curve")
+    for _, g, w, col, lv, kind in roads:
+        for part in parts(g):
+            pts = px(part.coords)
+            d.line(pts, fill=col, width=max(1, int(round(w * s))), joint="curve")
+            if lv:
+                dl.line(pts, fill=int(255 * lv), width=int((w + 6) * s), joint="curve")
+    mw = max(1, int(round(0.2 * s)))
+    for _, g, w, col, lv, kind in roads:
+        if not kind:
+            continue
+        _, lanes, oneway = kind
+        lanes = max(1, min(lanes, 6))
+        for part in parts(g):
+            if part.length < 30:
+                continue
+            offs = [(-w / 2 + w * k / lanes) for k in range(1, lanes)]
+            for o in offs:
+                ln = part if abs(o) < 0.01 else part.offset_curve(o)
+                if ln.is_empty or ln.geom_type != "LineString":
+                    continue
+                centre = abs(o) < 0.01 and not oneway
+                for dsh in (dashes(ln, 3.0, 9.0, 12.0) if not centre else dashes(ln, 9.0, 3.0, 12.0)):
+                    if dsh.geom_type == "LineString" and len(dsh.coords) > 1:
+                        d.line(px(dsh.coords), fill=MARK_RGB, width=mw)
+    road_area = shapely.union_all([g.buffer(w / 2, cap_style="flat") for _, g, w, *_ in roads]) if roads else None
+    for _, g, w, col, lv, kind in sel:
+        if kind != "zebra" or road_area is None:
+            continue
+        for part in parts(g):
+            if part.length > 40:
+                continue
+            for dsh in dashes(part, 0.5, 0.5, 0.25):
+                if dsh.geom_type != "LineString" or len(dsh.coords) < 2:
+                    continue
+                stripe = dsh.buffer(1.5, cap_style="flat").intersection(road_area)
+                for p in getattr(stripe, "geoms", [stripe]):
+                    if p.geom_type == "Polygon" and p.area > 0.2:
+                        d.polygon(px(p.exterior.coords), fill=MARK_RGB)
+    # contact shadow: soft darkening of the ground around building footprints
+    ao = Image.new("L", (N, N), 0)
+    da = ImageDraw.Draw(ao)
+    for k in sorted(G["btree"].query(frame)):
+        g = G["blds"][k].intersection(frame)
+        for p in getattr(g, "geoms", [g]):
+            if p.geom_type != "Polygon" or p.is_empty:
+                continue
+            da.polygon(px(p.exterior.coords), fill=255)
+    ao = ao.filter(ImageFilter.GaussianBlur(1.6 * s))
+    shade = ao.point(lambda v: 255 - int(v * 0.42))
+    img = ImageChops.multiply(img, Image.merge("RGB", (shade, shade, shade)))
+    img = img.resize((HX, HX), Image.LANCZOS)
+    lit = lit.resize((HX, HX), Image.LANCZOS)
+    for size, prefix, q in ((HX, "h", 78), (PX, "g", 82)):
+        rgba = img if size == HX else img.resize((size, size), Image.LANCZOS)
+        rgba = rgba.copy()
+        rgba.putalpha(lit if size == HX else lit.resize((size, size), Image.LANCZOS))
+        buf = io.BytesIO()
+        rgba.save(buf, "WEBP", quality=q, method=5, exact=True)  # keep RGB under alpha=0
+        (OUT / "ground" / f"{prefix}_{i}_{j}.webp").write_bytes(buf.getvalue())
     return key
 
 
@@ -168,7 +253,7 @@ def main():
     with Pool(initializer=init) as pool:
         for n, _ in enumerate(pool.imap_unordered(draw_tile, keys)):
             pass
-    size = sum(f.stat().st_size for f in (OUT / "ground").glob("*.webp"))
+    size = sum(f.stat().st_size for f in (OUT / "ground").glob("g_*.webp"))
     json.dump({"nx": nx, "nz": nz}, open(WORK / "ground_tiles.json", "w"))
     print(f"{len(keys)} ground tiles ({nx}x{nz}), {size/1e6:.1f} MB; heightmap {cols}x{rows}")
 

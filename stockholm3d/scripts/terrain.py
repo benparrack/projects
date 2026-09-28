@@ -79,11 +79,31 @@ def main():
     # unmasked ground (streets/courtyards/parks), which is what we actually stand on.
     ground = np.where(mask | water_m, np.inf, raw)
     ground = ndimage.minimum_filter(ground, size=5)
+    # Reject leftover bumps (DSM artifacts by the water, e.g. a 45 m blob on
+    # Strömkajen; moored ships): a grey opening removes features narrower than
+    # ~130 m in every direction but keeps one-sided steps such as the Söder cliffs.
+    g2 = np.where(np.isfinite(ground), ground, 1e4)[::2, ::2]
+    low = ndimage.grey_dilation(ndimage.grey_erosion(g2, size=13), size=13)
+    low = ndimage.zoom(low, 2, order=1)[:rows, :cols]
+    spikes = np.isfinite(ground) & (ground > low + 8)
+    print(f"spike cells rejected: {spikes.sum()}")
+    ground[spikes] = np.inf
+    # quay edges: the DSM smears ships and artifacts onto the shoreline strip
+    near_water = ndimage.distance_transform_edt(~water_m) * STEP <= 12
+    ground[near_water & (ground > 5.0)] = np.inf
     known = np.isfinite(ground) & ~water_m
+    # lone ground cells between masked buildings are still roof-smeared
+    known &= ndimage.uniform_filter(known.astype(np.float32), 7) > 0.25
+    if "--debug" in sys.argv:
+        np.savez_compressed(WORK / "terrain_debug.npz", raw=raw, mask=mask, ground=np.where(known, ground, -1))
     # Fill the holes by normalized convolution at growing scales, which gives
     # smooth ramps instead of the Voronoi facets a nearest-neighbour fill makes.
-    v = np.where(known, ground, 0.0)
-    m = known.astype(np.float64)
+    # Water next to land counts as quay-level ground for the fill, so masked
+    # peninsula tips (Blasieholmen, Skeppsholmen) ramp down to the shore instead
+    # of being filled only from the smeared ring around their buildings.
+    shore = water_m & (ndimage.distance_transform_edt(water_m) * STEP <= 40)
+    v = np.where(known, ground, np.where(shore, 1.5, 0.0))
+    m = (known | shore).astype(np.float64)
     filled = np.where(known, ground, np.nan)
     for sigma in (2, 4, 8, 16, 32, 64):
         est = ndimage.gaussian_filter(v, sigma) / np.maximum(ndimage.gaussian_filter(m, sigma), 1e-9)
@@ -95,6 +115,10 @@ def main():
 
     # --- water/land shaping: quays sit ~1.5 m above the water, water bottoms at -4 m
     h = np.maximum(filled, 1.5)
+    # quay walls are ~1.5 m: ramp land up from the shoreline so the fill can't
+    # leave a steep earth bank along the water (only bites within ~20 m of it)
+    d_land = ndimage.distance_transform_edt(~water_m) * STEP
+    h = np.minimum(h, 1.5 + np.maximum(d_land - 5.0, 0.0) * 0.5)
     dist_in_water = ndimage.distance_transform_edt(water_m) * STEP
     h = np.where(water_m, -np.minimum(0.6 + dist_in_water * 0.4, 6.0), h)
     h = h.astype(np.float32)

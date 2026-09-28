@@ -82,6 +82,18 @@ export class Atmosphere {
     this.sun.target.position.copy(f);
     this.sun.position.copy(f).addScaledVector(lightDir, 5000);
     this.sun.target.updateMatrixWorld();
+    // The 4096 shadow map is the most expensive pass: only re-render it when the
+    // sun or the shadow box moved noticeably, or scene content changed.
+    const sm = this.renderer.shadowMap;
+    sm.autoUpdate = false;
+    if (this.shadowDirty || !this.shadowAt || this.shadowAt.distanceTo(f) > S * 0.06
+        || Math.abs(this.shadowS - S) > S * 0.04 || this.shadowDir.angleTo(lightDir) > 0.0015) {
+      sm.needsUpdate = true;
+      this.shadowDirty = false;
+      this.shadowAt = f.clone();
+      this.shadowS = S;
+      this.shadowDir = lightDir.clone();
+    }
 
     this.hemi.intensity = 0.1 + 0.55 * twilight;
     this.hemi.color.setRGB(0.55 + 0.2 * day, 0.62 + 0.18 * day, 0.85);

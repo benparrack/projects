@@ -21,8 +21,9 @@ def _mosaic():
 
 
 def dem_at(x, z):
-    """Raw surface height (m) at local (x, z); bilinear, pixel-centre registered."""
+    """Raw surface height (m) at local (x, z); bilinear. GLO-30 is pixel-is-point:
+    pixel (0, 0) is centred on the tile corner (60N, 17E), so no half-pixel shift."""
     dem = _mosaic()
     H, W = dem.shape
     lat, lon = to_latlon(np.asarray(x, dtype=np.float64), np.asarray(z, dtype=np.float64))
-    return ndimage.map_coordinates(dem, [(60.0 - lat) * H - 0.5, (lon - 17.0) * (W / 2) - 0.5], order=1, mode="nearest")
+    return ndimage.map_coordinates(dem, [(60.0 - lat) * H, (lon - 17.0) * (W / 2)], order=1, mode="nearest")
