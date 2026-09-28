@@ -35,17 +35,27 @@ lockstep replay: one gzipped save state (~8–17 KiB) and then only frame-tagged
 | `web/netstate.js` | save state ⇄ gzipped base64 string for the network |
 | `test/run-tests.js` | test-ROM runner (`--verbose`, `--shots=dir`, name filters) |
 
-## Accuracy (131 / 141 test ROMs)
+## Accuracy (141 / 141 test ROMs)
 
-Passing: all Blargg `cpu_instrs`, `instr_timing`, `mem_timing`, `mem_timing-2`, `halt_bug`,
-`interrupt_time`, `cgb_sound`, most of `dmg_sound`; dmg-acid2 and cgb-acid2 pixel-exact;
-Mooneye acceptance timing/interrupt/timer/OAM-DMA tests and MBC1/2/5 emulator-only tests.
+Everything in the suite passes: all Blargg `cpu_instrs`, `instr_timing`, `mem_timing`,
+`mem_timing-2`, `halt_bug`, `interrupt_time`, `dmg_sound`, `cgb_sound`; dmg-acid2 and cgb-acid2
+pixel-exact; every Mooneye acceptance test for DMG (timing, interrupts, timer, OAM DMA, PPU,
+post-boot state, serial) plus the MBC1/2/5 emulator-only tests. Headless speed is about 900 fps
+(roughly 15× real time) on this machine.
 
-Known failures: `dmg_sound` 09/12 (DMG wave-RAM access timing while playing), Mooneye
-`boot_div`/`boot_hwio`/`boot_sclk_align` (exact post-boot state), and a handful of PPU
-edge cases (`hblank_ly_scx_timing`, `intr_2_mode0_timing_sprites`, `lcdon_timing`,
-`lcdon_write_timing`, `stat_lyc_onoff`). No commercial game depends on these to be playable
-in practice. Headless speed ≈ 900 fps (~15× real time) on this machine.
+Quirks the last few tests needed, for reference:
+- **Post-boot state:** DIV starts at `0xABC8`, P1 reads `$CF`. The serial clock is a falling
+  edge of divider bit 8, so bits align to the system counter rather than the SC write.
+- **PPU:**
+  - LY shows the next line one M-cycle before the line ends. During that M-cycle the LY=LYC
+    flag reads 0 and OAM reads are already locked.
+  - VRAM reads lock one M-cycle before mode 3. Writes are only blocked in the real modes, and
+    OAM even accepts writes in mode 2's last M-cycle.
+  - Line 0 after LCD-on starts at dot 0.
+  - Sprites lengthen mode 3 according to the Pan Docs penalty algorithm.
+  - With the LCD off, the LYC comparator holds its last result.
+- **DMG wave RAM:** while channel 3 plays, the CPU only reaches wave RAM on the exact T-cycle
+  of a sample fetch; otherwise reads return `$FF` and writes are dropped.
 
 ## Controls (web)
 

@@ -38,7 +38,7 @@ export class GameBoy {
     this.joypSelect = 0x30;
 
     // Serial
-    this.sb = 0; this.sc = 0; this.serialCycles = 0; this.serialBits = 0;
+    this.sb = 0; this.sc = 0; this.serialBits = 0;
     this.onSerialByte = null; // (byte) => incoming byte or undefined (0xFF = nothing connected)
 
     // OAM DMA
@@ -60,9 +60,10 @@ export class GameBoy {
       this.ppu.objPal.fill(0xff);
     } else {
       cpu.a = 0x01; cpu.f = 0xb0; cpu.b = 0; cpu.c = 0x13; cpu.d = 0; cpu.e = 0xd8; cpu.h = 0x01; cpu.l = 0x4d;
-      this.timer.counter = 0xabcc;
+      this.timer.counter = 0xabc8; // DIV phase from Mooneye boot_div (DMG ABC/MGB)
     }
     this.timer.tac = 0;
+    this.joypSelect = 0; // P1 reads $CF: the boot ROM leaves both select lines low
     const apuInit = [[0xff26, 0x80], [0xff10, 0x80], [0xff11, 0xbf], [0xff12, 0xf3], [0xff13, 0xff], [0xff14, 0x3f],
       [0xff16, 0x3f], [0xff17, 0x00], [0xff18, 0xff], [0xff19, 0xbf & 0x7f], [0xff1a, 0x7f], [0xff1b, 0xff], [0xff1c, 0x9f],
       [0xff1d, 0xff], [0xff1e, 0x3f], [0xff20, 0xff], [0xff21, 0], [0xff22, 0], [0xff23, 0x3f], [0xff24, 0x77], [0xff25, 0xf3]];
@@ -82,7 +83,6 @@ export class GameBoy {
     const dots = this.doubleSpeed ? 2 : 4;
     this.ppu.step(dots);
     this.apu.step(dots);
-    if (this.sc & 0x80) this.serialStep();
   }
 
   requestInterrupt(bit) { this.if |= 1 << bit; }
@@ -172,7 +172,7 @@ export class GameBoy {
       case 0xff01: this.sb = v; return;
       case 0xff02:
         this.sc = v & (this.cgb ? 0x83 : 0x81);
-        if ((v & 0x81) === 0x81) { this.serialBits = 0; this.serialCycles = 0; }
+        if ((v & 0x81) === 0x81) this.serialBits = 0;
         return;
       case 0xff04: case 0xff05: case 0xff06: case 0xff07: this.timer.write(addr, v); return;
       case 0xff0f: this.if = v & 0x1f; return;
@@ -245,12 +245,12 @@ export class GameBoy {
 
   // ---------------- serial ----------------
 
-  serialStep() {
-    if (!(this.sc & 1)) return; // external clock: wait for partner (never arrives when unlinked)
-    const perBit = (this.cgb && (this.sc & 2)) ? 16 : 512;
-    this.serialCycles += 4;
-    if (this.serialCycles < perBit) return;
-    this.serialCycles -= perBit;
+  // Internal-clock transfers shift one bit per falling edge of a divider bit (8192 Hz, or 262144 Hz in
+  // CGB fast mode), so bit timing aligns to the system counter, not to the SC write. Called by the timer.
+  // External-clock transfers wait for a partner that never arrives when unlinked.
+  serialEdge(oldCounter, newCounter) {
+    const bit = (this.cgb && (this.sc & 2)) ? 0x8 : 0x100;
+    if (!(oldCounter & bit) || (newCounter & bit)) return;
     if (++this.serialBits < 8) return;
     const out = this.sb;
     let incoming = 0xff;
@@ -282,7 +282,7 @@ export class GameBoy {
       cgb: this.cgb,
       gb: {
         doubleSpeed: this.doubleSpeed, key1: this.key1, wramBank: this.wramBank, ie: this.ie, if: this.if,
-        joypSelect: this.joypSelect, sb: this.sb, sc: this.sc, serialCycles: this.serialCycles, serialBits: this.serialBits,
+        joypSelect: this.joypSelect, sb: this.sb, sc: this.sc, serialBits: this.serialBits,
         dmaSource: this.dmaSource, dmaIndex: this.dmaIndex, dmaDelay: this.dmaDelay, dmaReg: this.dmaReg,
         hdmaSrc: this.hdmaSrc, hdmaDst: this.hdmaDst, hdmaLen: this.hdmaLen, hdmaActive: this.hdmaActive,
         hdmaPending: this.hdmaPending, cycles: this.cycles,
