@@ -222,7 +222,8 @@ export class CityMesh {
     g.setAttribute("color", new THREE.BufferAttribute(c, 3));
     const mesh = new THREE.InstancedMesh(g, glowMaterial("blink"), city.lights.length);
     const m = new THREE.Matrix4();
-    city.lights.forEach((l, i) => { m.makeTranslation(l.x, l.y, l.z); mesh.setMatrixAt(i, m); });
+    // rooftop masts get small lamps (you swing right past them); antennas keep big beacons
+    city.lights.forEach((l, i) => { m.makeScale(l.s || 1, l.s || 1, l.s || 1).setPosition(l.x, l.y, l.z); mesh.setMatrixAt(i, m); });
     mesh.computeBoundingSphere();
     scene.add(mesh);
   }

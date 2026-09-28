@@ -18,6 +18,9 @@ export const P = {
   RUN: 10, SPRINT: 17, RUN_ACC: 70, AIR_ACC: 9,
   JUMP: 10.5, JUMP_MAX: 27, CHARGE: 0.75,
   ROPE_MIN: 12, ROPE_MAX: 95, CLEAR: 4.5,
+  POLE_RANGE: 115,       // m: poles (antenna / spire / mast tips) you can lock onto
+  POLE_LOCK: 0.13,       // rad from the crosshair that locks a pole
+  POLE_EL: 0.36,         // min sin(elevation) of a pole above you (~21°)
   REEL: 16,              // m/s pulling in when the rope must shorten
   PUMP: 1.4,             // m/s reel-in on the downswing
   PIVOT_PULL: 0.6,       // physics pivot slides this much of the anchor's sideways offset over your travel line
@@ -426,9 +429,48 @@ export class Player {
     return { hit: -1, prog: (q.x - this.p.x) * hx + (q.z - this.p.z) * hz };
   }
 
+  /**
+   * Aim lock: the pole tip (antenna, spire or rooftop mast) nearest the crosshair,
+   * if it's in range, well above you, in line of sight, and the swing from it
+   * doesn't slam straight into a wall. Looking at a pole means "swing from that".
+   */
+  aimPole(c, hx, hz) {
+    const f = c.fwd, cp = c.camPos, w = this.w;
+    if (!f || !cp || !w.poles) return null;
+    const px = this.p.x, py = this.p.y + 0.6, pz = this.p.z;
+    const cands = [];
+    for (const q of w.poles) {
+      const dy = q.y - py;
+      if (dy < 5) continue;
+      const dx = q.x - px, dz = q.z - pz, L = Math.hypot(dx, dy, dz);
+      if (L < P.ROPE_MIN || L > P.POLE_RANGE || dy / L < P.POLE_EL) continue;
+      const cx = q.x - cp.x, cy = q.y - cp.y, cz = q.z - cp.z, cl = Math.hypot(cx, cy, cz);
+      const ang = Math.acos(clamp((cx * f.x + cy * f.y + cz * f.z) / cl, -1, 1));
+      // a little extra slack for close poles (a few metres either side of the crosshair)
+      if (ang > Math.max(P.POLE_LOCK, Math.atan(2.5 / cl))) continue;
+      cands.push({ q, L, dx, dy, dz, s: ang + L * 0.0012 });
+    }
+    cands.sort((a, b) => a.s - b.s);
+    for (const k of cands.slice(0, 4)) {
+      const { q, L, dx, dy, dz } = k;
+      const h = w.raycast(px, py, pz, dx / L, dy / L, dz / L, L - 0.4);
+      if (h && Math.hypot(h.x - q.x, h.z - q.z) > 1.0) continue;     // blocked (the mast itself is fine)
+      if (this.assist > 0) {
+        const pv = this.pivotFor(q.x, q.y, q.z, hx, hz, this._pv || (this._pv = v3()));
+        const sim = this.simArc(pv, Math.hypot(this.p.x - pv.x, this.p.y - pv.y, this.p.z - pv.z), hx, hz);
+        if (sim.hit >= 0 && sim.hit < 5) continue;
+      }
+      const side = dx * -hz + dz * hx >= 0 ? 1 : -1;
+      return { x: q.x, y: q.y, z: q.z, L, side, nx: 0, ny: 1, nz: 0, pole: true };
+    }
+    return null;
+  }
+
   findAnchor(c) {
     const w = this.w;
     const { x: hx, z: hz } = this.heading(c);
+    const lock = this.aimPole(c, hx, hz);
+    if (lock) return lock;
     const rx = -hz, rz = hx;      // right of heading
     const ox = this.p.x, oy = this.p.y + 0.6, oz = this.p.z;
     const steer = c.mx;
@@ -436,37 +478,57 @@ export class Player {
     const speed = len(this.v);
     // ideal horizontal reach grows with speed so fast swings get long ropes
     const idealLen = clamp(28 + speed * 0.7, 30, 80);
+    const consider = (h, el, yawOff, bonus) => {
+      if (h.y < this.p.y + 7) return;
+      const L = h.t;
+      if (L < P.ROPE_MIN) return;
+      // how low would the arc go? (lowest point ≈ anchor.y - L)
+      const floor = w.floorBelow(h.x, h.z, h.y - 1);
+      const clear = h.y - L - (floor === -Infinity ? G.WATER_Y : floor);
+      let s = 0;
+      s -= Math.abs(L - idealLen) * 0.05;
+      s -= Math.abs(el - 60) * 0.03;
+      s -= Math.abs(yawOff) * 0.012;                 // prefer ahead
+      s += Math.sign(yawOff) * steer * 0.8;          // stick picks the side
+      s += Math.sign(yawOff) === -this.lastSwingSide ? 0.35 : 0;   // alternate hands
+      s += clear < P.CLEAR + P.HY ? -0.6 : 0;
+      s += h.ny === 0 ? 0.3 : -0.2;                  // walls feel right, roofs OK
+      if (this.assist > 0) {
+        // preview the arc: heavily prefer swings that don't fly into a building,
+        // and that carry you a long way forward
+        const pv = this.pivotFor(h.x, h.y, h.z, hx, hz, this._pv || (this._pv = v3()));
+        const pL = Math.hypot(this.p.x - pv.x, this.p.y - pv.y, this.p.z - pv.z);
+        const sim = this.simArc(pv, pL, hx, hz);
+        if (sim.hit >= 0) s -= (0.6 + 2.5 * (1 - sim.hit / 16)) * this.assist;
+        s += clamp(sim.prog / (speed * 1.1 + 10), -0.5, 1.2) * 0.8 * this.assist;
+      }
+      s += bonus;
+      if (s > bestS) { bestS = s; best = { x: h.x, y: h.y, z: h.z, L, side: Math.sign(yawOff) || 1, nx: h.nx, ny: h.ny, nz: h.nz }; }
+    };
     for (const el of [42, 52, 62, 72, 82]) {
       const ce = Math.cos(el * Math.PI / 180), se = Math.sin(el * Math.PI / 180);
       for (const yawOff of [-75, -55, -38, -22, -8, 8, 22, 38, 55, 75]) {
         const a = yawOff * Math.PI / 180;
         const dx = (hx * Math.cos(a) + rx * Math.sin(a)) * ce, dz = (hz * Math.cos(a) + rz * Math.sin(a)) * ce, dy = se;
         const h = w.raycast(ox, oy, oz, dx, dy, dz, 130);
-        if (!h || h.box < 0) continue;
-        if (h.y < this.p.y + 7) continue;
-        const L = h.t;
-        if (L < P.ROPE_MIN) continue;
-        // how low would the arc go? (lowest point ≈ anchor.y - L)
-        const floor = w.floorBelow(h.x, h.z, h.y - 1);
-        const clear = h.y - L - (floor === -Infinity ? G.WATER_Y : floor);
-        let s = 0;
-        s -= Math.abs(L - idealLen) * 0.05;
-        s -= Math.abs(el - 60) * 0.03;
-        s -= Math.abs(yawOff) * 0.012;                 // prefer ahead
-        s += Math.sign(yawOff) * steer * 0.8;          // stick picks the side
-        s += Math.sign(yawOff) === -this.lastSwingSide ? 0.35 : 0;   // alternate hands
-        s += clear < P.CLEAR + P.HY ? -0.6 : 0;
-        s += h.ny === 0 ? 0.3 : -0.2;                  // walls feel right, roofs OK
-        if (this.assist > 0) {
-          // preview the arc: heavily prefer swings that don't fly into a building,
-          // and that carry you a long way forward
-          const pv = this.pivotFor(h.x, h.y, h.z, hx, hz, this._pv || (this._pv = v3()));
-          const pL = Math.hypot(this.p.x - pv.x, this.p.y - pv.y, this.p.z - pv.z);
-          const sim = this.simArc(pv, pL, hx, hz);
-          if (sim.hit >= 0) s -= (0.6 + 2.5 * (1 - sim.hit / 16)) * this.assist;
-          s += clamp(sim.prog / (speed * 1.1 + 10), -0.5, 1.2) * 0.8 * this.assist;
+        if (h && h.box >= 0) consider(h, el, yawOff, 0);
+      }
+    }
+    // crosshair: when you look up at a building, the spot you're aiming at is a
+    // strong candidate (still scored, so a swing straight into a wall loses)
+    const f = c.fwd, cp = c.camPos;
+    if (f && cp && f.y > 0.18) {
+      const h = w.raycast(cp.x, cp.y, cp.z, f.x, f.y, f.z, 160);
+      if (h && h.box >= 0) {
+        const dx = h.x - ox, dy = h.y - oy, dz = h.z - oz, L = Math.hypot(dx, dy, dz);
+        const el = Math.asin(clamp(dy / L, -1, 1)) * 180 / Math.PI;
+        const hl = Math.hypot(dx, dz) || 1;
+        const yawOff = Math.atan2((dx * rx + dz * rz) / hl, (dx * hx + dz * hz) / hl) * 180 / Math.PI;
+        if (el > 25 && L < 130 && Math.abs(yawOff) < 100) {
+          const hit = { t: L, x: h.x, y: h.y, z: h.z, nx: h.nx, ny: h.ny, nz: h.nz };
+          const los = w.raycast(ox, oy, oz, dx / L, dy / L, dz / L, L - 0.6);
+          if (!los) consider(hit, clamp(el, 42, 82), clamp(yawOff, -75, 75), 2.2 + Math.abs(L - idealLen) * 0.035);
         }
-        if (s > bestS) { bestS = s; best = { x: h.x, y: h.y, z: h.z, L, side: Math.sign(yawOff) || 1, nx: h.nx, ny: h.ny, nz: h.nz }; }
       }
     }
     return best;
@@ -499,6 +561,7 @@ export class Player {
     this.rope = dist;
     this.ropeTarget = dist;
     this.hand = a.side;
+    this.anchorPole = !!a.pole;
     this.lastSwingSide = a.side;
     this.attachT = 0; this.webT = 0;
     this.endTrick(false);

@@ -12,6 +12,7 @@ export class World {
     this.nz = Math.ceil((I.z1 - I.z0 + 128) / CELL);
     this.cells = new Array(this.nx * this.nz);
     this.boxes = city.boxes.filter((b) => b.collide);
+    this.poles = city.poles || [];
     const n = this.boxes.length;
     // flat copy for speed
     this.b = new Float32Array(n * 6);

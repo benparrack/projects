@@ -92,6 +92,8 @@ export class City {
     this.trees = [];        // {x,y,z,s,seed}
     this.lamps = [];        // {x,z,dir}
     this.lights = [];       // aircraft warning lights {x,y,z}
+    this.poles = [];        // web-swing targets: antenna, spire and mast tips {x,y,z}
+    this.lots = [];         // built lots with their top roof (for rooftop masts)
     this.tokens = [];       // collectible positions
     this.far = [];          // distant-shore boxes (render only)
     this.pond = null;
@@ -133,6 +135,7 @@ export class City {
     this.streetLamps(r);
     this.farShores(r);
     this.placeTokens(r);
+    this.masts();
   }
 
   block(bx0, bz0, bx1, bz1, r) {
@@ -166,10 +169,13 @@ export class City {
       // occasional gap lot: plaza (lets light in, adds variety)
       if (r() < 0.035 && dh < 200) { this.plaza(x0, z0, x1, z1, r); continue; }
       const roll = r();
+      const p0 = this.poles.length;
+      this.lastRoof = null;
       if (h > 110 && roll < 0.55) this.glassTower(x0, z0, x1, z1, h, r);
       else if (h > 90 && roll < 0.85) this.decoTower(x0, z0, x1, z1, h, r);
       else if (h < 75 && roll < 0.8) this.brick(x0, z0, x1, z1, h, r);
       else this.modern(x0, z0, x1, z1, h, r);
+      if (this.poles.length === p0 && this.lastRoof) this.lots.push(this.lastRoof);
     }
   }
 
@@ -180,6 +186,7 @@ export class City {
   roofTop(x0, z0, x1, z1, y, r, col) {
     // parapet ring + rooftop clutter
     const t = 0.5, ph = 1.1;
+    this.lastRoof = { x0, z0, x1, z1, y };
     const c = col || pick(r, PAL.concrete);
     this.box(x0, y, z0, x1, y + ph, z0 + t, S.PLAIN, c, { detail: true });
     this.box(x0, y, z1 - t, x1, y + ph, z1, S.PLAIN, c, { detail: true });
@@ -236,6 +243,31 @@ export class City {
     this.box(x - w, y, z - w, x + w, y + len, z + w, S.METAL, lin(0x8a8a90), { seed: r() });
     this.box(x - 3, y, z - 3, x + 3, y + 3, z + 3, S.MECH, lin(0x505258), { seed: r() });
     this.lights.push({ x, y: y + len + 0.6, z });
+    this.poles.push({ x, y: y + len, z });
+  }
+
+  /**
+   * Flagpole-style masts on roof corners: swing targets at normal swinging
+   * heights (the antennas and spires only start around 220 m). A separate rng so
+   * the rest of the city generates exactly as before.
+   */
+  masts() {
+    const r = rng(this.seed * 7 + 11);
+    for (const L of this.lots) {
+      const w = L.x1 - L.x0, d = L.z1 - L.z0;
+      if (w < 8 || d < 8 || r() > 0.5) continue;
+      const corners = [[L.x0 + 1.2, L.z0 + 1.2], [L.x1 - 1.2, L.z1 - 1.2], [L.x1 - 1.2, L.z0 + 1.2], [L.x0 + 1.2, L.z1 - 1.2]];
+      const k = Math.floor(r() * 4);
+      const n = w * d > 900 && r() < 0.4 ? 2 : 1;
+      for (let q = 0; q < n; q++) {
+        const [x, z] = corners[q === 0 ? k : k ^ 1];
+        const len = 8 + r() * 10, hw = 0.22;
+        this.box(x - hw, L.y, z - hw, x + hw, L.y + len, z + hw, S.METAL, lin(0x70737a), { seed: r() });
+        this.box(x - 0.6, L.y, z - 0.6, x + 0.6, L.y + 1.3, z + 0.6, S.MECH, lin(0x505258), { seed: r(), detail: true });
+        this.lights.push({ x, y: L.y + len + 0.2, z, s: 0.3 });
+        this.poles.push({ x, y: L.y + len, z });
+      }
+    }
   }
 
   decoTower(x0, z0, x1, z1, h, r) {
@@ -273,6 +305,7 @@ export class City {
       this.box(cx - s * 0.5, yy, cz - s * 0.5, cx + s * 0.5, yy + sl * 0.6, cz + s * 0.5, S.METAL, lin(0xc8c4b8), { detail: true });
       this.boxes[this.boxes.length - 1].render = false;
       this.lights.push({ x: cx, y: yy + sl + 0.5, z: cz });
+      this.poles.push({ x: cx, y: yy + sl * 0.9, z: cz });
     } else {
       this.roofTop(tx0, tz0, tx1, tz1, y, r, stone);
       if (r() < 0.4 && tx1 - tx0 > 14) this.waterTank(cx + (r() - 0.5) * 4, cz + (r() - 0.5) * 4, y, r);

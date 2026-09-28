@@ -33,6 +33,13 @@ button:hover { transform: scale(1.04); }
 #charge { height: 100%; width: 0; background: #ffd27a; }
 #marker { position: absolute; transform: translate(-50%, -140%); font-size: 11px; font-weight: 700; color: #ffcf6a;
   text-shadow: 0 1px 4px #000; display: none; }
+#aim { position: absolute; width: 18px; height: 18px; margin: -11px 0 0 -11px; border: 2px solid rgba(255,255,255,.7);
+  border-radius: 50%; display: none; pointer-events: none; box-shadow: 0 0 6px rgba(0,0,0,.5); }
+#aim::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255,255,255,.85); }
+#aim.pole { width: 26px; height: 26px; margin: -15px 0 0 -15px; border-color: #ffcf40; box-shadow: 0 0 10px rgba(255,190,40,.7); }
+#aim.pole::after { background: #ffcf40; }
+#poleDots i { position: absolute; width: 7px; height: 7px; margin: -5px 0 0 -5px; border: 1.5px solid rgba(255,207,64,.75);
+  transform: rotate(45deg); display: none; pointer-events: none; box-shadow: 0 0 4px rgba(0,0,0,.6); }
 #marker::after { content: "▼"; display: block; text-align: center; font-size: 10px; }
 #toast { position: fixed; left: 50%; top: 14%; transform: translate(-50%, -10px); font-size: 22px; font-weight: 800;
   letter-spacing: .06em; opacity: 0; transition: opacity .25s, transform .25s; text-shadow: 0 2px 14px rgba(0,0,0,.7);
@@ -76,7 +83,7 @@ button:hover { transform: scale(1.04); }
 #ringPtr .arr { font-size: 18px; opacity: 0; }
 #ringPtr.edge .arr { opacity: 1; }
 #help { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(10,12,20,.9); padding: 22px 28px; border-radius: 14px;
-  max-width: 640px; display: grid; gap: 7px; font-size: 14px; line-height: 1.4; box-shadow: 0 20px 60px rgba(0,0,0,.5); pointer-events: none; }
+  max-width: 640px; display: grid; gap: 7px; font-size: 14px; line-height: 1.4; box-shadow: 0 20px 60px rgba(0,0,0,.5); cursor: pointer; }
 #help h3 { margin: 6px 0 2px; font-style: italic; } #help b { color: #ffd27a; }
 #help .small, .panel .small a { font-size: 12px; opacity: .6; color: inherit; }
 .panel h3 { margin: 6px 0 0; font-size: 15px; font-style: italic; }

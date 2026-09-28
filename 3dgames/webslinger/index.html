@@ -21,7 +21,7 @@
   <div class="keys">
     <div><b>Mouse</b> look</div>
     <div><b>WASD</b> run · steer</div>
-    <div><b>Left mouse</b> / <b>Shift</b> hold to swing — release to fly</div>
+    <div><b>Left mouse</b> / <b>Shift</b> hold to swing — release to fly · look at a pole tip to swing from it</div>
     <div><b>Space</b> jump (hold to charge) · jump off a swing for a boost</div>
     <div><b>Right mouse</b> / <b>E</b> zip to a ledge and launch</div>
     <div><b>Q</b> web-dash (3) · <b>Ctrl</b> / <b>C</b> dive</div>
@@ -39,6 +39,8 @@
   <div id="cross"></div>
   <div id="chargeBar"><div id="charge"></div></div>
   <div id="marker"></div>
+  <div id="aim"></div>
+  <div id="poleDots"></div>
   <div id="focusBar"><div id="focus"></div></div>
   <canvas id="map"></canvas>
   <div id="combo"><div id="comboPts"></div><div id="comboFeed"></div></div>
@@ -52,6 +54,7 @@
   <h3>Controls</h3>
   <div><b>Hold left mouse / Shift</b> swing — keep holding to chain, let go on the upswing to fly</div>
   <div><b>Space</b> jump (hold to charge) · jump off a swing for a boost</div>
+  <div><b>Aim</b> the white ring shows where your web will stick. Look at a pole tip (◇ antennas, spires, rooftop masts) and the ring turns gold: your swing locks onto it. Look up at a building to pick that spot</div>
   <div><b>Right mouse / E</b> zip to the ledge you aim at and launch</div>
   <div><b>Q</b> web-dash (3 charges) · <b>Ctrl / C</b> dive</div>
   <div><b>F</b> air trick: W front flip · S backflip · A/D corkscrew · none 360. Land before it finishes and you bail</div>
@@ -60,6 +63,7 @@
   <div><b>M</b> map · <b>T</b> time of day · <b>V</b> look · <b>P</b> hide HUD · <b>R</b> respawn · <b>F3</b> stats</div>
   <h3>Style</h3>
   <div>Everything off the ground scores: swings, big flings, tricks, near misses, close calls, low swoops, wall runs, tokens, rings. The multiplier grows as you chain moves; the combo banks when you stay on your feet, and is lost if you bail or fall in the river.</div>
+  <div class="small">H or click to resume · Esc settings</div>
   <div class="small">Gamepad: RT swing · A jump · LT zip · X dash · B dive · Y trick · RB slow-mo · LB time · Back race · Start menu</div>
 </div>
 
@@ -81,7 +85,7 @@
     <h3>Ring races</h3>
     <div id="raceList"></div>
     <button id="resume">Resume</button>
-    <div class="small">H controls · F3 performance stats · R respawn · <a id="reset" href="#" onclick="return false">Reset progress</a></div>
+    <div class="small">H controls (pauses) · F3 performance stats · R respawn · <a id="reset" href="#" onclick="return false">Reset progress</a></div>
   </div>
 </div>
 <script type="module" src="src/main.js"></script>

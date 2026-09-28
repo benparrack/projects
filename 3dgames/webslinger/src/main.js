@@ -7,7 +7,7 @@ import { CityMesh } from "./cityMesh.js";
 import { Sky } from "./sky.js";
 import { Post } from "./post.js";
 import { Input } from "./input.js";
-import { Player } from "./player.js";
+import { Player, P as PP } from "./player.js";
 import { ChaseCam } from "./camera.js";
 import { Character } from "./character.js";
 import { Webs } from "./web.js";
@@ -232,7 +232,7 @@ function toast(msg, sub = "", dur = 1.6) {
   el.firstElementChild.textContent = msg; el.lastElementChild.textContent = sub;
   el.classList.add("on"); toastT = dur;
 }
-let playing = false, paused = true;
+let playing = false, paused = true, helpOpen = false;
 function startPlay() {
   audio.start(); audio.setVolume(S.volume);
   input.lock();
@@ -242,9 +242,21 @@ $("resume").addEventListener("click", startPlay);
 canvas.addEventListener("click", () => { if (!input.locked && playing) startPlay(); });
 document.addEventListener("pointerlockchange", () => {
   const locked = document.pointerLockElement === canvas;
-  if (locked) { playing = true; paused = false; $("title").classList.add("hidden"); $("menu").classList.add("hidden"); $("hud").classList.remove("hidden"); }
-  else if (playing) { paused = true; $("menu").classList.remove("hidden"); }
+  if (locked) { playing = true; paused = false; helpOpen = false; $("title").classList.add("hidden"); $("menu").classList.add("hidden"); $("help").classList.add("hidden"); $("hud").classList.remove("hidden"); }
+  else if (playing) { paused = true; $(helpOpen ? "help" : "menu").classList.remove("hidden"); }
 });
+// H: the controls are a pause screen like the settings menu (H again or a click resumes)
+function toggleHelp() {
+  const help = $("help");
+  if (!playing) { help.classList.toggle("hidden"); return; }
+  if (!paused) {                       // playing → pause on the controls page
+    helpOpen = true;
+    if (input.locked) document.exitPointerLock();
+    else { paused = true; help.classList.remove("hidden"); }
+  } else if (helpOpen) startPlay();    // controls → back into the game
+  else { helpOpen = true; $("menu").classList.add("hidden"); help.classList.remove("hidden"); }   // settings → controls
+}
+$("help").addEventListener("click", () => { if (playing && paused) startPlay(); });
 function setLook(k, announce) {
   if (!LOOKS[k]) k = "cinematic";
   S.look = k; store.set("look", k);
@@ -357,6 +369,57 @@ function goRace() {
   if (mainWeb) { webs.letGo(mainWeb); mainWeb = null; }
 }
 const tmpV = new THREE.Vector3();
+// web target preview (refreshed at 20 Hz): where a swing would attach, gold when
+// it's locked onto a pole, plus small diamonds on the poles in reach near the crosshair
+let aimT = 0, aimA = null;
+const poleNear = [];
+const dotEls = Array.from({ length: 6 }, () => document.createElement("i"));
+dotEls.forEach((e) => $("poleDots").appendChild(e));
+function updateAim(dt) {
+  aimT -= dt;
+  if (aimT <= 0) {
+    aimT = 0.05;
+    const st = player.state;
+    if (st === "zip" || !ctl.fwd) aimA = null;
+    else if (st === "swing") { const h = player.heading(ctl); aimA = player.aimPole(ctl, h.x, h.z); }
+    else aimA = player.findAnchor(ctl);
+    // poles in reach within ~30° of the crosshair
+    poleNear.length = 0;
+    const f = ctl.fwd, cp = camera.position, py = player.p.y + 0.6;
+    for (const q of world.poles) {
+      const dy = q.y - py;
+      if (dy < 5) continue;
+      const dx = q.x - player.p.x, dz = q.z - player.p.z, L = Math.hypot(dx, dy, dz);
+      if (L < PP.ROPE_MIN || L > PP.POLE_RANGE || dy / L < PP.POLE_EL) continue;
+      const cx = q.x - cp.x, cy = q.y - cp.y, cz = q.z - cp.z;
+      const cs = (cx * f.x + cy * f.y + cz * f.z) / Math.hypot(cx, cy, cz);
+      if (cs > 0.86) poleNear.push({ q, cs });
+    }
+    poleNear.sort((a, b) => b.cs - a.cs);
+  }
+  const el = $("aim");
+  let on = false;
+  if (aimA) {
+    tmpV.set(aimA.x, aimA.y, aimA.z).project(camera);
+    on = tmpV.z < 1 && Math.abs(tmpV.x) < 1 && Math.abs(tmpV.y) < 1;
+    if (on) {
+      el.style.left = ((tmpV.x * 0.5 + 0.5) * innerWidth) + "px";
+      el.style.top = ((-tmpV.y * 0.5 + 0.5) * innerHeight) + "px";
+      el.classList.toggle("pole", !!aimA.pole);
+    }
+  }
+  el.style.display = on ? "block" : "none";
+  for (let k = 0; k < dotEls.length; k++) {
+    const d = dotEls[k], n = poleNear[k];
+    let vis = false;
+    if (n && !(aimA && aimA.pole && aimA.x === n.q.x && aimA.z === n.q.z)) {
+      tmpV.set(n.q.x, n.q.y, n.q.z).project(camera);
+      vis = tmpV.z < 1 && Math.abs(tmpV.x) < 1 && Math.abs(tmpV.y) < 1;
+      if (vis) { d.style.left = ((tmpV.x * 0.5 + 0.5) * innerWidth) + "px"; d.style.top = ((-tmpV.y * 0.5 + 0.5) * innerHeight) + "px"; }
+    }
+    d.style.display = vis ? "block" : "none";
+  }
+}
 const titleCam = { a: 0 };
 const ctl = { mx: 0, mz: 0, lookX: 0, lookY: 0, swing: false, swingP: false, jump: false, jumpP: false, zip: false, dash: false, dive: false };
 
@@ -402,10 +465,11 @@ function tick(now) {
   const c = input.poll();
   if (window.WS?.fake) Object.assign(c, window.WS.fake);
   if (c.menu && input.locked) document.exitPointerLock();
+  else if (c.menu && playing && paused && helpOpen) { helpOpen = false; $("help").classList.add("hidden"); $("menu").classList.remove("hidden"); }
   if (c.time) setTimePreset(S.time + 1);
   if (c.comic) setLook(LOOK_ORDER[(LOOK_ORDER.indexOf(S.look) + 1) % LOOK_ORDER.length], true);
   if (c.photo) { $("hud").classList.toggle("hidden"); }
-  if (c.help) $("help").classList.toggle("hidden");
+  if (c.help) toggleHelp();
   if (input.keys.has("F3")) { input.keys.delete("F3"); statsOn = !statsOn; $("stats").classList.toggle("hidden", !statsOn); }
 
   let speed = 0, sdt = dt;
@@ -493,6 +557,7 @@ function tick(now) {
         mk.textContent = Math.round(Math.hypot(nt.x - player.p.x, nt.y - player.p.y, nt.z - player.p.z)) + " m";
       }
     }
+    updateAim(dt);
     $("charge").style.width = (player.charge / 0.75 * 100) + "%";
     $("focus").style.width = (focusMeter * 100) + "%";
     $("focusBar").classList.toggle("full", focusMeter >= 1);

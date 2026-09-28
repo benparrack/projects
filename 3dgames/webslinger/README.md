@@ -31,7 +31,7 @@ Games").
 | V | Cycle look: Cinematic, Realistic (AgX, SSAO, eye adaptation), Comic book |
 | P | Photo mode |
 | R | Respawn |
-| H | Help |
+| H | Controls. Pauses the game like the Esc menu; H or a click resumes |
 | F3 | Stats |
 | Esc | Menu: quality and settings (including the **Swing assist** toggle), the ring race list with bests, and resetting progress |
 
@@ -57,6 +57,19 @@ Gamepad: RT swing · A jump · LT zip · X dash · B dive · Y trick · RB slow-
     against your best run is shown at each ring.
   - The best run is saved with its splits and a ghost (20 Hz), which you race
     against.
+- **Swing targeting** (`aimPole` and `findAnchor` in `src/player.js`, HUD in `updateAim` in `main.js`):
+  - A white ring shows where the web would stick right now. It is refreshed at 20 Hz
+    and costs about 0.2 ms.
+  - Pole tips are swing points. There are 768: antenna and spire tips on the tall
+    towers, plus rooftop corner masts (`City.masts()`, 8–18 m tall, with their own
+    rng so the rest of the city generates unchanged).
+  - A pole locks the web when it's near the crosshair (about 7.5°), in range (115
+    m), at least 21° above you, in line of sight, and the arc from it doesn't hit a
+    wall straight away. The ring turns gold. Poles in reach near the crosshair get
+    small ◇ markers.
+  - Looking up (camera pitch above ~10°) at a building gives the spot under the
+    crosshair a big bonus in the anchor scoring. It still loses to other anchors if
+    the arc would fly into a wall.
 - **Minimap** (`src/minimap.js`): heading-up, and shows tokens, race starts or the
   active route, and the ghost.
 - **Slow-mo, speed lines**: slow-mo scales the simulation timestep by 0.3. It also
@@ -133,7 +146,11 @@ Open `?debug` to get `window.WS`:
   `races` are also exposed.
 
 Tests: `node tests/city.test.mjs`, `node tests/swing.test.mjs`,
-`node tests/flow.test.mjs [assist 0|1]`, `node tests/style.test.mjs`.
+`node tests/flow.test.mjs [assist 0|1]`, `node tests/style.test.mjs`, `node tests/aim.test.mjs`.
+- The aim test checks that looking at mast tips locks the web, that aiming 20° off
+  doesn't, that swings from poles run cleanly, and that aiming at a wall picks that
+  spot. It also re-runs the flow bot with the camera pitched up, so pole locks
+  can't wreck normal swinging.
 - The style test runs a trick bot and a bail, checks that combos bank, and checks ring
   counts and gaps for each race course.
 - The swing test runs a headless bot through the city and reports swings, maximum

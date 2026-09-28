@@ -14,6 +14,11 @@
   - Air tricks (F + direction): front flip, backflip, corkscrews and 360. Landing mid-trick is a bail.
   - 4 ring races (G, or the Esc menu) with saved bests, splits and a ghost; a heading-up minimap (M); slow-mo focus (Tab/MMB) with a lowpass; speed lines; tokens are saved between sessions.
   - Tests: `tests/style.test.mjs`.
+  Targeting pass 2026-09-28:
+  - A white ring previews where the web will stick. Poles are now swing points: 768 antenna, spire and new rooftop-mast tips. Looking at one near the crosshair locks the web onto it and turns the ring gold.
+  - Looking up at a building picks that spot.
+  - H pauses on the controls page.
+  - Tests: `tests/aim.test.mjs`.
 
   `./serve.sh` → localhost:8084. Play in Chrome because of pointer lock. Note: the vendored `CSMShader.js` carries a required patch (see README).
 - **Stockholm in 3D** (`NEW_IDEAS.md` N5) — `stockholm3d/` — a browser 3D explorer of central Stockholm built from open data. A Python pipeline turns the OSM extract and the Copernicus GLO-30 DEM into compact 500 m tiles (~40 MB): 0.56M-triangle buildings at real heights with procedural windows, a bare-earth heightmap, ground textures, water carved from coastline+DEM+land evidence, bridges/piers, and ~90k trees. The three.js viewer (vendored, no build step) has the real sun for any date/time (NOAA algorithm, Swedish DST, real sunrise/sunset), Rayleigh sky, shadows, stars on sidereal time, lit windows and streets at night, and seasons with snow and autumn leaves. Camera modes: map, fly, and street-level walk with wall collision. Also: search, 20 framed landmarks, click-a-building info with Wikipedia/OSM links, and a shareable URL hash. Run `./build.sh` (data is git-ignored), then `./serve.sh` → localhost:8083.
