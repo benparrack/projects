@@ -50,6 +50,12 @@ const CATEGORIES = [
       { type: 'garticphone', label: 'DRAWING PHONE' },
     ],
   },
+  {
+    name: 'RETRO',
+    games: [
+      { type: 'gameboy', label: 'GAME BOY / COLOR (EMULATOR)' },
+    ],
+  },
 ];
 
 // Flat list, derived from CATEGORIES — everything below that just needs "all games" (initial

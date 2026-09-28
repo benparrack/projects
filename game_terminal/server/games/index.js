@@ -20,6 +20,7 @@ const tron = require('./tron');
 const pictionary = require('./pictionary');
 const slope = require('./slope');
 const mazedash = require('./mazedash');
+const gameboy = require('./gameboy');
 
 const registry = {
   [drawing.type]: drawing,
@@ -41,6 +42,7 @@ const registry = {
   [pictionary.type]: pictionary,
   [slope.type]: slope,
   [mazedash.type]: mazedash,
+  [gameboy.type]: gameboy,
 };
 
 // CPU players for the card games — patches those plugins' onMessage in place (see cardBots.js).
