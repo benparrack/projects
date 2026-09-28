@@ -19,3 +19,5 @@ adjustris.gb  Adjustris v1.1 — Dave VanEe (tbsp). CC0 1.0, public domain dedic
               Source: https://github.com/tbsp/Adjustris
 2048.gb       2048-gb — (c) 2014 Sanqui. zlib license (LICENSE-2048.txt).
               Source: https://github.com/Sanqui/2048-gb
+linktron.gb   Link Tron — (c) 2026 Ben Parrack. MIT (LICENSE-linktron.txt). Two-player link-cable
+              light cycles written for this room. Source: gameboy/homebrew/linktron/ in this repo.

@@ -1,8 +1,10 @@
 // Game Boy / Game Boy Color — a real emulator (emu/, synced from the top-level gameboy/ project
 // via gameboy/tools/sync-game-terminal.sh; edit it there, not here). Everyone plays locally;
-// the room shows who's playing what, and you can WATCH anyone playing a bundled game.
+// the room shows who's playing what, and you can WATCH anyone playing a bundled game, or LINK with
+// someone for a two-player link-cable game (each browser emulates both consoles in lockstep and
+// only button presses cross the wire; see emu/web/player.js startLink).
 // Server plugin: ../../../server/games/gameboy.js (explains the lockstep spectating scheme).
-import { Player } from './emu/web/player.js';
+import { Player, linkDelayFor } from './emu/web/player.js';
 import { encodeState, decodeState } from './emu/web/netstate.js';
 import { sfx } from '../sfx.js';
 
@@ -16,7 +18,10 @@ const LIBRARY = [ // ids must match server/games/gameboy.js LIBRARY
   { id: 'geometrix', file: 'geometrix.gbc', name: 'GEOMETRIX', note: 'puzzle · GBC' },
   { id: 'adjustris', file: 'adjustris.gb', name: 'ADJUSTRIS', note: 'falling blocks · GB' },
   { id: '2048', file: '2048.gb', name: '2048', note: 'puzzle · GB' },
+  { id: 'linktron', file: 'linktron.gb', name: 'LINK TRON', note: '2 players · LINK someone in the room', link: true },
 ];
+const LINK_GAME = LIBRARY.find((e) => e.link);
+const PINGS = 3;
 const ROM_BASE = new URL('./roms/', import.meta.url);
 const FLUSH_MS = 50; // spectator input batches
 
@@ -112,6 +117,7 @@ export function mount(container, api) {
 
   // ---------------- state ----------------
   let roster = [];
+  let lastInviteFrom = new Set(); // who had invited me as of the last roster, to chime once per invite
   let myLib = null;          // library id I'm playing (null = custom ROM / nothing)
   let myWatchers = 0;
   let watching = null;       // clientId I'm spectating
@@ -121,6 +127,7 @@ export function mount(container, api) {
   let pendingInputs = [];
   let keyInFlight = false;
   let destroyed = false;
+  let linked = null;         // { partner, side, names, started, pings } during a link session
   const romCache = new Map();
 
   async function fetchLib(entry) {
@@ -135,6 +142,7 @@ export function mount(container, api) {
   // ---------------- playing ----------------
   async function play(bytes, name, lib) {
     stopWatching(false);
+    linked = null; // loading anything else unplugs the cable (the server tells the partner)
     await player.initAudio();
     try {
       await player.loadRom(bytes, name);
@@ -234,22 +242,119 @@ export function mount(container, api) {
     player.pushRemote(d.i, d.upTo);
   }
 
+  // ---------------- link cable ----------------
+  // After the server pairs us (linkStart), P1 (the inviter) pings P2 through the relay to size the
+  // input delay, then sends 'go'; both start the same ROM from power-on. P2 answers pings only
+  // once its ROM is loaded, so it's always ready by the time 'go' arrives.
+  const lsend = (m) => api.sendAction({ kind: 'lmsg', m });
+
+  async function onLinkStart(d) {
+    stopWatching(false);
+    if (player.gb && !player.link) player.setPaused(true); // flushes the battery save
+    myLib = null;
+    const session = linked = { partner: d.partner, side: d.side, names: d.names || [], started: false, pings: [], rom: null };
+    showMsg(`LINKING WITH ${escapeHtml(partnerName())}…`);
+    statusEl.textContent = '';
+    renderWho();
+    try {
+      session.rom = await fetchLib(LINK_GAME);
+    } catch (e) {
+      if (linked === session) unplug(`LINK FAILED: ${e.message}`);
+      return;
+    }
+    if (linked !== session) return;
+    if (session.side === 0) sendPing(session);
+    else if (session.pendingPings) for (const m of session.pendingPings.splice(0)) lsend({ t: 'pong', i: m.i, ts: m.ts });
+    setTimeout(() => { if (linked === session && !session.started) unplug('PARTNER DIDN\'T ANSWER'); }, 10000);
+  }
+
+  function sendPing(session) { lsend({ t: 'ping', i: session.pings.length, ts: performance.now() }); }
+
+  function partnerName() {
+    const p = roster.find((r) => r.clientId === linked?.partner);
+    return p ? p.nickname : linked?.names[1 - linked.side] || 'PARTNER';
+  }
+
+  function beginLink(delay) {
+    const session = linked;
+    session.started = true;
+    session.delay = delay;
+    player.startLink(session.rom, { side: session.side, delay, send: lsend, name: LINK_GAME.file });
+    showMsg('');
+    statusEl.textContent = `LINKED WITH ${partnerName()} — you are P${session.side + 1} (input delay ${delay})`;
+  }
+
+  function onLinkMsg(m) {
+    const session = linked;
+    if (!session || !m) return;
+    switch (m.t) {
+      case 'ping':
+        if (!session.rom) (session.pendingPings ||= []).push(m);
+        else lsend({ t: 'pong', i: m.i, ts: m.ts });
+        return;
+      case 'pong': {
+        if (session.side !== 0 || session.started) return;
+        session.pings.push(performance.now() - m.ts);
+        if (session.pings.length < PINGS) { sendPing(session); return; }
+        const delay = linkDelayFor(Math.max(...session.pings));
+        lsend({ t: 'go', delay });
+        beginLink(delay);
+        return;
+      }
+      case 'go':
+        if (session.side === 1 && !session.started && session.rom && Number.isInteger(m.delay)) beginLink(m.delay);
+        return;
+      default:
+        if (session.started) player.linkReceive(m);
+    }
+  }
+
+  // Ends the session locally; tell=false when the server already knows (partner left, etc.).
+  function unplug(why, tell = true) {
+    if (!linked) return;
+    linked = null;
+    player.stopLink();
+    if (tell) api.sendAction({ kind: 'linkEnd' });
+    showMsg(why || 'PICK A GAME →');
+    statusEl.textContent = '';
+    renderWho();
+  }
+
+  player.addEventListener('linkwait', (e) => {
+    if (linked) showMsg(e.detail ? `WAITING FOR ${escapeHtml(partnerName())}…` : '');
+  });
+  player.addEventListener('linkdesync', () => {
+    if (linked) statusEl.textContent = 'LINK OUT OF SYNC — UNPLUG AND LINK AGAIN';
+  });
+
   // ---------------- roster ----------------
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`); }
 
   function renderWho() {
     const me = api.getClientId();
+    const mine = roster.find((p) => p.clientId === me);
     const ul = $('.gbx-who');
     ul.innerHTML = '';
+    const button = (li, text, onclick) => {
+      const b = document.createElement('button');
+      b.textContent = text;
+      b.onclick = () => { sfx.play?.('click'); player.initAudio(); onclick(); };
+      li.appendChild(b);
+    };
     for (const p of roster) {
       const li = document.createElement('li');
-      const what = p.title ? `${p.title}${p.lib ? '' : ' (own ROM)'}` : p.watching ? 'watching' : 'idle';
-      li.innerHTML = `<span>${escapeHtml(p.nickname)}${p.clientId === me ? ' (you)' : ''}<br><small style="color:var(--fg-dim)">${escapeHtml(what)}${p.watchers ? ` · ${p.watchers} 👁` : ''}</small></span>`;
-      if (p.clientId !== me && p.lib) {
-        const b = document.createElement('button');
-        b.textContent = watching === p.clientId ? 'STOP' : 'WATCH';
-        b.onclick = () => (watching === p.clientId ? stopWatching() : watch(p.clientId));
-        li.appendChild(b);
+      const partner = p.link && roster.find((r) => r.clientId === p.link);
+      const what = p.link ? `${LINK_GAME.name} with ${partner ? partner.nickname : '…'}`
+        : p.title ? `${p.title}${p.lib ? '' : ' (own ROM)'}` : p.watching ? 'watching' : 'idle';
+      const invited = p.invite === me ? ' · wants to LINK' : p.invite && p.clientId === me ? ' · invite sent' : '';
+      li.innerHTML = `<span>${escapeHtml(p.nickname)}${p.clientId === me ? ' (you)' : ''}<br><small style="color:var(--fg-dim)">${escapeHtml(what + invited)}${p.watchers ? ` · ${p.watchers} 👁` : ''}</small></span>`;
+      if (p.clientId === me) {
+        if (linked) button(li, 'UNPLUG', () => unplug());
+      } else if (!p.link && !linked) {
+        if (p.invite === me) button(li, 'ACCEPT', () => api.sendAction({ kind: 'linkAccept', from: p.clientId }));
+        else if (mine && mine.invite === p.clientId) button(li, 'CANCEL', () => api.sendAction({ kind: 'linkInvite', target: null }));
+        else button(li, 'LINK', () => api.sendAction({ kind: 'linkInvite', target: p.clientId }));
+        if (p.lib) button(li, watching === p.clientId ? 'STOP' : 'WATCH', () => (watching === p.clientId ? stopWatching() : watch(p.clientId)));
       }
       ul.appendChild(li);
     }
@@ -260,6 +365,13 @@ export function mount(container, api) {
     const me = roster.find((p) => p.clientId === api.getClientId());
     const before = myWatchers;
     myWatchers = me ? me.watchers : 0;
+    const invitedBy = roster.find((p) => p.invite === api.getClientId() && !p.link);
+    if (invitedBy && !linked && !lastInviteFrom.has(invitedBy.clientId)) {
+      sfx.play?.('chime');
+      statusEl.textContent = `${invitedBy.nickname} WANTS TO LINK — press ACCEPT next to their name`;
+    }
+    lastInviteFrom = new Set(roster.filter((p) => p.invite === api.getClientId()).map((p) => p.clientId));
+    if (linked && !roster.some((p) => p.clientId === linked.partner)) unplug('YOUR PARTNER LEFT THE ROOM', false);
     if (!before && myWatchers) pendingInputs = [];
     if (watching) {
       const t = roster.find((p) => p.clientId === watching);
@@ -291,7 +403,7 @@ export function mount(container, api) {
   };
   root.querySelectorAll('[data-act]').forEach((b) => {
     b.onclick = () => {
-      if (watching && b.dataset.act !== 'full') return;
+      if ((watching || linked) && b.dataset.act !== 'full') return; // no pausing etc. in someone else's game
       switch (b.dataset.act) {
         case 'pause': player.togglePause(); break;
         case 'reset': player.reset(); break;
@@ -328,6 +440,9 @@ export function mount(container, api) {
       else if (d.kind === 'needKey') { pendingInputs = []; sendKey(); }
       else if (d.kind === 'key') onKey(d);
       else if (d.kind === 'inp') onInp(d);
+      else if (d.kind === 'linkStart') onLinkStart(d);
+      else if (d.kind === 'lmsg') onLinkMsg(d.m);
+      else if (d.kind === 'linkEnd') unplug(d.reason === 'left' ? 'YOUR PARTNER LEFT THE ROOM' : 'YOUR PARTNER UNPLUGGED', false);
     },
     unmount() {
       destroyed = true;

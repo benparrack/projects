@@ -47,6 +47,7 @@ export class GameBoy {
     this.hdmaSrc = 0; this.hdmaDst = 0; this.hdmaLen = 0; this.hdmaActive = false; this.hdmaPending = false;
 
     this.cycles = 0; // total CPU M-cycles * 4
+    this.dots = 0;   // real time in dots (4 per M-cycle, 2 in CGB double speed); Link keeps two machines in step with it
     this.initPostBoot();
   }
 
@@ -81,6 +82,7 @@ export class GameBoy {
     this.timer.tick();
     if (this.dmaIndex >= 0 || this.dmaDelay) this.dmaStep();
     const dots = this.doubleSpeed ? 2 : 4;
+    this.dots += dots;
     this.ppu.step(dots);
     this.apu.step(dots);
   }
@@ -98,6 +100,14 @@ export class GameBoy {
     while (!ppu.frameReady && this.cycles < limit) {
       if (this.hdmaPending) this.runHdmaBlock();
       cpu.step();
+    }
+  }
+
+  /** Runs until the real-time dot counter reaches `t` (used by Link to interleave two machines). */
+  runUntil(t) {
+    while (this.dots < t) {
+      if (this.hdmaPending) this.runHdmaBlock();
+      this.cpu.step();
     }
   }
 
@@ -285,7 +295,7 @@ export class GameBoy {
         joypSelect: this.joypSelect, sb: this.sb, sc: this.sc, serialBits: this.serialBits,
         dmaSource: this.dmaSource, dmaIndex: this.dmaIndex, dmaDelay: this.dmaDelay, dmaReg: this.dmaReg,
         hdmaSrc: this.hdmaSrc, hdmaDst: this.hdmaDst, hdmaLen: this.hdmaLen, hdmaActive: this.hdmaActive,
-        hdmaPending: this.hdmaPending, cycles: this.cycles,
+        hdmaPending: this.hdmaPending, cycles: this.cycles, dots: this.dots,
       },
       wram: this.wram.slice(), hram: this.hram.slice(),
       cpu: this.cpu.saveState(), ppu: this.ppu.saveState(), apu: this.apu.saveState(),
