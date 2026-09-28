@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Webslinger</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="loading">Building the city…</div>
+
+<div id="title">
+  <div class="logo">WEB<span>SLINGER</span></div>
+  <div class="tag">swing through a city at golden hour</div>
+  <button id="play">Click to play</button>
+  <div class="keys">
+    <div><b>Mouse</b> look</div>
+    <div><b>WASD</b> run · steer</div>
+    <div><b>Left mouse</b> / <b>Shift</b> hold to swing — release to fly</div>
+    <div><b>Space</b> jump (hold to charge) · jump off a swing for a boost</div>
+    <div><b>Right mouse</b> / <b>E</b> zip to a ledge and launch</div>
+    <div><b>Q</b> web-dash (3) · <b>Ctrl</b> / <b>C</b> dive</div>
+    <div><b>T</b> time of day · <b>V</b> comic mode · <b>P</b> hide HUD · <b>Esc</b> settings</div>
+  </div>
+  <div class="hint">Best in Chrome — Firefox on Linux/X11 has a pointer-lock bug that can stick the mouse. Gamepads work too.</div>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="speedo"><span id="spd">0</span><small>km/h</small><div class="sub"><span id="alt">0</span> m</div></div>
+  <div id="tokens"><span class="gem">◆</span> <span id="tok">0</span> / <span id="tokTotal">0</span></div>
+  <div id="dash">◆◆◆</div>
+  <div id="cross"></div>
+  <div id="chargeBar"><div id="charge"></div></div>
+  <div id="marker"></div>
+</div>
+<div id="toast"></div>
+<div id="stats" class="hidden"></div>
+<div id="help" class="hidden"></div>
+
+<div id="menu" class="hidden">
+  <div class="panel">
+    <h2>Paused</h2>
+    <label>Quality <select id="s-quality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="ultra">Ultra</option></select></label>
+    <label>Time of day <select id="s-time"></select></label>
+    <label><input type="checkbox" id="s-flow"> Time passes (1 h / min)</label>
+    <label><input type="checkbox" id="s-comic"> Comic-book shading (V)</label>
+    <label><input type="checkbox" id="s-dyn"> Dynamic resolution (hold 60 fps)</label>
+    <label><input type="checkbox" id="s-auto"> Camera follows swings</label>
+    <label><input type="checkbox" id="s-invert"> Invert Y</label>
+    <label>Mouse sensitivity <input type="range" id="s-sens" min="0.2" max="3" step="0.05"></label>
+    <label>Field of view <input type="range" id="s-fov" min="55" max="95" step="1"></label>
+    <label>Motion blur / aberration <input type="range" id="s-motion" min="0" max="1.5" step="0.05"></label>
+    <label>Volume <input type="range" id="s-vol" min="0" max="1" step="0.05"></label>
+    <button id="resume">Resume</button>
+    <div class="small">F3 performance stats · R respawn</div>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
