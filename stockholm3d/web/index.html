@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stockholm 3D</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="labels"></div>
+
+<header id="top">
+  <div class="brand">Stockholm <b>3D</b></div>
+  <div class="search">
+    <input id="q" type="search" placeholder="Search buildings, places…" autocomplete="off" spellcheck="false">
+    <ul id="results" hidden></ul>
+  </div>
+  <select id="landmarks" title="Fly to a landmark"><option value="">Landmarks…</option></select>
+  <div class="modes" role="group" aria-label="Camera mode">
+    <button data-mode="orbit" class="on" title="Map: left-drag pan, right-drag rotate, wheel zoom">Map</button>
+    <button data-mode="fly" title="Fly: WASD move, E/Q up/down, drag to look, wheel = speed, Shift = fast">Fly</button>
+    <button data-mode="walk" title="Walk: WASD, drag to look, Shift = run">Walk</button>
+  </div>
+</header>
+
+<aside id="info" hidden>
+  <button id="info-close" aria-label="Close">×</button>
+  <h2 id="info-title"></h2>
+  <p id="info-sub"></p>
+  <dl id="info-list"></dl>
+  <p id="info-links"></p>
+</aside>
+
+<footer id="time">
+  <input id="date" type="date" title="Date">
+  <input id="clock" type="range" min="0" max="1439" step="1" title="Time of day (Stockholm)">
+  <output id="clock-out">12:00</output>
+  <div class="speed" role="group" aria-label="Time speed">
+    <button data-speed="0" class="on" title="Pause">❚❚</button>
+    <button data-speed="1" title="Real time">1×</button>
+    <button data-speed="300" title="5 minutes per second">5m/s</button>
+    <button data-speed="3600" title="1 hour per second">1h/s</button>
+  </div>
+  <button id="now" title="Jump to the current time">Now</button>
+  <select id="season" title="Season">
+    <option value="auto">Season: from date</option>
+    <option value="summer">Summer</option>
+    <option value="autumn">Autumn</option>
+    <option value="winter">Winter (snow)</option>
+  </select>
+  <span id="suntimes"></span>
+</footer>
+
+<div id="loading"><div class="bar"><i></i></div><span>Loading Stockholm…</span></div>
+<div id="help">Map: left-drag pan · right-drag rotate · wheel zoom · click a building</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
