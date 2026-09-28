@@ -1,0 +1,31 @@
+{
+  "name": "jump-tower",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "Server": { "$path": "src/server" },
+      "ServerLib": { "$path": "../../lib/server" }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterUseJumpPower": true,
+        "CharacterWalkSpeed": 22,
+        "CameraMaxZoomDistance": 250
+      },
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/client" }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "Gravity": 196.2,
+        "StreamingEnabled": false
+      }
+    },
+    "SoundService": {},
+    "Lighting": {}
+  }
+}
