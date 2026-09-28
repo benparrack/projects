@@ -11,6 +11,12 @@ const LIBRARY = [
   { file: 'ucity.gbc', name: 'µCity', by: 'Antonio Niño Díaz', note: 'city builder', cgb: true },
   { file: 'libbet.gb', name: 'Libbet and the Magic Floor', by: 'Damian Yerrick', note: 'puzzle' },
   { file: 'big2small.gb', name: 'Big2Small', by: 'mdsteele', note: 'puzzle', cgb: true },
+  { file: 'tobudx.gb', name: 'Tobu Tobu Girl Deluxe', by: 'Tangram Games', note: 'arcade platformer', cgb: true },
+  { file: 'porklike.gb', name: 'Porklike', by: 'binji', note: 'roguelike' },
+  { file: 'shocklobster.gb', name: 'Shock Lobster', by: 'tbsp', note: 'action' },
+  { file: 'geometrix.gbc', name: 'Geometrix', by: 'Antonio Niño Díaz', note: 'puzzle', cgb: true },
+  { file: 'adjustris.gb', name: 'Adjustris', by: 'tbsp', note: 'falling blocks' },
+  { file: '2048.gb', name: '2048', by: 'Sanqui', note: 'puzzle' },
 ];
 const ROM_BASE = '../roms/homebrew/';
 

@@ -7,7 +7,7 @@ import { GameBoy, BUTTONS } from '../src/gameboy.js';
 import { encodeState, decodeState } from '../web/netstate.js';
 
 const roms = process.argv.slice(2);
-if (!roms.length) roms.push('roms/homebrew/ucity.gbc', 'roms/homebrew/libbet.gb', 'roms/homebrew/big2small.gb');
+if (!roms.length) for (const f of ['ucity.gbc', 'libbet.gb', 'big2small.gb', 'tobudx.gb', 'porklike.gb', 'shocklobster.gb', 'geometrix.gbc', 'adjustris.gb', '2048.gb']) roms.push('roms/homebrew/' + f);
 
 function setMask(gb, prev, mask) {
   for (let i = 0; i < 8; i++) if ((prev ^ mask) & (1 << i)) gb.setButton(BUTTONS[i], (mask >> i) & 1);

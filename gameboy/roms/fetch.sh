@@ -15,4 +15,11 @@ cd ../homebrew
 [ -f libbet.gb ] || curl -sfL -o libbet.gb https://github.com/pinobatch/libbet/releases/download/v0.08/libbet.gb
 [ -f big2small.gb ] || curl -sfL -o big2small.gb https://github.com/mdsteele/big2small/releases/download/v1.0.0/big2small.gb
 [ -f ucity.gbc ] || curl -sfL -o ucity.gbc https://github.com/AntonioND/ucity/releases/download/v1.3/ucity.gbc
+DB=https://raw.githubusercontent.com/gbdev/database/master/entries
+[ -f adjustris.gb ] || curl -sfL -o adjustris.gb https://github.com/tbsp/Adjustris/releases/download/v1.1/adjustris.gb
+[ -f geometrix.gbc ] || curl -sfL -o geometrix.gbc https://raw.githubusercontent.com/AntonioND/geometrix/master/geometrix.gbc
+[ -f 2048.gb ] || curl -sfL -o 2048.gb $DB/2048gb/2048.gb
+[ -f tobudx.gb ] || curl -sfL -o tobudx.gb $DB/tobutobugirldeluxe/tobudx.gb
+[ -f porklike.gb ] || curl -sfL -o porklike.gb $DB/porklike-gb/porklike.gb
+[ -f shocklobster.gb ] || curl -sfL -o shocklobster.gb $DB/shock-lobster/shocklobster.gb
 echo "ROMs ready."

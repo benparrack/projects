@@ -68,5 +68,11 @@ hold Space = fast-forward · hold R = rewind · P/Esc = pause · F5/F8 = save/lo
 - **µCity** — Antonio Niño Díaz, GPL-3.0 — https://github.com/AntonioND/ucity
 - **Libbet and the Magic Floor** — Damian Yerrick, zlib — https://github.com/pinobatch/libbet
 - **Big2Small** — Matthew D. Steele, GPL-3.0 — https://github.com/mdsteele/big2small
+- **Tobu Tobu Girl Deluxe** — Tangram Games, MIT code + CC-BY 4.0 assets — https://github.com/SimonLarsen/tobutobugirl-dx
+- **Porklike GB** — Ben Smith (binji), MIT — https://github.com/binji/porklike.gb
+- **Shock Lobster** — Dave VanEe (tbsp), zlib — https://github.com/tbsp/shock-lobster
+- **Geometrix** — Antonio Niño Díaz, GPL-3.0 — https://github.com/AntonioND/geometrix
+- **Adjustris** — Dave VanEe (tbsp), CC0 — https://github.com/tbsp/Adjustris
+- **2048-gb** — Sanqui, zlib — https://github.com/Sanqui/2048-gb
 
 Only free homebrew is bundled/fetched; bring your own ROM dumps for anything else.
