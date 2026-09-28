@@ -403,11 +403,11 @@ export class Player {
    * body box against the city. Returns the step it would hit something (or -1)
    * and how far it gets along the heading.
    */
-  simArc(pv, L, hx, hz) {
+  simArc(pv, L, hx, hz, N = 16) {
     const w = this.w, q = this._q || (this._q = v3()), u = this._u || (this._u = v3());
     q.x = this.p.x; q.y = this.p.y; q.z = this.p.z;
     u.x = this.v.x; u.y = this.v.y; u.z = this.v.z;
-    const N = 16, dt = 0.07, hx2 = P.HX + 0.35, hy2 = P.HY;
+    const dt = 0.07, hx2 = P.HX + 0.35, hy2 = P.HY;
     for (let i = 0; i < N; i++) {
       u.y -= P.GRAV * dt;
       q.x += u.x * dt; q.y += u.y * dt; q.z += u.z * dt;
@@ -455,11 +455,12 @@ export class Player {
       const { q, L, dx, dy, dz } = k;
       const h = w.raycast(px, py, pz, dx / L, dy / L, dz / L, L - 0.4);
       if (h && Math.hypot(h.x - q.x, h.z - q.z) > 1.0) continue;     // blocked (the mast itself is fine)
-      if (this.assist > 0) {
-        const pv = this.pivotFor(q.x, q.y, q.z, hx, hz, this._pv || (this._pv = v3()));
-        const sim = this.simArc(pv, Math.hypot(this.p.x - pv.x, this.p.y - pv.y, this.p.z - pv.z), hx, hz);
-        if (sim.hit >= 0 && sim.hit < 5) continue;
-      }
+      const pv = this.pivotFor(q.x, q.y, q.z, hx, hz, this._pv || (this._pv = v3()));
+      // a pole stands on a roof, so the bottom of its arc is often inside that
+      // building: preview the whole swing (not just the first second) and only
+      // lock onto poles whose arc is clean and carries you forward
+      const sim = this.simArc(pv, Math.hypot(this.p.x - pv.x, this.p.y - pv.y, this.p.z - pv.z), hx, hz, 45);
+      if (sim.hit >= 0 || sim.prog < 10) continue;
       const side = dx * -hz + dz * hx >= 0 ? 1 : -1;
       return { x: q.x, y: q.y, z: q.z, L, side, nx: 0, ny: 1, nz: 0, pole: true };
     }
@@ -512,23 +513,6 @@ export class Player {
         const dx = (hx * Math.cos(a) + rx * Math.sin(a)) * ce, dz = (hz * Math.cos(a) + rz * Math.sin(a)) * ce, dy = se;
         const h = w.raycast(ox, oy, oz, dx, dy, dz, 130);
         if (h && h.box >= 0) consider(h, el, yawOff, 0);
-      }
-    }
-    // crosshair: when you look up at a building, the spot you're aiming at is a
-    // strong candidate (still scored, so a swing straight into a wall loses)
-    const f = c.fwd, cp = c.camPos;
-    if (f && cp && f.y > 0.18) {
-      const h = w.raycast(cp.x, cp.y, cp.z, f.x, f.y, f.z, 160);
-      if (h && h.box >= 0) {
-        const dx = h.x - ox, dy = h.y - oy, dz = h.z - oz, L = Math.hypot(dx, dy, dz);
-        const el = Math.asin(clamp(dy / L, -1, 1)) * 180 / Math.PI;
-        const hl = Math.hypot(dx, dz) || 1;
-        const yawOff = Math.atan2((dx * rx + dz * rz) / hl, (dx * hx + dz * hz) / hl) * 180 / Math.PI;
-        if (el > 25 && L < 130 && Math.abs(yawOff) < 100) {
-          const hit = { t: L, x: h.x, y: h.y, z: h.z, nx: h.nx, ny: h.ny, nz: h.nz };
-          const los = w.raycast(ox, oy, oz, dx / L, dy / L, dz / L, L - 0.6);
-          if (!los) consider(hit, clamp(el, 42, 82), clamp(yawOff, -75, 75), 2.2 + Math.abs(L - idealLen) * 0.035);
-        }
       }
     }
     return best;

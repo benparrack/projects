@@ -262,8 +262,9 @@ export class City {
       for (let q = 0; q < n; q++) {
         const [x, z] = corners[q === 0 ? k : k ^ 1];
         const len = 8 + r() * 10, hw = 0.22;
-        this.box(x - hw, L.y, z - hw, x + hw, L.y + len, z + hw, S.METAL, lin(0x70737a), { seed: r() });
-        this.box(x - 0.6, L.y, z - 0.6, x + 0.6, L.y + 1.3, z + 0.6, S.MECH, lin(0x505258), { seed: r(), detail: true });
+        // visual only: thin masts at roof corners would snag swings and catch fan rays
+        this.box(x - hw, L.y, z - hw, x + hw, L.y + len, z + hw, S.METAL, lin(0x70737a), { seed: r(), collide: false });
+        this.box(x - 0.6, L.y, z - 0.6, x + 0.6, L.y + 1.3, z + 0.6, S.MECH, lin(0x505258), { seed: r(), detail: true, collide: false });
         this.lights.push({ x, y: L.y + len + 0.2, z, s: 0.3 });
         this.poles.push({ x, y: L.y + len, z });
       }

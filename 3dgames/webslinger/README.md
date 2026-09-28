@@ -62,14 +62,17 @@ Gamepad: RT swing · A jump · LT zip · X dash · B dive · Y trick · RB slow-
     and costs about 0.2 ms.
   - Pole tips are swing points. There are 768: antenna and spire tips on the tall
     towers, plus rooftop corner masts (`City.masts()`, 8–18 m tall, with their own
-    rng so the rest of the city generates unchanged).
+    rng so the rest of the city generates unchanged). Masts don't collide: at roof
+    corners they snagged swings and caught the anchor rays.
   - A pole locks the web when it's near the crosshair (about 7.5°), in range (115
-    m), at least 21° above you, in line of sight, and the arc from it doesn't hit a
-    wall straight away. The ring turns gold. Poles in reach near the crosshair get
+    m), at least 21° above you, in line of sight, and a preview of the whole arc
+    (not just its first second; a pole stands on a roof, so the bottom of its arc
+    is often inside that building) is clean and carries you forward. The ring turns
+    gold. Poles in reach near the crosshair get
     small ◇ markers.
-  - Looking up (camera pitch above ~10°) at a building gives the spot under the
-    crosshair a big bonus in the anchor scoring. It still loses to other anchors if
-    the arc would fly into a wall.
+  - Otherwise the anchor is the normal scored fan pick. A crosshair-wall bonus was
+    tried and removed: real players look at buildings, and it kept picking a wall
+    straight ahead, swinging you into it (a look-around bot lost ~15% speed).
 - **Minimap** (`src/minimap.js`): heading-up, and shows tokens, race starts or the
   active route, and the ghost.
 - **Slow-mo, speed lines**: slow-mo scales the simulation timestep by 0.3. It also
@@ -148,8 +151,7 @@ Open `?debug` to get `window.WS`:
 Tests: `node tests/city.test.mjs`, `node tests/swing.test.mjs`,
 `node tests/flow.test.mjs [assist 0|1]`, `node tests/style.test.mjs`, `node tests/aim.test.mjs`.
 - The aim test checks that looking at mast tips locks the web, that aiming 20° off
-  doesn't, that swings from poles run cleanly, and that aiming at a wall picks that
-  spot. It also re-runs the flow bot with the camera pitched up, so pole locks
+  doesn't, and that swings from poles run cleanly. It also re-runs the flow bot with the camera pitched up, so pole locks
   can't wreck normal swinging.
 - The style test runs a trick bot and a bail, checks that combos bank, and checks ring
   counts and gaps for each race course.

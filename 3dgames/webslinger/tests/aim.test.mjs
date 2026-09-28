@@ -48,24 +48,6 @@ ok(locked >= tried * 0.7, `crosshair locks the pole ${locked}/${tried}`);
 ok(offLocked === 0, `no lock when aiming 20° off (${offLocked})`);
 ok(swung === locked, `swings from locked poles stay finite (${swung}/${locked})`);
 
-// crosshair on a building edge while looking up picks (near) that spot
-{
-  const pl = new Player(w);
-  pl.p.x = 0; pl.p.z = 600; pl.p.y = 20; pl.state = "air"; pl.v.z = -20;
-  let near = 0, n = 0;
-  for (const yawOff of [-0.5, -0.3, 0.3, 0.5]) {
-    const f = norm(Math.sin(yawOff) * -1, 0.75, -Math.cos(yawOff));
-    const cam = { x: pl.p.x, y: pl.p.y + 1.5, z: pl.p.z + 5 };
-    const h = w.raycast(cam.x, cam.y, cam.z, f.x, f.y, f.z, 160);
-    if (!h || h.box < 0 || h.y < pl.p.y + 10) continue;
-    const hx = h.x, hy = h.y, hz = h.z;
-    const a = pl.findAnchor({ ...base, yaw: 0, camPos: cam, fwd: f });
-    n++;
-    if (a && Math.hypot(a.x - hx, a.y - hy, a.z - hz) < 12) near++;
-  }
-  ok(n > 0 && near >= n - 1, `looking up at a wall anchors near the crosshair ${near}/${n}`);
-}
-
 // flow bot with the camera pitched up: pole locks must not wreck momentum
 const runs = [
   { x: 0, z: 600, yaw: 0 }, { x: -1104 + 184 * 3, z: 900, yaw: 0 },

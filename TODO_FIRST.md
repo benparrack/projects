@@ -16,7 +16,7 @@
   - Tests: `tests/style.test.mjs`.
   Targeting pass 2026-09-28:
   - A white ring previews where the web will stick. Poles are now swing points: 768 antenna, spire and new rooftop-mast tips. Looking at one near the crosshair locks the web onto it and turns the ring gold.
-  - Looking up at a building picks that spot.
+  - Fix, same day: swinging broke in real play. The "look up at a building picks that spot" bonus kept swinging players into walls, so it's removed. Pole locks now preview the whole arc, and rooftop masts no longer collide.
   - H pauses on the controls page.
   - Tests: `tests/aim.test.mjs`.
 
