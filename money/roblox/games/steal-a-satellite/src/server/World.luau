@@ -360,6 +360,10 @@ local function base(map: Folder, index: number, cf: CFrame): Base
 			local z = if row == 0 then -6 else 12
 			local pad = part(model, { Name = "Pad", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.4, 6, 6), CFrame = at(x, 1.7, z) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Metal, Color = Color3.fromRGB(70, 72, 92) })
 			decor(pad, { Name = "PadRing", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 6.5, 6.5), CFrame = at(x, 2.1, z) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = color })
+			local lockTag = billboard(pad, UDim2.fromScale(5, 1.3), Vector3.new(3.2, 0, 0), "🔒 Rebirth", Color3.fromRGB(170, 170, 190), 60) -- pad is rotated: local X is world up
+			local lockGui = lockTag.Parent :: BillboardGui
+			lockGui.Name = "LockTag"
+			lockGui.Enabled = false
 			local plate = part(model, { Name = "Collect", Size = Vector3.new(5.4, 0.4, 2.6), CFrame = at(x, 1.2, z - 5), Material = Enum.Material.Neon, Color = Color3.fromRGB(70, 200, 100), CanCollide = false })
 			table.insert(pads, at(x, 8, z))
 			table.insert(padParts, pad)
@@ -387,7 +391,7 @@ local function base(map: Folder, index: number, cf: CFrame): Base
 		shield = shield,
 		ownerLabel = ownerLabel,
 		insideLabel = insideLabel,
-		spawn = at(0, 4, D / 2 - 10) * CFrame.Angles(0, math.pi, 0),
+		spawn = at(0, 4, D / 2 - 10), -- faces the belt
 	}
 end
 

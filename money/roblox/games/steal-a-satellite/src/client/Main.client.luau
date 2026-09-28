@@ -433,6 +433,7 @@ end
 -- Left button column ---------------------------------------------------------------------
 
 local column = Ui.new("Frame", {
+	Name = "Column",
 	AnchorPoint = Vector2.new(0, 0.5),
 	Position = UDim2.new(0, 10, 0.5, 0),
 	Size = UDim2.fromOffset(84, 420),
@@ -441,7 +442,7 @@ local column = Ui.new("Frame", {
 }, { Ui.new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
 
 local function sideButton(order: number, icon: string, text: string, color: Color3, onClick: () -> ()): TextButton
-	local b = Ui.button({ Size = UDim2.fromOffset(84, 70), Text = "", LayoutOrder = order, Parent = column }, color, onClick)
+	local b = Ui.button({ Name = text, Size = UDim2.fromOffset(84, 70), Text = "", LayoutOrder = order, Parent = column }, color, onClick)
 	Ui.label({ Size = UDim2.fromScale(1, 0.62), Text = icon, Parent = b })
 	Ui.label({ Position = UDim2.fromScale(0, 0.6), Size = UDim2.fromScale(1, 0.4), Text = text, Parent = b })
 	return b

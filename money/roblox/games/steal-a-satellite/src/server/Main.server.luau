@@ -293,6 +293,10 @@ local function paintPads(player: Player, session: Session?)
 		if ring then
 			ring.Transparency = if open then 0 else 0.85
 		end
+		local lockTag = pad:FindFirstChild("LockTag") :: BillboardGui?
+		if lockTag then
+			lockTag.Enabled = not open
+		end
 		base.collect[i].Transparency = if open then 0 else 1
 	end
 end
@@ -799,6 +803,10 @@ local function spawnPirates(index: number)
 		local ring = pad:FindFirstChild("PadRing") :: BasePart?
 		if ring then
 			ring.Transparency = if i <= Config.BaseSlots then 0 else 0.85
+		end
+		local lockTag = pad:FindFirstChild("LockTag") :: BillboardGui?
+		if lockTag then
+			lockTag.Enabled = false
 		end
 		base.collect[i].Transparency = 1
 	end
