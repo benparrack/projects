@@ -364,7 +364,7 @@ local function base(map: Folder, index: number, cf: CFrame): Base
 			local lockGui = lockTag.Parent :: BillboardGui
 			lockGui.Name = "LockTag"
 			lockGui.Enabled = false
-			local plate = part(model, { Name = "Collect", Size = Vector3.new(5.4, 0.4, 2.6), CFrame = at(x, 1.2, z - 5), Material = Enum.Material.Neon, Color = Color3.fromRGB(70, 200, 100), CanCollide = false })
+			local plate = part(model, { Name = "Collect", Size = Vector3.new(5.4, 0.4, 2.6), CFrame = at(x, 1.2, z - 5), Material = Enum.Material.Neon, Color = Color3.fromRGB(70, 200, 100), CanCollide = false, Transparency = 1 })
 			table.insert(pads, at(x, 8, z))
 			table.insert(padParts, pad)
 			table.insert(collect, plate)

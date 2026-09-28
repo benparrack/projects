@@ -241,6 +241,14 @@ function placePirateModel(crew: Pirates, slotIndex: number, id: string): Model
 	return model
 end
 
+-- Collect plate: bright under a satellite, faint on an empty open pad, hidden on a locked one.
+local function paintPlate(session: Session, slotIndex: number, open: boolean)
+	local plate = session.base.collect[slotIndex]
+	if plate then
+		plate.Transparency = if not open then 1 elseif session.slots[slotIndex] then 0 else 0.8
+	end
+end
+
 local function setSlot(owner: Player, session: Session, slotIndex: number, id: string, pending: number?)
 	local old = session.slots[slotIndex]
 	if old then
@@ -248,6 +256,7 @@ local function setSlot(owner: Player, session: Session, slotIndex: number, id: s
 	end
 	session.slots[slotIndex] = { id = id, model = placeModel(owner, session, slotIndex, id), pending = pending or 0, carrier = nil }
 	session.profile.data.found[id] = true
+	paintPlate(session, slotIndex, true)
 	syncSave(session)
 end
 
@@ -258,6 +267,7 @@ local function clearSlot(session: Session, slotIndex: number)
 		session.slots[slotIndex] = nil
 		session.base.collectLabels[slotIndex].Text = ""
 	end
+	paintPlate(session, slotIndex, true)
 	syncSave(session)
 end
 
@@ -297,7 +307,9 @@ local function paintPads(player: Player, session: Session?)
 		if lockTag then
 			lockTag.Enabled = not open
 		end
-		base.collect[i].Transparency = if open then 0 else 1
+		if session then
+			paintPlate(session, i, open)
+		end
 	end
 end
 
@@ -843,7 +855,7 @@ local function evictPirates(index: number)
 	base.lockPlate.Color = Color3.fromRGB(255, 70, 70)
 	paintBase(base, base.color)
 	for i in base.padParts do
-		base.collect[i].Transparency = 0
+		base.collect[i].Transparency = 1
 	end
 end
 
@@ -1101,6 +1113,13 @@ local function onPlayerRemoving(player: Player)
 	base.insideLabel.Text = ""
 	setShield(base, false)
 	base.lockLabel.Text = "🔓 LOCK BASE"
+	for i, pad in base.padParts do
+		base.collect[i].Transparency = 1
+		local lockTag = pad:FindFirstChild("LockTag") :: BillboardGui?
+		if lockTag then
+			lockTag.Enabled = false
+		end
+	end
 	for _, d in base.model:GetChildren() do
 		if d.Name == "Trim" or d.Name == "SignTrim" then
 			(d :: BasePart).Color = base.color
