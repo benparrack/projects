@@ -8,6 +8,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Formulas = require(Shared.Formulas)
 local TowerLayout = require(Shared.TowerLayout)
+local Decor = require(script.Parent.Decor)
 
 local World = {}
 
@@ -100,8 +101,19 @@ local function buildPlaza(folder: Folder): Part
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(4, r * 2, r * 2),
 		CFrame = CFrame.new(0, -2, 0) * CFrame.Angles(0, 0, math.pi / 2),
-		Material = Enum.Material.Slate,
-		Color = Color3.fromRGB(78, 84, 106),
+		Material = Enum.Material.Grass,
+		Color = Color3.fromRGB(96, 178, 80),
+		Parent = folder,
+	})
+	-- Paved ring around the tower base.
+	part({
+		Name = "Paving",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(4.2, (Config.CoreRadius + 16) * 2, (Config.CoreRadius + 16) * 2),
+		CFrame = CFrame.new(0, -2, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		Material = Enum.Material.Cobblestone,
+		Color = Color3.fromRGB(165, 160, 150),
+		CanCollide = false,
 		Parent = folder,
 	})
 	part({
@@ -169,16 +181,53 @@ local function buildPlaza(folder: Folder): Part
 	return plaza
 end
 
--- Returns the lava part (the game listens to its Touched event).
+-- Returns the lava part under the tower (the game listens to its Touched event); more tiles
+-- around it carry the sea past the horizon so there's no visible edge.
 local function buildLava(folder: Folder): Part
-	return part({
-		Name = "Lava",
-		Size = Vector3.new(2048, 20, 2048),
-		CFrame = CFrame.new(0, LAVA_TOP - 10, 0),
-		Material = Enum.Material.Neon,
-		Color = Color3.fromRGB(255, 85, 20),
-		Parent = folder,
-	})
+	local main
+	for x = -2, 2 do
+		for z = -2, 2 do
+			local tile = part({
+				Name = if x == 0 and z == 0 then "Lava" else "LavaSea",
+				Size = Vector3.new(MAX_PART, 20, MAX_PART),
+				CFrame = CFrame.new(x * MAX_PART, LAVA_TOP - 9.5, z * MAX_PART),
+				Material = Enum.Material.CrackedLava,
+				Color = Color3.fromRGB(255, 120, 40),
+				Transparency = 0.45,
+				-- Outer tiles are scenery: you sink through them and the fall backup returns you.
+				CanTouch = x == 0 and z == 0,
+				CanCollide = x == 0 and z == 0,
+				Parent = folder,
+			})
+			-- Glowing layer under the translucent crust, so the sea reads as lava from any distance.
+			part({
+				Name = "LavaGlow",
+				Size = Vector3.new(MAX_PART, 4, MAX_PART),
+				CFrame = CFrame.new(x * MAX_PART, LAVA_TOP - 3, z * MAX_PART),
+				Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(235, 80, 15),
+				CanCollide = false,
+				CanTouch = false,
+				CanQuery = false,
+				Parent = folder,
+			})
+			if x == 0 and z == 0 then
+				main = tile
+			end
+		end
+	end
+	-- Heat shimmer: slow glowing bubbles rising off the sea near the plaza.
+	local bubbles = Instance.new("ParticleEmitter")
+	bubbles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	bubbles.Rate = 25
+	bubbles.Lifetime = NumberRange.new(2, 4)
+	bubbles.Speed = NumberRange.new(4, 10)
+	bubbles.EmissionDirection = Enum.NormalId.Top
+	bubbles.Size = NumberSequence.new(1.5, 0)
+	bubbles.Color = ColorSequence.new(Color3.fromRGB(255, 170, 60))
+	bubbles.LightEmission = 1
+	bubbles.Parent = main
+	return main
 end
 
 -- Central core: stacked cylinder segments, banded in each zone's colour over that zone's height range.
@@ -194,6 +243,7 @@ local function buildCore(folder: Folder, pillars: { TowerLayout.Pillar })
 	for zi, zone in Config.Zones do
 		local top = zoneTop[zi] + (if zi == #Config.Zones then 30 else 0)
 		local color = rgb(zone.color):Lerp(Color3.fromRGB(40, 40, 60), 0.45)
+		local material = (Enum.Material :: any)[Config.Themes[zi].core] :: Enum.Material
 		while bottom < top do
 			local h = math.min(MAX_PART, top - bottom)
 			part({
@@ -201,7 +251,7 @@ local function buildCore(folder: Folder, pillars: { TowerLayout.Pillar })
 				Shape = Enum.PartType.Cylinder,
 				Size = Vector3.new(h, r * 2, r * 2),
 				CFrame = CFrame.new(0, bottom + h / 2, 0) * CFrame.Angles(0, 0, math.pi / 2),
-				Material = Enum.Material.Concrete,
+				Material = material,
 				Color = color,
 				Parent = core,
 			})
@@ -240,7 +290,7 @@ local function buildTower(folder: Folder): { [number]: Part }
 			Name = "Cap",
 			Size = Vector3.new(size, 4, size),
 			CFrame = basis + Vector3.new(0, p.top - 2, 0),
-			Material = Enum.Material.SmoothPlastic,
+			Material = (Enum.Material :: any)[Config.Themes[p.zone].ledge],
 			Color = color,
 			Parent = model,
 		})
@@ -301,8 +351,17 @@ local function buildTower(folder: Folder): { [number]: Part }
 				Name = "WinPad",
 				Size = Vector3.new(size - 4, 0.6, size - 4),
 				CFrame = basis + Vector3.new(0, p.top + 0.3, 0),
+				Material = Enum.Material.Foil,
+				Color = Color3.fromRGB(255, 200, 50),
+				Parent = model,
+			})
+			part({
+				Name = "PadRim",
+				Size = Vector3.new(size - 3, 0.4, size - 3),
+				CFrame = basis + Vector3.new(0, p.top + 0.15, 0),
 				Material = Enum.Material.Neon,
-				Color = Color3.fromRGB(255, 215, 60),
+				Color = Color3.fromRGB(255, 225, 90),
+				CanCollide = false,
 				Parent = model,
 			})
 			pad:SetAttribute("Zone", p.zone)
@@ -341,6 +400,14 @@ function World.build(): Built
 	local plaza = buildPlaza(folder)
 	local lava = buildLava(folder)
 	local winPads = buildTower(folder)
+	local bounds, bottom = {}, 0
+	for _, p in TowerLayout.build() do
+		if p.isZoneEnd then
+			table.insert(bounds, { bottom, p.top })
+			bottom = p.top
+		end
+	end
+	Decor.build(folder, bounds)
 	return { lava = lava, plaza = plaza, winPads = winPads, spawn = spawnCFrame() + Vector3.new(0, 4, 0) }
 end
 

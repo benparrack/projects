@@ -5,7 +5,6 @@
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
@@ -36,21 +35,7 @@ local function act(name: string, arg: any?)
 	actionRemote:FireServer(name, arg)
 end
 
--- Sounds --------------------------------------------------------------------------------
-
-local function sound(id: string, volume: number, pitch: number?)
-	local s = Instance.new("Sound")
-	s.SoundId = id
-	s.Volume = volume
-	s.PlaybackSpeed = pitch or 1
-	s.Parent = SoundService
-	s:Play()
-	s.Ended:Once(function()
-		s:Destroy()
-	end)
-end
-local SFX_REWARD = "rbxasset://sounds/electronicpingshort.wav"
-local SFX_CLICK = "rbxasset://sounds/button.wav"
+local Sfx = require(script.Parent.Sfx)
 
 -- Root gui ------------------------------------------------------------------------------
 
@@ -145,7 +130,12 @@ local toastOrder = 0
 
 local function toast(text: string, kind: string)
 	toastOrder += 1
-	local color = if kind == "error" then C.red elseif kind == "big" then C.gold elseif kind == "reward" then C.green else C.text
+	-- "win" and "big" toasts also get confetti and a fanfare from Juice.client.
+	local color = if kind == "error"
+		then C.red
+		elseif kind == "big" or kind == "win" then C.gold
+		elseif kind == "reward" then C.green
+		else C.text
 	local big = kind == "big"
 	local label = Ui.label({
 		Size = UDim2.fromOffset(if big then 520 else 440, if big then 52 else 34),
@@ -155,8 +145,8 @@ local function toast(text: string, kind: string)
 		Parent = toastHolder,
 	})
 	Ui.pop(label, 0.4)
-	if kind == "reward" or big then
-		sound(SFX_REWARD, 0.5, if big then 0.8 else 1.2)
+	if kind == "reward" then
+		Sfx.play("reward", 0.5)
 	end
 	task.delay(if big then 4 else 2.6, function()
 		local t = TweenService:Create(label, TweenInfo.new(0.4), { TextTransparency = 1 })
@@ -222,7 +212,6 @@ local function makePanel(title: string, accent: Color3): (Frame, ScrollingFrame)
 end
 
 local function toggle(panel: Frame, onOpen: (() -> ())?)
-	sound(SFX_CLICK, 0.4)
 	if openPanel and openPanel ~= panel then
 		openPanel.Visible = false
 	end
@@ -399,13 +388,12 @@ local rebirthButton = Ui.button({ Size = UDim2.fromOffset(120, 60), Text = "🔁
 	toggle(rebirthPanel, fillRebirth)
 end)
 Ui.button({ Size = UDim2.fromOffset(120, 60), Text = "🏠 Spawn", LayoutOrder = 4, Parent = left }, C.blue, function()
-	sound(SFX_CLICK, 0.4)
 	act("spawn")
 end)
 
 local right = Ui.new("Frame", {
 	AnchorPoint = Vector2.new(1, 0.5),
-	Position = UDim2.new(1, -10, 0.5, 0),
+	Position = UDim2.new(1, -60, 0.5, 0), -- leaves room for the altitude meter (Juice.client)
 	Size = UDim2.fromOffset(130, 150),
 	BackgroundTransparency = 1,
 	Parent = gui,

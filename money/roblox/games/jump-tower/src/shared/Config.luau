@@ -22,6 +22,20 @@ Config.Zones = {
 	{ name = "Space", need = 109350, wins = 800, color = { 255, 220, 90 } },
 }
 
+-- Per-zone look. The client blends Lighting between these by altitude (see Altitude.client).
+-- clock = ClockTime, sky/decay = Atmosphere Color/Decay, haze/density = Atmosphere, ambient = OutdoorAmbient,
+-- ledge/core = materials, deco = scenery kind built around the tower (see World.decorate).
+Config.Themes = {
+	{ clock = 14.5, sky = { 200, 225, 255 }, decay = { 110, 140, 190 }, density = 0.3, haze = 1.2, ambient = { 140, 140, 160 }, ledge = "Grass", core = "Cobblestone", deco = "meadow" },
+	{ clock = 16.2, sky = { 255, 205, 150 }, decay = { 190, 110, 70 }, density = 0.32, haze = 1.6, ambient = { 170, 130, 110 }, ledge = "Sandstone", core = "Sandstone", deco = "canyon" },
+	{ clock = 12, sky = { 205, 235, 255 }, decay = { 120, 170, 220 }, density = 0.36, haze = 2, ambient = { 150, 170, 200 }, ledge = "Ice", core = "Glacier", deco = "glacier" },
+	{ clock = 10.5, sky = { 185, 235, 185 }, decay = { 60, 130, 90 }, density = 0.34, haze = 1.8, ambient = { 110, 150, 110 }, ledge = "LeafyGrass", core = "Rock", deco = "jungle" },
+	{ clock = 18.1, sky = { 255, 150, 100 }, decay = { 120, 30, 20 }, density = 0.4, haze = 2.4, ambient = { 170, 90, 70 }, ledge = "Basalt", core = "Basalt", deco = "volcano" },
+	{ clock = 13, sky = { 255, 255, 255 }, decay = { 190, 210, 255 }, density = 0.3, haze = 0.6, ambient = { 190, 190, 215 }, ledge = "Snow", core = "Marble", deco = "clouds" },
+	{ clock = 20.4, sky = { 150, 110, 255 }, decay = { 40, 180, 170 }, density = 0.22, haze = 0.4, ambient = { 110, 90, 170 }, ledge = "Glass", core = "Slate", deco = "aurora" },
+	{ clock = 0, sky = { 30, 20, 60 }, decay = { 10, 10, 30 }, density = 0.05, haze = 0, ambient = { 120, 110, 160 }, ledge = "Foil", core = "DiamondPlate", deco = "space" },
+}
+
 Config.PillarsPerZone = 5
 -- The tower is a central core with square ledges spiralling up around it.
 Config.CoreRadius = 34

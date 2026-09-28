@@ -12,6 +12,7 @@ local Formulas = require(Shared.Formulas)
 local TowerLayout = require(Shared.TowerLayout)
 local SaveStore = require(ServerScriptService.ServerLib.SaveStore)
 local Monetization = require(ServerScriptService.ServerLib.Monetization)
+local Leaderboard = require(ServerScriptService.ServerLib.Leaderboard)
 local World = require(script.Parent.World)
 
 workspace.Gravity = Config.Gravity
@@ -75,6 +76,25 @@ type Session = {
 	leaderstats: { Jump: NumberValue, Wins: NumberValue, Rebirths: IntValue },
 }
 local sessions: { [Player]: Session } = {}
+
+-- Global boards either side of the title sign, angled toward the spawn and tower.
+do
+	local sp = built.spawn.Position
+	local function field(name: string): (Player) -> number?
+		return function(player)
+			local session = sessions[player]
+			return session and session.profile.data[name]
+		end
+	end
+	local function at(side: number): CFrame
+		local pos = Vector3.new(sp.X + side * 36, 12, sp.Z + 12)
+		return CFrame.lookAt(pos, Vector3.new(sp.X, 12, sp.Z - 30))
+	end
+	Leaderboard.start({
+		{ store = "TopWins", title = "🏆 TOP WINS", color = Color3.fromRGB(255, 210, 70), cframe = at(-1), value = field("wins"), format = Formulas.abbreviate },
+		{ store = "TopRebirths", title = "🔁 TOP REBIRTHS", color = Color3.fromRGB(80, 220, 120), cframe = at(1), value = field("rebirths"), format = Formulas.abbreviate },
+	}, workspace:WaitForChild("Map"))
+end
 
 -- Monetization ---------------------------------------------------------------------------
 
@@ -432,7 +452,7 @@ for zone, pad in built.winPads do
 				end
 			end)
 		else
-			notify(player, `Zone {zone} cleared! +{Formulas.abbreviate(wins)} Wins`, "reward")
+			notify(player, `Zone {zone} cleared! +{Formulas.abbreviate(wins)} Wins`, "win")
 		end
 		refresh(player)
 	end)

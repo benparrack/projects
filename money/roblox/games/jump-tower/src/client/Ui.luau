@@ -3,6 +3,8 @@
 
 local TweenService = game:GetService("TweenService")
 
+local Sfx = require(script.Parent.Sfx)
+
 local Ui = {}
 
 Ui.Font = Enum.Font.FredokaOne
@@ -110,7 +112,10 @@ function Ui.button(props: { [string]: any }, color: Color3, onClick: () -> ()): 
 	button.MouseLeave:Connect(function()
 		TweenService:Create(scale, TweenInfo.new(0.12), { Scale = 1 }):Play()
 	end)
-	button.Activated:Connect(onClick)
+	button.Activated:Connect(function()
+		Sfx.play("click", 0.5)
+		onClick()
+	end)
 	return button
 end
 
