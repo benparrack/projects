@@ -9,6 +9,9 @@ bash roms/fetch.sh       # download test ROMs + the bundled free homebrew (gitig
 npm test                 # Blargg / Mooneye / acid2 suites, headless (~30 s)
 node test/shot.js roms/homebrew/ucity.gbc out.png 300 "200:start:5"   # headless screenshot
 node test/determinism.js # keyframe + input-log replay is bit-exact (basis for spectating)
+node test/link.js        # two linked consoles running Link Tron: handshake, agreement, replay
+node test/netlink.js 90 40  # link netplay over a simulated laggy connection (latency, jitter ms)
+bash homebrew/linktron/build.sh  # rebuild Link Tron (needs RGBDS; the built ROM is committed)
 tools/sync-game-terminal.sh  # copy core + player + ROMs into ../game_terminal/public/games/gameboy/
 ```
 
@@ -19,6 +22,14 @@ The hub's **RETRO → GAME BOY** room (`game_terminal/public/games/gameboy/clien
 so it serves a *copy* under `emu/` — edit here, then run `tools/sync-game-terminal.sh`.
 Everyone plays locally; anyone playing a bundled homebrew game can be **watched** live via
 lockstep replay: one gzipped save state (~8–17 KiB) and then only frame-tagged button changes.
+
+**Link cable:** press LINK next to someone in the room; once they accept, both play
+**Link Tron** (our own two-player homebrew, `homebrew/linktron/`) over an emulated cable. Each
+browser emulates *both* consoles (`src/link.js`, interleaved in 32-dot slices so serial
+handshakes behave like real hardware) and only button masks cross the network. Inputs apply
+`delay` frames after they're pressed (sized from a ping: `linkDelayFor(rtt)`, 3–15 frames), a
+peer that hasn't heard from the other yet waits instead of guessing, and state fingerprints are
+compared every 120 frames to catch desyncs. A linked player whose tab is hidden stalls both.
 
 ## Layout
 
@@ -32,6 +43,8 @@ lockstep replay: one gzipped save state (~8–17 KiB) and then only frame-tagged
 | `src/cart.js` | ROM-only, MBC1 (+multicart), MBC2, MBC3+RTC (wall-clock), MBC5 (+rumble); battery saves |
 | `web/player.js` | UI-agnostic `Player`: rAF loop @ 59.73 Hz, AudioWorklet with rate control, keyboard/gamepad/touch, IndexedDB battery saves + 4 state slots, fast-forward, rewind, screenshot |
 | `web/index.html`, `ui.js`, `style.css` | standalone page with a CSS-drawn handheld shell, homebrew library, drag-and-drop ROM loading (.gb/.gbc/.zip) |
+| `src/link.js` | `Link` — two consoles joined by a cable, run in lockstep; byte-level serial exchange |
+| `homebrew/linktron/` | Link Tron (MIT) — RGBDS source for the two-player link demo, plus the built ROM |
 | `web/netstate.js` | save state ⇄ gzipped base64 string for the network |
 | `test/run-tests.js` | test-ROM runner (`--verbose`, `--shots=dir`, name filters) |
 
@@ -74,5 +87,6 @@ hold Space = fast-forward · hold R = rewind · P/Esc = pause · F5/F8 = save/lo
 - **Geometrix** — Antonio Niño Díaz, GPL-3.0 — https://github.com/AntonioND/geometrix
 - **Adjustris** — Dave VanEe (tbsp), CC0 — https://github.com/tbsp/Adjustris
 - **2048-gb** — Sanqui, zlib — https://github.com/Sanqui/2048-gb
+- **Link Tron** — ours (Ben Parrack), MIT — `homebrew/linktron/`
 
 Only free homebrew is bundled/fetched; bring your own ROM dumps for anything else.

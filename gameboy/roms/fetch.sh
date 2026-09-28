@@ -22,4 +22,6 @@ DB=https://raw.githubusercontent.com/gbdev/database/master/entries
 [ -f tobudx.gb ] || curl -sfL -o tobudx.gb $DB/tobutobugirldeluxe/tobudx.gb
 [ -f porklike.gb ] || curl -sfL -o porklike.gb $DB/porklike-gb/porklike.gb
 [ -f shocklobster.gb ] || curl -sfL -o shocklobster.gb $DB/shock-lobster/shocklobster.gb
+# Our own two-player link-cable demo (source in homebrew/linktron/, prebuilt so no RGBDS needed).
+cp ../../homebrew/linktron/linktron.gb linktron.gb
 echo "ROMs ready."

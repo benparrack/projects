@@ -3,12 +3,19 @@
 // Used by the standalone page (web/ui.js) and by game_terminal's Game Boy room.
 
 import { GameBoy, BUTTONS } from '../src/gameboy.js';
+import { Link } from '../src/link.js';
 import { DMG_PALETTES, WIDTH, HEIGHT } from '../src/ppu.js';
 import * as store from './storage.js';
 
 const FRAME_MS = 1000 / (4194304 / 70224); // ~16.74ms (59.73 Hz)
 const REWIND_EVERY = 3;       // snapshot every N frames
 const REWIND_MAX = 360;       // ~18 s of rewind
+const HASH_EVERY = 120;       // link netplay: compare state fingerprints this often (frames)
+
+/** Link netplay input delay (frames) for a measured round-trip time: one-way latency plus margin. */
+export function linkDelayFor(rttMs) {
+  return Math.min(15, Math.max(3, Math.ceil(rttMs / 2 / FRAME_MS) + 2));
+}
 
 export const DEFAULT_KEYS = {
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
@@ -87,6 +94,7 @@ export class Player extends EventTarget {
     this.saveTimer = null;
     this.onInput = null;          // (frame, mask) whenever the applied input changes — for streaming to spectators
     this.remote = null;           // spectator mode: { upTo, inputs: Map<frame, mask> } fed by pushRemote()
+    this.link = null;             // link-cable netplay session, see startLink()
     this._loop = this._loop.bind(this);
     this._onKey = this._onKey.bind(this);
     this._onVis = () => { if (document.hidden) this.flushSave(); };
@@ -104,6 +112,7 @@ export class Player extends EventTarget {
   // ---------------- ROM lifecycle ----------------
 
   async loadRom(bytes, name = 'game') {
+    this.stopLink();
     await this.flushSave();
     const rom = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     let gb;
@@ -133,7 +142,7 @@ export class Player extends EventTarget {
   }
 
   reset() {
-    if (!this.gb) return;
+    if (!this.gb || this.link) return;
     const save = this.gb.cart.hasBattery() ? this.gb.cart.exportSave() : null;
     const rom = this.gb.cart.rom;
     this.gb = new GameBoy(rom.slice(), { sampleRate: this.audio ? this.audio.sampleRate : 48000 });
@@ -148,7 +157,7 @@ export class Player extends EventTarget {
 
   async flushSave() {
     const gb = this.gb;
-    if (this.remote) return; // a spectated game's save RAM belongs to someone else
+    if (this.remote || this.link) return; // spectated/linked sessions start fresh and aren't saved
     if (!gb || !gb.cart.hasBattery() || !gb.cart.ramDirty) return;
     gb.cart.ramDirty = false;
     await store.set(`sram:${this.romKey}`, gb.cart.exportSave());
@@ -167,7 +176,7 @@ export class Player extends EventTarget {
   // ---------------- save states ----------------
 
   async saveState(slot = this.slot) {
-    if (!this.gb) return;
+    if (!this.gb || this.link) return;
     const state = this.gb.saveState();
     const thumb = this.pixels.slice();
     await store.set(`state:${this.romKey}:${slot}`, { state, thumb, time: Date.now() });
@@ -176,7 +185,7 @@ export class Player extends EventTarget {
   }
 
   async loadState(slot = this.slot) {
-    if (!this.gb) return;
+    if (!this.gb || this.link) return;
     const rec = await store.get(`state:${this.romKey}:${slot}`);
     if (!rec) { this.toast(`State ${slot} is empty`); return; }
     try { this.gb.loadState(rec.state); } catch (e) { this.toast(e.message); return; }
@@ -253,7 +262,7 @@ export class Player extends EventTarget {
   stop() { this.running = false; }
 
   setPaused(p) {
-    if (!this.gb) return;
+    if (!this.gb || this.link) return;
     this.paused = p;
     if (p) this.flushSave();
     if (this.node) this.node.port.postMessage('clear');
@@ -269,6 +278,7 @@ export class Player extends EventTarget {
     this.pollGamepads();
     if (!this.gb || this.paused) return;
 
+    if (this.link) { this._linkLoop(dt); return; }
     if (this.remote) { this._remoteLoop(dt, now); return; }
 
     if (this.rewinding) {
@@ -325,7 +335,7 @@ export class Player extends EventTarget {
   }
 
   draw() {
-    const src = this.gb.ppu.frame;
+    const src = this.link ? this.link.core.shown[this.link.side] : this.gb.ppu.frame;
     const px = this.pixels;
     if (this.lcdBlend) {
       for (let i = 0; i < px.length; i++) {
@@ -368,6 +378,7 @@ export class Player extends EventTarget {
       e.preventDefault();
       return;
     }
+    if (this.link) return; // no pausing, rewinding or save states while linked
     switch (e.code) {
       case 'Space': case 'Tab': this.fastForward = down; e.preventDefault(); break;
       case 'KeyR': if (!e.ctrlKey && !e.metaKey) { this.setRewinding(down); e.preventDefault(); } break;
@@ -391,6 +402,12 @@ export class Player extends EventTarget {
 
   localInputMask() { return this.inputKeyboard | this.inputTouch | this.inputPad; }
 
+  pollGamepadsFF(ff, rw) {
+    if (this.link) return;
+    if (ff !== this.padFF) { this.padFF = ff; this.fastForward = ff; }
+    if (rw !== this.padRW) { this.padRW = rw; this.setRewinding(rw); }
+  }
+
   pollGamepads() {
     if (!navigator.getGamepads) return;
     let mask = 0, ff = false, rw = false;
@@ -410,8 +427,7 @@ export class Player extends EventTarget {
       if (b(6) || b(4)) rw = true;
     }
     this.inputPad = mask;
-    if (ff !== this.padFF) { this.padFF = ff; this.fastForward = ff; }
-    if (rw !== this.padRW) { this.padRW = rw; this.setRewinding(rw); }
+    this.pollGamepadsFF(ff, rw);
   }
 
   applyInput() {
@@ -442,6 +458,7 @@ export class Player extends EventTarget {
 
   /** Enter spectator mode on the already-loaded ROM, starting from a keyframe. */
   startRemote({ state, frame, mask }) {
+    this.link = null;
     this.gb.loadState(state);
     this.remote = { upTo: frame, inputs: new Map() };
     this.frameCount = frame;
@@ -476,6 +493,120 @@ export class Player extends EventTarget {
       while (this.frameCount < this.remote.upTo - 6) this.stepFrame();
     }
     if (frames) { this.pushAudio(); this.draw(); }
+  }
+
+  // ---------------- link-cable netplay ----------------
+  //
+  // Both peers emulate *both* consoles (src/link.js) from a fresh power-on, and exchange only
+  // their button masks. Input sampled while stepping frame f is applied at frame f + delay, which
+  // gives the peer `delay` frames to receive it; a peer that hasn't heard about frame f yet waits.
+  // Messages (sent with `send`, delivered with linkReceive):
+  //   { t: 'in', c: [[frame, mask], ...], upTo }  input changes; the sender's input is final below upTo
+  //   { t: 'hash', f, h }                          state fingerprint after frame f, for desync detection
+
+  /** Starts a link session on `rom`. side 0 = player 1 (drives the link clock in most games). */
+  startLink(rom, { side, delay = 4, send, name = 'game' }) {
+    this.stopRemote();
+    this.flushSave();
+    clearInterval(this.saveTimer);
+    const rate = this.audio ? this.audio.sampleRate : 48000;
+    const gbs = [new GameBoy(rom.slice(), { sampleRate: rate }), new GameBoy(rom.slice(), { sampleRate: rate })];
+    this.link = {
+      core: new Link(gbs[0], gbs[1]), side, delay, send,
+      mine: [], theirs: [],           // pending input changes [frame, mask], oldest first
+      lastMine: 0, sentUpTo: delay, outbox: [], theirUpTo: delay,
+      masks: [0, 0], hashes: new Map(), peerHashes: new Map(), waiting: 0, stuck: false,
+    };
+    this.gb = gbs[side];
+    this.romName = name;
+    this.romKey = null;
+    this.applyVideoSettings();
+    this.rewindBuf = [];
+    this.frameCount = 0;
+    this.applied = 0;
+    this.fastForward = false; this.rewinding = false;
+    this.paused = false;
+    this.emit('romloaded', { title: this.gb.cart.header.title || name, cgb: this.gb.cgb, header: this.gb.cart.header, link: true });
+    this.start();
+  }
+
+  stopLink() {
+    if (!this.link) return;
+    this.link = null;
+    this.gb = null;
+    this.clearScreen();
+    if (this.node) this.node.port.postMessage('clear');
+  }
+
+  linkReceive(msg) {
+    const L = this.link;
+    if (!L || !msg) return;
+    if (msg.t === 'in' && Array.isArray(msg.c) && Number.isInteger(msg.upTo)) {
+      for (const [f, m] of msg.c) if (Number.isInteger(f) && f >= this.frameCount) L.theirs.push([f, m & 0xff]);
+      L.theirUpTo = Math.max(L.theirUpTo, msg.upTo);
+    } else if (msg.t === 'hash' && Number.isInteger(msg.f)) {
+      L.peerHashes.set(msg.f, msg.h);
+      this._checkHash(msg.f);
+    }
+  }
+
+  _checkHash(f) {
+    const L = this.link;
+    if (!L.hashes.has(f) || !L.peerHashes.has(f)) return;
+    const ok = L.hashes.get(f) === L.peerHashes.get(f);
+    L.hashes.delete(f); L.peerHashes.delete(f);
+    if (!ok) this.emit('linkdesync', f);
+  }
+
+  _linkStep() {
+    const L = this.link, f = this.frameCount;
+    // This frame's local sample is scheduled `delay` frames ahead.
+    const mask = this.inputEnabled ? this.localInputMask() : 0;
+    if (mask !== L.lastMine) { L.lastMine = mask; L.mine.push([f + L.delay, mask]); L.outbox.push([f + L.delay, mask]); }
+    L.sentUpTo = f + L.delay + 1;
+    const next = (q, cur) => { while (q.length && q[0][0] <= f) cur = q.shift()[1]; return cur; };
+    const me = next(L.mine, L.masks[L.side]);
+    const peer = next(L.theirs, L.masks[1 - L.side]);
+    const masks = [0, 0];
+    masks[L.side] = me; masks[1 - L.side] = peer;
+    L.core.gbs.forEach((gb, i) => {
+      const changed = masks[i] ^ L.masks[i];
+      for (let b = 0; b < 8; b++) if (changed & (1 << b)) gb.setButton(BUTTONS[b], (masks[i] >> b) & 1);
+    });
+    L.masks = masks;
+    L.core.runFrame();
+    L.core.gbs[1 - L.side].apu.takeSamples(); // only this side's console is heard
+    this.frameCount++;
+    if (this.frameCount % HASH_EVERY === 0) {
+      const h = L.core.hash();
+      L.hashes.set(this.frameCount, h);
+      L.send({ t: 'hash', f: this.frameCount, h });
+      this._checkHash(this.frameCount);
+    }
+  }
+
+  _linkLoop(dt) {
+    const L = this.link;
+    // Run slightly fast when the peer is ahead of us so the two stay in step.
+    const slack = L.theirUpTo - this.frameCount;
+    this.acc += dt * (slack > L.delay + 3 ? 1.08 : 1);
+    let frames = 0;
+    while (this.acc >= FRAME_MS && frames < 4) {
+      if (this.frameCount >= L.theirUpTo) { this.acc = Math.min(this.acc, FRAME_MS); break; }
+      this.acc -= FRAME_MS;
+      this._linkStep();
+      frames++;
+    }
+    if (this.acc > FRAME_MS * 8) this.acc = FRAME_MS * 8;
+    L.waiting = this.frameCount >= L.theirUpTo ? L.waiting + 1 : 0;
+    const stuck = L.waiting >= 30; // half a second without the peer's input
+    if (stuck !== L.stuck) { L.stuck = stuck; this.emit('linkwait', stuck); }
+    if (frames) {
+      L.send({ t: 'in', c: L.outbox, upTo: L.sentUpTo });
+      L.outbox = [];
+      this.pushAudio();
+      this.draw();
+    }
   }
 
   destroy() {
