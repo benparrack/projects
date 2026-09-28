@@ -602,6 +602,11 @@ SHOT_FNS = {
 def world_state(t, shot=None):
     if shot is None:
         shot = TL.shot_at(t)[1]
+    else:
+        # motion-blur sub-samples of a shot's first/last frame can fall just
+        # outside it; clamp so shot curves never see u < 0 (x**1.x -> complex)
+        a, b = next((a, b) for n, a, b in TL.SHOTS if n == shot)
+        t = min(max(t, a), b)
     s = base_state(t)
     s = SHOT_FNS[shot](t, s)
     if "probe_on_until" in s and t > s["probe_on_until"]:
