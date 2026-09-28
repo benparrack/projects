@@ -38,6 +38,7 @@ export class Timer {
     // DIV-APU: frame sequencer steps on the falling edge of bit 12 (bit 13 in double speed).
     const apuBit = this.gb.doubleSpeed ? 0x2000 : 0x1000;
     if ((old & apuBit) && !(this.counter & apuBit)) this.gb.apu.frameSequencerStep();
+    if ((this.gb.sc & 0x81) === 0x81) this.gb.serialEdge(old, this.counter);
   }
 
   read(addr) {
@@ -57,6 +58,7 @@ export class Timer {
         if (this.signal(old)) this.incTima();
         const apuBit = this.gb.doubleSpeed ? 0x2000 : 0x1000;
         if (old & apuBit) this.gb.apu.frameSequencerStep();
+        if ((this.gb.sc & 0x81) === 0x81) this.gb.serialEdge(old, 0);
         this.counter = 0;
         break;
       }

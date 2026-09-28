@@ -126,7 +126,8 @@ class Wave extends Channel {
       this.pos = (this.pos + 1) & 31;
       const b = this.ram[this.pos >> 1];
       this.sample = (this.pos & 1) ? b & 0x0f : b >> 4;
-      this.justRead = 2;
+      // DMG: the CPU only reaches wave RAM if its access lands on the exact T-cycle of the fetch.
+      this.justRead = this.timer === this.period ? 1 : 0;
     }
   }
   get output() {

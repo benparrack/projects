@@ -87,10 +87,8 @@ export class PPU {
     if (this.line < 144) {
       if (this.mode === 2) return 80;
       if (this.mode === 3) return 80 + this.mode3Len;
-      return 456;
-    }
-    if (this.line === 153 && this.dot < 4) return 4;
-    return 456;
+    } else if (this.line === 153 && this.dot < 4) return 4;
+    return this.dot < 452 && this.line !== 153 ? 452 : 456;
   }
 
   event() {
@@ -110,6 +108,11 @@ export class PPU {
     }
     if (this.line === 153 && this.dot === 4) {
       this.ly = 0;           // LY reads 0 for almost all of line 153
+      this.updateStat();
+      return;
+    }
+    if (this.dot === 452) {
+      this.ly = this.line + 1; // LY reads the next line one M-cycle early; the LYC compare follows at line start
       this.updateStat();
       return;
     }
@@ -139,7 +142,7 @@ export class PPU {
 
   // Recompute the combined STAT interrupt line; IRQ fires on its rising edge ("STAT blocking").
   updateStat() {
-    this.lycMatch = this.ly === this.lyc;
+    this.lycMatch = !this.lyChanging && this.ly === this.lyc;
     const s = this.statBits;
     const line = (this.lycMatch && (s & 0x40) !== 0) ||
       (this.mode === 0 && (s & 0x08) !== 0) ||
@@ -161,11 +164,27 @@ export class PPU {
       const y = this.oam[i * 4] - 16;
       if (ly >= y && ly < y + h) list.push(i);
     }
-    // Approximate mode-3 length: base + fine scroll + window + per-sprite penalty.
+    // Mode-3 length: base + fine scroll + window + sprite fetch penalty.
     let len = 172 + (this.scx & 7);
     if ((this.lcdc & 0x20) && this.wyTriggered && this.wx <= 166) len += 6;
-    if (this.lcdc & 2) len += list.length * 6;
+    if ((this.lcdc & 2) && list.length) len += this.spritePenalty(list) & ~3;
     this.mode3Len = Math.min(len, 289);
+  }
+
+  // Pan Docs OBJ penalty: 6 dots per sprite with X < 168, plus, for the first sprite to touch each BG
+  // tile, (pixels of that tile right of the sprite's left edge) - 2. Sprites are fetched in X order.
+  spritePenalty(list) {
+    const xs = [];
+    for (const i of list) { const x = this.oam[i * 4 + 1]; if (x < 168) xs.push(x); }
+    xs.sort((a, b) => a - b);
+    let pen = 0, lastTile = -1;
+    const fine = this.scx & 7;
+    for (const x of xs) {
+      const tile = (x + fine) >> 3;
+      if (tile !== lastTile) { pen += Math.max(0, 7 - ((x + fine) & 7) - 2); lastTile = tile; }
+      pen += 6;
+    }
+    return pen;
   }
 
   // ---------------- rendering ----------------
@@ -293,15 +312,32 @@ export class PPU {
 
   // ---------------- registers ----------------
 
-  canAccessVram() { return !this.enabled || this.mode !== 3; }
-  canAccessOam() { return !this.enabled || this.mode < 2 || (this.lcdJustOn && this.mode === 2); }
+  // Last M-cycle of a line: LY already shows the next line, the LY=LYC flag reads 0, and OAM is
+  // already locked if the next line is visible (Mooneye lcdon_timing).
+  get lyChanging() { return this.dot >= 452 && this.line !== 153; }
+
+  // VRAM locks one M-cycle before STAT reports mode 3; OAM locks one M-cycle before mode 2.
+  canAccessVram() {
+    return !this.enabled || (this.mode !== 3 && !(this.mode === 2 && this.dot >= 76 && this.line < 144 && !this.lcdJustOn));
+  }
+  canAccessOam() {
+    if (!this.enabled) return true;
+    if (this.mode >= 2) return this.lcdJustOn && this.mode === 2;
+    return !(this.lyChanging && this.line < 143);
+  }
+  // Writes don't see the early locks, and OAM even accepts writes in mode 2's last M-cycle
+  // (Mooneye lcdon_write_timing).
+  canWriteVram() { return !this.enabled || this.mode !== 3; }
+  canWriteOam() {
+    return !this.enabled || this.mode < 2 || (this.mode === 2 && (this.lcdJustOn || this.dot >= 76));
+  }
 
   readVram(addr) {
     if (!this.canAccessVram()) return 0xff;
     return this.vram[(this.vbk << 13) | (addr & 0x1fff)];
   }
   writeVram(addr, v) {
-    if (!this.canAccessVram()) return;
+    if (!this.canWriteVram()) return;
     this.vram[(this.vbk << 13) | (addr & 0x1fff)] = v;
   }
   readOam(addr) {
@@ -309,7 +345,7 @@ export class PPU {
     return this.oam[addr & 0xff];
   }
   writeOam(addr, v) {
-    if (!this.canAccessOam()) return;
+    if (!this.canWriteOam()) return;
     this.oam[addr & 0xff] = v;
   }
 
@@ -350,14 +386,15 @@ export class PPU {
         if (wasOn && !this.enabled) {
           this.ly = 0; this.line = 0; this.dot = 0; this.mode = 0;
           this.windowLine = 0; this.wyTriggered = false;
-          this.statLine = false;
+          // The LY=LYC comparator stops but keeps its last result (and thus its STAT-line contribution).
+          this.statLine = this.lycMatch && (this.statBits & 0x40) !== 0;
           // Blank screen while LCD is off.
           this.frame.fill(this.cgb ? 0xffffffff : this.shades[0]);
           this.frameReady = true;
         } else if (!wasOn && this.enabled) {
           // The first line after enabling skips the OAM scan: STAT reports mode 0 until
           // pixel transfer starts (internally we still run the mode-2 timer).
-          this.ly = 0; this.line = 0; this.dot = 4; this.mode = 2;
+          this.ly = 0; this.line = 0; this.dot = 0; this.mode = 2;
           this.lcdJustOn = true;
           this.lineSprites.length = 0;
           this.mode3Len = 172 + (this.scx & 7);
