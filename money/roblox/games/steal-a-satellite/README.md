@@ -21,6 +21,12 @@ and zap anyone who tries to steal yours.
   to steal. Captain Bolts guards 6 loot pads, including one "treasure" satellite one
   tier above the best one in the server. Their shield opens for 35 s, then locks for
   15 s. Pads restock every 40 s. When a player needs a base, the pirates warp out.
+- **Pirate raids:** about every 90 s a pirate drone flies to someone's base. It picks a player
+  with 3+ satellites and 3+ minutes of play, not locked, at most once per 5 min per player.
+  - It beams up any satellite except their best one and crawls home at speed 9.
+  - Zap it for a 5% bounty and the satellite comes back.
+  - Locking your base during the beam bounces the drone.
+  - If it gets home, the satellite becomes pirate loot you can steal back.
 - **Rebirth:** costs 1M × 4ʳ. Each rebirth adds +0.5x income and +1 pad (up to +4).
 - **Retention:** offline earnings (10% for up to 2 h), a daily streak, the Index
   (found / odds), and leaderboards for top steals and top earned.
@@ -62,3 +68,4 @@ Dashboard. Until then the shop shows them as "SOON".
   - collect and lock
   - zap
   - pirate steal and delivery
+  - drone zap: run `Debug:Invoke(player, {raid = true})` first

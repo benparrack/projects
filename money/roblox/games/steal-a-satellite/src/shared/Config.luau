@@ -111,6 +111,18 @@ Config.PirateLoot = 6
 Config.PirateOpen = 35
 Config.PirateLock = 15
 Config.PirateRefill = 40
+-- Pirate raids: every RaidEvery seconds a drone flies to a player's base (someone with at least
+-- RaidMinSats satellites and RaidGrace seconds of play, not locked) and tractor-beams up one that
+-- isn't their best. Zap it on the way home to get it back plus a bounty of DroneBounty × its price.
+Config.RaidEvery = 90
+Config.RaidGrace = 180
+Config.RaidCooldown = 300
+Config.RaidMinSats = 3
+Config.RaidGrab = 6
+Config.DroneSpeedIn = 45
+Config.DroneSpeedOut = 9
+Config.DroneZapRange = 32
+Config.DroneBounty = 0.05
 
 -- Daily streak: day N pays DailyCashPerDay * min(N, cap) seconds of your income (min DailyMinCash).
 Config.DailyStreakCap = 7

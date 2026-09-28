@@ -68,6 +68,7 @@ type Slot = {
 	model: Model,
 	pending: number,
 	carrier: Player?,
+	raided: boolean?, -- hanging under a pirate drone
 }
 
 type Carry = {
@@ -89,6 +90,7 @@ type Session = {
 	stunnedUntil: number,
 	immuneUntil: number,
 	zapReady: number,
+	raidedAt: number,
 	lastAction: number,
 	leaderstats: { Cash: StringValue, Steals: IntValue },
 }
@@ -407,7 +409,7 @@ function onStealPrompt(thief: Player, owner: Player, slotIndex: number)
 		isOwner = thief == owner,
 		locked = isLocked(ownerSession),
 		alreadyCarrying = session.carry ~= nil,
-		targetCarried = slot.carrier ~= nil,
+		targetCarried = slot.carrier ~= nil or slot.raided == true,
 		thiefHasRoom = Rules.freeSlot(session.slots, slotCount(thief, session.profile.data)) ~= nil,
 		stunned = now() < session.stunnedUntil,
 	})
@@ -493,7 +495,7 @@ end
 function onSellPrompt(player: Player, slotIndex: number)
 	local session = sessions[player]
 	local slot = session and session.slots[slotIndex]
-	if not session or not slot or slot.carrier then
+	if not session or not slot or slot.carrier or slot.raided then
 		return
 	end
 	local price = Formulas.sellPrice(slot.id)
@@ -570,6 +572,8 @@ local function zapBolt(from: Vector3, to: Vector3)
 	end)
 end
 
+local zapDrone: (player: Player, root: BasePart, tipPos: Vector3, beat: number) -> boolean
+
 local function zap(player: Player)
 	local session = sessions[player]
 	local root = rootOf(player)
@@ -596,6 +600,9 @@ local function zap(player: Player)
 	end
 	local tipPos = root.Position + root.CFrame.LookVector * 3 + Vector3.new(0, 1, 0)
 	fxRemote:FireAllClients("zap", tipPos)
+	if zapDrone(player, root, tipPos, bestScore) then
+		return
+	end
 	if not best then
 		zapBolt(tipPos, tipPos + root.CFrame.LookVector * 6)
 		return
@@ -903,6 +910,304 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
+-- Pirate raids ---------------------------------------------------------------------------------------
+-- One drone at a time flies from a pirate base to a player's pad, beams up a satellite and crawls
+-- home with it. Zapping it returns the satellite (plus a bounty); if it makes it, the satellite
+-- becomes pirate loot the owner can steal back.
+
+type Raid = {
+	drone: Model,
+	beam: BasePart,
+	crew: number,
+	owner: Player,
+	slot: number,
+	id: string,
+	phase: "in" | "grab" | "out",
+	path: { Vector3 },
+	pos: Vector3,
+	grabEnd: number,
+	sat: Model?,
+}
+local raid: Raid? = nil
+
+local function buildDrone(at: Vector3): (Model, BasePart)
+	local drone = Instance.new("Model")
+	drone.Name = "PirateDrone"
+	local function add(props: { [string]: any }): BasePart
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		for k, v in props do
+			(p :: any)[k] = v
+		end
+		p.Parent = drone
+		return p
+	end
+	local flat = CFrame.new(at) * CFrame.Angles(0, 0, math.rad(90))
+	local body = add({ Name = "Body", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.4, 7, 7), CFrame = flat, Material = Enum.Material.Metal, Color = Color3.fromRGB(60, 25, 35) })
+	add({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.5, 8, 8), CFrame = flat, Material = Enum.Material.Neon, Color = PIRATE_TRIM })
+	add({ Name = "Dome", Shape = Enum.PartType.Ball, Size = Vector3.new(3.6, 3.6, 3.6), CFrame = CFrame.new(at + Vector3.new(0, 0.8, 0)), Material = Enum.Material.Glass, Color = Color3.fromRGB(255, 120, 140), Transparency = 0.35 })
+	add({ Name = "Eye", Shape = Enum.PartType.Ball, Size = Vector3.new(1.2, 1.2, 1.2), CFrame = CFrame.new(at + Vector3.new(0, -0.9, 0)), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 40, 40) })
+	for i = 0, 3 do
+		local a = i * math.pi / 2 + math.pi / 4
+		add({ Name = "Fin", Size = Vector3.new(0.4, 0.3, 3), CFrame = CFrame.new(at) * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, 4.4), Material = Enum.Material.Metal, Color = Color3.fromRGB(170, 170, 185) })
+	end
+	local beam = add({ Name = "Beam", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1, 5, 5), CFrame = flat, Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 90, 160), Transparency = 1, CanQuery = false })
+	local tag = World.billboard(body, UDim2.fromScale(9, 1.8), Vector3.new(0, 4.5, 0), "☠ PIRATE DRONE", Color3.fromRGB(255, 110, 130), 160)
+	tag.Name = "DroneTag"
+	drone.PrimaryPart = body
+	drone.Parent = Workspace
+	return drone, beam
+end
+
+-- Moves the drone (and anything it's carrying) with a little wobble.
+local function poseDrone(r: Raid)
+	local t = os.clock()
+	local cf = CFrame.new(r.pos + Vector3.new(0, math.sin(t * 3) * 0.4, 0)) * CFrame.Angles(math.sin(t * 2) * 0.08, t * 1.5, math.cos(t * 2) * 0.08)
+	r.drone:PivotTo(cf)
+	if r.sat then
+		r.sat:PivotTo(CFrame.new(r.pos - Vector3.new(0, 5, 0)) * CFrame.Angles(0, t, 0))
+	end
+end
+
+local function endRaid(r: Raid, boom: boolean)
+	if boom then
+		local e = Instance.new("Explosion")
+		e.Position = r.pos
+		e.BlastPressure = 0
+		e.DestroyJointRadiusPercent = 0
+		e.BlastRadius = 6
+		e.Parent = Workspace
+	end
+	r.drone:Destroy()
+	if r.sat then
+		r.sat:Destroy()
+	end
+	if raid == r then
+		raid = nil
+	end
+end
+
+-- Puts the raided satellite back on its pad.
+local function returnRaided(r: Raid)
+	local session = sessions[r.owner]
+	local slot = session and session.slots[r.slot]
+	if session and slot and slot.raided then
+		slot.raided = nil
+		slot.model = placeModel(r.owner, session, r.slot, slot.id)
+	end
+end
+
+function zapDrone(player: Player, root: BasePart, tipPos: Vector3, beat: number): boolean
+	local r = raid
+	if not r then
+		return false
+	end
+	local offset = r.pos - root.Position
+	local dist = offset.Magnitude
+	if dist > Config.DroneZapRange or dist - root.CFrame.LookVector:Dot(offset.Unit) * 4 > beat + 8 then
+		return false
+	end
+	zapBolt(tipPos, r.pos)
+	local carried = r.sat ~= nil
+	returnRaided(r)
+	endRaid(r, true)
+	local session = sessions[player]
+	if session then
+		local bounty = math.max(50, math.floor(Config.ById[r.id].price * Config.DroneBounty))
+		session.profile.data.cash += bounty
+		refresh(player)
+		notify(player, `💥 Drone down! +{Formulas.cash(bounty)} bounty`, "reward")
+	end
+	if carried and r.owner ~= player and r.owner.Parent then
+		notify(r.owner, `🛡 {player.DisplayName} shot down the drone! Your {Config.ById[r.id].name} is back.`, "good")
+	elseif carried then
+		notify(player, `🛡 Your {Config.ById[r.id].name} is back home!`, "good")
+	end
+	return true
+end
+
+local function launchRaid()
+	if raid or next(pirates) == nil then
+		return
+	end
+	local t = now()
+	local candidates = {}
+	for player, session in sessions do
+		if session.profile.data.playSeconds >= Config.RaidGrace and t - session.raidedAt >= Config.RaidCooldown and not isLocked(session) then
+			-- Every idle satellite except the single best earner is fair game.
+			local best, bestIncome, pool = nil, -1, {}
+			for s, slot in session.slots do
+				if not slot.carrier and not slot.raided then
+					table.insert(pool, s)
+					local income = Config.ById[slot.id].income
+					if income > bestIncome then
+						best, bestIncome = s, income
+					end
+				end
+			end
+			if #pool >= Config.RaidMinSats then
+				table.remove(pool, table.find(pool, best) :: number)
+				table.insert(candidates, { player = player, session = session, slot = pool[math.random(#pool)] })
+			end
+		end
+	end
+	if #candidates == 0 then
+		return
+	end
+	local pick = candidates[math.random(#candidates)]
+	local pad = pick.session.base.pads[pick.slot].Position
+	-- Launch from the nearest pirate base.
+	local crewIndex, crewDist = nil, math.huge
+	for index, crew in pirates do
+		local d = (crew.base.cframe.Position - pad).Magnitude
+		if d < crewDist then
+			crewIndex, crewDist = index, d
+		end
+	end
+	local crew = pirates[crewIndex :: number]
+	local cruise = pad.Y + 16
+	local from = Vector3.new(crew.base.cframe.Position.X, cruise, crew.base.cframe.Position.Z)
+	local drone, beam = buildDrone(from)
+	pick.session.raidedAt = t
+	raid = {
+		drone = drone,
+		beam = beam,
+		crew = crewIndex :: number,
+		owner = pick.player,
+		slot = pick.slot,
+		id = pick.session.slots[pick.slot].id,
+		phase = "in",
+		path = { Vector3.new(pad.X, cruise, pad.Z), pad + Vector3.new(0, 7, 0) },
+		pos = from,
+		grabEnd = 0,
+		sat = nil,
+	}
+	notify(pick.player, "☠ A PIRATE DRONE is raiding your base! Zap it! ⚡", "alarm")
+	fxRemote:FireClient(pick.player, "alarm", 0)
+end
+
+RunService.Heartbeat:Connect(function(dt)
+	local r = raid
+	if not r then
+		return
+	end
+	local session = sessions[r.owner]
+	local slot = session and session.slots[r.slot]
+	-- Owner gone, or the satellite was sold / stolen before the beam finished: fly off empty.
+	if not session or not slot or slot.id ~= r.id or (r.phase ~= "out" and slot.carrier ~= nil) then
+		if r.sat then
+			-- Owner left mid-raid: their save already has it; just drop the copy.
+			r.sat:Destroy()
+			r.sat = nil
+		end
+		endRaid(r, false)
+		return
+	end
+	if r.phase == "grab" then
+		if isLocked(session) then
+			notify(r.owner, "🔒 Your lock bounced the pirate drone!", "good")
+			endRaid(r, true)
+			return
+		end
+		local left = r.grabEnd - now()
+		local pad = session.base.pads[r.slot].Position
+		local len = r.pos.Y - pad.Y + 1
+		r.beam.Size = Vector3.new(len, 3 + math.sin(os.clock() * 12) * 0.4, 3 + math.sin(os.clock() * 12) * 0.4)
+		r.beam.Transparency = 0.55
+		r.beam.CFrame = CFrame.new(r.pos - Vector3.new(0, len / 2, 0)) * CFrame.Angles(0, 0, math.rad(90))
+		if left <= 0 then
+			-- Beam it up: the pad empties but the slot stays reserved until the raid resolves.
+			slot.raided = true
+			slot.model:Destroy()
+			local sat = SatModel.build(r.id, CFrame.new(r.pos - Vector3.new(0, 5, 0)))
+			for _, d in sat:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.CanCollide = false
+					d.CanTouch = false
+				end
+			end
+			infoTag(sat.PrimaryPart :: BasePart, r.id, "☠ RAIDED! ZAP IT!", 5 * Config.ById[r.id].scale)
+			sat.Parent = r.drone
+			r.sat = sat
+			r.beam.Transparency = 1
+			local home = pirates[r.crew]
+			local dest = if home then home.base.cframe.Position else r.pos + Vector3.new(0, 0, 300)
+			r.path = { Vector3.new(r.pos.X, pad.Y + 16, r.pos.Z), Vector3.new(dest.X, pad.Y + 16, dest.Z) }
+			r.phase = "out"
+			notify(r.owner, `☠ The drone grabbed your {Config.ById[r.id].name}! Chase it and ZAP it!`, "alarm")
+		end
+		poseDrone(r)
+		return
+	end
+	local speed = if r.phase == "in" then Config.DroneSpeedIn else Config.DroneSpeedOut
+	local step = speed * dt
+	while step > 0 and #r.path > 0 do
+		local to = r.path[1]
+		local gap = (to - r.pos).Magnitude
+		if gap <= step then
+			r.pos = to
+			step -= gap
+			table.remove(r.path, 1)
+		else
+			r.pos += (to - r.pos).Unit * step
+			step = 0
+		end
+	end
+	poseDrone(r)
+	if #r.path > 0 then
+		return
+	end
+	if r.phase == "in" then
+		r.phase = "grab"
+		r.grabEnd = now() + Config.RaidGrab
+		return
+	end
+	-- Made it home: the satellite joins the pirate loot (or the drone just vanishes with it if
+	-- the pirates have been evicted meanwhile, in which case it goes back to its owner).
+	local crew = pirates[r.crew]
+	local freeSlot: number? = nil
+	if crew then
+		for i = 1, Config.BaseSlots do
+			if not crew.slots[i] then
+				freeSlot = i
+				break
+			end
+		end
+		if not freeSlot then
+			for i, loot in crew.slots do
+				if not loot.carrier then
+					loot.model:Destroy()
+					crew.slots[i] = nil
+					freeSlot = i
+					break
+				end
+			end
+		end
+	end
+	if crew and freeSlot then
+		crew.slots[freeSlot] = { id = r.id, model = placePirateModel(crew, freeSlot, r.id), carrier = nil }
+		slot.raided = nil
+		clearSlot(session, r.slot)
+		refresh(r.owner)
+		notify(r.owner, `☠ Pirates stole your {Config.ById[r.id].name}! Steal it back from their base!`, "alarm")
+	else
+		returnRaided(r)
+	end
+	endRaid(r, false)
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(Config.RaidEvery * (0.75 + math.random() * 0.5))
+		launchRaid()
+	end
+end)
+
 -- Once a second: keep pirates in empty bases, run their lock cycle and restock.
 task.spawn(function()
 	while true do
@@ -1041,6 +1346,7 @@ local function onPlayerAdded(player: Player)
 		stunnedUntil = 0,
 		immuneUntil = 0,
 		zapReady = 0,
+		raidedAt = 0,
 		lastAction = 0,
 		leaderstats = { Cash = cashStat, Steals = stealStat },
 	}
@@ -1300,7 +1606,7 @@ task.spawn(function()
 			local data = session.profile.data
 			local state = incomeState(player, data)
 			for s, slot in session.slots do
-				if not slot.carrier then
+				if not slot.carrier and not slot.raided then
 					slot.pending += Formulas.satIncome(slot.id, state)
 					session.base.collectLabels[s].Text = if slot.pending >= 1 then Formulas.cash(slot.pending) else ""
 				end
@@ -1428,6 +1734,10 @@ if RunService:IsStudio() then
 				if free then
 					setSlot(player, session, free, v)
 				end
+			elseif k == "raid" then
+				session.raidedAt = -math.huge
+				session.profile.data.playSeconds = math.max(session.profile.data.playSeconds, Config.RaidGrace)
+				launchRaid()
 			elseif (session :: any)[k] ~= nil and k ~= "profile" then
 				(session :: any)[k] = v
 			else
@@ -1437,9 +1747,11 @@ if RunService:IsStudio() then
 		refresh(player)
 		local slots = {}
 		for s, slot in session.slots do
-			slots[s] = { id = slot.id, pending = slot.pending, carrier = slot.carrier and slot.carrier.Name }
+			slots[s] = { id = slot.id, pending = slot.pending, carrier = slot.carrier and slot.carrier.Name, raided = slot.raided }
 		end
-		return { data = session.profile.data, slots = slots, carrying = session.carry and session.carry.id, base = session.base.index }
+		local r = raid
+		local raidInfo = r and { phase = r.phase, pos = r.pos, slot = r.slot, id = r.id }
+		return { data = session.profile.data, slots = slots, carrying = session.carry and session.carry.id, base = session.base.index, raid = raidInfo }
 	end
 	debug.Parent = game:GetService("ServerStorage")
 end
