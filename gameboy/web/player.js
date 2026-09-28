@@ -85,7 +85,8 @@ export class Player extends EventTarget {
     this.audio = null; this.node = null; this.gain = null; this.audioFill = 0;
     this.fps = 0; this.fpsFrames = 0; this.fpsTime = 0;
     this.saveTimer = null;
-    this.onFrame = null;          // optional hook (frame index) for netplay/spectating
+    this.onInput = null;          // (frame, mask) whenever the applied input changes — for streaming to spectators
+    this.remote = null;           // spectator mode: { upTo, inputs: Map<frame, mask> } fed by pushRemote()
     this._loop = this._loop.bind(this);
     this._onKey = this._onKey.bind(this);
     this._onVis = () => { if (document.hidden) this.flushSave(); };
@@ -139,11 +140,15 @@ export class Player extends EventTarget {
     if (save) this.gb.cart.importSave(save);
     this.applyVideoSettings();
     this.rewindBuf = [];
+    this.frameCount = 0;
+    this.applied = 0;
     this.toast('Reset');
+    this.emit('discontinuity');
   }
 
   async flushSave() {
     const gb = this.gb;
+    if (this.remote) return; // a spectated game's save RAM belongs to someone else
     if (!gb || !gb.cart.hasBattery() || !gb.cart.ramDirty) return;
     gb.cart.ramDirty = false;
     await store.set(`sram:${this.romKey}`, gb.cart.exportSave());
@@ -177,6 +182,7 @@ export class Player extends EventTarget {
     try { this.gb.loadState(rec.state); } catch (e) { this.toast(e.message); return; }
     this.rewindBuf = [];
     this.toast(`Loaded state ${slot}`);
+    this.emit('discontinuity');
   }
 
   async stateInfo(slot) {
@@ -263,6 +269,8 @@ export class Player extends EventTarget {
     this.pollGamepads();
     if (!this.gb || this.paused) return;
 
+    if (this.remote) { this._remoteLoop(dt, now); return; }
+
     if (this.rewinding) {
       this.acc += dt;
       let steps = 0;
@@ -299,10 +307,9 @@ export class Player extends EventTarget {
   stepFrame() {
     const gb = this.gb;
     this.applyInput();
-    if (this.onFrame) this.onFrame(this.frameCount);
     gb.runFrame();
     this.frameCount++;
-    if (this.frameCount % REWIND_EVERY === 0) {
+    if (!this.remote && this.frameCount % REWIND_EVERY === 0) {
       this.rewindBuf.push(gb.saveState());
       if (this.rewindBuf.length > REWIND_MAX) this.rewindBuf.shift();
     }
@@ -310,8 +317,10 @@ export class Player extends EventTarget {
   }
 
   setRewinding(on) {
-    if (on && !this.rewindBuf.length) return;
+    if (this.remote || (on && !this.rewindBuf.length)) return;
+    const was = this.rewinding;
     this.rewinding = on;
+    if (was && !on) this.emit('discontinuity');
     if (this.node) this.node.port.postMessage('clear');
   }
 
@@ -350,6 +359,7 @@ export class Player extends EventTarget {
   _onKey(e) {
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (this.remote || !this.gb) return;
     const down = e.type === 'keydown';
     const btn = this.keys[e.code];
     if (btn) {
@@ -405,11 +415,67 @@ export class Player extends EventTarget {
   }
 
   applyInput() {
-    const mask = this.inputEnabled ? (this.localInputMask() | this.inputRemote) : this.inputRemote;
+    let mask;
+    if (this.remote) {
+      const m = this.remote.inputs.get(this.frameCount);
+      if (m === undefined) return;
+      this.remote.inputs.delete(this.frameCount);
+      mask = m;
+    } else mask = this.inputEnabled ? (this.localInputMask() | this.inputRemote) : this.inputRemote;
     if (mask === this.applied) return;
+    this.setMask(mask);
+    if (this.onInput && !this.remote) this.onInput(this.frameCount, mask);
+  }
+
+  setMask(mask) {
     const changed = mask ^ this.applied;
     for (let i = 0; i < 8; i++) if (changed & (1 << i)) this.gb.setButton(BUTTONS[i], (mask >> i) & 1);
     this.applied = mask;
+  }
+
+  // ---------------- spectating (lockstep replay of someone else's inputs) ----------------
+
+  /** Snapshot for a spectator: state + the frame it's at + currently held buttons. */
+  keyframe() {
+    return { state: this.gb.saveState(), frame: this.frameCount, mask: this.applied };
+  }
+
+  /** Enter spectator mode on the already-loaded ROM, starting from a keyframe. */
+  startRemote({ state, frame, mask }) {
+    this.gb.loadState(state);
+    this.remote = { upTo: frame, inputs: new Map() };
+    this.frameCount = frame;
+    this.applied = 0;
+    this.setMask(mask);
+    this.rewindBuf = [];
+    this.paused = false;
+    this.acc = 0;
+  }
+
+  /** Feed more of the streamer's input log; the spectator may simulate up to (not including) `upTo`. */
+  pushRemote(inputs, upTo) {
+    if (!this.remote) return;
+    for (const [f, m] of inputs) if (f >= this.frameCount) this.remote.inputs.set(f, m);
+    this.remote.upTo = Math.max(this.remote.upTo, upTo);
+  }
+
+  stopRemote() { this.remote = null; }
+
+  _remoteLoop(dt, now) {
+    // Hold ~6 frames of buffer to absorb network jitter; speed up when further behind.
+    const backlog = this.remote.upTo - this.frameCount;
+    if (backlog <= 0) { this.acc = 0; return; }
+    this.acc += dt * (backlog > 30 ? 4 : backlog > 12 ? 1.25 : 1);
+    let frames = 0;
+    while (this.acc >= FRAME_MS && this.frameCount < this.remote.upTo && frames < 5) {
+      this.acc -= FRAME_MS;
+      this.stepFrame();
+      frames++;
+    }
+    if (backlog > 600) { // hopelessly behind (tab was hidden): jump by simulating without drawing
+      while (this.frameCount < this.remote.upTo - 6) this.stepFrame();
+    }
+    if (frames) { this.pushAudio(); this.draw(); }
   }
 
   destroy() {

@@ -8,7 +8,17 @@ node serve.js            # → http://localhost:8080/  (standalone player page)
 bash roms/fetch.sh       # download test ROMs + the bundled free homebrew (gitignored)
 npm test                 # Blargg / Mooneye / acid2 suites, headless (~30 s)
 node test/shot.js roms/homebrew/ucity.gbc out.png 300 "200:start:5"   # headless screenshot
+node test/determinism.js # keyframe + input-log replay is bit-exact (basis for spectating)
+tools/sync-game-terminal.sh  # copy core + player + ROMs into ../game_terminal/public/games/gameboy/
 ```
+
+## game_terminal integration
+
+The hub's **RETRO → GAME BOY** room (`game_terminal/public/games/gameboy/client.js`,
+`server/games/gameboy.js`) runs this emulator client-side. game_terminal has no build step,
+so it serves a *copy* under `emu/` — edit here, then run `tools/sync-game-terminal.sh`.
+Everyone plays locally; anyone playing a bundled homebrew game can be **watched** live via
+lockstep replay: one gzipped save state (~8–17 KiB) and then only frame-tagged button changes.
 
 ## Layout
 
@@ -22,6 +32,7 @@ node test/shot.js roms/homebrew/ucity.gbc out.png 300 "200:start:5"   # headless
 | `src/cart.js` | ROM-only, MBC1 (+multicart), MBC2, MBC3+RTC (wall-clock), MBC5 (+rumble); battery saves |
 | `web/player.js` | UI-agnostic `Player`: rAF loop @ 59.73 Hz, AudioWorklet with rate control, keyboard/gamepad/touch, IndexedDB battery saves + 4 state slots, fast-forward, rewind, screenshot |
 | `web/index.html`, `ui.js`, `style.css` | standalone page with a CSS-drawn handheld shell, homebrew library, drag-and-drop ROM loading (.gb/.gbc/.zip) |
+| `web/netstate.js` | save state ⇄ gzipped base64 string for the network |
 | `test/run-tests.js` | test-ROM runner (`--verbose`, `--shots=dir`, name filters) |
 
 ## Accuracy (131 / 141 test ROMs)
