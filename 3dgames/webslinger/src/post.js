@@ -10,7 +10,7 @@ const VERT = /* glsl */`varying vec2 vUv; void main(){ vUv = uv; gl_Position = v
 const DOWN = /* glsl */`
 varying vec2 vUv;
 uniform sampler2D tSrc; uniform vec2 uTexel; uniform float uFirst; uniform float uThreshold;
-vec3 s(vec2 o){ return texture2D(tSrc, vUv + o * uTexel).rgb; }
+vec3 s(vec2 o){ vec3 c = texture2D(tSrc, vUv + o * uTexel).rgb; return any(isnan(c)) || any(isinf(c)) ? vec3(0.0) : c; }
 float karis(vec3 c){ return 1.0 / (1.0 + max(c.r, max(c.g, c.b))); }
 void main(){
   vec3 a = s(vec2(-2, 2)), b = s(vec2(0, 2)), c = s(vec2(2, 2));
@@ -72,6 +72,77 @@ void main(){
   gl_FragColor = vec4(acc / float(N), 1.0);
 }`;
 
+
+// Screen-space ambient occlusion at half resolution: horizon-style hemisphere samples
+// around a depth-reconstructed normal. The radius grows with distance so near ledges get
+// crisp contact shadows and far street canyons darken toward the bottom. Stores AO in r,
+// linear depth in g (for the depth-aware blur in the composite).
+const SSAO = /* glsl */`
+varying vec2 vUv;
+uniform sampler2D tDepth; uniform mat4 uProjInv; uniform vec2 uTexel; uniform float uProjY; uniform float uTime;
+vec3 vpos(vec2 uv){ float z = texture2D(tDepth, uv).r; vec4 p = uProjInv * vec4(vec3(uv, z) * 2.0 - 1.0, 1.0); return p.xyz / p.w; }
+void main(){
+  float z0 = texture2D(tDepth, vUv).r;
+  if (z0 >= 0.99999) { gl_FragColor = vec4(1.0, 1e5, 0.0, 1.0); return; }
+  vec3 P = vpos(vUv);
+  // normal from the flatter of the two neighbours on each axis (avoids smearing across edges)
+  vec3 pr = vpos(vUv + vec2(uTexel.x, 0.0)), pl = vpos(vUv - vec2(uTexel.x, 0.0));
+  vec3 pu = vpos(vUv + vec2(0.0, uTexel.y)), pd = vpos(vUv - vec2(0.0, uTexel.y));
+  vec3 dx = abs(pr.z - P.z) < abs(P.z - pl.z) ? pr - P : P - pl;
+  vec3 dy = abs(pu.z - P.z) < abs(P.z - pd.z) ? pu - P : P - pd;
+  vec3 n = normalize(cross(dx, dy));
+  float dist = -P.z;
+  float R = clamp(1.2 + dist * 0.035, 1.2, 14.0);
+  float rs = R * uProjY * 0.5 / dist;             // radius in uv units
+  rs = min(rs, 0.12);
+  // interleaved gradient noise rotates the spiral per pixel; the blur hides the pattern
+  float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  float rot = ign * 6.2831853;
+  const int N = 12;
+  float occ = 0.0;
+  for (int i = 0; i < N; i++) {
+    float fi = (float(i) + 0.5) / float(N);
+    float a = rot + float(i) * 2.3999632;
+    vec2 o = vec2(cos(a), sin(a)) * rs * sqrt(fi) * vec2(uTexel.y / uTexel.x, 1.0);
+    vec3 v = vpos(vUv + o) - P;
+    float l = length(v);
+    occ += max(0.0, dot(v / max(l, 1e-4), n) - 0.12) * (1.0 - smoothstep(0.55 * R, R, l));
+  }
+  float ao = clamp(1.0 - 1.35 * occ / float(N), 0.0, 1.0);
+  gl_FragColor = vec4(ao * ao, dist, 0.0, 1.0);
+}`;
+
+// Eye adaptation: average log-luminance of the frame into a small grid, then a 1×1
+// target that eases toward it over time (ping-pong), centre-weighted like a camera meter.
+const LUM = /* glsl */`
+varying vec2 vUv;
+uniform sampler2D tSrc; uniform vec2 uTexel;
+void main(){
+  float s = 0.0;
+  for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++) {
+    vec3 c = texture2D(tSrc, vUv + (vec2(x, y) - 1.5) * 0.25 * uTexel).rgb;
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    s += log(clamp(l, 1e-4, 60.0));
+  }
+  gl_FragColor = vec4(s / 16.0, 0.0, 0.0, 1.0);
+}`;
+const ADAPT = /* glsl */`
+varying vec2 vUv;
+uniform sampler2D tLum; uniform sampler2D tPrev; uniform float uRate; uniform vec2 uGrid;
+void main(){
+  float s = 0.0, w = 0.0;
+  for (int y = 0; y < 18; y++) for (int x = 0; x < 32; x++) {
+    vec2 uv = (vec2(x, y) + 0.5) / uGrid;
+    vec2 q = (uv - 0.5) * vec2(1.6, 1.0);
+    float k = 0.35 + exp(-dot(q, q) * 6.0);
+    s += texture2D(tLum, uv).r * k; w += k;
+  }
+  float avg = exp(s / w);
+  float prev = texture2D(tPrev, vec2(0.5)).r;
+  float a = prev <= 0.0 ? avg : prev + (avg - prev) * uRate;
+  gl_FragColor = vec4(a, 0.0, 0.0, 1.0);
+}`;
+
 const COMPOSITE = /* glsl */`
 varying vec2 vUv;
 uniform sampler2D tScene; uniform sampler2D tBloom; uniform sampler2D tRays; uniform sampler2D tDepth;
@@ -79,6 +150,8 @@ uniform vec2 uRes; uniform float uTime;
 uniform float uExposure, uBloom, uRays, uSpeed, uCA, uVignette, uGrain, uSat, uContrast, uComic, uWarm;
 uniform float uNear, uFar; uniform vec2 uBlurCenter; uniform float uFlash; uniform vec3 uFlashCol;
 uniform float uLetterbox;
+uniform sampler2D tAO; uniform vec2 uAOTexel; uniform float uAO;
+uniform sampler2D tAdapt; uniform float uAdapt; uniform float uKey; uniform float uTonemap;
 
 vec3 aces(vec3 v) {
   const mat3 I = mat3(0.59719, 0.07600, 0.02840, 0.35458, 0.90834, 0.13383, 0.04823, 0.01566, 0.83777);
@@ -87,6 +160,22 @@ vec3 aces(vec3 v) {
   vec3 a = v * (v + 0.0245786) - 0.000090537;
   vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
   return clamp(O * (a / b), 0.0, 1.0);
+}
+// AgX (Troy Sobotka / Blender), sRGB primaries: film-like highlight roll-off and hue
+// preservation, far less of the saturated "game" look than ACES
+vec3 agxCurve(vec3 x){ vec3 x2 = x * x, x4 = x2 * x2;
+  return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232; }
+vec3 agx(vec3 c){
+  const mat3 IN = mat3(0.842479062253094, 0.0423282422610123, 0.0423756549057051, 0.0784335999999992, 0.878468636469772, 0.0784336, 0.0792237451477643, 0.0791661274605434, 0.879142973793104);
+  const mat3 OUT = mat3(1.19687900512017, -0.0528968517574562, -0.0529716355144438, -0.0980208811401368, 1.15190312990417, -0.0980434501171241, -0.0990297440797205, -0.0989611768448433, 1.15107367264116);
+  c = IN * max(c, 1e-10);
+  c = clamp((log2(c) + 12.47393) / 16.5, 0.0, 1.0);
+  c = agxCurve(c);
+  // "punchy" look (as in Blender): a touch more contrast and saturation in display space
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = pow(max(vec3(l) + (c - l) * 1.3, 0.0), vec3(1.3));
+  c = OUT * c;
+  return pow(clamp(c, 0.0, 1.0), vec3(2.2));
 }
 float linDepth(float z){ float ndc = z * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - ndc * (uFar - uNear)); }
 float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -111,10 +200,29 @@ void main(){
     col.b += texture2D(tScene, uv + o - fromC * ca).b;
   }
   col /= float(NB);
+  if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
+  if (uAO > 0.0) {
+    // depth-aware 3x3 blur of the half-res AO, then applied mostly to ambient-lit tones
+    float zc = linDepth(texture2D(tDepth, uv).r);
+    float s = 0.0, w = 0.0;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 a = texture2D(tAO, uv + vec2(x, y) * uAOTexel).rg;
+      float k = exp(-abs(a.y - zc) / (0.04 * zc + 0.05)) * (x == 0 && y == 0 ? 2.0 : 1.0);
+      s += a.x * k; w += k;
+    }
+    float ao = w > 1e-4 ? s / w : 1.0;
+    float lum0 = dot(col, vec3(0.2126, 0.7152, 0.0722)) * uExposure;
+    col *= mix(1.0, ao, uAO * (1.0 - 0.6 * smoothstep(0.4, 2.5, lum0)));
+  }
   col += texture2D(tBloom, uv).rgb * uBloom;
   col += texture2D(tRays, uv).rgb * uRays;
-  col *= uExposure;
-  col = aces(col);
+  float ex = uExposure;
+  if (uAdapt > 0.0) {
+    float avg = texture2D(tAdapt, vec2(0.5)).r;
+    if (avg > 0.0) ex *= clamp(pow(uKey / max(avg * uExposure, 1e-4), uAdapt), 0.6, 1.7);
+  }
+  col *= ex;
+  col = uTonemap > 0.5 ? agx(col) : aces(col);
   // grade (display-referred)
   float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col = mix(vec3(l), col, uSat);
@@ -199,12 +307,22 @@ export class Post {
       uNear: { value: 0.1 }, uFar: { value: 1000 }, uBlurCenter: { value: new THREE.Vector2(0.5, 0.5) },
       uFlash: { value: 0 }, uFlashCol: { value: new THREE.Color(1, 1, 1) }, uLetterbox: { value: 0 },
     });
+    Object.assign(this.comp.uniforms, {
+      tAO: { value: null }, uAOTexel: { value: new THREE.Vector2() }, uAO: { value: 0 },
+      tAdapt: { value: null }, uAdapt: { value: 0 }, uKey: { value: 0.2 }, uTonemap: { value: 0 },
+    });
+    this.ssao = mk(SSAO, { tDepth: { value: null }, uProjInv: { value: new THREE.Matrix4() }, uTexel: { value: new THREE.Vector2() }, uProjY: { value: 1 }, uTime: { value: 0 } });
+    this.lum = mk(LUM, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2(1 / 32, 1 / 18) } });
+    this.adapt = mk(ADAPT, { tLum: { value: null }, tPrev: { value: null }, uRate: { value: 0.05 }, uGrid: { value: new THREE.Vector2(32, 18) } });
+    const small = (w, h) => new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false });
+    this.lumRT = small(32, 18);
+    this.adaptRT = [small(1, 1), small(1, 1)];
     this.fxaa = mk(FXAA, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uOn: { value: 1 }, uSharpen: { value: 0 } });
     this.black = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
     this.black.needsUpdate = true;
     this.samples = 4;
     this.scale = 1;
-    this.opts = { bloom: true, rays: true, fxaa: true };
+    this.opts = { bloom: true, rays: true, fxaa: true, ao: false, adapt: false };
     this.w = this.h = 0;
   }
 
@@ -229,11 +347,12 @@ export class Post {
     for (let i = 0; i < 6 && mw >= 4 && mh >= 4; i++) { this.mips.push(this.rt(mw, mh)); mw >>= 1; mh >>= 1; }
     this.ups = this.mips.slice(0, -1).map((m) => this.rt(m.width, m.height));
     this.raysRT = this.rt(Math.max(4, iw >> 2), Math.max(4, ih >> 2));
+    this.aoRT = this.rt(Math.max(4, iw >> 1), Math.max(4, ih >> 1));
     this.ldr = new THREE.WebGLRenderTarget(iw, ih, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
   }
 
   dispose() {
-    for (const t of [this.sceneRT, this.raysRT, this.ldr, ...(this.mips || []), ...(this.ups || [])]) if (t) { t.depthTexture?.dispose(); t.dispose(); }
+    for (const t of [this.sceneRT, this.raysRT, this.aoRT, this.ldr, ...(this.mips || []), ...(this.ups || [])]) if (t) { t.depthTexture?.dispose(); t.dispose(); }
   }
 
   pass(mat, target) {
@@ -280,6 +399,29 @@ export class Post {
       this.pass(this.rays, this.raysRT);
       c.tRays.value = this.raysRT.texture;
     } else c.tRays.value = this.black;
+    // ambient occlusion
+    if (this.opts.ao) {
+      const u = this.ssao.uniforms;
+      u.tDepth.value = this.sceneRT.depthTexture;
+      u.uProjInv.value.copy(camera.projectionMatrixInverse);
+      u.uProjY.value = camera.projectionMatrix.elements[5];
+      u.uTexel.value.set(1 / this.aoRT.width, 1 / this.aoRT.height);
+      this.pass(this.ssao, this.aoRT);
+      c.tAO.value = this.aoRT.texture;
+      c.uAOTexel.value.set(1 / this.aoRT.width, 1 / this.aoRT.height);
+    } else c.uAO.value = 0;
+    // eye adaptation
+    if (this.opts.adapt) {
+      this.lum.uniforms.tSrc.value = this.sceneRT.texture;
+      this.pass(this.lum, this.lumRT);
+      const [prev, next] = this.adaptRT;
+      this.adapt.uniforms.tLum.value = this.lumRT.texture;
+      this.adapt.uniforms.tPrev.value = prev.texture;
+      this.adapt.uniforms.uRate.value = 1 - Math.exp(-(p.dt ?? 1 / 60) * 1.6);
+      this.pass(this.adapt, next);
+      this.adaptRT = [next, prev];
+      c.tAdapt.value = next.texture;
+    } else c.uAdapt.value = 0;
     c.tScene.value = this.sceneRT.texture;
     c.tDepth.value = this.sceneRT.depthTexture;
     c.uRes.value.set(this.w, this.h);

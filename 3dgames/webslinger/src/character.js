@@ -163,7 +163,7 @@ export class Character {
 
   update(dt, pl, c, t) {
     const v = pl.v, hs = Math.hypot(v.x, v.z), sp = Math.hypot(v.x, v.y, v.z);
-    this.root.position.set(pl.p.x, pl.p.y, pl.p.z);
+    this.root.position.set(pl.rp.x, pl.rp.y, pl.rp.z);
     const target = {};
     const put = (pose, w = 1) => { for (const n of this.names) { const a = target[n] || (target[n] = [0, 0, 0]), b = pose[n]; a[0] += b[0] * w; a[1] += b[1] * w; a[2] += b[2] * w; } };
     let rate = 14;
@@ -200,7 +200,7 @@ export class Character {
       target.lHip[0] += k; target.rHip[0] -= k;
       // body hangs along the rope
       const A = pl.anchor;
-      up.set(A.x - pl.p.x, A.y - pl.p.y, A.z - pl.p.z).normalize();
+      up.set(A.x - pl.rp.x, A.y - pl.rp.y, A.z - pl.rp.z).normalize();
       fwd.set(v.x, v.y, v.z).normalize();
       if (sp < 1) fwd.set(-Math.sin(pl.facing), 0, -Math.cos(pl.facing));
       this.body.position.y = 0;

@@ -30,7 +30,11 @@ class Builder {
   box(b) {
     const { x0, y0, z0, x1, y1, z1 } = b;
     const d = [b.style, b.seed, y0, y1], c = b.col;
-    this.quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0], c, d);
+    if (b.rim > 0) {
+      // cornice: only the overhanging rim of the top face, so it doesn't z-fight with the roof
+      const r = b.rim, top = (a0, a1, c0, c1) => this.quad([a0, y1, c1], [a1, y1, c1], [a1, y1, c0], [a0, y1, c0], [0, 1, 0], c, d);
+      top(x0, x1, z0, z0 + r); top(x0, x1, z1 - r, z1); top(x0, x0 + r, z0 + r, z1 - r); top(x1 - r, x1, z0 + r, z1 - r);
+    } else this.quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0], c, d);
     this.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], c, d);
     this.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], c, d);
     this.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], c, d);

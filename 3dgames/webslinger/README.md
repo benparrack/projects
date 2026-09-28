@@ -24,7 +24,7 @@ Games").
 | Q | Air dash |
 | Ctrl / C | Dive |
 | T | Cycle time of day (golden hour, sunset, blue hour, night, dawn, morning, midday) |
-| V | Comic-book shader |
+| V | Cycle look: Cinematic, Realistic (AgX, SSAO, eye adaptation), Comic book |
 | P | Photo mode |
 | R | Respawn |
 | H | Help |
@@ -35,6 +35,10 @@ Games").
 
 - **Swing physics** (`src/player.js`, 240 Hz): the web is an inextensible rope.
   - A constraint removes outward radial velocity and keeps tangential velocity.
+  - For the first `P.CATCH` seconds a fresh rope is springy: it stretches a little
+    and swings most of your fall speed forward instead of stopping you dead.
+  - Rendering uses `player.rp`, which is interpolated between substeps, so display
+    rates that aren't a divisor of 240 don't stutter.
   - You keep your momentum through the arc and pick up speed on the downswing by
     reeling in a little ("pumping").
   - The anchor finder picks building edges ahead of and above you. It is biased by
@@ -49,8 +53,11 @@ Games").
   - The sky is a Nishita atmosphere LUT, which also feeds the PMREM environment and
     the height fog.
   - Shadows are CSM cascades.
-  - Post-processing is an HDR pipeline: bloom, god rays, ACES, FXAA, and dynamic
-    resolution to hold the frame rate.
+  - Post-processing is an HDR pipeline: SSAO (half-res), eye adaptation, bloom,
+    god rays, ACES or AgX, FXAA, and dynamic resolution to hold the frame rate.
+    SSAO is off on Low quality.
+  - Cornice boxes (`rim` in `city.js`) emit only their overhanging top rim, to
+    avoid z-fighting with the roof below.
 
 **Vendored patch:** `vendor/three/addons/csm/CSMShader.js` has a
 `[webslinger patch]` block. It adds r186's `material.dfg` and multi-scatter setup,

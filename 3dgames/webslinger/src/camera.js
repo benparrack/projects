@@ -19,6 +19,8 @@ export class ChaseCam {
     this.tmp = new THREE.Vector3();
     this.roll = 0;
     this.lastLook = 0;
+    this.lastHead = null;
+    this.turnRate = 0;
   }
 
   update(dt, pl, c, opts) {
@@ -40,9 +42,9 @@ export class ChaseCam {
       this.pitch = damp(this.pitch, wantP, 0.5, dt);
     }
     // follow target: slightly above the player; lag in y softens landings
-    const ty = pl.p.y + 0.9;
-    this.target.x = damp(this.target.x, pl.p.x, 30, dt);
-    this.target.z = damp(this.target.z, pl.p.z, 30, dt);
+    const ty = pl.rp.y + 0.9;
+    this.target.x = damp(this.target.x, pl.rp.x, 30, dt);
+    this.target.z = damp(this.target.z, pl.rp.z, 30, dt);
     this.target.y = Math.abs(this.target.y - ty) > 8 ? ty : damp(this.target.y, ty, pl.state === "ground" ? 14 : 22, dt);
     // pull back with speed
     const want = 6.2 + Math.min(1, speed / 45) * 4.5 + (pl.state === "wall" ? 1.5 : 0);
@@ -72,8 +74,19 @@ export class ChaseCam {
     this.tmp.copy(cam.position).add(this.fwd);
     cam.up.set(0, 1, 0);
     cam.lookAt(this.tmp);
-    // subtle roll into the swing's sideways acceleration
-    const rollW = pl.state === "swing" ? -c.mx * 0.05 : 0;
+    // bank into turns: smoothed yaw rate of the travel direction (like a camera
+    // operator leaning into the curve), plus a little from the stick on the rope
+    if (hs > 6) {
+      const head = Math.atan2(-v.x, -v.z);
+      if (this.lastHead !== null && dt > 0) {
+        let dh = head - this.lastHead; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+        this.turnRate = damp(this.turnRate, dh / dt, 4, dt);
+      }
+      this.lastHead = head;
+    } else { this.lastHead = null; this.turnRate = damp(this.turnRate, 0, 4, dt); }
+    const air = pl.state === "swing" || pl.state === "air";
+    const bank = air ? THREE.MathUtils.clamp(this.turnRate * Math.min(1, hs / 30) * 0.06, -0.1, 0.1) : 0;
+    const rollW = bank + (pl.state === "swing" ? -c.mx * 0.04 : 0);
     this.roll = damp(this.roll, rollW, 3, dt);
     cam.rotateZ(this.roll);
     if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }

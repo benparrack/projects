@@ -20,6 +20,7 @@ export const P = {
   ROPE_MIN: 12, ROPE_MAX: 95, CLEAR: 4.5,
   REEL: 16,              // m/s pulling in when the rope must shorten
   PUMP: 1.4,             // m/s reel-in on the downswing
+  CATCH: 0.3,            // s over which a fresh rope goes from springy to taut
   BOTTOM_BOOST: 7, W_PUMP: 5, STEER: 13,
   WALL_UP: 14, WALL_SIDE: 10,
   DASH: 3, DASH_REGEN: 1.3,
@@ -35,6 +36,10 @@ export class Player {
   constructor(world) {
     this.w = world;
     this.p = v3(); this.v = v3();
+    // render position: interpolated between the last two 240 Hz substeps so a
+    // display rate that isn't a divisor of 240 (144 Hz, 165 Hz, jittery dt) doesn't
+    // stutter by a whole substep (~0.2 m at swing speed) every few frames
+    this.pp = v3(); this.rp = v3();
     this.state = "air";
     this.anchor = v3(); this.rope = 0; this.ropeTarget = 0; this.attachT = 0;
     this.hand = 1;               // +1 right hand, -1 left hand
@@ -75,10 +80,16 @@ export class Player {
     // edge-triggered inputs are consumed by the first substep
     let first = true;
     while (this.acc >= P.STEP) {
+      this.pp.x = this.p.x; this.pp.y = this.p.y; this.pp.z = this.p.z;
       this.step(P.STEP, c, first);
       first = false;
       this.acc -= P.STEP;
     }
+    // teleports (respawn, spawn placement) must not smear across the lerp
+    const a = Math.hypot(this.p.x - this.pp.x, this.p.y - this.pp.y, this.p.z - this.pp.z) > 5 ? 1 : this.acc / P.STEP;
+    this.rp.x = this.pp.x + (this.p.x - this.pp.x) * a;
+    this.rp.y = this.pp.y + (this.p.y - this.pp.y) * a;
+    this.rp.z = this.pp.z + (this.p.z - this.pp.z) * a;
     const sp = len(this.v);
     this.stats.maxSpeed = Math.max(this.stats.maxSpeed, sp);
   }
@@ -366,18 +377,14 @@ export class Player {
     const dist = Math.hypot(dx, dy, dz);
     const nx = dx / dist, ny = dy / dist, nz = dz / dist;
     // the catch: redirect momentum along the arc instead of losing the radial part
+    // The catch itself happens over P.CATCH in swing() (springy rope that turns the
+    // fall into forward swing). Only a dead vertical drop needs a nudge here, or the
+    // rope would just stop you like a bungee.
     const sp = len(this.v);
     const vr = dot(this.v, { x: nx, y: ny, z: nz });
-    if (vr > 0) {
-      this.v.x -= vr * nx; this.v.y -= vr * ny; this.v.z -= vr * nz;
-      const st = len(this.v);
-      const keep = Math.max(sp * 0.82, st);
-      if (st > 0.5) { const k = keep / st; this.v.x *= k; this.v.y *= k; this.v.z *= k; }
-      else {
-        // falling straight down: kick forward along the arc
-        const cfx = -Math.sin(c.yaw), cfz = -Math.cos(c.yaw);
-        this.v.x = cfx * keep; this.v.z = cfz * keep;
-      }
+    if (vr > 0 && Math.hypot(this.v.x - vr * nx, this.v.y - vr * ny, this.v.z - vr * nz) < 0.5) {
+      const cfx = -Math.sin(c.yaw), cfz = -Math.cos(c.yaw);
+      this.v.x += cfx * sp * 0.5; this.v.z += cfz * sp * 0.5;
     }
     this.rope = dist;
     this.ropeTarget = dist;
@@ -453,12 +460,26 @@ export class Player {
     dist = Math.hypot(dx, dy, dz);
     if (dist > this.rope) {
       nx = dx / dist; ny = dy / dist; nz = dz / dist;
+      // fresh rope: springy for the first P.CATCH seconds (stretch a little, then
+      // take up), after that inextensible
+      const u = Math.min(1, this.attachT / P.CATCH);
+      const stiff = this.attachT < P.CATCH ? 0.06 + 0.94 * u * u : 1;
       // position: back onto the sphere (collision-aware)
-      const corr = dist - this.rope;
+      const corr = (dist - this.rope) * stiff;
       this.w.move(this.p, P.HX, P.HY, P.HZ, -nx * corr, -ny * corr, -nz * corr, this.out, false);
-      // velocity: drop the outward radial part (inextensible rope)
+      // velocity: drop the outward radial part
       const vr2 = dot(this.v, { x: nx, y: ny, z: nz });
-      if (vr2 > 0) { this.v.x -= vr2 * nx; this.v.y -= vr2 * ny; this.v.z -= vr2 * nz; }
+      if (vr2 > 0) {
+        const s0 = len(this.v);
+        const cut = vr2 * stiff;
+        this.v.x -= cut * nx; this.v.y -= cut * ny; this.v.z -= cut * nz;
+        // during the catch, most of the fall speed is swung forward along the arc
+        // (movie-style momentum) instead of being soaked up by the rope
+        if (this.attachT < P.CATCH * 1.5) {
+          const s1 = len(this.v), keep = s1 + (s0 - s1) * 0.8;
+          if (s1 > 0.5) { const k = keep / s1; this.v.x *= k; this.v.y *= k; this.v.z *= k; }
+        }
+      }
     }
     if (r.y === -1) { this.land(vy0); return; }
     if ((r.x || r.z) && this.wallCheck(r, c, vIn)) return;
@@ -474,7 +495,8 @@ export class Player {
       const up = this.v.y > -4 ? (jumped ? 9 : 5.5) : (jumped ? 6 : 2);
       const fw = jumped ? 4 : 2.5;
       this.v.x += (this.v.x / s) * fw; this.v.z += (this.v.z / s) * fw;
-      this.v.y = Math.max(this.v.y, 0) + up;
+      // bleed off the fall instead of snapping vertical speed to zero (no hitch)
+      this.v.y = (this.v.y > 0 ? this.v.y : this.v.y * 0.3) + up;
       if (this.v.y > 6) this.flip = auto ? 0 : 0.75;
     } else if (jumped) this.v.y += 8;
     this.set("air");

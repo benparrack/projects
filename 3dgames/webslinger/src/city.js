@@ -101,7 +101,7 @@ export class City {
   box(x0, y0, z0, x1, y1, z1, style, col, opt = {}) {
     if (x1 - x0 < 0.01 || y1 - y0 < 0.01 || z1 - z0 < 0.01) return null;
     const b = { x0, y0, z0, x1, y1, z1, style, col, seed: opt.seed ?? Math.random(),
-      collide: opt.collide ?? true, detail: opt.detail ?? false, bottom: opt.bottom ?? false };
+      collide: opt.collide ?? true, detail: opt.detail ?? false, bottom: opt.bottom ?? false, rim: opt.rim ?? 0 };
     (opt.far ? this.far : this.boxes).push(b);
     return b;
   }
@@ -249,7 +249,7 @@ export class City {
       const top = k === tiers - 1 ? h : Math.round((y + (h - y) * frac) / 3.8) * 3.8;
       this.box(tx0, y, tz0, tx1, top, tz1, S.STONE, stone, { seed });
       // cornice band
-      this.box(tx0 - 0.4, top - 1.2, tz0 - 0.4, tx1 + 0.4, top, tz1 + 0.4, S.PLAIN, stone.map((v) => v * 1.12), { detail: true, bottom: true });
+      this.box(tx0 - 0.4, top - 1.2, tz0 - 0.4, tx1 + 0.4, top, tz1 + 0.4, S.PLAIN, stone.map((v) => v * 1.12), { detail: true, bottom: true, rim: 0.4 });
       y = top;
       if (k < tiers - 1) {
         const room = (Math.min(tx1 - tx0, tz1 - tz0) - 14) / 2;
@@ -288,7 +288,7 @@ export class City {
     const setback = h > 40 && r() < 0.35;
     const y1 = setback ? Math.round(h * (0.65 + 0.15 * r()) / 3.8) * 3.8 : h;
     this.box(x0, sh, z0, x1, y1, z1, S.BRICK, col, { seed });
-    this.box(x0 - 0.7, y1 - 1.4, z0 - 0.7, x1 + 0.7, y1, z1 + 0.7, S.PLAIN, pick(r, PAL.stone), { detail: true, bottom: true });
+    this.box(x0 - 0.7, y1 - 1.4, z0 - 0.7, x1 + 0.7, y1, z1 + 0.7, S.PLAIN, pick(r, PAL.stone), { detail: true, bottom: true, rim: 0.7 });
     let rx0 = x0, rz0 = z0, rx1 = x1, rz1 = z1;
     if (setback) {
       const inset = Math.min(4, (Math.min(x1 - x0, z1 - z0) - 10) / 2);

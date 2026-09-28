@@ -22,10 +22,10 @@ const store = {
 
 // ------------------------------------------------------------------ settings
 const QUALITY = {
-  low: { minScale: 0.45, maxScale: 0.7, samples: 0, shadow: 1024, cascades: 2, rays: false, interior: 0, traffic: 300, bloom: true },
-  medium: { minScale: 0.55, maxScale: 0.85, samples: 0, shadow: 2048, cascades: 3, rays: true, interior: 1, traffic: 500, bloom: true },
-  high: { minScale: 0.6, maxScale: 1.0, samples: 4, shadow: 2048, cascades: 3, rays: true, interior: 1, traffic: 700, bloom: true },
-  ultra: { minScale: 0.75, maxScale: 1.0, samples: 4, shadow: 4096, cascades: 4, rays: true, interior: 1, traffic: 900, bloom: true },
+  low: { minScale: 0.45, maxScale: 0.7, samples: 0, shadow: 1024, cascades: 2, rays: false, interior: 0, traffic: 300, bloom: true, ao: false },
+  medium: { minScale: 0.55, maxScale: 0.85, samples: 0, shadow: 2048, cascades: 3, rays: true, interior: 1, traffic: 500, bloom: true, ao: true },
+  high: { minScale: 0.6, maxScale: 1.0, samples: 4, shadow: 2048, cascades: 3, rays: true, interior: 1, traffic: 700, bloom: true, ao: true },
+  ultra: { minScale: 0.75, maxScale: 1.0, samples: 4, shadow: 4096, cascades: 4, rays: true, interior: 1, traffic: 900, bloom: true, ao: true },
 };
 const TIMES = [
   { name: "Golden Hour", hour: 17.55, cloud: 0.4 },
@@ -36,10 +36,18 @@ const TIMES = [
   { name: "Morning", hour: 9.0, cloud: 0.35 },
   { name: "Midday", hour: 12.5, cloud: 0.4 },
 ];
+// post "looks": Cinematic = punchy ACES grade with lens effects; Realistic = AgX film
+// response, SSAO, eye adaptation, neutral grade, extra aerial haze, no lens tricks
+const LOOKS = {
+  cinematic: { name: "Cinematic", tonemap: 0, exp: 1, ao: 0.55, adapt: 0.3, sat: 1.08, contrast: 1.06, warm: 0.6, vignette: 0.35, grain: 0.012, ca: 1, blur: 1, bloom: 0.06, rays: 1, fog: 1, comic: 0 },
+  realistic: { name: "Realistic", tonemap: 1, exp: 1, ao: 0.9, adapt: 0.5, sat: 1.0, contrast: 1.0, warm: 0.2, vignette: 0.2, grain: 0.006, ca: 0, blur: 0.45, bloom: 0.035, rays: 0.7, fog: 1.1, comic: 0 },
+  comic: { name: "Comic book", tonemap: 0, exp: 1, ao: 0.4, adapt: 0.25, sat: 1.08, contrast: 1.06, warm: 0.6, vignette: 0.35, grain: 0.012, ca: 0.5, blur: 1, bloom: 0.06, rays: 1, fog: 1, comic: 1 },
+};
+const LOOK_ORDER = ["cinematic", "realistic", "comic"];
 const S = {
   quality: store.get("quality", "high"),
   time: store.get("time", 0),
-  comic: store.get("comic", false),
+  look: store.get("look", store.get("comic", false) ? "comic" : "cinematic"),
   sens: store.get("sens", 1),
   invertY: store.get("invertY", false),
   autoCam: store.get("autoCam", true),
@@ -131,6 +139,7 @@ function toSpawn() {
   player.p.x = spawn.x; player.p.z = spawn.z;
   player.p.y = world.floorBelow(spawn.x, spawn.z, spawn.y + 30) + 0.95;
   player.v.x = player.v.y = player.v.z = 0;
+  Object.assign(player.pp, player.p); Object.assign(player.rp, player.p);
   player.state = "ground"; player.facing = spawn.yaw;
   chase.yaw = spawn.yaw; chase.pitch = 0.02;
   chase.target.set(player.p.x, player.p.y + 0.9, player.p.z);
@@ -194,6 +203,12 @@ document.addEventListener("pointerlockchange", () => {
   if (locked) { playing = true; paused = false; $("title").classList.add("hidden"); $("menu").classList.add("hidden"); $("hud").classList.remove("hidden"); }
   else if (playing) { paused = true; $("menu").classList.remove("hidden"); }
 });
+function setLook(k, announce) {
+  if (!LOOKS[k]) k = "cinematic";
+  S.look = k; store.set("look", k);
+  $("s-look").value = k;
+  if (announce) toast(LOOKS[k].name);
+}
 function bindSettings() {
   const q = $("s-quality"); q.value = S.quality;
   q.onchange = () => { store.set("quality", q.value); location.reload(); };
@@ -204,7 +219,8 @@ function bindSettings() {
     const el = $(id); el[prop] = S[key];
     el.oninput = () => { S[key] = prop === "checked" ? el.checked : +el.value; store.set(key, S[key]); fn && fn(); };
   };
-  bind("s-comic", "comic");
+  const lk = $("s-look"); lk.value = S.look;
+  lk.onchange = () => setLook(lk.value);
   bind("s-flow", "timeFlow");
   bind("s-auto", "autoCam");
   bind("s-invert", "invertY", () => (input.invertY = S.invertY));
@@ -268,7 +284,7 @@ function tick(now) {
   if (window.WS?.fake) Object.assign(c, window.WS.fake);
   if (c.menu && input.locked) document.exitPointerLock();
   if (c.time) setTimePreset(S.time + 1);
-  if (c.comic) { S.comic = !S.comic; store.set("comic", S.comic); $("s-comic").checked = S.comic; toast(S.comic ? "Comic mode" : "Cinematic mode"); }
+  if (c.comic) setLook(LOOK_ORDER[(LOOK_ORDER.indexOf(S.look) + 1) % LOOK_ORDER.length], true);
   if (c.photo) { $("hud").classList.toggle("hidden"); }
   if (c.help) $("help").classList.toggle("hidden");
   if (input.keys.has("F3")) { input.keys.delete("F3"); statsOn = !statsOn; $("stats").classList.toggle("hidden", !statsOn); }
@@ -345,14 +361,25 @@ function tick(now) {
   sunScreen.copy(sky.sunDir).multiplyScalar(5000).add(camera.position).project(camera);
   const sunVisible = sky.sunDir.y > -0.03 && sunScreen.z < 1 && tmpV.copy(sky.sunDir).dot(chase.fwd) > 0;
   post.opts.rays = Q.rays && sunVisible;
-  const ps = { sunScreen: new THREE.Vector3(sunScreen.x * 0.5 + 0.5, sunScreen.y * 0.5 + 0.5, sunVisible ? 1 : 0) };
+  const ps = { dt, sunScreen: new THREE.Vector3(sunScreen.x * 0.5 + 0.5, sunScreen.y * 0.5 + 0.5, sunVisible ? 1 : 0) };
   const n = skyState.night, tw = skyState.twilight;
   pc.uExposure.value = THREE.MathUtils.lerp(1.1, 1.9, Math.min(1, n * 1.2)) * (1 + (1 - skyState.day) * tw * 0.8);
   pc.uRays.value = 0.35 * skyState.day + 0.25 * tw;
-  const sp01 = Math.min(1, Math.max(0, (speed - 20) / 45)) * S.motion;
+  const sp01 = Math.min(1, Math.max(0, (speed - 20) / 45)) * S.motion * (LOOKS[S.look] || LOOKS.cinematic).blur;
   pc.uSpeed.value = THREE.MathUtils.lerp(pc.uSpeed.value, sp01, 1 - Math.exp(-4 * dt));
-  pc.uCA.value = S.motion;
-  pc.uComic.value = S.comic ? 1 : 0;
+  const L = LOOKS[S.look] || LOOKS.cinematic;
+  pc.uCA.value = S.motion * L.ca;
+  pc.uComic.value = L.comic;
+  pc.uTonemap.value = L.tonemap;
+  pc.uSat.value = L.sat; pc.uContrast.value = L.contrast; pc.uWarm.value = L.warm;
+  pc.uVignette.value = L.vignette; pc.uGrain.value = L.grain; pc.uBloom.value = L.bloom;
+  pc.uRays.value *= L.rays;
+  pc.uExposure.value *= L.exp;
+  post.opts.ao = Q.ao && L.ao > 0; pc.uAO.value = L.ao;
+  post.opts.adapt = L.adapt > 0; pc.uAdapt.value = L.adapt;
+  // metering target: mid-grey by day, much darker at night so night stays night
+  pc.uKey.value = THREE.MathUtils.lerp(0.2, 0.05, Math.min(1, n * 1.1 + tw * 0.3));
+  U.uFogBoost.value = L.fog;
   pc.uTime.value = time;
   flash = Math.max(0, flash - dt * 2);
   pc.uFlash.value = flash * 0.5;
@@ -396,4 +423,4 @@ window.WS = {
   // headless-ish testing: enter play mode without pointer lock; WS.fake = {swing: true, ...} overrides input
   play: () => { playing = true; paused = false; $("title").classList.add("hidden"); $("hud").classList.remove("hidden"); },
   fake: null,
-  tick: (n = 1, ms = 16.7) => { for (let i = 0; i < n; i++) tick(last + ms); },  player, chase, camera, post, sky, applyTime, setTimePreset, S, renderer, input, csm, world, city };
+  tick: (n = 1, ms = 16.7) => { for (let i = 0; i < n; i++) tick(last + ms); },  player, chase, camera, post, sky, applyTime, setTimePreset, setLook, S, renderer, input, csm, world, city };

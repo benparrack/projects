@@ -112,7 +112,10 @@ vec3 roomColor(vec2 id, vec2 f, vec3 V, vec3 T, vec3 N, vec2 cs, float depth, fl
   float h2 = h12(id * 1.37 + seed * 11.0 + 3.1);
   lit = step(h, clamp(uLitShare * litBoost, 0.0, 1.0));
   vec3 rd = vec3(dot(V, T) / cs.x, V.y / cs.y, max(dot(V, -N), 0.02) / depth);
-  vec3 ro = vec3(f, 0.0);
+  // keep the ray off exact axis alignment: (1 - f) / 0 at a clamped window edge is 0/0 = NaN,
+  // which bloom smeared into a column of white dots straight ahead of the camera
+  rd.xy = mix(vec2(-1e-4), vec2(1e-4), step(0.0, rd.xy)) + rd.xy;
+  vec3 ro = vec3(clamp(f, 0.001, 0.999), 0.0);
   vec3 tw = (step(0.0, rd) - ro) / rd;
   float t = min(min(tw.x, tw.y), tw.z);
   vec3 hp = ro + rd * t;
@@ -152,7 +155,13 @@ void facadeWalls(int st, vec3 N, float seed, float base, float top, inout vec3 c
   float u = dot(vWPos, T) + seed * 13.0;
   float y = vWPos.y;
   vec2 cs; vec4 win; float depth = 1.4; float litBoost = 1.0;
-  if (st == 1) { cs = vec2(1.5 + floor(seed * 3.0) * 0.35, 3.8); win = vec4(0.035, 0.965, 0.26, 0.985); depth = 2.6; }
+  // curtain-wall variants: 0 banded spandrels, 1 flush all-glass, 2 bold vertical fins
+  float gv = fract(seed * 11.7);
+  int cw = gv < 0.4 ? 0 : gv < 0.75 ? 1 : 2;
+  if (st == 1) {
+    cs = vec2(1.5 + floor(seed * 3.0) * 0.35, 3.8); depth = 2.6;
+    win = cw == 0 ? vec4(0.035, 0.965, 0.26, 0.985) : cw == 1 ? vec4(0.018, 0.982, 0.05, 0.99) : vec4(0.09, 0.91, 0.1, 0.99);
+  }
   else if (st == 2) { cs = vec2(3.2 + floor(seed * 2.0) * 0.5, 3.8); win = vec4(0.27, 0.73, 0.26, 0.84); depth = 1.3; }
   else if (st == 3) { cs = vec2(2.7, 3.4); win = vec4(0.3, 0.7, 0.24, 0.8); depth = 1.1; }
   else if (st == 4) { cs = vec2(1.7, 3.8); win = vec4(0.03, 0.97, 0.4, 0.9); depth = 2.2; }
@@ -166,6 +175,14 @@ void facadeWalls(int st, vec3 N, float seed, float base, float top, inout vec3 c
   float cover = (win.y - win.x) * (win.w - win.z);
   float mask = mix(wx * wy, cover, far);
   if (st == 5 && y > 6.0) mask = 0.0;
+  // louvred mechanical floors every 10-20 storeys on glass towers, and a louvred crown
+  float mech = 0.0;
+  if (st == 1 || st == 4) {
+    float per = 10.0 + 5.0 * floor(fract(seed * 3.3) * 3.0);
+    float fl = floor((y - base) / cs.y);
+    mech = (fl > 3.0 && mod(fl, per) > per - 1.5 && y < top - 12.0) || (top > 90.0 && y > top - cs.y * 1.6) ? 1.0 : 0.0;
+    mask *= 1.0 - mech;
+  }
   // wall surface
   vec3 wallc = col;
   float n = vn2(vWPos.xz * 0.35 + vec2(y * 0.5, 0.0)) * 0.5 + vn2(vec2(u, y) * 0.08) * 0.5;
@@ -194,6 +211,7 @@ void facadeWalls(int st, vec3 N, float seed, float base, float top, inout vec3 c
   } else if (st == 1) {
     // spandrel panels: tinted opaque glass, same reflectivity
     wallc = col * (0.55 + 0.2 * h11(id.y + seed * 7.0));
+    if (cw == 1) wallc = col * 0.9;
   } else if (st == 4) {
     wallc *= 0.88 + 0.18 * n;
     float band = smoothstep(win.z - 0.02, win.z, f.y) * (1.0 - smoothstep(win.w, win.w + 0.02, f.y));
@@ -235,22 +253,48 @@ void facadeWalls(int st, vec3 N, float seed, float base, float top, inout vec3 c
   if (st == 5 && y < 6.0) {
     float band = step(0.76, f.y) * step(f.y, 0.92);
     float hue = h12(id + seed);
-    vec3 sc = 0.5 + 0.5 * cos(6.2831 * (hue + vec3(0.0, 0.33, 0.67)));
-    col = mix(col, sc * 0.3, band);
-    gEmit += sc * band * (0.15 + 2.4 * uNight) * step(0.35, fract(hue * 7.0));
+    // shop signs: dark painted fascias (navy, forest, oxblood, black, cream) with light
+    // blocky "lettering"; about half the signs are backlit at night
+    int k = int(floor(fract(hue * 5.7) * 5.0));
+    vec3 fascia = k == 0 ? vec3(0.03, 0.05, 0.12) : k == 1 ? vec3(0.03, 0.09, 0.05) : k == 2 ? vec3(0.14, 0.03, 0.03) : k == 3 ? vec3(0.02) : vec3(0.55, 0.5, 0.4);
+    vec3 ink = k == 4 ? vec3(0.06, 0.05, 0.04) : vec3(0.85, 0.8, 0.68);
+    vec2 lq = vec2((f.x - 0.2) * cs.x / 0.35, (f.y - 0.79) / 0.1);
+    float word = step(0.0, lq.x) * step(lq.x, cs.x * 1.6) * step(0.0, lq.y) * step(lq.y, 1.0);
+    float letter = step(0.3, h12(floor(lq * vec2(1.0, 3.0)) + hue * 91.0)) * step(0.2, fract(lq.x));
+    vec3 sc = mix(fascia, ink, word * letter);
+    col = mix(col, sc, band);
+    float lit = step(0.5, fract(hue * 7.0));
+    gEmit += band * (sc * 0.1 + ink * word * letter * 2.2 * lit) * uNight;
+    // warm lit shop interiors at night behind the display glass
+    gEmit += vec3(1.0, 0.78, 0.5) * mask * 0.5 * uNight * step(0.25, fract(hue * 13.0));
   }
   if (st == 1) {
     // curtain wall: spandrels are opaque tinted glass, windows clear glass; all mirror-like
     col = mix(col * 0.6 + glassTint * 0.4, glassTint, mask);
     gEmit += room * mask * tintVis;
-    gRough = 0.03 + 0.06 * h12(id * 0.37);
+    // slightly rough glass: a sun glint spreads into a soft patch instead of pinpoint fireflies
+    gRough = 0.06 + 0.07 * h12(id * 0.37);
     gMetal = mix(0.3, 1.0, mask);
     gRough = mix(0.25, gRough, mask);
+    // aluminium mullions (vertical) catch the light; fins are bolder and lighter
+    float mull = (1.0 - wx) * wy * (1.0 - far) * (1.0 - mech);
+    vec3 alu = cw == 2 ? vec3(0.62, 0.63, 0.64) : vec3(0.4, 0.42, 0.45);
+    col = mix(col, alu, mull);
+    gRough = mix(gRough, 0.35, mull);
+    gMetal = mix(gMetal, 0.9, mull);
   } else {
     col = mix(col, glassTint, mask);
     gEmit += room * mask * tintVis;
     gRough = mix(st == 3 ? 0.92 : 0.8, 0.05, mask);
     gMetal = mask;
+  }
+  if (mech > 0.5) {
+    // horizontal louvre blades with dark gaps
+    float bl = fract(y / 0.45);
+    float fwy = fwidth(y / 0.45);
+    float blade = mix(smoothstep(0.35, 0.45, bl) * (1.0 - smoothstep(0.85, 0.95, bl)), 0.55, smoothstep(0.3, 0.8, fwy));
+    col = mix(vec3(0.05, 0.055, 0.06), vec3(0.34, 0.35, 0.36), blade);
+    gRough = 0.45; gMetal = 0.7;
   }
   gWin = mask;
   // panel waviness in reflections
@@ -309,6 +353,8 @@ void surfaceTop(int st, float seed, inout vec3 col) {
     vec2 q = p / 3.0;
     float seam = smoothstep(0.96, 1.0, fract(q.x)) * (1.0 - smoothstep(0.1, 0.4, fwidth(q.x)));
     col = roof * (1.0 - 0.3 * seam);
+    // at night roofs pick up the city's orange skyglow instead of going pure black
+    gEmit += roof * vec3(1.0, 0.72, 0.5) * uNight * 0.05;
     gRough = 0.9;
     if (st == 8) { gRough = 0.35; gMetal = 0.8; }
   }
