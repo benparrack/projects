@@ -51,6 +51,7 @@ const S = {
   sens: store.get("sens", 1),
   invertY: store.get("invertY", false),
   autoCam: store.get("autoCam", true),
+  assist: store.get("assist", true),
   volume: store.get("volume", 0.8),
   fov: store.get("fov", 70),
   timeFlow: store.get("timeFlow", false),
@@ -145,6 +146,7 @@ function toSpawn() {
   chase.target.set(player.p.x, player.p.y + 0.9, player.p.z);
 }
 toSpawn();
+player.assist = S.assist ? 1 : 0;
 
 // ------------------------------------------------------------------ time of day
 let hour = TIMES[S.time % TIMES.length].hour;
@@ -162,6 +164,7 @@ function applyTime(h, force) {
   U.uLitShare.value = 0.3 + 0.22 * skyState.night;
   const sd = sky.sunDir.y > 0.02 ? sky.sunDir : sky.moonDir;
   csm.lightDirection.copy(sd).negate();
+  shadowForce = true;
   const moon = new THREE.Color(0.05, 0.07, 0.12).multiplyScalar(skyState.night * 1.2);
   for (const l of csm.lights) { l.color.copy(sky.sunDir.y > 0.02 ? sky.sunLight : moon); l.intensity = 1; }
   scene.environmentIntensity = 1;
@@ -171,7 +174,28 @@ function setTimePreset(i) {
   S.time = (i + TIMES.length) % TIMES.length;
   store.set("time", S.time);
   applyTime(TIMES[S.time].hour, true);
+  post.adaptReset = true;
   toast(TIMES[S.time].name);
+}
+
+// ------------------------------------------------------------------ shadows
+// Far cascades cover a lot of city and change slowly on screen, so they're redrawn
+// every 2nd/3rd/4th frame. A skipped cascade keeps its old shadow matrix together
+// with its old map (three skips both), so static shadows stay exactly right; only
+// moving things far away update at a lower rate. A fast camera turn or a jump in
+// position redraws everything, since a stale far cascade might not cover the view.
+var shadowFrame = 0, shadowForce = true;   // var: applyTime() runs above this line
+const lastCamQ = new THREE.Quaternion(), lastCamP = new THREE.Vector3();
+function staggerShadows() {
+  shadowFrame++;
+  const every = [1, 2, 3, 4];
+  const jump = shadowForce || camera.quaternion.angleTo(lastCamQ) > 0.04 || camera.position.distanceTo(lastCamP) > 12;
+  shadowForce = false;
+  lastCamQ.copy(camera.quaternion); lastCamP.copy(camera.position);
+  csm.lights.forEach((l, i) => {
+    l.shadow.autoUpdate = false;
+    l.shadow.needsUpdate = jump || (shadowFrame + i) % every[Math.min(i, 3)] === 0;
+  });
 }
 
 // ------------------------------------------------------------------ sizing
@@ -182,7 +206,11 @@ function resize() {
   renderer.setSize(w, h, false);
   canvas.style.width = innerWidth + "px"; canvas.style.height = innerHeight + "px";
   camera.aspect = w / h; camera.updateProjectionMatrix();
-  post.setSize(w, h, S.dynRes ? dynScale : Q.maxScale, Q.samples);
+  const sc = S.dynRes ? dynScale : Q.maxScale;
+  // at HiDPI density 4x MSAA is indistinguishable from 2x but costs ~2 ms at 5 MP
+  post.setSize(w, h, sc, Q.samples >= 4 && dpr * sc >= 1.5 ? 2 : Q.samples);
+  // MSAA'd and not upscaled: FXAA would only soften it
+  post.opts.fxaa = post.samples === 0 || post.scale < 0.95;
 }
 addEventListener("resize", resize);
 resize();
@@ -223,6 +251,7 @@ function bindSettings() {
   lk.onchange = () => setLook(lk.value);
   bind("s-flow", "timeFlow");
   bind("s-auto", "autoCam");
+  bind("s-assist", "assist", () => (player.assist = S.assist ? 1 : 0));
   bind("s-invert", "invertY", () => (input.invertY = S.invertY));
   bind("s-dyn", "dynRes", resize);
   bind("s-sens", "sens", () => (input.sens = S.sens), "value");
@@ -251,7 +280,7 @@ function handleEvents(speed) {
     } else if (e === "release" || e === "releaseJump" || e === "landHard" || e === "land" || e === "wall" || e === "respawn") {
       if (mainWeb) { webs.letGo(mainWeb); mainWeb = null; }
       if (e === "landHard") chase.shake = 1;
-      if (e === "respawn") { flash = 1; toast("Back to the city"); }
+      if (e === "respawn") { flash = 1; post.adaptReset = true; toast("Back to the city"); }
     } else if (e === "zip") {
       if (mainWeb) webs.letGo(mainWeb);
       mainWeb = webs.shoot(hero.handPos.r, tmpV.set(player.zipT.x, player.zipT.y, player.zipT.z));
@@ -356,6 +385,7 @@ function tick(now) {
   cityMesh.update(camera);
   camera.updateMatrixWorld();
   csm.update();
+  staggerShadows();
   const pc = post.comp.uniforms;
   // sun position on screen for god rays
   sunScreen.copy(sky.sunDir).multiplyScalar(5000).add(camera.position).project(camera);

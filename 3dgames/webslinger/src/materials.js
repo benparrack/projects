@@ -248,7 +248,9 @@ void facadeWalls(int st, vec3 N, float seed, float base, float top, inout vec3 c
   float fres = 0.06 + 0.94 * pow(1.0 - ndv, 4.0);
   float tintVis = (st == 1 ? 0.6 : 0.85) * (1.0 - fres);
   // metallic glass: albedo acts as reflectance (F0), so keep it mid-grey-blue, not black
-  vec3 glassTint = st == 1 ? mix(vec3(0.42, 0.48, 0.54), col, 0.3) : vec3(0.3, 0.34, 0.38);
+  // (real coated curtain-wall glass reflects ~10-30% head-on, rising to a mirror at grazing
+  // angles through the metallic Fresnel; much higher and every tower is a chrome mirror)
+  vec3 glassTint = st == 1 ? mix(vec3(0.27, 0.31, 0.35), col * 0.65, 0.3) : vec3(0.2, 0.23, 0.26);
   // shop signage band above storefronts (colourful at night)
   if (st == 5 && y < 6.0) {
     float band = step(0.76, f.y) * step(f.y, 0.92);
@@ -273,7 +275,7 @@ void facadeWalls(int st, vec3 N, float seed, float base, float top, inout vec3 c
     col = mix(col * 0.6 + glassTint * 0.4, glassTint, mask);
     gEmit += room * mask * tintVis;
     // slightly rough glass: a sun glint spreads into a soft patch instead of pinpoint fireflies
-    gRough = 0.06 + 0.07 * h12(id * 0.37);
+    gRough = 0.09 + 0.07 * h12(id * 0.37);
     gMetal = mix(0.3, 1.0, mask);
     gRough = mix(0.25, gRough, mask);
     // aluminium mullions (vertical) catch the light; fins are bolder and lighter
@@ -298,7 +300,9 @@ void facadeWalls(int st, vec3 N, float seed, float base, float top, inout vec3 c
   }
   gWin = mask;
   // panel waviness in reflections
-  gJit = (vec2(h12(id + 0.5), h12(id + 7.5)) - 0.5) * 0.035 * (1.0 - far);
+  // panels are never perfectly coplanar: small per-panel tilt, same for a whole storey band
+  // row so it reads as glazing units rather than broken mosaic
+  gJit = (vec2(h12(id + 0.5), h12(vec2(floor(id.x / 3.0), id.y) + 7.5)) - 0.5) * 0.018 * (1.0 - far);
   // lit crowns on tall towers at night
   if (top > 150.0 && y > top - 14.0 && fract(seed * 5.3) > 0.7) {
     float hue = fract(seed * 3.7);
@@ -430,12 +434,20 @@ if (gRefl > 0.0) {
   float az = atan(R.z, R.x) * 9.5492966 + dot(vWPos.xz, vec2(0.0021, 0.0017));
   float fid = floor(az * 4.0);
   float hgt = (0.06 + 0.42 * pow(h11(fid * 1.7 + 3.0), 2.0)) * (1.0 - clamp(vWPos.y / 520.0, 0.0, 0.85));
-  float city = smoothstep(hgt + 0.004, hgt - 0.004, R.y);
+  // soft silhouette edge: wider when the reflection sweeps fast across the screen (no
+  // crawling hard-edged bars), and slightly soft even up close (panels aren't optical flats)
+  float ew = 0.01 + 2.0 * fwidth(R.y);
+  float city = smoothstep(hgt + ew, hgt - ew, R.y);
+  // tower edges: blend neighbour heights across a soft vertical seam
+  float ef = fract(az * 4.0), es = 0.08 + 2.0 * fwidth(az * 4.0);
+  city *= mix(1.0, 0.75, smoothstep(0.5 - es, 0.5, abs(ef - 0.5)));
   vec2 wq = vec2(az * 16.0, R.y * 80.0);
   float wl = step(h12(floor(wq) + fid), uLitShare * 0.5) * step(0.25, fract(wq.x)) * step(0.3, fract(wq.y));
-  vec3 cityCol = uHorizon * mix(0.75, 0.12, uNight) * (0.45 + 0.9 * h11(fid)) + uSunCol * 0.05 * (1.0 - uNight) * step(0.6, h11(fid * 3.1)) * max(dot(normalize(R.xz + 1e-4), -normalize(uSunDir.xz + 1e-4)), 0.0) + vec3(1.0, 0.7, 0.42) * wl * uNight * 0.9;
-  cityCol = mix(cityCol, uHorizon * 0.8, smoothstep(0.0, -0.4, R.y) * 0.5);
-  radiance = mix(radiance, cityCol, city * gRefl);
+  wl *= 1.0 - smoothstep(0.3, 1.0, fwidth(wq.y));   // windows fade out instead of sparkling
+  // reflected towers are other facades: darker than the sky behind them, low contrast
+  vec3 cityCol = uHorizon * mix(0.42, 0.1, uNight) * (0.7 + 0.45 * h11(fid)) + uSunCol * 0.04 * (1.0 - uNight) * step(0.6, h11(fid * 3.1)) * max(dot(normalize(R.xz + 1e-4), -normalize(uSunDir.xz + 1e-4)), 0.0) + vec3(1.0, 0.7, 0.42) * wl * uNight * 0.8;
+  cityCol = mix(cityCol, uHorizon * 0.55, smoothstep(0.0, -0.4, R.y) * 0.5);
+  radiance = mix(radiance, min(cityCol, radiance * 1.1 + 0.02), city * gRefl * 0.85);
 }
 #endif`);
   };

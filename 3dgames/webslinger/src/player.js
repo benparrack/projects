@@ -20,6 +20,7 @@ export const P = {
   ROPE_MIN: 12, ROPE_MAX: 95, CLEAR: 4.5,
   REEL: 16,              // m/s pulling in when the rope must shorten
   PUMP: 1.4,             // m/s reel-in on the downswing
+  PIVOT_PULL: 0.6,       // physics pivot slides this much of the anchor's sideways offset over your travel line
   CATCH: 0.3,            // s over which a fresh rope goes from springy to taut
   BOTTOM_BOOST: 7, W_PUMP: 5, STEER: 13,
   WALL_UP: 14, WALL_SIDE: 10,
@@ -41,7 +42,8 @@ export class Player {
     // stutter by a whole substep (~0.2 m at swing speed) every few frames
     this.pp = v3(); this.rp = v3();
     this.state = "air";
-    this.anchor = v3(); this.rope = 0; this.ropeTarget = 0; this.attachT = 0;
+    this.anchor = v3(); this.pivot = v3(); this.rope = 0;
+    this.assist = 1;             // swing assist strength (0 = off): wall avoidance + street alignment this.ropeTarget = 0; this.attachT = 0;
     this.hand = 1;               // +1 right hand, -1 left hand
     this.wallN = v3();
     this.zipT = v3(); this.zipMode = "";
@@ -195,6 +197,7 @@ export class Player {
     this.v.z += d.z * P.AIR_ACC * dt;
     const dive = c.dive && this.v.y < 5;
     this.gravity(dt, dive ? 1.7 : 1, dive ? 0.45 : 1);
+    if (this.airT > 0.1) this.steerAssist(dt, c, 0.6);
     const hs = Math.hypot(this.v.x, this.v.z);
     if (hs > 2) this.turnTo(Math.atan2(-this.v.x, -this.v.z), dt, 5);
     const vy = this.v.y;
@@ -223,6 +226,7 @@ export class Player {
 
   integrate(dt, canStep) {
     const p0x = this.p.x, p0z = this.p.z;
+    this.vPreX = this.v.x; this.vPreZ = this.v.z;
     const r = this.w.move(this.p, P.HX, P.HY, P.HZ, this.v.x * dt, this.v.y * dt, this.v.z * dt, this.out, canStep);
     if (r.x) this.v.x = r.x * this.v.x < 0 ? this.v.x : 0;
     if (r.z) this.v.z = r.z * this.v.z < 0 ? this.v.z : 0;
@@ -247,6 +251,19 @@ export class Player {
     const into = -(d.x * nx + d.z * nz);
     const hsIn = speedIn ?? 0;
     if (into < 0.4 && hsIn < 8) return false;
+    // glancing hit while flying (not steering into it): skim off the wall and keep
+    // the speed instead of sticking to a wall-run, which kills a swing chain
+    const hsPre = Math.hypot(this.vPreX, this.vPreZ);
+    if (this.state !== "ground" && hsPre > 8 && into < 0.5) {
+      const vin = -(this.vPreX * nx + this.vPreZ * nz) / hsPre;
+      if (vin < 0.5) {
+        const hs = Math.hypot(this.v.x, this.v.z) || 1, keep = hsPre * 0.96 / hs;
+        this.v.x = this.v.x * keep + nx * 2.5; this.v.z = this.v.z * keep + nz * 2.5;
+        this.p.x += nx * 0.05; this.p.z += nz * 0.05;
+        this.emit("graze");
+        return false;
+      }
+    }
     // needs to be a real wall (not a kerb): something solid at head height too
     const h = this.w.raycast(this.p.x, this.p.y + 1.2, this.p.z, -nx, 0, -nz, P.HX + 0.6);
     if (!h) return false;
@@ -317,8 +334,7 @@ export class Player {
    * Find a web anchor: a building surface ahead and above, to the left/right,
    * biased by where you're moving, where the camera looks, and the stick.
    */
-  findAnchor(c) {
-    const w = this.w;
+  heading(c) {
     const hs = Math.hypot(this.v.x, this.v.z);
     // heading: blend velocity with camera direction (camera steers the swing)
     const cfx = -Math.sin(c.yaw), cfz = -Math.cos(c.yaw);
@@ -329,7 +345,57 @@ export class Player {
     }
     const d = this.moveDir(c);
     hx += d.x * 0.5; hz += d.z * 0.5;
-    const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
+    const hl = Math.hypot(hx, hz) || 1;
+    return { x: hx / hl, z: hz / hl };
+  }
+
+  /**
+   * Physics pivot for an anchor: the web visibly sticks to the building, but the
+   * pendulum swings from a point pulled sideways over your line of travel. A real
+   * pivot off to the side swings you across the street into that building; this
+   * keeps the arc going down the street the way the films (and games) cheat it.
+   */
+  pivotFor(ax, ay, az, hx, hz, out) {
+    const lat = (ax - this.p.x) * -hz + (az - this.p.z) * hx;   // sideways offset (right of heading)
+    const pull = lat * P.PIVOT_PULL * Math.min(1, this.assist * 1.5);
+    out.x = ax - -hz * pull; out.y = ay; out.z = az - hx * pull;
+    return out;
+  }
+
+  /**
+   * Cheap preview of the swing from a pivot: coarse pendulum steps, checking the
+   * body box against the city. Returns the step it would hit something (or -1)
+   * and how far it gets along the heading.
+   */
+  simArc(pv, L, hx, hz) {
+    const w = this.w, q = this._q || (this._q = v3()), u = this._u || (this._u = v3());
+    q.x = this.p.x; q.y = this.p.y; q.z = this.p.z;
+    u.x = this.v.x; u.y = this.v.y; u.z = this.v.z;
+    const N = 16, dt = 0.07, hx2 = P.HX + 0.35, hy2 = P.HY;
+    for (let i = 0; i < N; i++) {
+      u.y -= P.GRAV * dt;
+      q.x += u.x * dt; q.y += u.y * dt; q.z += u.z * dt;
+      let dx = q.x - pv.x, dy = q.y - pv.y, dz = q.z - pv.z;
+      const d = Math.hypot(dx, dy, dz);
+      if (d > L) {
+        dx /= d; dy /= d; dz /= d;
+        q.x = pv.x + dx * L; q.y = pv.y + dy * L; q.z = pv.z + dz * L;
+        const s0 = len(u), vr = u.x * dx + u.y * dy + u.z * dz;
+        if (vr > 0) {
+          u.x -= vr * dx; u.y -= vr * dy; u.z -= vr * dz;
+          const s1 = len(u);
+          if (s1 > 0.5) { const k = (s1 + (s0 - s1) * 0.6) / s1; u.x *= k; u.y *= k; u.z *= k; }
+        }
+      }
+      if (w.overlaps(q.x - hx2, q.y - hy2, q.z - hx2, q.x + hx2, q.y + hy2, q.z + hx2)) return { hit: i, prog: (q.x - this.p.x) * hx + (q.z - this.p.z) * hz };
+      if (q.y > pv.y - L * 0.12 && u.y > 0) break;   // would auto-release here
+    }
+    return { hit: -1, prog: (q.x - this.p.x) * hx + (q.z - this.p.z) * hz };
+  }
+
+  findAnchor(c) {
+    const w = this.w;
+    const { x: hx, z: hz } = this.heading(c);
     const rx = -hz, rz = hx;      // right of heading
     const ox = this.p.x, oy = this.p.y + 0.6, oz = this.p.z;
     const steer = c.mx;
@@ -358,6 +424,15 @@ export class Player {
         s += Math.sign(yawOff) === -this.lastSwingSide ? 0.35 : 0;   // alternate hands
         s += clear < P.CLEAR + P.HY ? -0.6 : 0;
         s += h.ny === 0 ? 0.3 : -0.2;                  // walls feel right, roofs OK
+        if (this.assist > 0) {
+          // preview the arc: heavily prefer swings that don't fly into a building,
+          // and that carry you a long way forward
+          const pv = this.pivotFor(h.x, h.y, h.z, hx, hz, this._pv || (this._pv = v3()));
+          const pL = Math.hypot(this.p.x - pv.x, this.p.y - pv.y, this.p.z - pv.z);
+          const sim = this.simArc(pv, pL, hx, hz);
+          if (sim.hit >= 0) s -= (0.6 + 2.5 * (1 - sim.hit / 16)) * this.assist;
+          s += clamp(sim.prog / (speed * 1.1 + 10), -0.5, 1.2) * 0.8 * this.assist;
+        }
         if (s > bestS) { bestS = s; best = { x: h.x, y: h.y, z: h.z, L, side: Math.sign(yawOff) || 1, nx: h.nx, ny: h.ny, nz: h.nz }; }
       }
     }
@@ -373,7 +448,9 @@ export class Player {
     }
     // pull the anchor a hair out of the surface so the rope end is visible
     this.anchor.x = a.x + a.nx * 0.05; this.anchor.y = a.y + a.ny * 0.05; this.anchor.z = a.z + a.nz * 0.05;
-    const dx = this.p.x - this.anchor.x, dy = this.p.y - this.anchor.y, dz = this.p.z - this.anchor.z;
+    const hd = this.heading(c);
+    this.pivotFor(this.anchor.x, this.anchor.y, this.anchor.z, hd.x, hd.z, this.pivot);
+    const dx = this.p.x - this.pivot.x, dy = this.p.y - this.pivot.y, dz = this.p.z - this.pivot.z;
     const dist = Math.hypot(dx, dy, dz);
     const nx = dx / dist, ny = dy / dist, nz = dz / dist;
     // the catch: redirect momentum along the arc instead of losing the radial part
@@ -399,7 +476,7 @@ export class Player {
 
   swing(dt, c, first) {
     this.attachT += dt; this.airT = 0;
-    const A = this.anchor;
+    const A = this.pivot;
     // release
     if (!c.swing || (first && c.jumpP)) { this.release(first && c.jumpP); return; }
 
@@ -449,6 +526,7 @@ export class Player {
         this.v.x = vx * cs - vz * sn; this.v.z = vx * sn + vz * cs;
       }
     }
+    this.steerAssist(dt, c, 1);
     const hs = Math.hypot(this.v.x, this.v.z);
     if (hs > 2) this.turnTo(Math.atan2(-this.v.x, -this.v.z), dt, 8);
 
@@ -486,6 +564,61 @@ export class Player {
     // swung up past the anchor: let go automatically at the top of the arc
     if (this.p.y > A.y - this.rope * 0.12 && this.v.y > 0 && this.attachT > 0.3) { this.release(false, true); return; }
     if (this.attachT > 8) this.release(false);
+  }
+
+  /** rotate horizontal velocity by ang (radians, +ang turns +x towards +z) */
+  rotV(ang) {
+    const cs = Math.cos(ang), sn = Math.sin(ang), vx = this.v.x, vz = this.v.z;
+    this.v.x = vx * cs - vz * sn; this.v.z = vx * sn + vz * cs;
+  }
+
+  /**
+   * Swing assist, in flight: (1) feel ahead along the travel line and bend around
+   * a wall towards the more open side (or up and over it), and (2) when you're
+   * already heading roughly down an avenue/street and not steering away, ease the
+   * heading onto the street and towards its middle. Both fade out the moment the
+   * camera or stick asks for a different direction, so turns stay yours.
+   */
+  steerAssist(dt, c, k) {
+    k *= this.assist;
+    if (k <= 0) return;
+    const hs = Math.hypot(this.v.x, this.v.z);
+    if (hs < 10) return;
+    const ux = this.v.x / hs, uz = this.v.z / hs;
+    const w = this.w, px = this.p.x, py = this.p.y, pz = this.p.z;
+    const look = hs * 0.8 + 6;
+    const h = w.raycast(px, py, pz, ux, 0, uz, look);
+    if (h) {
+      const free = (ang) => {
+        const cs = Math.cos(ang), sn = Math.sin(ang);
+        const r = w.raycast(px, py, pz, ux * cs - uz * sn, 0, ux * sn + uz * cs, look * 1.5);
+        return r ? r.t : look * 1.5;
+      };
+      const pos = Math.max(free(0.45), free(0.9) * 0.9), neg = Math.max(free(-0.45), free(-0.9) * 0.9);
+      const urg = clamp(1 - h.t / look, 0, 1) ** 0.7;
+      const room = Math.max(pos, neg);
+      if (room > h.t * 1.25) this.rotV((pos > neg ? 1 : -1) * urg * 2.4 * k * dt);
+      // boxed in (dead end / huge face): lift, to clear the roofline if it's close
+      else this.v.y += urg * 16 * k * dt;
+    }
+    // street alignment (skip when the camera or the stick wants to go elsewhere)
+    const alongX = Math.abs(ux) > Math.abs(uz);
+    const a = alongX ? ux : uz, sg = Math.sign(a);
+    const tx = alongX ? sg : 0, tz = alongX ? 0 : sg;
+    const cfx = -Math.sin(c.yaw), cfz = -Math.cos(c.yaw);
+    const camOn = cfx * tx + cfz * tz;
+    if (Math.abs(a) < 0.87 || camOn < 0.9 || Math.abs(c.mx) > 0.3) return;
+    const kk = k * clamp((camOn - 0.9) / 0.06, 0, 1) * clamp((hs - 10) / 10, 0, 1);
+    const cross = ux * tz - uz * tx;                       // sin(angle from heading to axis)
+    this.rotV(clamp(cross, -1, 1) * 1.1 * kk * dt);
+    // ease towards the middle of the road we're flying down
+    if (alongX) {
+      const zc = G.Z0 + Math.round((pz - G.Z0) / G.PZ) * G.PZ, off = pz - zc;
+      if (Math.abs(off) < G.SW / 2 + 4) this.v.z += (-0.9 * off - 1.2 * this.v.z) * 0.5 * kk * dt;
+    } else {
+      const xc = G.X0 + Math.round((px - G.X0) / G.PX) * G.PX, off = px - xc;
+      if (Math.abs(off) < G.AW / 2 + 4) this.v.x += (-0.9 * off - 1.2 * this.v.x) * 0.5 * kk * dt;
+    }
   }
 
   release(jumped, auto) {

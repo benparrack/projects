@@ -139,7 +139,8 @@ void main(){
   }
   float avg = exp(s / w);
   float prev = texture2D(tPrev, vec2(0.5)).r;
-  float a = prev <= 0.0 ? avg : prev + (avg - prev) * uRate;
+  // eyes adapt to brightness faster than to darkness
+  float a = prev <= 0.0 ? avg : prev + (avg - prev) * (avg > prev ? min(1.0, uRate * 2.2) : uRate);
   gl_FragColor = vec4(a, 0.0, 0.0, 1.0);
 }`;
 
@@ -317,6 +318,7 @@ export class Post {
     const small = (w, h) => new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false });
     this.lumRT = small(32, 18);
     this.adaptRT = [small(1, 1), small(1, 1)];
+    this.adaptReset = true;
     this.fxaa = mk(FXAA, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uOn: { value: 1 }, uSharpen: { value: 0 } });
     this.black = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
     this.black.needsUpdate = true;
@@ -417,7 +419,9 @@ export class Post {
       const [prev, next] = this.adaptRT;
       this.adapt.uniforms.tLum.value = this.lumRT.texture;
       this.adapt.uniforms.tPrev.value = prev.texture;
-      this.adapt.uniforms.uRate.value = 1 - Math.exp(-(p.dt ?? 1 / 60) * 1.6);
+      // a reset (time-of-day jump, respawn) snaps straight to the new scene
+      this.adapt.uniforms.uRate.value = this.adaptReset ? 1 : 1 - Math.exp(-(p.dt ?? 1 / 60) * 1.6);
+      this.adaptReset = false;
       this.pass(this.adapt, next);
       this.adaptRT = [next, prev];
       c.tAdapt.value = next.texture;
