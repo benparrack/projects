@@ -25,6 +25,9 @@ export const P = {
   PUMP: 1.4,             // m/s reel-in on the downswing
   PIVOT_PULL: 0.6,       // physics pivot slides this much of the anchor's sideways offset over your travel line
   CATCH: 0.3,            // s over which a fresh rope goes from springy to taut
+  REL_PITCH: 0.8,        // holding the swing lets go once the upswing climbs this steeply (tan ≈ 39°)
+  APEX_UNDER: 8,         // m: a held chain aims its flight to peak this far under the anchor
+  KICK_T: 0.09,          // s the release pop is spread over (no one-frame velocity step)
   BOTTOM_BOOST: 7, W_PUMP: 5, STEER: 13,
   WALL_UP: 14, WALL_SIDE: 10,
   DASH: 3, DASH_REGEN: 1.3,
@@ -53,6 +56,7 @@ export class Player {
     this.dash = P.DASH; this.dashRegen = 0;
     this.charge = 0; this.chargeHeld = false;
     this.releaseT = 9; this.groundT = 0; this.airT = 0; this.stateT = 0;
+    this.kick = { x: 0, y: 0, z: 0 }; this.kickT = 0;
     this.flip = 0; this.roll = 0; this.landHard = 0;
     // air tricks (F / pad Y): the stick picks the trick. Landing on the ground
     // before it finishes is a bail.
@@ -204,6 +208,13 @@ export class Player {
   // ------------------------------------------------------------------- air
   air(dt, c) {
     this.airT += dt; this.groundT = 0;
+    if (this.kickT > 0) {
+      // half-sine pulse: the pop eases in and out instead of switching on/off
+      const tm = P.KICK_T - this.kickT + Math.min(dt, this.kickT) / 2;
+      const f = Math.PI / 2 * Math.sin(Math.PI * tm / P.KICK_T) * Math.min(dt, this.kickT) / P.KICK_T;
+      this.v.x += this.kick.x * f; this.v.y += this.kick.y * f; this.v.z += this.kick.z * f;
+      this.kickT -= dt;
+    }
     const d = this.moveDir(c);
     this.v.x += d.x * P.AIR_ACC * dt;
     this.v.z += d.z * P.AIR_ACC * dt;
@@ -228,7 +239,7 @@ export class Player {
     } else if (this.trickT > 0) this.endTrick(true);
     if (vy < -24) { this.roll = 0.55; this.landHard = 1; this.emit("landHard"); }
     else this.emit(vy < -8 ? "land" : "step");
-    this.v.y = 0;
+    this.v.y = 0; this.kickT = 0;
     this.charge = 0; this.chargeHeld = false;
     this.set("ground"); this.groundT = 0;
     this.dash = Math.min(P.DASH, this.dash + 1);
@@ -547,7 +558,7 @@ export class Player {
     this.hand = a.side;
     this.anchorPole = !!a.pole;
     this.lastSwingSide = a.side;
-    this.attachT = 0; this.webT = 0;
+    this.attachT = 0; this.webT = 0; this.kickT = 0; this.reelV = 0;
     this.endTrick(false);
     this.set("swing");
     this.stats.swings++;
@@ -566,6 +577,10 @@ export class Player {
     let nx = dx / dist, ny = dy / dist, nz = dz / dist;
     const sp = len(this.v);
     const below = -ny;            // 1 straight below anchor, 0 at horizontal
+    // no slack: the web takes up as you close on the anchor, so it never hangs
+    // loose and then snaps taut with a jolt (a slack-then-taut yank cost ~25 m/s
+    // in one frame)
+    if (dist < this.rope) { this.rope = Math.max(P.ROPE_MIN * 0.7, dist); this.ropeTarget = Math.min(this.ropeTarget, this.rope); }
     // --- rope length target: keep the arc above the street
     const floor = this.w.floorBelow(A.x, A.z, A.y - 1);
     const ground = floor === -Infinity ? G.WATER_Y : floor;
@@ -573,8 +588,12 @@ export class Player {
     if (this.ropeTarget > maxL) this.ropeTarget = maxL;
     // pumping: reel in a little on the downswing, like leaning into a swing
     if (this.v.y < 0 && below > 0.3) this.ropeTarget = Math.max(P.ROPE_MIN, this.ropeTarget - P.PUMP * dt);
-    if (this.rope > this.ropeTarget) this.rope = Math.max(this.ropeTarget, this.rope - P.REEL * dt);
-    else this.rope = this.ropeTarget;
+    // reel in at a rate that ramps up and eases off, so taking up rope doesn't
+    // jerk the body at the start and end of the pull
+    const want = this.rope > this.ropeTarget ? Math.min(P.REEL, (this.rope - this.ropeTarget) * 6) : 0;
+    this.reelV += clamp(want - this.reelV, -90 * dt, 90 * dt);
+    if (this.rope > this.ropeTarget) this.rope = Math.max(this.ropeTarget, this.rope - Math.max(this.reelV, 0.3) * dt);
+    else { this.rope = this.ropeTarget; this.reelV = 0; }
 
     // --- forces
     this.gravity(dt, 1, 0.8);
@@ -586,7 +605,7 @@ export class Player {
       tx /= tl; ty /= tl; tz /= tl;
       // push through the bottom of the arc (+ W to pump harder)
       const bottom = Math.max(0, below - 0.55) / 0.45;
-      const push = (P.BOTTOM_BOOST + P.W_PUMP * Math.max(0, c.mz)) * bottom * (sp < 55 ? 1 : 0.2);
+      const push = (P.BOTTOM_BOOST + P.W_PUMP * Math.max(0, c.mz)) * bottom * clamp((62 - sp) / 14, 0.2, 1);   // fades out at speed (no step)
       this.v.x += tx * push * dt; this.v.y += ty * push * dt; this.v.z += tz * push * dt;
       // A/D: steer sideways (perpendicular to both the rope and the travel direction)
       const sx = ny * tz - nz * ty, sy = nz * tx - nx * tz, sz = nx * ty - ny * tx;
@@ -635,15 +654,28 @@ export class Player {
         // during the catch, most of the fall speed is swung forward along the arc
         // (movie-style momentum) instead of being soaked up by the rope
         if (this.attachT < P.CATCH * 1.5) {
-          const s1 = len(this.v), keep = s1 + (s0 - s1) * 0.8;
+          // (fading out towards the end, not switching off)
+          const fade = clamp((P.CATCH * 1.5 - this.attachT) / (P.CATCH * 0.8), 0, 1);
+          const s1 = len(this.v), keep = s1 + (s0 - s1) * 0.8 * fade;
           if (s1 > 0.5) { const k = keep / s1; this.v.x *= k; this.v.y *= k; this.v.z *= k; }
         }
       }
     }
     if (r.y === -1) { this.land(vy0); return; }
     if ((r.x || r.z) && this.wallCheck(r, c, vIn)) return;
-    // swung up past the anchor: let go automatically at the top of the arc
-    if (this.p.y > A.y - this.rope * 0.12 && this.v.y > 0 && this.attachT > 0.3) { this.release(false, true); return; }
+    // holding through the upswing: let go once it climbs at a good launch angle
+    // (~39°), so a held chain flies forward into the next web. Waiting for the
+    // top of the arc left you going straight up at walking pace, or rocking back
+    // and forth under the anchor when the swing didn't reach it.
+    if (this.v.y > 0 && this.attachT > 0.3) {
+      const hsv = Math.hypot(this.v.x, this.v.z);
+      const beyond = (this.p.x - A.x) * this.v.x + (this.p.z - A.z) * this.v.z > 0;
+      // ...or earlier, once the flight would already top out just under the
+      // anchor's roofline: spare energy goes into speed, not climbing out of the
+      // street canyon until there's nothing left above you to web onto
+      const vy1 = this.v.y + 5.5, apex = this.p.y + vy1 * vy1 / (2 * P.GRAV);
+      if ((beyond && (this.v.y > hsv * P.REL_PITCH || (this.v.y > 2 && apex > A.y - P.APEX_UNDER))) || this.p.y > A.y - this.rope * 0.12 || this.attachT > 2.5) { this.release(false, true); return; }
+    }
     if (this.attachT > 8) this.release(false);
   }
 
@@ -704,15 +736,19 @@ export class Player {
 
   release(jumped, auto) {
     // release boost: a flick forward and up, strongest at the front of the arc
+    // It's applied over P.KICK_T in air() rather than as a one-frame step.
     const s = Math.hypot(this.v.x, this.v.z);
+    this.kick.x = this.kick.y = this.kick.z = 0;
     if (s > 3) {
       const up = this.v.y > -4 ? (jumped ? 9 : 5.5) : (jumped ? 6 : 2);
       const fw = jumped ? 4 : 2.5;
-      this.v.x += (this.v.x / s) * fw; this.v.z += (this.v.z / s) * fw;
+      this.kick.x = (this.v.x / s) * fw; this.kick.z = (this.v.z / s) * fw;
       // bleed off the fall instead of snapping vertical speed to zero (no hitch)
-      this.v.y = (this.v.y > 0 ? this.v.y : this.v.y * 0.3) + up;
-      if (this.v.y > 6) this.flip = auto ? 0 : 0.75;
-    } else if (jumped) this.v.y += 8;
+      const vy1 = (this.v.y > 0 ? this.v.y : this.v.y * 0.3) + up;
+      this.kick.y = vy1 - this.v.y;
+      if (vy1 > 6) this.flip = auto ? 0 : 0.75;
+    } else if (jumped) this.kick.y = 8;
+    this.kickT = P.KICK_T;
     this.set("air");
     this.releaseT = 0; this.airT = 0;
     this.emit(jumped ? "releaseJump" : "release");

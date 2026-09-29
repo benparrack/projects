@@ -23,7 +23,7 @@ export class ChaseCam {
     this.lastLook = 0;
     this.lastHead = null;
     this.turnRate = 0;
-    this.pvy = 0; this.gAcc = 0; this.gOff = 0;
+    this.pvy = 0; this.gAcc = 0; this.gOff = 0; this.colD = 99;
   }
 
   update(dt, pl, c, opts) {
@@ -71,10 +71,13 @@ export class ChaseCam {
     const shoulder = 0.9;
     const ox = this.target.x + rx * shoulder, oz = this.target.z + rz * shoulder, oy = this.target.y + 0.35 + this.gOff;
     // collision: cast from the pivot back toward the camera
-    let d = this.dist;
+    // (snaps in so it never clips a wall, eases back out so passing a corner
+    // doesn't pop the camera in and out)
     const bx = -this.fwd.x, by = -this.fwd.y, bz = -this.fwd.z;
-    const h = this.w.raycast(ox, oy, oz, bx, by, bz, d + 0.4);
-    if (h) d = Math.max(0.6, h.t - 0.4);
+    const h = this.w.raycast(ox, oy, oz, bx, by, bz, this.dist + 0.4);
+    const free = h ? Math.max(0.6, h.t - 0.4) : this.dist;
+    this.colD = free < this.colD ? free : damp(this.colD, free, 3.5, dt);
+    const d = Math.min(this.dist, this.colD);
     this.curDist = d;
     cam.position.set(ox + bx * d, oy + by * d, oz + bz * d);
     if (cam.position.y < 0.4 && this.w.onIsland(cam.position.x, cam.position.z)) cam.position.y = 0.4;

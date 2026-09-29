@@ -104,6 +104,16 @@ Gamepad: RT swing · A jump · LT zip · X dash · B dive · Y trick · RB slow-
     and swings most of your fall speed forward instead of stopping you dead.
   - Rendering uses `player.rp`, which is interpolated between substeps, so display
     rates that aren't a divisor of 240 don't stutter.
+  - Holding the swing lets go on the upswing by itself, at about 39° or earlier,
+    once the flight would already peak just under the anchor's roofline
+    (`P.REL_PITCH`, `P.APEX_UNDER`). Spare energy then goes into speed instead
+    of climbing out of the street. It used to wait for the top of the arc, which
+    left you going straight up or rocking under the anchor.
+  - The web never goes slack: it takes up as you close on the anchor, so it can't
+    snap taut with a jolt. Reeling in ramps up and eases off. The release pop is a
+    half-sine over `P.KICK_T` (0.09 s), not a one-frame step. The catch fades out
+    instead of cutting off.
+  - The camera snaps in when a wall comes between it and you, and eases back out.
   - You keep your momentum through the arc and pick up speed on the downswing by
     reeling in a little ("pumping").
   - The anchor finder picks building edges ahead of and above you. It is biased by
@@ -164,7 +174,8 @@ Open `?debug` to get `window.WS`:
   `races` are also exposed.
 
 Tests: `node tests/city.test.mjs`, `node tests/swing.test.mjs`,
-`node tests/flow.test.mjs [assist 0|1]`, `node tests/style.test.mjs`, `node tests/aim.test.mjs`, `node tests/birds.test.mjs`.
+`node tests/flow.test.mjs [assist 0|1]`, `node tests/style.test.mjs`, `node tests/aim.test.mjs`, `node tests/birds.test.mjs`, `node tests/hold.test.mjs`.
+- The hold test holds swing down an avenue and a street. It checks that the chain keeps its speed (over 35 m/s), that each swing lets go within 2.6 s and at under 50°, and that there are no slack-rope snaps. The old code failed every check: 14 m/s, 8 s swings, 80° releases.
 - The birds test checks that perches sit on a surface, flocks scatter and settle back home, flying pigeons stay out of buildings (at most 3% of samples), web hits spook them, and particles fade.
 - The aim test checks that looking at mast tips locks the web, that aiming 20° off
   doesn't, and that swings from poles run cleanly. It also re-runs the flow bot with the camera pitched up, so pole locks

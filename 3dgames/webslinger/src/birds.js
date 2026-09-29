@@ -203,7 +203,9 @@ export class Birds {
         const k = Math.min(9, hd * 1.4 + 0.5) / (hd || 1);
         wx = (b.hx - b.x) * k; wy = (b.hy + 0.02 - b.y) * k + (hd > 6 ? 1.2 : 0); wz = (b.hz - b.z) * k;
         flapping = hd < 4 || wy > 0.5;
-        if (hd < 0.25) {
+        // hd < 0.25: landed. A bird still wandering 20 s into its trip home (hemmed
+        // in by towers) just settles rather than circling on forever.
+        if (hd < 0.25 || t > b.back + 20) {
           b.flying = false; b.x = b.hx; b.y = b.hy; b.z = b.hz; b.h = b.hh; b.pitch = 0;
           this.write(b, i);
           continue;
