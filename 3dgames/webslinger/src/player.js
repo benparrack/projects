@@ -25,8 +25,8 @@ export const P = {
   PUMP: 1.4,             // m/s reel-in on the downswing
   PIVOT_PULL: 0.6,       // physics pivot slides this much of the anchor's sideways offset over your travel line
   CATCH: 0.3,            // s over which a fresh rope goes from springy to taut
-  REL_PITCH: 0.8,        // holding the swing lets go once the upswing climbs this steeply (tan ≈ 39°)
-  APEX_UNDER: 8,         // m: a held chain aims its flight to peak this far under the anchor
+  REL_PITCH: 1.07,       // holding the swing lets go once the upswing climbs this steeply (tan ≈ 47°)
+  APEX_UNDER: 4,         // m: a held chain aims its flight to peak this far under the anchor
   KICK_T: 0.09,          // s the release pop is spread over (no one-frame velocity step)
   BOTTOM_BOOST: 7, W_PUMP: 5, STEER: 13,
   WALL_UP: 14, WALL_SIDE: 10,

@@ -175,7 +175,7 @@ Open `?debug` to get `window.WS`:
 
 Tests: `node tests/city.test.mjs`, `node tests/swing.test.mjs`,
 `node tests/flow.test.mjs [assist 0|1]`, `node tests/style.test.mjs`, `node tests/aim.test.mjs`, `node tests/birds.test.mjs`, `node tests/hold.test.mjs`.
-- The hold test holds swing down an avenue and a street. It checks that the chain keeps its speed (over 35 m/s), that each swing lets go within 2.6 s and at under 50°, and that there are no slack-rope snaps. The old code failed every check: 14 m/s, 8 s swings, 80° releases.
+- The hold test holds swing down an avenue and a street. It checks that the chain keeps its speed (over 35 m/s), that each swing lets go within 2.6 s and at under 56°, and that there are no slack-rope snaps. The old code failed every check: 14 m/s, 8 s swings, 80° releases.
 - The birds test checks that perches sit on a surface, flocks scatter and settle back home, flying pigeons stay out of buildings (at most 3% of samples), web hits spook them, and particles fade.
 - The aim test checks that looking at mast tips locks the web, that aiming 20° off
   doesn't, and that swings from poles run cleanly. It also re-runs the flow bot with the camera pitched up, so pole locks

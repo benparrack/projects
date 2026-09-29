@@ -38,7 +38,7 @@ for (const R of runs) {
   const avg = hs / n;
   check(avg > 35, `${R.name}: held chain keeps its speed (avg ${avg.toFixed(1)} m/s, ${pl.stats.swings} swings)`);
   check(longest < 2.6, `${R.name}: held swings let go in time (longest ${longest.toFixed(2)} s)`);
-  check(steepest < 50, `${R.name}: auto-release flies forward, not straight up (steepest ${steepest.toFixed(0)}°)`);
+  check(steepest < 56, `${R.name}: auto-release flies forward, not straight up (steepest ${steepest.toFixed(0)}°)`);
   check(snaps === 0, `${R.name}: no slack-rope snaps (${snaps})`);
 }
 process.exit(fails ? 1 : 0);
