@@ -41,6 +41,8 @@ GAMES = {
         ("hero2.png", "PLANT  -  HARVEST  -  SELL", 0.4),
     ]),
 }
+# games whose title goes at the top (the interesting part of the shot is at the bottom)
+TITLE_TOP = {"steal-a-satellite"}
 
 
 def font(size):
@@ -76,7 +78,7 @@ def text(draw, xy, s, f, accent, stroke, shadow):
     draw.text((x, y), s, font=f, anchor="mm", fill=(255, 255, 255), stroke_width=stroke, stroke_fill=tuple(int(c * 0.35) for c in accent))
 
 
-def thumb(shot: Image.Image, title, caption, accent, yoff):
+def thumb(shot: Image.Image, title, caption, accent, yoff, title_top=False):
     w, h = shot.size
     ch = round(w * 9 / 16)
     top = round((h - ch) * yoff)
@@ -84,10 +86,10 @@ def thumb(shot: Image.Image, title, caption, accent, yoff):
     img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=60, threshold=2))
     d = ImageDraw.Draw(img)
     if caption is None:
-        img = shade(img, False, 420, 200)
+        img = shade(img, title_top, 420, 200)
         d = ImageDraw.Draw(img)
         f = fit(d, title, 1700, 200, 16)
-        text(d, (960, 900), title, f, accent, 16, 10)
+        text(d, (960, 170 if title_top else 900), title, f, accent, 16, 10)
     else:
         img = shade(img, True, 330, 190)
         d = ImageDraw.Draw(img)
@@ -96,11 +98,11 @@ def thumb(shot: Image.Image, title, caption, accent, yoff):
     return img
 
 
-def icon(shot: Image.Image, title, accent, xc):
+def icon(shot: Image.Image, title, accent, xc, title_top=False):
     w, h = shot.size
     x = max(0, min(w - h, round(w * xc - h / 2)))
     img = shot.crop((x, 0, x + h, h)).resize((512, 512), Image.LANCZOS)
-    img = shade(img, False, 260, 215)
+    img = shade(img, title_top, 260, 215)
     d = ImageDraw.Draw(img)
     words = title.split()
     if len(title) > 12:
@@ -110,7 +112,7 @@ def icon(shot: Image.Image, title, accent, xc):
         lines = [title]
     size = min(fit(d, ln, 450, 110, 7).size for ln in lines)
     f = font(size)
-    y = 512 - 40 - (len(lines) - 1) * size * 0.95
+    y = 60 if title_top else 512 - 40 - (len(lines) - 1) * size * 0.95
     for ln in lines:
         text(d, (256, y), ln, f, accent, 7, 5)
         y += size * 0.95
@@ -124,11 +126,11 @@ if __name__ == "__main__":
         mk = ROOT / "games" / game / "marketing"
         out = mk / "store"
         out.mkdir(exist_ok=True)
-        ic = icon(Image.open(mk / icon_shot).convert("RGB"), title, accent, xc)
+        ic = icon(Image.open(mk / icon_shot).convert("RGB"), title, accent, xc, game in TITLE_TOP)
         ic.save(out / "icon.png")
         row = [ic]
         for i, (shot, caption, yoff) in enumerate(thumbs, 1):
-            t = thumb(Image.open(mk / shot).convert("RGB"), title, caption, accent, yoff)
+            t = thumb(Image.open(mk / shot).convert("RGB"), title, caption, accent, yoff, game in TITLE_TOP)
             t.save(out / f"thumb{i}.png", optimize=True)
             row.append(t)
         sheet_items.append(row)
