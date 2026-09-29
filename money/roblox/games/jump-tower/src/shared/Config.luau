@@ -75,15 +75,15 @@ Config.Trails = {
 -- Monetization. Ids are 0 until the pass/product is created on the Roblox dashboard;
 -- items with id 0 are hidden from the shop.
 Config.GamePasses = {
-	x2Jump = { id = 0, name = "2x Jump", price = 149, desc = "Double Jump gain forever" },
-	x2Wins = { id = 0, name = "2x Wins", price = 99, desc = "Double Wins from every pad" },
-	vip = { id = 0, name = "VIP", price = 249, desc = "+50% Jump gain, gold trail, VIP tag" },
+	x2Jump = { id = 1998225589, name = "2x Jump", price = 149, desc = "Double Jump gain forever" },
+	x2Wins = { id = 2002430403, name = "2x Wins", price = 99, desc = "Double Wins from every pad" },
+	vip = { id = 2002442393, name = "VIP", price = 249, desc = "+50% Jump gain, gold trail, VIP tag" },
 } :: { [string]: Pass }
 
 Config.Products = {
-	boostSmall = { id = 0, name = "+5 min of Jump", price = 25, kind = "jumpMinutes", amount = 5 },
-	boostLarge = { id = 0, name = "+60 min of Jump", price = 149, kind = "jumpMinutes", amount = 60 },
-	skipZone = { id = 0, name = "Skip a Zone", price = 49, kind = "skipZone", amount = 1 },
+	boostSmall = { id = 3715455730, name = "+5 min of Jump", price = 25, kind = "jumpMinutes", amount = 5 },
+	boostLarge = { id = 3715455763, name = "+60 min of Jump", price = 149, kind = "jumpMinutes", amount = 60 },
+	skipZone = { id = 3715455843, name = "Skip a Zone", price = 49, kind = "skipZone", amount = 1 },
 } :: { [string]: Product }
 
 return Config

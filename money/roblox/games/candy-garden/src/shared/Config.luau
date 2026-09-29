@@ -108,10 +108,10 @@ Config.DailyStreakCap = 7
 
 -- Robux items. 0 = not created yet on the Creator Dashboard (shop shows SOON).
 Config.Passes = {
-	sell2x = 0, -- 2x Sell
-	fastgrow = 0, -- plants grow 50% faster
-	basket = 0, -- Big Basket
-	vip = 0, -- +10% sell, VIP tag, rainbow trail
+	sell2x = 1998639591, -- 2x Sell
+	fastgrow = 2002724436, -- plants grow 50% faster
+	basket = 2002280457, -- Big Basket
+	vip = 1999173531, -- +10% sell, VIP tag, rainbow trail
 }
 Config.PassPrices = { sell2x = 199, fastgrow = 249, basket = 99, vip = 149 }
 Config.PassInfo = {
@@ -122,9 +122,9 @@ Config.PassInfo = {
 }
 
 Config.Products = {
-	restock = 0, -- restock the seed shop for the whole server
-	growall = 0, -- every plant in your garden ripens now
-	weather = 0, -- start a random weather event for the whole server
+	restock = 3715480060, -- restock the seed shop for the whole server
+	growall = 3715480149, -- every plant in your garden ripens now
+	weather = 3715480177, -- start a random weather event for the whole server
 }
 Config.ProductPrices = { restock = 29, growall = 49, weather = 79 }
 Config.ProductInfo = {

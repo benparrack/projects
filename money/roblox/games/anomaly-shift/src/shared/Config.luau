@@ -92,16 +92,16 @@ Config.Titles = {
 
 -- Robux items. 0 = not created yet on the Creator Dashboard (shop shows SOON).
 Config.Passes = {
-	coins2x = 0, -- 2x Coins
-	lucky = 0, -- Lucky Badge: one free Second Chance every run
-	radar = 0, -- Radar Pro: one free radar ping every floor
+	coins2x = 2002616413, -- 2x Coins
+	lucky = 2002430434, -- Lucky Badge: one free Second Chance every run
+	radar = 2001494495, -- Radar Pro: one free radar ping every floor
 }
 Config.PassPrices = { coins2x = 149, lucky = 199, radar = 249 }
 
 Config.Products = {
-	revive = 0, -- Second Chance (keep your floor)
-	radar3 = 0, -- 3 radar pings
-	revive3 = 0, -- 3 Second Chances
+	revive = 3715479361, -- Second Chance (keep your floor)
+	radar3 = 3715479430, -- 3 radar pings
+	revive3 = 3715479468, -- 3 Second Chances
 }
 Config.ProductPrices = { revive = 25, radar3 = 39, revive3 = 59 }
 

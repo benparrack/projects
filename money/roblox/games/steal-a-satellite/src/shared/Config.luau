@@ -136,17 +136,17 @@ export type Product = { id: number, name: string, price: number, kind: string, a
 
 -- ids are 0 until created on the Creator Dashboard; the shop shows those as "SOON".
 Config.GamePasses = {
-	x2Cash = { id = 0, name = "2x Cash", price = 199, desc = "Double income from every satellite" },
-	biggerBase = { id = 0, name = "Bigger Base", price = 149, desc = "+4 satellite pads" },
-	speedyThief = { id = 0, name = "Speedy Thief", price = 99, desc = "Run faster while carrying loot" },
-	vip = { id = 0, name = "VIP", price = 249, desc = "+50% income, VIP tag, gold base trim" },
+	x2Cash = { id = 2002280410, name = "2x Cash", price = 199, desc = "Double income from every satellite" },
+	biggerBase = { id = 1999725531, name = "Bigger Base", price = 149, desc = "+4 satellite pads" },
+	speedyThief = { id = 2002496406, name = "Speedy Thief", price = 99, desc = "Run faster while carrying loot" },
+	vip = { id = 2001944410, name = "VIP", price = 249, desc = "+50% income, VIP tag, gold base trim" },
 } :: { [string]: Pass }
 
 Config.Products = {
-	cashSmall = { id = 0, name = "+10 min of income", price = 29, kind = "incomeMinutes", amount = 10 },
-	cashLarge = { id = 0, name = "+2 hours of income", price = 199, kind = "incomeMinutes", amount = 120 },
-	shield = { id = 0, name = "Force Shield (10 min)", price = 39, kind = "shield", amount = 600 },
-	luck = { id = 0, name = "Server Luck (15 min)", price = 79, kind = "luck", amount = 900 },
+	cashSmall = { id = 3715454859, name = "+10 min of income", price = 29, kind = "incomeMinutes", amount = 10 },
+	cashLarge = { id = 3715455059, name = "+2 hours of income", price = 199, kind = "incomeMinutes", amount = 120 },
+	shield = { id = 3715455121, name = "Force Shield (10 min)", price = 39, kind = "shield", amount = 600 },
+	luck = { id = 3715455171, name = "Server Luck (15 min)", price = 79, kind = "luck", amount = 900 },
 } :: { [string]: Product }
 
 return Config
