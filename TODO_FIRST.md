@@ -1,6 +1,6 @@
 # Up Next
 
-- **Roblox studio** (`money/roblox/`): Ben wants to publish several Robux-earning Roblox games; `RESEARCH.md` has the ranked concepts. First game **+1 Jump Tower** (`games/jump-tower/`) is code complete and `tools/check.sh jump-tower` passes. Next: Ben logs into Studio (Vinegar) and enables the MCP server, then playtest via the `roblox-studio` MCP → publish → create passes/products and paste their ids into Config. Then **Steal a Satellite** (flagship), then Anomaly Shift, Ore Tycoon and more.
+- **Roblox studio** (`money/roblox/`): Ben wants to publish several Robux-earning Roblox games; `RESEARCH.md` has the ranked concepts. **+1 Jump Tower** and **Steal a Satellite** are both playtested in Studio over MCP, polished, with promo shots. Next, Ben does the manual steps: publish each game (Steal a Satellite with max players 8), create the passes/products and paste their ids into each `Config.luau`. Then Anomaly Shift, Ore Tycoon and more. Note: `tools/studio-sync.py <game>` pushes scripts into whichever place Studio has open. **Don't save that place** unless it's the same game.
 - **Flip bot** (`money/flip-bot/`): built and runs in dry run. Waiting on Ben: SETUP.md steps 1–3 (ntfy app, Tradera dev keys, `flip auth`). Then a short session to verify the Tradera API details listed in `money/flip-bot/PROGRESS.md`.
 
 ## Done

@@ -44,3 +44,4 @@ Gotcha: never kill Vinegar mid-download. It then treats the half-written Studio 
 | Game | Status |
 |---|---|
 | `games/jump-tower` (+1 Jump Tower) | v1 playtested in Studio: all 40 steps physically climbable, server flow verified. Next: publish, then fill in the pass/product ids. |
+| `games/steal-a-satellite` (Steal a Satellite) | v1 playtested in Studio. Verified: buy, collect, lock, zap, stealing, space-pirate bases, drone raids and the first-time hints. Promo shots are in `marketing/`. Next: publish with max players 8, then fill in the pass/product ids. |
