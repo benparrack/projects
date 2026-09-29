@@ -279,6 +279,32 @@ local function row(list: ScrollingFrame, order: number, title: string, subtitle:
 	return r
 end
 
+-- Show the live Robux price from the Creator Dashboard (it can differ from Config with
+-- managed/regional pricing). Falls back to the Config price if the lookup fails.
+local livePrices: { [number]: number } = {}
+local function livePrice(label: TextButton, id: number, isPass: boolean): TextButton
+	local function apply(p: number)
+		label.Text = (string.gsub(label.Text, "R%$ %d+", "R$ " .. p, 1))
+	end
+	if id == 0 then
+		return label
+	elseif livePrices[id] then
+		apply(livePrices[id])
+		return label
+	end
+	task.spawn(function()
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(id, if isPass then Enum.InfoType.GamePass else Enum.InfoType.Product)
+		end)
+		local price = if ok and typeof(info) == "table" then info.PriceInRobux else nil
+		if typeof(price) == "number" then
+			livePrices[id] = price
+			apply(price)
+		end
+	end)
+	return label
+end
+
 local function rowButton(r: Frame, text: string, color: Color3, onClick: () -> ()): TextButton
 	return Ui.button({
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -312,9 +338,9 @@ local function fillShop()
 		elseif pass.id == 0 then
 			rowButton(r, "SOON", C.muted, function() end)
 		else
-			rowButton(r, `R$ {pass.price}`, C.green, function()
+			livePrice(rowButton(r, `R$ {pass.price}`, C.green, function()
 				MarketplaceService:PromptGamePassPurchase(player, pass.id)
-			end)
+			end), pass.id, true)
 		end
 	end
 	for i, key in PRODUCT_ORDER do
@@ -327,9 +353,9 @@ local function fillShop()
 		if product.id == 0 then
 			rowButton(r, "SOON", C.muted, function() end)
 		else
-			rowButton(r, `R$ {product.price}`, C.green, function()
+			livePrice(rowButton(r, `R$ {product.price}`, C.green, function()
 				MarketplaceService:PromptProductPurchase(player, product.id)
-			end)
+			end), product.id, false)
 		end
 	end
 end

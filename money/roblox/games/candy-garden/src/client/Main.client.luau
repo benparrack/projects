@@ -88,6 +88,32 @@ end
 
 -- Panels ---------------------------------------------------------------------------------------
 
+-- Show the live Robux price from the Creator Dashboard (it can differ from Config with
+-- managed/regional pricing). Falls back to the Config price if the lookup fails.
+local livePrices: { [number]: number } = {}
+local function livePrice(label: TextButton, id: number, isPass: boolean): TextButton
+	local function apply(p: number)
+		label.Text = (string.gsub(label.Text, "R%$ %d+", "R$ " .. p, 1))
+	end
+	if id == 0 then
+		return label
+	elseif livePrices[id] then
+		apply(livePrices[id])
+		return label
+	end
+	task.spawn(function()
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(id, if isPass then Enum.InfoType.GamePass else Enum.InfoType.Product)
+		end)
+		local price = if ok and typeof(info) == "table" then info.PriceInRobux else nil
+		if typeof(price) == "number" then
+			livePrices[id] = price
+			apply(price)
+		end
+	end)
+	return label
+end
+
 local openPanel: Frame? = nil
 local function panel(name: string, size: UDim2, title: string, color: Color3): (Frame, Frame)
 	local p = Ui.new("Frame", {
@@ -268,9 +294,9 @@ local function robuxPrompt(kind: "pass" | "product", id: number)
 end
 
 local shopTimer = Ui.label({ Text = "", Size = UDim2.new(0.6, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.muted, ZIndex = 22, Parent = shopBody })
-Ui.button({ Text = `R$ {Config.ProductPrices.restock} Restock Now`, Size = UDim2.new(0.38, 0, 0, 34), Position = UDim2.new(0.62, 0, 0, -3), ZIndex = 22, Parent = shopBody }, Color3.fromRGB(60, 170, 90), function()
+livePrice(Ui.button({ Text = `R$ {Config.ProductPrices.restock} Restock Now`, Size = UDim2.new(0.38, 0, 0, 34), Position = UDim2.new(0.62, 0, 0, -3), ZIndex = 22, Parent = shopBody }, Color3.fromRGB(60, 170, 90), function()
 	robuxPrompt("product", Config.Products.restock)
-end)
+end), Config.Products.restock, false)
 local seedList = Ui.new("ScrollingFrame", {
 	Size = UDim2.new(1, 0, 1, -40),
 	Position = UDim2.fromOffset(0, 40),
@@ -359,17 +385,17 @@ Ui.label({ Text = "Game Passes", Size = UDim2.new(1, 0, 0, 26), TextXAlignment =
 local PASS_ICON = { sell2x = "💰", fastgrow = "⚡", basket = "🧺", vip = "⭐" }
 for i, key in { "sell2x", "fastgrow", "basket", "vip" } do
 	local info = Config.PassInfo[key]
-	passButtons[key] = storeRow(i, PASS_ICON[key], info.name, info.blurb, `R$ {Config.PassPrices[key]}`, Color3.fromRGB(60, 170, 90), function()
+	passButtons[key] = livePrice(storeRow(i, PASS_ICON[key], info.name, info.blurb, `R$ {Config.PassPrices[key]}`, Color3.fromRGB(60, 170, 90), function()
 		robuxPrompt("pass", Config.Passes[key])
-	end)
+	end), Config.Passes[key], true)
 end
 Ui.label({ Text = "Boosts", Size = UDim2.new(1, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = MINT, LayoutOrder = 10, ZIndex = 22, Parent = storeList })
 local PRODUCT_ICON = { restock = "🌱", growall = "✨", weather = "⛅" }
 for i, key in { "growall", "weather", "restock" } do
 	local info = Config.ProductInfo[key]
-	storeRow(10 + i, PRODUCT_ICON[key], info.name, info.blurb, `R$ {Config.ProductPrices[key]}`, Color3.fromRGB(70, 150, 255), function()
+	livePrice(storeRow(10 + i, PRODUCT_ICON[key], info.name, info.blurb, `R$ {Config.ProductPrices[key]}`, Color3.fromRGB(70, 150, 255), function()
 		robuxPrompt("product", Config.Products[key])
-	end)
+	end), Config.Products[key], false)
 end
 local function refreshPasses()
 	for key, b in passButtons do

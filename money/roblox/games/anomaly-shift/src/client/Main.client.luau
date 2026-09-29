@@ -192,6 +192,32 @@ local shopList = Ui.new("ScrollingFrame", {
 }, { Ui.new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
 
 local ownedLabels: { [string]: TextButton } = {}
+-- Show the live Robux price from the Creator Dashboard (it can differ from Config with
+-- managed/regional pricing). Falls back to the Config price if the lookup fails.
+local livePrices: { [number]: number } = {}
+local function livePrice(label: TextButton, id: number, isPass: boolean): TextButton
+	local function apply(p: number)
+		label.Text = (string.gsub(label.Text, "R%$ %d+", "R$ " .. p, 1))
+	end
+	if id == 0 then
+		return label
+	elseif livePrices[id] then
+		apply(livePrices[id])
+		return label
+	end
+	task.spawn(function()
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(id, if isPass then Enum.InfoType.GamePass else Enum.InfoType.Product)
+		end)
+		local price = if ok and typeof(info) == "table" then info.PriceInRobux else nil
+		if typeof(price) == "number" then
+			livePrices[id] = price
+			apply(price)
+		end
+	end)
+	return label
+end
+
 local function shopRow(order: number, icon: string, name: string, desc: string, price: string, color: Color3, onBuy: () -> ()): TextButton
 	local row = Ui.new("Frame", { Size = UDim2.new(1, -10, 0, 70), BackgroundColor3 = C.panelLight, LayoutOrder = order, ZIndex = 21, Parent = shopList }, { Ui.corner(10) })
 	Ui.label({ Text = icon, Size = UDim2.fromOffset(52, 52), Position = UDim2.fromOffset(10, 9), ZIndex = 22, Parent = row })
@@ -208,21 +234,21 @@ shopRow(2, "💫", "Second Chance", "After a mistake, keep your floor.", `💰 {
 	action:FireServer("buy", "revive")
 end)
 Ui.label({ Text = "Robux", Size = UDim2.new(1, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.green, LayoutOrder = 10, ZIndex = 22, Parent = shopList })
-shopRow(11, "💫", "3 Second Chances", "Never lose a good run.", `R$ {Config.ProductPrices.revive3}`, C.green, function()
+livePrice(shopRow(11, "💫", "3 Second Chances", "Never lose a good run.", `R$ {Config.ProductPrices.revive3}`, C.green, function()
 	prompt("product", Config.Products.revive3)
-end)
-shopRow(12, "📡", "3 Radar Pings", "Check a hall when you're not sure.", `R$ {Config.ProductPrices.radar3}`, C.green, function()
+end), Config.Products.revive3, false)
+livePrice(shopRow(12, "📡", "3 Radar Pings", "Check a hall when you're not sure.", `R$ {Config.ProductPrices.radar3}`, C.green, function()
 	prompt("product", Config.Products.radar3)
-end)
-ownedLabels.coins2x = shopRow(20, "💰", "2x Coins", "Double coins from every floor and escape.", `R$ {Config.PassPrices.coins2x}`, C.blue, function()
+end), Config.Products.radar3, false)
+ownedLabels.coins2x = livePrice(shopRow(20, "💰", "2x Coins", "Double coins from every floor and escape.", `R$ {Config.PassPrices.coins2x}`, C.blue, function()
 	prompt("pass", Config.Passes.coins2x)
-end)
-ownedLabels.lucky = shopRow(21, "🍀", "Lucky Badge", "One free Second Chance every shift.", `R$ {Config.PassPrices.lucky}`, C.blue, function()
+end), Config.Passes.coins2x, true)
+ownedLabels.lucky = livePrice(shopRow(21, "🍀", "Lucky Badge", "One free Second Chance every shift.", `R$ {Config.PassPrices.lucky}`, C.blue, function()
 	prompt("pass", Config.Passes.lucky)
-end)
-ownedLabels.radar = shopRow(22, "🛰", "Radar Pro", "A free radar ping on every floor.", `R$ {Config.PassPrices.radar}`, C.blue, function()
+end), Config.Passes.lucky, true)
+ownedLabels.radar = livePrice(shopRow(22, "🛰", "Radar Pro", "A free radar ping on every floor.", `R$ {Config.PassPrices.radar}`, C.blue, function()
 	prompt("pass", Config.Passes.radar)
-end)
+end), Config.Passes.radar, true)
 local stockLabel = Ui.label({ Text = "", Size = UDim2.new(1, 0, 0, 24), TextColor3 = C.muted, LayoutOrder = 30, ZIndex = 22, Parent = shopList })
 
 -- Index -------------------------------------------------------------------------------------
@@ -329,10 +355,10 @@ local reviveFree = Ui.button({ Text = "💫 Use Second Chance", Size = UDim2.new
 	action:FireServer("revive")
 	revive.Visible = false
 end)
-local reviveBuy = Ui.button({ Text = `R$ {Config.ProductPrices.revive} · Keep my floor`, Size = UDim2.new(1, -24, 0, 50), Position = UDim2.fromOffset(12, 128), ZIndex = 61, Parent = revive }, C.blue, function()
+local reviveBuy = livePrice(Ui.button({ Text = `R$ {Config.ProductPrices.revive} · Keep my floor`, Size = UDim2.new(1, -24, 0, 50), Position = UDim2.fromOffset(12, 128), ZIndex = 61, Parent = revive }, C.blue, function()
 	prompt("product", Config.Products.revive)
 	revive.Visible = false
-end)
+end), Config.Products.revive, false)
 local reviveToken = 0
 
 local function offerRevive(floor: number)
