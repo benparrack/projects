@@ -1,0 +1,635 @@
+<title>Repo City</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Barlow+Semi+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed 3D city; HUD is a planning-office overlay — clock + ledger top-left, commit ticker and timeline strip along the bottom. */
+:root {
+  color-scheme: dark;
+  --ink: #e9e6df;           /* HUD text */
+  --ink-dim: #9aa0ab;
+  --glass: rgba(12, 15, 24, 0.72);
+  --rule: rgba(233, 230, 223, 0.14);
+  --sodium: #ffb347;        /* streetlight amber: night commits, playhead, construction glow */
+  --daylight: #8fc1ea;      /* day commits */
+  --ground: #0b0e16;
+  --f-display: "Big Shoulders Display", "Oswald", "Arial Narrow", sans-serif;
+  --f-body: "Barlow Semi Condensed", "Roboto Condensed", "Arial Narrow", sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+html, body { height: 100%; }
+body { background: var(--ground); color: var(--ink); font-family: var(--f-body); overflow: hidden; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; }
+#labels { position: fixed; inset: 0; pointer-events: none; }
+.dlabel {
+  font-family: var(--f-data); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink); background: rgba(12,15,24,0.6); padding: 2px 6px; border-radius: 2px;
+  white-space: nowrap; transition: opacity .6s;
+}
+.dlabel.fresh { color: #14100a; background: var(--sodium); }
+
+.hud { position: fixed; z-index: 2; background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--rule); }
+#ledger {
+  top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px; padding: 14px 16px 12px;
+  display: grid; gap: 10px; width: min(300px, calc(100vw - 32px)); border-radius: 4px;
+}
+#ledger h1 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: 30px; line-height: 1; letter-spacing: 0.02em; text-transform: uppercase; }
+#ledger .sub { font-family: var(--f-data); font-size: 11px; color: var(--ink-dim); margin-top: 4px; }
+.clock { display: flex; align-items: baseline; gap: 10px; border-top: 1px solid var(--rule); padding-top: 10px; }
+.clock .time { font-family: var(--f-display); font-weight: 600; font-size: 44px; line-height: .9; font-variant-numeric: tabular-nums; }
+.clock .date { font-family: var(--f-data); font-size: 12px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .06em; }
+.clock .phase { margin-left: auto; font-family: var(--f-data); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; border: 1px solid currentColor; }
+#hours { width: 100%; height: 34px; display: block; }
+.hours-cap { display: flex; justify-content: space-between; font-family: var(--f-data); font-size: 9px; color: var(--ink-dim); margin-top: -6px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; border-top: 1px solid var(--rule); padding-top: 10px; }
+.stat b { display: block; font-family: var(--f-data); font-weight: 500; font-size: 15px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-dim); }
+
+#legend {
+  top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; padding: 10px 12px; border-radius: 4px;
+  display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-family: var(--f-data); font-size: 10px; color: var(--ink-dim);
+}
+#legend .k { display: flex; align-items: center; gap: 6px; }
+#legend i { width: 9px; height: 9px; border-radius: 1px; display: inline-block; }
+#legend .note { grid-column: 1 / -1; border-top: 1px solid var(--rule); padding-top: 6px; margin-top: 2px; max-width: 190px; line-height: 1.4; }
+
+#dock {
+  left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); padding: 10px 12px 12px; border-radius: 4px;
+  display: grid; gap: 8px;
+}
+#ticker { display: grid; gap: 3px; min-height: 58px; align-content: end; }
+.tick { display: flex; gap: 10px; align-items: baseline; min-width: 0; font-size: 15px; transition: opacity .4s; }
+.tick .h { font-family: var(--f-data); font-size: 11px; color: var(--sodium); flex: none; }
+.tick .d { font-family: var(--f-data); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); flex: none; }
+.tick .m { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tick:nth-last-child(2) { opacity: .5; font-size: 13px; }
+.tick:nth-last-child(3) { opacity: .25; font-size: 13px; }
+.controls { display: flex; gap: 10px; align-items: center; }
+button {
+  font: 600 13px var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink);
+  background: transparent; border: 1px solid var(--rule); border-radius: 3px; padding: 6px 10px; cursor: pointer; flex: none;
+}
+button:hover { border-color: var(--ink-dim); }
+button:focus-visible, #timeline:focus-visible { outline: 2px solid var(--sodium); outline-offset: 2px; }
+button.primary { background: var(--sodium); color: #14100a; border-color: var(--sodium); min-width: 92px; }
+#timeline { flex: 1; height: 40px; min-width: 0; cursor: pointer; touch-action: none; display: block; }
+.cnt { font-family: var(--f-data); font-size: 11px; color: var(--ink-dim); flex: none; font-variant-numeric: tabular-nums; }
+
+#tip {
+  position: fixed; z-index: 3; pointer-events: none; padding: 8px 10px; border-radius: 3px; background: var(--glass);
+  border: 1px solid var(--rule); font-size: 13px; max-width: 280px; backdrop-filter: blur(8px);
+}
+#tip .p { font-family: var(--f-data); font-size: 11px; word-break: break-all; }
+#tip .meta { color: var(--ink-dim); font-size: 12px; margin-top: 3px; }
+#loading { position: fixed; inset: 0; display: grid; place-items: center; font-family: var(--f-data); color: var(--ink-dim); }
+
+@media (max-width: 640px) {
+  #legend { display: none; }
+  #ledger { padding: 10px 12px; gap: 8px; }
+  #ledger h1 { font-size: 24px; }
+  .clock .time { font-size: 34px; }
+  #hours, .hours-cap { display: none; }
+  .tick { font-size: 13px; }
+  .tick .d { display: none; }
+  .dlabel { font-size: 8px; }
+}
+@media (max-height: 560px) { #hours, .hours-cap, #legend .note { display: none; } }
+</style>
+
+<div id="loading">Surveying lots…</div>
+<div id="stage"></div>
+<div id="labels"></div>
+
+<section id="ledger" class="hud" aria-label="City ledger">
+  <div>
+    <h1>Repo City</h1>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="clock">
+    <span class="time" id="time">--:--</span>
+    <span class="date" id="date"></span>
+    <span class="phase" id="phase"></span>
+  </div>
+  <div>
+    <canvas id="hours" aria-label="Commits by hour of day"></canvas>
+    <div class="hours-cap"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b id="sCommits">0</b><span>commits</span></div>
+    <div class="stat"><b id="sLines">0</b><span>lines</span></div>
+    <div class="stat"><b id="sBldg">0</b><span>buildings</span></div>
+    <div class="stat"><b id="sDist">0</b><span>districts</span></div>
+  </div>
+</section>
+
+<aside id="legend" class="hud" aria-label="Legend"></aside>
+
+<section id="dock" class="hud" aria-label="Timeline">
+  <div id="ticker" aria-live="polite"></div>
+  <div class="controls">
+    <button id="play" class="primary" type="button">Replay</button>
+    <button id="speed" type="button" title="Playback speed">1×</button>
+    <canvas id="timeline" tabindex="0" aria-label="Commit timeline. Drag to scrub, arrow keys step."></canvas>
+    <span class="cnt" id="cnt"></span>
+  </div>
+</section>
+<div id="tip" hidden></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const DATA = /*__DATA__*/null;
+const { files, districts, commits } = DATA;
+const N = commits.length, F = files.length;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ---------- file classification ----------
+const TYPES = [
+  ["JavaScript", "#e8c547", ["js", "mjs", "ts"]],
+  ["Python", "#4f8fd6", ["py"]],
+  ["Luau", "#a77be0", ["luau", "lua"]],
+  ["HTML", "#e2744a", ["html"]],
+  ["CSS", "#df5f93", ["css", "tcss"]],
+  ["Shaders", "#46c6d6", ["frag", "vert", "glsl"]],
+  ["Game Boy asm", "#9ccc4a", ["asm", "inc", "s"]],
+  ["Shell & config", "#5bb59e", ["sh", "json", "toml", "yaml", "yml", "example", "service", "none"]],
+  ["Docs", "#d8d2c4", ["md", "txt"]],
+];
+const extColor = {};
+for (const [, c, exts] of TYPES) for (const e of exts) extColor[e] = c;
+const WAREHOUSE = "#555b66";
+const isWarehouse = (p, ext) =>
+  /(^|\/)(vendor|data)\//.test(p) || /\.d\.luau$/.test(p) || /roblox\.yml$/.test(p) ||
+  ["wsdl", "png", "mp4", "gb", "gbc", "jpg", "wav", "ogg"].includes(ext);
+const fileMeta = files.map(([p, d, x, z, ext]) => {
+  const wh = isWarehouse(p, ext);
+  return { p, d, x, z, ext, wh, color: new THREE.Color(wh ? WAREHOUSE : (extColor[ext] || "#8a8f98")) };
+});
+const born = new Array(F).fill(-1);
+commits.forEach((c, i) => c.c.forEach(([fi]) => { if (born[fi] < 0) born[fi] = i; }));
+
+const shortName = n => n === "money" ? "money (misc)" : n.split("/").pop();
+const hourOf = t => { const d = new Date(t * 1000); return d.getUTCHours() + d.getUTCMinutes() / 60; };
+const fmtTime = t => new Date(t * 1000).toISOString().slice(11, 16);
+const fmtDate = t => new Date(t * 1000).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+const heightFor = (lines, wh) => lines <= 0 ? 0 : wh ? Math.min(0.25 + 0.03 * Math.sqrt(lines), 1.8) : Math.min(0.25 + 0.1 * Math.sqrt(lines), 14);
+
+// ---------- renderer / scene ----------
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+stage.appendChild(renderer.domElement);
+const labelRenderer = new CSS2DRenderer({ element: document.getElementById("labels") });
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x070b1a, 60, 150);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500);
+camera.position.set(34, 29, 37);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(2, 0, -1);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.47;
+controls.minDistance = 12; controls.maxDistance = 140;
+controls.autoRotateSpeed = 0.5;
+let lastUserMove = -1e9;
+controls.addEventListener("start", () => { lastUserMove = performance.now(); });
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.45, 0.82);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const hemi = new THREE.HemisphereLight(0xbfd6ff, 0x1a1c22, 0.6);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 2);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 160 });
+sun.shadow.bias = -0.0008;
+scene.add(sun, sun.target);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0x1b1f28, roughness: 0.95 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(120, 120, 0x2a3040, 0x222734);
+grid.position.y = 0.005; grid.material.transparent = true; grid.material.opacity = 0.35;
+scene.add(grid);
+
+// stars
+const starGeo = new THREE.BufferGeometry();
+const sp = new Float32Array(1500 * 3);
+for (let i = 0; i < 1500; i++) {
+  const th = Math.random() * Math.PI * 2, ph = Math.random() * Math.PI * 0.42, r = 220;
+  sp.set([r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th)], i * 3);
+}
+starGeo.setAttribute("position", new THREE.BufferAttribute(sp, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, transparent: true, fog: false, sizeAttenuation: true }));
+scene.add(stars);
+
+// ---------- district plates + labels ----------
+const GROUND_NIGHT = new THREE.Color(0x1b1f28), GROUND_DAY = new THREE.Color(0x4a505c);
+const PLATE_NIGHT = new THREE.Color(0x343a47), PLATE_DAY = new THREE.Color(0x8a8f99);
+const plateMat = new THREE.MeshStandardMaterial({ color: 0x343a47, roughness: 0.85 });
+const plates = districts.map(d => {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(d.w + 0.7, 0.14, d.h + 0.7), plateMat);
+  m.position.set(d.x + d.w / 2, 0.07, d.z + d.h / 2);
+  m.receiveShadow = true; m.scale.setScalar(0.001); m.visible = false;
+  scene.add(m);
+  const el = document.createElement("div");
+  el.className = "dlabel"; el.textContent = shortName(d.n);
+  const lab = new CSS2DObject(el);
+  lab.position.set(m.position.x, 0.4, d.z + d.h + 0.9);
+  lab.visible = false;
+  scene.add(lab);
+  return { d, m, lab, el, s: 0, fresh: 0, size: 0 };
+});
+
+// ---------- buildings (one instance per file) ----------
+const uNight = { value: 1 };
+const boxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+const glowAttr = new THREE.InstancedBufferAttribute(new Float32Array(F), 1);
+glowAttr.setUsage(THREE.DynamicDrawUsage);
+boxGeo.setAttribute("aGlow", glowAttr);
+const bMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.1 });
+bMat.onBeforeCompile = sh => {
+  sh.uniforms.uNight = uNight;
+  sh.vertexShader = sh.vertexShader
+    .replace("#include <common>", `#include <common>
+      attribute float aGlow; varying float vGlow; varying vec3 vLocal; varying vec3 vScale; varying vec3 vObjN; varying float vSeed;`)
+    .replace("#include <begin_vertex>", `#include <begin_vertex>
+      vGlow = aGlow; vLocal = position; vObjN = normal;
+      vScale = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+      vSeed = instanceMatrix[3].x * 12.9898 + instanceMatrix[3].z * 78.233;`);
+  sh.fragmentShader = sh.fragmentShader
+    .replace("#include <common>", `#include <common>
+      uniform float uNight; varying float vGlow; varying vec3 vLocal; varying vec3 vScale; varying vec3 vObjN; varying float vSeed;
+      float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + vSeed) * 43758.5453); }`)
+    .replace("#include <color_fragment>", `#include <color_fragment>
+      vec3 pm = (vLocal + vec3(0.5, 0.0, 0.5)) * vScale;
+      float side = step(abs(vObjN.y), 0.5);
+      vec2 wuv = abs(vObjN.x) > 0.5 ? vec2(pm.z, pm.y) : vec2(pm.x, pm.y);
+      vec2 wcell = floor(wuv * vec2(5.0, 3.4));
+      vec2 wf = fract(wuv * vec2(5.0, 3.4));
+      float win = side * step(0.22, wf.x) * step(wf.x, 0.78) * step(0.28, wf.y) * step(wf.y, 0.82)
+                * step(0.25, pm.y) * step(pm.y, vScale.y - 0.12);
+      float lit = step(0.42, h21(wcell + vObjN.xz * 3.0));
+      diffuseColor.rgb *= 1.0 - win * 0.55;`)
+    .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+      totalEmissiveRadiance += win * lit * uNight * vec3(1.0, 0.72, 0.38) * 1.3;
+      totalEmissiveRadiance += vec3(1.0, 0.62, 0.2) * vGlow * 1.6;`);
+};
+const city = new THREE.InstancedMesh(boxGeo, bMat, F);
+city.castShadow = true; city.receiveShadow = true;
+city.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+fileMeta.forEach((f, i) => city.setColorAt(i, f.color));
+scene.add(city);
+
+// construction beams (one per touched district per commit)
+const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 12, 1, true).translate(0, 0.5, 0);
+const beams = [];
+function spawnBeam(x, z, r) {
+  let b = beams.find(b => b.life <= 0);
+  if (!b) {
+    const m = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    scene.add(m); b = { m, life: 0 }; beams.push(b);
+  }
+  b.life = 1; b.m.visible = true; b.m.position.set(x, 0, z); b.r = r;
+}
+
+// ---------- state ----------
+const lines = new Float64Array(F), touches = new Uint16Array(F);
+const shownH = new Float32Array(F), glow = new Float32Array(F);
+const hourCounts = new Array(24).fill(0);
+let cur = N;               // commits applied
+let sky = { hour: 23 };
+
+function recompute(k) {
+  lines.fill(0); touches.fill(0); hourCounts.fill(0);
+  for (let i = 0; i < k; i++) applyData(i);
+  cur = k;
+}
+function applyData(i) {
+  const c = commits[i];
+  for (const [fi, a, d] of c.c) { lines[fi] += a - d; touches[fi]++; }
+  hourCounts[Math.floor(hourOf(c.t))]++;
+}
+function step() {
+  if (cur >= N) return false;
+  applyData(cur);
+  const c = commits[cur];
+  cur++;
+  const per = new Map();
+  for (const [fi, a, d] of c.c) {
+    glow[fi] = 1;
+    const di = fileMeta[fi].d;
+    per.set(di, (per.get(di) || 0) + a + d);
+  }
+  for (const [di, churn] of per) {
+    const d = districts[di];
+    spawnBeam(d.x + d.w / 2, d.z + d.h / 2, Math.min(0.15 + Math.log10(1 + churn) * 0.18, 1.1));
+    plates[di].fresh = 1;
+  }
+  return true;
+}
+
+// ---------- sky ----------
+const SKY = [[0, "#060a18"], [4.5, "#0a1027"], [5.8, "#2d2447"], [6.8, "#d58a68"], [8, "#86b2da"], [12, "#9ac5ea"], [17, "#a3bfdc"], [18.6, "#e0955a"], [19.6, "#4a3157"], [21, "#0f1330"], [24, "#060a18"]]
+  .map(([h, c]) => [h, new THREE.Color(c)]);
+function skyColor(h, out) {
+  for (let i = 0; i < SKY.length - 1; i++) {
+    const [h0, c0] = SKY[i], [h1, c1] = SKY[i + 1];
+    if (h >= h0 && h <= h1) return out.copy(c0).lerp(c1, (h - h0) / (h1 - h0));
+  }
+  return out.copy(SKY[0][1]);
+}
+// Stockholm in late September: sunrise ~06:50, sunset ~18:55
+const daylight = h => THREE.MathUtils.smoothstep(h, 6.2, 8) * (1 - THREE.MathUtils.smoothstep(h, 18.3, 20));
+const skyCol = new THREE.Color();
+let skyHour = 23, targetHour = 23;
+
+// ---------- HUD ----------
+const $ = id => document.getElementById(id);
+const first = commits[0], last = commits[N - 1];
+$("sub").textContent = `~/${DATA.repo} · ${fmtDate(first.t)} → ${fmtDate(last.t)}`;
+$("legend").innerHTML = TYPES.map(([n, c]) => `<span class="k"><i style="background:${c}"></i>${n}</span>`).join("") +
+  `<span class="k"><i style="background:${WAREHOUSE}"></i>Warehouse</span>` +
+  `<span class="note">One building per file, height from line count. Warehouses are vendored libraries, data and binaries, kept low so they don't hide the real code.</span>`;
+
+const hoursCv = $("hours"), hctx = hoursCv.getContext("2d");
+function drawHours() {
+  const w = hoursCv.clientWidth, h = hoursCv.clientHeight, dpr = devicePixelRatio;
+  if (!w) return;
+  hoursCv.width = w * dpr; hoursCv.height = h * dpr;
+  hctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const max = Math.max(4, ...hourCounts), bw = w / 24;
+  const nowH = cur ? Math.floor(hourOf(commits[cur - 1].t)) : -1;
+  for (let i = 0; i < 24; i++) {
+    const v = hourCounts[i] / max * (h - 8);
+    hctx.fillStyle = daylight(i + 0.5) > 0.5 ? "#8fc1ea" : "#ffb347";
+    hctx.globalAlpha = i === nowH ? 1 : 0.55;
+    hctx.fillRect(i * bw + 1, h - 6 - v, bw - 2, Math.max(v, 1));
+  }
+  hctx.globalAlpha = 1;
+}
+
+const tl = $("timeline"), tctx = tl.getContext("2d");
+const churn = commits.map(c => c.c.reduce((s, [, a, d]) => s + a + d, 0));
+function drawTimeline() {
+  const w = tl.clientWidth, h = tl.clientHeight, dpr = devicePixelRatio;
+  if (!w) return;
+  if (tl.width !== Math.round(w * dpr)) { tl.width = w * dpr; tl.height = h * dpr; }
+  tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  tctx.clearRect(0, 0, w, h);
+  const xOf = i => 4 + (i / (N - 1)) * (w - 8);
+  const base = h - 12;
+  tctx.font = "9px 'IBM Plex Mono', monospace";
+  tctx.fillStyle = "#9aa0ab";
+  let lastDay = "", lastLabelX = -99;
+  commits.forEach((c, i) => {
+    const day = new Date(c.t * 1000).toISOString().slice(0, 10);
+    if (day !== lastDay) {
+      const x = xOf(i);
+      tctx.fillStyle = "rgba(233,230,223,0.18)"; tctx.fillRect(x - 0.5, 0, 1, base);
+      if (x - lastLabelX > 34) { tctx.fillStyle = "#9aa0ab"; tctx.fillText(day.slice(8) + "/" + day.slice(5, 7), x + 2, h - 2); lastLabelX = x; }
+      lastDay = day;
+    }
+    const v = Math.min(1, Math.log10(1 + churn[i]) / 4.5) * (base - 4) + 2;
+    tctx.fillStyle = daylight(hourOf(c.t)) > 0.5 ? "#8fc1ea" : "#ffb347";
+    tctx.globalAlpha = i < cur ? 0.95 : 0.25;
+    tctx.fillRect(xOf(i) - 1, base - v, 2, v);
+  });
+  tctx.globalAlpha = 1;
+  const px = cur ? xOf(cur - 1) : 2;
+  tctx.fillStyle = "#e9e6df"; tctx.fillRect(px - 1, 0, 2, base + 2);
+}
+
+let tickerShown = -1;
+function updateHud() {
+  const c = cur ? commits[cur - 1] : null;
+  let loc = 0, bld = 0; const live = new Set();
+  for (let i = 0; i < F; i++) if (lines[i] > 0) { bld++; live.add(fileMeta[i].d); if (!fileMeta[i].wh) loc += lines[i]; }
+  $("sCommits").textContent = cur;
+  $("sLines").textContent = loc >= 1000 ? (loc / 1000).toFixed(loc >= 1e5 ? 0 : 1) + "k" : loc;
+  $("sBldg").textContent = bld;
+  $("sDist").textContent = live.size;
+  $("cnt").textContent = `${cur}/${N}`;
+  if (c) {
+    $("time").textContent = fmtTime(c.t);
+    $("date").textContent = fmtDate(c.t);
+    const day = daylight(hourOf(c.t)) > 0.5;
+    const ph = $("phase"); ph.textContent = day ? "day shift" : "night shift"; ph.style.color = day ? "var(--daylight)" : "var(--sodium)";
+  } else { $("time").textContent = "--:--"; $("date").textContent = "empty lot"; $("phase").textContent = ""; }
+  if (tickerShown !== cur) {
+    tickerShown = cur;
+    const rows = [];
+    for (let i = Math.max(0, cur - 3); i < cur; i++) {
+      const cc = commits[i];
+      const ds = [...new Set(cc.c.map(([fi]) => shortName(districts[fileMeta[fi].d].n)))];
+      rows.push(`<div class="tick"><span class="h">${cc.h}</span><span class="d">${ds.slice(0, 2).join(" + ")}${ds.length > 2 ? " +" + (ds.length - 2) : ""}</span><span class="m"></span></div>`);
+    }
+    $("ticker").innerHTML = rows.join("");
+    [...$("ticker").querySelectorAll(".m")].forEach((el, k) => { el.textContent = commits[Math.max(0, cur - 3) + k].m; });
+  }
+  drawHours(); drawTimeline();
+}
+
+// ---------- playback ----------
+let playing = false, speed = 1, acc = 0;
+const SPEEDS = [1, 2, 4, 0.5];
+const playBtn = $("play");
+function setPlaying(p) {
+  playing = p;
+  playBtn.textContent = p ? "Pause" : cur >= N ? "Replay" : "Play";
+}
+playBtn.onclick = () => {
+  if (!playing && cur >= N) { recompute(0); glow.fill(0); shownH.fill(0); plates.forEach(p => p.s = 0); acc = 0.6; }
+  setPlaying(!playing); updateHud();
+};
+$("speed").onclick = () => { speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; $("speed").textContent = speed + "×"; };
+
+function scrubTo(k, flash) {
+  k = Math.max(0, Math.min(N, k));
+  if (k === cur) return;
+  if (k === cur + 1) step(); else { recompute(k); glow.fill(0); if (flash && k) commits[k - 1].c.forEach(([fi]) => glow[fi] = 1); }
+  if (cur) targetHour = hourOf(commits[cur - 1].t);
+  setPlaying(playing && cur < N); updateHud();
+}
+let dragging = false;
+const tlIndex = e => { const r = tl.getBoundingClientRect(); return Math.round(((e.clientX - r.left - 4) / (r.width - 8)) * (N - 1)) + 1; };
+tl.addEventListener("pointerdown", e => { dragging = true; tl.setPointerCapture(e.pointerId); setPlaying(false); scrubTo(tlIndex(e), true); });
+tl.addEventListener("pointermove", e => { if (dragging) scrubTo(tlIndex(e), true); });
+tl.addEventListener("pointerup", () => { dragging = false; });
+addEventListener("keydown", e => {
+  if (e.target.tagName === "BUTTON" && (e.key === " " || e.key === "Enter")) return;
+  if (e.key === " ") { e.preventDefault(); playBtn.click(); }
+  else if (e.key === "ArrowRight") { setPlaying(false); scrubTo(cur + (e.shiftKey ? 10 : 1), true); }
+  else if (e.key === "ArrowLeft") { setPlaying(false); scrubTo(cur - (e.shiftKey ? 10 : 1), true); }
+});
+
+// ---------- hover inspection ----------
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(), tip = $("tip");
+let hoverEv = null;
+renderer.domElement.addEventListener("pointermove", e => { hoverEv = e; });
+renderer.domElement.addEventListener("pointerleave", () => { hoverEv = null; tip.hidden = true; });
+function inspect() {
+  if (!hoverEv) return;
+  const e = hoverEv; hoverEv = null;
+  mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hit = ray.intersectObject(city)[0];
+  if (!hit || shownH[hit.instanceId] < 0.05) { tip.hidden = true; return; }
+  const f = fileMeta[hit.instanceId], i = hit.instanceId;
+  tip.innerHTML = `<div class="p"></div><div class="meta"></div>`;
+  tip.querySelector(".p").textContent = f.p;
+  tip.querySelector(".meta").textContent =
+    `${Math.round(lines[i]).toLocaleString()} lines · ${touches[i]} commit${touches[i] === 1 ? "" : "s"} · built ${fmtDate(commits[born[i]].t)} ${fmtTime(commits[born[i]].t)}${f.wh ? " · warehouse" : ""}`;
+  tip.hidden = false;
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8) + "px";
+}
+
+// ---------- frame loop ----------
+const tmpM = new THREE.Matrix4(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
+let framed = false;
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h); composer.setSize(w, h); labelRenderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.fov = w < 640 ? 55 : 42;
+  camera.updateProjectionMatrix();
+  if (!framed) {   // first fit only: pull back on portrait screens so the whole city is in frame
+    framed = true;
+    const aspect = w / h, dir = camera.position.clone().sub(controls.target);
+    camera.position.copy(controls.target).addScaledVector(dir, aspect < 1 ? 1 / Math.pow(aspect, 0.55) : 1);
+  }
+  tl.width = 0; updateHud();
+}
+addEventListener("resize", resize);
+
+// hide labels that would overlap a more important one (fresh construction first, then bigger districts)
+let frameNo = 0;
+fileMeta.forEach(f => plates[f.d].size++);
+const projV = new THREE.Vector3();
+function declutter() {
+  const w = innerWidth, h = innerHeight, placed = [];
+  const order = plates.filter(p => p.d.born < cur).sort((a, b) => (b.fresh > 0.3) - (a.fresh > 0.3) || b.size - a.size);
+  for (const p of plates) if (p.d.born >= cur) p.lab.visible = false;
+  for (const p of order) {
+    projV.copy(p.lab.position).project(camera);
+    const x = (projV.x + 1) / 2 * w, y = (1 - projV.y) / 2 * h;
+    const bw = p.el.offsetWidth || p.d.n.length * 7 + 12, bh = 18;
+    const r = [x - bw / 2 - 3, y - bh / 2 - 2, x + bw / 2 + 3, y + bh / 2 + 2];
+    const clash = projV.z > 1 || placed.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1]);
+    p.lab.visible = !clash;
+    if (!clash) placed.push(r);
+  }
+}
+
+let prev = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
+  if (playing) {
+    acc += dt * speed;
+    const interval = 0.42;
+    while (acc >= interval && playing) {
+      acc -= interval;
+      if (!step()) { setPlaying(false); break; }
+      targetHour = hourOf(commits[cur - 1].t);
+      updateHud();
+    }
+    if (cur >= N) setPlaying(false);
+  }
+
+  // sky eases toward the current commit's wall-clock hour, always forward around the dial
+  let dh = targetHour - skyHour; if (dh < -12) dh += 24; if (dh > 12) dh -= 24;
+  skyHour = (skyHour + dh * Math.min(1, dt * 3) + 24) % 24;
+  const day = daylight(skyHour);
+  uNight.value = 1 - day;
+  skyColor(skyHour, skyCol);
+  scene.background = skyCol; scene.fog.color.copy(skyCol);
+  const ang = ((skyHour - 6) / 12) * Math.PI;
+  sun.position.set(Math.cos(ang) * 60, Math.max(Math.sin(ang), 0.25) * 70, 30);
+  sun.intensity = 0.25 + 2.3 * day;
+  sun.color.setHSL(day > 0.5 ? 0.12 : 0.62, day > 0.5 ? 0.3 : 0.4, day > 0.5 ? 0.95 : 0.75);
+  hemi.intensity = 0.35 + 0.7 * day;
+  ground.material.color.copy(GROUND_NIGHT).lerp(GROUND_DAY, day);
+  plateMat.color.copy(PLATE_NIGHT).lerp(PLATE_DAY, day);
+  stars.material.opacity = (1 - day) * 0.9;
+  renderer.toneMappingExposure = 0.9 + 0.25 * day;
+
+  // buildings grow toward their line counts
+  const k = reduceMotion ? 1 : Math.min(1, dt * 6);
+  for (let i = 0; i < F; i++) {
+    const f = fileMeta[i];
+    const target = heightFor(lines[i], f.wh);
+    shownH[i] += (target - shownH[i]) * k;
+    if (Math.abs(target - shownH[i]) < 0.002) shownH[i] = target;
+    glow[i] = Math.max(0, glow[i] - dt * 1.1);
+    glowAttr.array[i] = glow[i] * glow[i];
+    const fp = f.wh ? 0.92 : 0.7;
+    const h = shownH[i];
+    tmpP.set(f.x, 0.14, f.z);
+    tmpS.set(h > 0.001 ? fp : 0.0001, Math.max(h, 0.0001), h > 0.001 ? fp : 0.0001);
+    city.setMatrixAt(i, tmpM.compose(tmpP, tmpQ, tmpS));
+  }
+  city.instanceMatrix.needsUpdate = true; glowAttr.needsUpdate = true;
+  city.computeBoundingSphere();
+
+  // districts appear the first time they're touched
+  for (const pl of plates) {
+    const on = pl.d.born < cur;
+    pl.s += ((on ? 1 : 0) - pl.s) * k;
+    pl.m.visible = pl.s > 0.01; pl.m.scale.set(Math.max(pl.s, 0.001), 1, Math.max(pl.s, 0.001));
+    pl.fresh = Math.max(0, pl.fresh - dt * 0.6);
+    pl.el.classList.toggle("fresh", pl.fresh > 0.3);
+  }
+  for (const b of beams) {
+    if (b.life <= 0) continue;
+    b.life -= dt * 0.9;
+    const t = Math.max(b.life, 0);
+    b.m.scale.set(b.r * (0.3 + 0.7 * t), 18 * (1.2 - t * 0.2), b.r * (0.3 + 0.7 * t));
+    b.m.material.opacity = t * t * t * (0.1 + 0.12 * uNight.value);
+    if (b.life <= 0) b.m.visible = false;
+  }
+
+  if (++frameNo % 8 === 0) declutter();
+  controls.autoRotate = !reduceMotion && playing && now - lastUserMove > 6000;
+  controls.update();
+  inspect();
+  bloom.strength = 0.35 + 0.55 * uNight.value;
+  composer.render();
+  labelRenderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+// open on the finished city, then start the replay unless the viewer has already taken over
+recompute(N);
+targetHour = skyHour = hourOf(last.t);
+for (let i = 0; i < F; i++) shownH[i] = heightFor(lines[i], fileMeta[i].wh);
+plates.forEach(p => p.s = p.d.born < N ? 1 : 0);
+$("loading").remove();
+resize();
+setPlaying(false);
+requestAnimationFrame(frame);
+let touched = false;
+["pointerdown", "keydown", "wheel"].forEach(t => addEventListener(t, () => { touched = true; }, { once: true }));
+if (!reduceMotion && location.hash !== "#still") setTimeout(() => { if (!touched && !playing) playBtn.click(); }, 2800);
+</script>

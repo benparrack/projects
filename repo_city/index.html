@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Repo City</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Barlow+Semi+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed 3D city; HUD is a planning-office overlay — clock + ledger top-left, commit ticker and timeline strip along the bottom. */
+:root {
+  color-scheme: dark;
+  --ink: #e9e6df;           /* HUD text */
+  --ink-dim: #9aa0ab;
+  --glass: rgba(12, 15, 24, 0.72);
+  --rule: rgba(233, 230, 223, 0.14);
+  --sodium: #ffb347;        /* streetlight amber: night commits, playhead, construction glow */
+  --daylight: #8fc1ea;      /* day commits */
+  --ground: #0b0e16;
+  --f-display: "Big Shoulders Display", "Oswald", "Arial Narrow", sans-serif;
+  --f-body: "Barlow Semi Condensed", "Roboto Condensed", "Arial Narrow", sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+html, body { height: 100%; }
+body { background: var(--ground); color: var(--ink); font-family: var(--f-body); overflow: hidden; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; }
+#labels { position: fixed; inset: 0; pointer-events: none; }
+.dlabel {
+  font-family: var(--f-data); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink); background: rgba(12,15,24,0.6); padding: 2px 6px; border-radius: 2px;
+  white-space: nowrap; transition: opacity .6s;
+}
+.dlabel.fresh { color: #14100a; background: var(--sodium); }
+
+.hud { position: fixed; z-index: 2; background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--rule); }
+#ledger {
+  top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px; padding: 14px 16px 12px;
+  display: grid; gap: 10px; width: min(300px, calc(100vw - 32px)); border-radius: 4px;
+}
+#ledger h1 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: 30px; line-height: 1; letter-spacing: 0.02em; text-transform: uppercase; }
+#ledger .sub { font-family: var(--f-data); font-size: 11px; color: var(--ink-dim); margin-top: 4px; }
+.clock { display: flex; align-items: baseline; gap: 10px; border-top: 1px solid var(--rule); padding-top: 10px; }
+.clock .time { font-family: var(--f-display); font-weight: 600; font-size: 44px; line-height: .9; font-variant-numeric: tabular-nums; }
+.clock .date { font-family: var(--f-data); font-size: 12px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .06em; }
+.clock .phase { margin-left: auto; font-family: var(--f-data); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; border: 1px solid currentColor; }
+#hours { width: 100%; height: 34px; display: block; }
+.hours-cap { display: flex; justify-content: space-between; font-family: var(--f-data); font-size: 9px; color: var(--ink-dim); margin-top: -6px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; border-top: 1px solid var(--rule); padding-top: 10px; }
+.stat b { display: block; font-family: var(--f-data); font-weight: 500; font-size: 15px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-dim); }
+
+#legend {
+  top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; padding: 10px 12px; border-radius: 4px;
+  display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-family: var(--f-data); font-size: 10px; color: var(--ink-dim);
+}
+#legend .k { display: flex; align-items: center; gap: 6px; }
+#legend i { width: 9px; height: 9px; border-radius: 1px; display: inline-block; }
+#legend .note { grid-column: 1 / -1; border-top: 1px solid var(--rule); padding-top: 6px; margin-top: 2px; max-width: 190px; line-height: 1.4; }
+
+#dock {
+  left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); padding: 10px 12px 12px; border-radius: 4px;
+  display: grid; gap: 8px;
+}
+#ticker { display: grid; gap: 3px; min-height: 58px; align-content: end; }
+.tick { display: flex; gap: 10px; align-items: baseline; min-width: 0; font-size: 15px; transition: opacity .4s; }
+.tick .h { font-family: var(--f-data); font-size: 11px; color: var(--sodium); flex: none; }
+.tick .d { font-family: var(--f-data); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); flex: none; }
+.tick .m { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tick:nth-last-child(2) { opacity: .5; font-size: 13px; }
+.tick:nth-last-child(3) { opacity: .25; font-size: 13px; }
+.controls { display: flex; gap: 10px; align-items: center; }
+button {
+  font: 600 13px var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink);
+  background: transparent; border: 1px solid var(--rule); border-radius: 3px; padding: 6px 10px; cursor: pointer; flex: none;
+}
+button:hover { border-color: var(--ink-dim); }
+button:focus-visible, #timeline:focus-visible { outline: 2px solid var(--sodium); outline-offset: 2px; }
+button.primary { background: var(--sodium); color: #14100a; border-color: var(--sodium); min-width: 92px; }
+#timeline { flex: 1; height: 40px; min-width: 0; cursor: pointer; touch-action: none; display: block; }
+.cnt { font-family: var(--f-data); font-size: 11px; color: var(--ink-dim); flex: none; font-variant-numeric: tabular-nums; }
+
+#tip {
+  position: fixed; z-index: 3; pointer-events: none; padding: 8px 10px; border-radius: 3px; background: var(--glass);
+  border: 1px solid var(--rule); font-size: 13px; max-width: 280px; backdrop-filter: blur(8px);
+}
+#tip .p { font-family: var(--f-data); font-size: 11px; word-break: break-all; }
+#tip .meta { color: var(--ink-dim); font-size: 12px; margin-top: 3px; }
+#loading { position: fixed; inset: 0; display: grid; place-items: center; font-family: var(--f-data); color: var(--ink-dim); }
+
+@media (max-width: 640px) {
+  #legend { display: none; }
+  #ledger { padding: 10px 12px; gap: 8px; }
+  #ledger h1 { font-size: 24px; }
+  .clock .time { font-size: 34px; }
+  #hours, .hours-cap { display: none; }
+  .tick { font-size: 13px; }
+  .tick .d { display: none; }
+  .dlabel { font-size: 8px; }
+}
+@media (max-height: 560px) { #hours, .hours-cap, #legend .note { display: none; } }
+</style>
+
+<div id="loading">Surveying lots…</div>
+<div id="stage"></div>
+<div id="labels"></div>
+
+<section id="ledger" class="hud" aria-label="City ledger">
+  <div>
+    <h1>Repo City</h1>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="clock">
+    <span class="time" id="time">--:--</span>
+    <span class="date" id="date"></span>
+    <span class="phase" id="phase"></span>
+  </div>
+  <div>
+    <canvas id="hours" aria-label="Commits by hour of day"></canvas>
+    <div class="hours-cap"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b id="sCommits">0</b><span>commits</span></div>
+    <div class="stat"><b id="sLines">0</b><span>lines</span></div>
+    <div class="stat"><b id="sBldg">0</b><span>buildings</span></div>
+    <div class="stat"><b id="sDist">0</b><span>districts</span></div>
+  </div>
+</section>
+
+<aside id="legend" class="hud" aria-label="Legend"></aside>
+
+<section id="dock" class="hud" aria-label="Timeline">
+  <div id="ticker" aria-live="polite"></div>
+  <div class="controls">
+    <button id="play" class="primary" type="button">Replay</button>
+    <button id="speed" type="button" title="Playback speed">1×</button>
+    <canvas id="timeline" tabindex="0" aria-label="Commit timeline. Drag to scrub, arrow keys step."></canvas>
+    <span class="cnt" id="cnt"></span>
+  </div>
+</section>
+<div id="tip" hidden></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const DATA = {"repo":"projects","files":[[".gitignore",0,-0.5,-0.5,"none"],["3dgames/shooter/game.js",1,-0.5,-4.5,"js"],["3dgames/shooter/index.html",1,0.5,-4.5,"html"],["3dgames/shooter/three.min.js",1,-0.5,-3.5,"js"],["IDEAS.md",0,0.5,-0.5,"md"],["dungeon_crawler/index.html",2,-0.5,3.5,"html"],["money/alpaca-paper-trader/.env.example",3,-6.5,-1.5,"example"],["money/alpaca-paper-trader/.gitignore",3,-5.5,-1.5,"none"],["money/alpaca-paper-trader/README.md",3,-4.5,-1.5,"md"],["money/alpaca-paper-trader/alpaca_client.py",3,-3.5,-1.5,"py"],["money/alpaca-paper-trader/config.py",3,-6.5,-0.5,"py"],["money/alpaca-paper-trader/indicators.py",3,-5.5,-0.5,"py"],["money/alpaca-paper-trader/main.py",3,-4.5,-0.5,"py"],["money/alpaca-paper-trader/reporter.py",3,-3.5,-0.5,"py"],["money/alpaca-paper-trader/requirements.txt",3,-6.5,0.5,"txt"],["money/alpaca-paper-trader/state.py",3,-5.5,0.5,"py"],["money/alpaca-paper-trader/strategy.py",3,-4.5,0.5,"py"],["money/alpaca-paper-trader/tests/test_indicators.py",3,-3.5,0.5,"py"],["money/alpaca-paper-trader/tests/test_state.py",3,-6.5,1.5,"py"],["money/alpaca-paper-trader/tests/test_strategy.py",3,-5.5,1.5,"py"],["money/alpaca-paper-trader/trader.py",3,-4.5,1.5,"py"],["money/alpaca-paper-trader/universe.py",3,-3.5,1.5,"py"],["money/sports-arb-scanner/.env.example",4,3.5,3.5,"example"],["money/sports-arb-scanner/.gitignore",4,4.5,3.5,"none"],["money/sports-arb-scanner/README.md",4,5.5,3.5,"md"],["money/sports-arb-scanner/arbitrage.py",4,6.5,3.5,"py"],["money/sports-arb-scanner/config.py",4,3.5,4.5,"py"],["money/sports-arb-scanner/main.py",4,4.5,4.5,"py"],["money/sports-arb-scanner/odds_client.py",4,5.5,4.5,"py"],["money/sports-arb-scanner/reporter.py",4,6.5,4.5,"py"],["money/sports-arb-scanner/requirements.txt",4,3.5,5.5,"txt"],["money/sports-arb-scanner/scanner.py",4,4.5,5.5,"py"],["money/sports-arb-scanner/tests/test_arbitrage.py",4,5.5,5.5,"py"],["money/sports-arb-scanner/tests/test_scanner.py",4,6.5,5.5,"py"],["README.md",0,1.5,-0.5,"md"],["hand_paintbrush/.gitignore",5,3.5,-4.5,"none"],["hand_paintbrush/README.md",5,4.5,-4.5,"md"],["hand_paintbrush/main.py",5,3.5,-3.5,"py"],["hand_paintbrush/requirements.txt",5,4.5,-3.5,"txt"],["physics_sandbox/index.html",6,-4.5,4.5,"html"],["generative_art_gallery/README.md",7,4.5,0.5,"md"],["generative_art_gallery/index.html",7,5.5,0.5,"html"],["TODO_FIRST.md",0,-0.5,0.5,"md"],["money/money_ideas.md",8,-4.5,-4.5,"md"],["raytracer/index.html",9,-0.5,6.5,"html"],["music_visualizer/index.html",10,-4.5,7.5,"html"],["mission_control/.gitignore",11,7.5,-6.5,"none"],["mission_control/README.md",11,8.5,-6.5,"md"],["mission_control/app.py",11,9.5,-6.5,"py"],["mission_control/config.example.toml",11,10.5,-6.5,"toml"],["mission_control/config.py",11,11.5,-6.5,"py"],["mission_control/panels/__init__.py",11,7.5,-5.5,"py"],["mission_control/panels/base.py",11,8.5,-5.5,"py"],["mission_control/panels/calendar_panel.py",11,9.5,-5.5,"py"],["mission_control/panels/git_status.py",11,10.5,-5.5,"py"],["mission_control/panels/system.py",11,11.5,-5.5,"py"],["mission_control/panels/up_next.py",11,7.5,-4.5,"py"],["mission_control/panels/weather.py",11,8.5,-4.5,"py"],["mission_control/requirements.txt",11,9.5,-4.5,"txt"],["mission_control/styles.tcss",11,10.5,-4.5,"tcss"],["game_terminal/README.md",12,-5.5,-16.5,"md"],["game_terminal/package-lock.json",12,-4.5,-16.5,"json"],["game_terminal/package.json",12,-3.5,-16.5,"json"],["game_terminal/public/games/drawing/client.js",12,-2.5,-16.5,"js"],["game_terminal/public/hub.js",12,-1.5,-16.5,"js"],["game_terminal/public/index.html",12,-0.5,-16.5,"html"],["game_terminal/public/protocol.js",12,0.5,-16.5,"js"],["game_terminal/public/style.css",12,1.5,-16.5,"css"],["game_terminal/server/games/drawing.js",12,2.5,-16.5,"js"],["game_terminal/server/games/index.js",12,3.5,-16.5,"js"],["game_terminal/server/index.js",12,4.5,-16.5,"js"],["game_terminal/server/protocol.js",12,-5.5,-15.5,"js"],["game_terminal/server/roomManager.js",12,-4.5,-15.5,"js"],["game_terminal/server/static.js",12,-3.5,-15.5,"js"],["ant_colony_optimization/index.html",13,3.5,8.5,"html"],["mission_control/panels/now_playing.py",11,11.5,-4.5,"py"],["mission_control/panels/top_bar.py",11,7.5,-3.5,"py"],["mission_control/spotify_auth.py",11,8.5,-3.5,"py"],["game_terminal/public/games/hangman/client.js",12,-2.5,-15.5,"js"],["game_terminal/server/games/hangman.js",12,-1.5,-15.5,"js"],["mission_control/panels/clock.py",11,9.5,-3.5,"py"],["game_terminal/public/games/checkers/client.js",12,-0.5,-15.5,"js"],["game_terminal/server/games/checkers.js",12,0.5,-15.5,"js"],["game_terminal/public/games/chess/client.js",12,1.5,-15.5,"js"],["game_terminal/server/games/chess.js",12,2.5,-15.5,"js"],["mission_control/screens.py",11,10.5,-3.5,"py"],["mission_control/styles/common.tcss",11,11.5,-3.5,"tcss"],["mission_control/styles/grid.tcss",11,7.5,-2.5,"tcss"],["mission_control/styles/sidebar.tcss",11,8.5,-2.5,"tcss"],["mission_control/styles/stacked.tcss",11,9.5,-2.5,"tcss"],["mission_control/FUTURE.md",11,10.5,-2.5,"md"],["game_terminal/FUTURE.md",12,3.5,-15.5,"md"],["CLAUDE.md",0,0.5,0.5,"md"],["game_terminal/public/games/slither/client.js",12,4.5,-15.5,"js"],["game_terminal/server/games/slither.js",12,-5.5,-14.5,"js"],["mission_control/panels/notes.py",11,11.5,-2.5,"py"],["game_terminal/public/games/connect4/client.js",12,-4.5,-14.5,"js"],["game_terminal/server/games/connect4.js",12,-3.5,-14.5,"js"],["terrain_generator/index.html",14,-8.5,4.5,"html"],["daily_learning/index.html",15,7.5,8.5,"html"],["daily_learning/.gitignore",15,8.5,8.5,"none"],["daily_learning/package.json",15,9.5,8.5,"json"],["daily_learning/server.js",15,7.5,9.5,"js"],["money/stream-clipper/.env.example",16,-12.5,7.5,"example"],["money/stream-clipper/.gitignore",16,-11.5,7.5,"none"],["money/stream-clipper/README.md",16,-10.5,7.5,"md"],["money/stream-clipper/audio_signal.py",16,-9.5,7.5,"py"],["money/stream-clipper/chat_client.py",16,-8.5,7.5,"py"],["money/stream-clipper/clipper.py",16,-7.5,7.5,"py"],["money/stream-clipper/config.py",16,-12.5,8.5,"py"],["money/stream-clipper/downloader.py",16,-11.5,8.5,"py"],["money/stream-clipper/highlights.py",16,-10.5,8.5,"py"],["money/stream-clipper/instagram_uploader.py",16,-9.5,8.5,"py"],["money/stream-clipper/main.py",16,-8.5,8.5,"py"],["money/stream-clipper/manifest.py",16,-7.5,8.5,"py"],["money/stream-clipper/pipeline.py",16,-12.5,9.5,"py"],["money/stream-clipper/poster.py",16,-11.5,9.5,"py"],["money/stream-clipper/reporter.py",16,-10.5,9.5,"py"],["money/stream-clipper/requirements.txt",16,-9.5,9.5,"txt"],["money/stream-clipper/state.py",16,-8.5,9.5,"py"],["money/stream-clipper/tests/test_clipper.py",16,-7.5,9.5,"py"],["money/stream-clipper/tests/test_highlights.py",16,-12.5,10.5,"py"],["money/stream-clipper/tests/test_state.py",16,-11.5,10.5,"py"],["money/stream-clipper/tests/test_transcribe.py",16,-10.5,10.5,"py"],["money/stream-clipper/transcribe.py",16,-9.5,10.5,"py"],["money/stream-clipper/youtube_uploader.py",16,-8.5,10.5,"py"],["money/stream-clipper/tests/test_downloader.py",16,-7.5,10.5,"py"],["money/stream-clipper/face_track.py",16,-12.5,11.5,"py"],["money/stream-clipper/pacing.py",16,-11.5,11.5,"py"],["money/stream-clipper/tests/test_face_track.py",16,-10.5,11.5,"py"],["money/stream-clipper/tests/test_pacing.py",16,-9.5,11.5,"py"],["money/stream-clipper/tests/test_titling.py",16,-8.5,11.5,"py"],["money/stream-clipper/titling.py",16,-7.5,11.5,"py"],["game_terminal/public/games/shooter/client.js",12,-2.5,-14.5,"js"],["game_terminal/public/games/shooter/vendor/three.min.js",12,-1.5,-14.5,"js"],["game_terminal/server/games/shooter.js",12,-0.5,-14.5,"js"],["game_terminal/server/games/data/hangman_words.txt",12,0.5,-14.5,"txt"],["game_terminal/public/games/bs/client.js",12,1.5,-14.5,"js"],["game_terminal/public/games/cardCommon.js",12,2.5,-14.5,"js"],["game_terminal/public/games/crazyeights/client.js",12,3.5,-14.5,"js"],["game_terminal/public/games/garticphone/client.js",12,4.5,-14.5,"js"],["game_terminal/public/games/poker/client.js",12,-5.5,-13.5,"js"],["game_terminal/public/games/war/client.js",12,-4.5,-13.5,"js"],["game_terminal/server/games/bs.js",12,-3.5,-13.5,"js"],["game_terminal/server/games/cardCommon.js",12,-2.5,-13.5,"js"],["game_terminal/server/games/crazyeights.js",12,-1.5,-13.5,"js"],["game_terminal/server/games/garticphone.js",12,-0.5,-13.5,"js"],["game_terminal/server/games/poker.js",12,0.5,-13.5,"js"],["game_terminal/server/games/war.js",12,1.5,-13.5,"js"],["cosmic_forge/README.md",17,9.5,0.5,"md"],["cosmic_forge/index.html",17,10.5,0.5,"html"],[".claude/rules/game_terminal.md",18,-8.5,-4.5,"md"],[".claude/settings.json",18,-7.5,-4.5,"json"],[".claudeignore",0,1.5,0.5,"none"],["rhythm_game/index.html",19,-0.5,9.5,"html"],["game_terminal/public/games/hearts/client.js",12,2.5,-13.5,"js"],["game_terminal/public/games/spades/client.js",12,3.5,-13.5,"js"],["game_terminal/server/games/hearts.js",12,4.5,-13.5,"js"],["game_terminal/server/games/spades.js",12,-5.5,-12.5,"js"],["game_terminal/public/games/backgammon/client.js",12,-4.5,-12.5,"js"],["game_terminal/public/games/pictionary/client.js",12,-3.5,-12.5,"js"],["game_terminal/public/games/slope/client.js",12,-2.5,-12.5,"js"],["game_terminal/public/games/slope/three.min.js",12,-1.5,-12.5,"js"],["game_terminal/public/games/tron/client.js",12,-0.5,-12.5,"js"],["game_terminal/server/games/backgammon.js",12,0.5,-12.5,"js"],["game_terminal/server/games/pictionary.js",12,1.5,-12.5,"js"],["game_terminal/server/games/slope.js",12,2.5,-12.5,"js"],["game_terminal/server/games/tron.js",12,3.5,-12.5,"js"],["game_terminal/public/games/mazedash/client.js",12,4.5,-12.5,"js"],["game_terminal/server/games/mazedash.js",12,-5.5,-11.5,"js"],["daily_learning/topics.js",15,8.5,9.5,"js"],["game_terminal/public/games/serverClock.js",12,-4.5,-11.5,"js"],["claude_usage_analyst/README.md",20,-11.5,-10.5,"md"],["claude_usage_analyst/bin/claude-usage",20,-10.5,-10.5,"none"],["claude_usage_analyst/claude_usage/__init__.py",20,-9.5,-10.5,"py"],["claude_usage_analyst/claude_usage/__main__.py",20,-8.5,-10.5,"py"],["claude_usage_analyst/claude_usage/analysis.py",20,-11.5,-9.5,"py"],["claude_usage_analyst/claude_usage/cli.py",20,-10.5,-9.5,"py"],["claude_usage_analyst/claude_usage/parser.py",20,-9.5,-9.5,"py"],["claude_usage_analyst/claude_usage/pricing.py",20,-8.5,-9.5,"py"],["claude_usage_analyst/claude_usage/server.py",20,-11.5,-8.5,"py"],["claude_usage_analyst/tests/test_usage.py",20,-10.5,-8.5,"py"],["claude_usage_analyst/web/app.css",20,-9.5,-8.5,"css"],["claude_usage_analyst/web/app.js",20,-8.5,-8.5,"js"],["claude_usage_analyst/web/index.html",20,-11.5,-7.5,"html"],["game_terminal/public/games/sfx.js",12,-3.5,-11.5,"js"],["game_terminal/public/games/boardFx.js",12,-2.5,-11.5,"js"],["game_terminal/public/games/canvasFx.js",12,-1.5,-11.5,"js"],["claude_usage_analyst/claude_usage/live.py",20,-10.5,-7.5,"py"],["game_terminal/public/games/resultsPanel.js",12,-0.5,-11.5,"js"],["game_terminal/server/games/cardBots.js",12,0.5,-11.5,"js"],["game_terminal/public/games/drawFx.js",12,1.5,-11.5,"js"],["game_terminal/server/games/ai/chessEngine.js",12,2.5,-11.5,"js"],["game_terminal/server/games/ai/connect4Engine.js",12,3.5,-11.5,"js"],["game_terminal/server/games/ai/index.js",12,4.5,-11.5,"js"],["game_terminal/server/games/ai/worker.js",12,-5.5,-10.5,"js"],["game_terminal/public/games/botLevel.js",12,-4.5,-10.5,"js"],["game_terminal/server/games/ai/checkersEngine.js",12,-3.5,-10.5,"js"],["game_terminal/server/games/ai/levels.js",12,-2.5,-10.5,"js"],["game_terminal/server/games/ai/backgammonEngine.js",12,-1.5,-10.5,"js"],["game_terminal/public/games/tickBots.js",12,-0.5,-10.5,"js"],["game_terminal/server/games/tickBots.js",12,0.5,-10.5,"js"],["cosmic_forge/pacing_sim.js",17,11.5,0.5,"js"],["game_terminal/public/games/slope/sim.js",12,1.5,-10.5,"js"],["cosmic_forge/release/.gitignore",17,12.5,0.5,"none"],["cosmic_forge/release/STORE_LISTING.md",17,13.5,0.5,"md"],["cosmic_forge/release/build.sh",17,9.5,1.5,"sh"],["cosmic_forge/release/cover_1920x1080.png",17,10.5,1.5,"png"],["cosmic_forge/release/cover_800x1200.png",17,11.5,1.5,"png"],["cosmic_forge/release/cover_800x800.png",17,12.5,1.5,"png"],["cosmic_forge/release/itch_cover_630x500.png",17,13.5,1.5,"png"],["cosmic_forge/release/screenshot_1_early.png",17,9.5,2.5,"png"],["cosmic_forge/release/screenshot_2_void.png",17,10.5,2.5,"png"],["cosmic_forge/release/screenshot_3_late.png",17,11.5,2.5,"png"],["cosmic_forge/release/cover_portrait_1080x1620.png",17,12.5,2.5,"png"],["cosmic_forge/release/make_videos.sh",17,13.5,2.5,"sh"],["cosmic_forge/release/preview_landscape_1920x1080.mp4",17,9.5,3.5,"mp4"],["cosmic_forge/release/preview_portrait_1080x1620.mp4",17,10.5,3.5,"mp4"],["cosmic_forge/release/preview_recorder.js",17,11.5,3.5,"js"],["money/flip-bot/PLAN.md",21,7.5,-14.5,"md"],["money/flip-bot/BUILD.md",21,8.5,-14.5,"md"],["money/flip-bot/PROGRESS.md",21,9.5,-14.5,"md"],["money/flip-bot/.env.example",21,10.5,-14.5,"example"],["money/flip-bot/.gitignore",21,11.5,-14.5,"none"],["money/flip-bot/catalog.py",21,12.5,-14.5,"py"],["money/flip-bot/catalog.yaml",21,7.5,-13.5,"yaml"],["money/flip-bot/config.yaml",21,8.5,-13.5,"yaml"],["money/flip-bot/inbox/.gitkeep",21,9.5,-13.5,"none"],["money/flip-bot/pricing.py",21,10.5,-13.5,"py"],["money/flip-bot/requirements.txt",21,11.5,-13.5,"txt"],["money/flip-bot/scorer.py",21,12.5,-13.5,"py"],["money/flip-bot/sources/__init__.py",21,7.5,-12.5,"py"],["money/flip-bot/sources/blocket.py",21,8.5,-12.5,"py"],["money/flip-bot/tests/__init__.py",21,9.5,-12.5,"py"],["money/flip-bot/tests/fixtures/blocket_switch.html",21,10.5,-12.5,"html"],["money/flip-bot/tests/test_blocket.py",21,11.5,-12.5,"py"],["money/flip-bot/tests/test_logic.py",21,12.5,-12.5,"py"],["money/flip-bot/notify.py",21,7.5,-11.5,"py"],["money/flip-bot/store.py",21,8.5,-11.5,"py"],["money/flip-bot/tests/test_store_notify.py",21,9.5,-11.5,"py"],["money/flip-bot/flip.py",21,10.5,-11.5,"py"],["money/flip-bot/tests/test_e2e.py",21,11.5,-11.5,"py"],["money/flip-bot/sources/tradera.py",21,12.5,-11.5,"py"],["money/flip-bot/sources/wsdl/BuyerService.wsdl",21,7.5,-10.5,"wsdl"],["money/flip-bot/sources/wsdl/OrderService.wsdl",21,8.5,-10.5,"wsdl"],["money/flip-bot/sources/wsdl/PublicService.wsdl",21,9.5,-10.5,"wsdl"],["money/flip-bot/sources/wsdl/RestrictedService.wsdl",21,10.5,-10.5,"wsdl"],["money/flip-bot/sources/wsdl/SearchService.wsdl",21,11.5,-10.5,"wsdl"],["money/flip-bot/tests/test_tradera.py",21,12.5,-10.5,"py"],["money/flip-bot/README.md",21,7.5,-9.5,"md"],["money/flip-bot/SETUP.md",21,8.5,-9.5,"md"],["money/flip-bot/flipbot.service",21,9.5,-9.5,"service"],["animated_short/.gitignore",22,-13.5,-1.5,"none"],["animated_short/DECISIONS.md",22,-12.5,-1.5,"md"],["animated_short/PROMPT.md",22,-11.5,-1.5,"md"],["animated_short/SCRIPT.md",22,-10.5,-1.5,"md"],["animated_short/src/mathutil.py",22,-9.5,-1.5,"py"],["animated_short/src/render.py",22,-13.5,-0.5,"py"],["animated_short/src/scene.py",22,-12.5,-0.5,"py"],["animated_short/src/shaders/composite.frag",22,-11.5,-0.5,"frag"],["animated_short/src/shaders/down.frag",22,-10.5,-0.5,"frag"],["animated_short/src/shaders/fullscreen.vert",22,-9.5,-0.5,"vert"],["animated_short/src/shaders/scene.frag",22,-13.5,0.5,"frag"],["animated_short/src/shaders/up.frag",22,-12.5,0.5,"frag"],["animated_short/src/text.py",22,-11.5,0.5,"py"],["animated_short/src/timeline.py",22,-10.5,0.5,"py"],["animated_short/REVIEW.md",22,-9.5,0.5,"md"],["animated_short/PROGRESS.md",22,-13.5,1.5,"md"],["animated_short/make_film.sh",22,-12.5,1.5,"sh"],["animated_short/src/audio.py",22,-11.5,1.5,"py"],["animated_short/README.md",22,-10.5,1.5,"md"],["gameboy/.gitignore",23,-2.5,12.5,"none"],["gameboy/package.json",23,-1.5,12.5,"json"],["gameboy/roms/fetch.sh",23,-0.5,12.5,"sh"],["gameboy/src/apu.js",23,0.5,12.5,"js"],["gameboy/src/cart.js",23,1.5,12.5,"js"],["gameboy/src/cpu.js",23,2.5,12.5,"js"],["gameboy/src/gameboy.js",23,-2.5,13.5,"js"],["gameboy/src/ppu.js",23,-1.5,13.5,"js"],["gameboy/src/timer.js",23,-0.5,13.5,"js"],["gameboy/test/png.js",23,0.5,13.5,"js"],["gameboy/test/run-tests.js",23,1.5,13.5,"js"],["gameboy/test/shot.js",23,2.5,13.5,"js"],["gameboy/README.md",23,-2.5,14.5,"md"],["gameboy/serve.js",23,-1.5,14.5,"js"],["gameboy/web/index.html",23,-0.5,14.5,"html"],["gameboy/web/player.js",23,0.5,14.5,"js"],["gameboy/web/storage.js",23,1.5,14.5,"js"],["gameboy/web/style.css",23,2.5,14.5,"css"],["gameboy/web/ui.js",23,-2.5,15.5,"js"],["gameboy/test/determinism.js",23,-1.5,15.5,"js"],["gameboy/tools/sync-game-terminal.sh",23,-0.5,15.5,"sh"],["gameboy/web/netstate.js",23,0.5,15.5,"js"],["game_terminal/public/games/gameboy/client.js",12,2.5,-10.5,"js"],["game_terminal/public/games/gameboy/emu/src/apu.js",12,3.5,-10.5,"js"],["game_terminal/public/games/gameboy/emu/src/cart.js",12,4.5,-10.5,"js"],["game_terminal/public/games/gameboy/emu/src/cpu.js",12,-5.5,-9.5,"js"],["game_terminal/public/games/gameboy/emu/src/gameboy.js",12,-4.5,-9.5,"js"],["game_terminal/public/games/gameboy/emu/src/ppu.js",12,-3.5,-9.5,"js"],["game_terminal/public/games/gameboy/emu/src/timer.js",12,-2.5,-9.5,"js"],["game_terminal/public/games/gameboy/emu/web/netstate.js",12,-1.5,-9.5,"js"],["game_terminal/public/games/gameboy/emu/web/player.js",12,-0.5,-9.5,"js"],["game_terminal/public/games/gameboy/emu/web/storage.js",12,0.5,-9.5,"js"],["game_terminal/public/games/gameboy/roms/GPL-3.0.txt",12,1.5,-9.5,"txt"],["game_terminal/public/games/gameboy/roms/LICENSE-libbet.txt",12,2.5,-9.5,"txt"],["game_terminal/public/games/gameboy/roms/README.txt",12,3.5,-9.5,"txt"],["game_terminal/public/games/gameboy/roms/big2small.gb",12,4.5,-9.5,"gb"],["game_terminal/public/games/gameboy/roms/libbet.gb",12,-5.5,-8.5,"gb"],["game_terminal/public/games/gameboy/roms/ucity.gbc",12,-4.5,-8.5,"gbc"],["game_terminal/server/games/gameboy.js",12,-3.5,-8.5,"js"],["game_terminal/public/games/gameboy/roms/2048.gb",12,-2.5,-8.5,"gb"],["game_terminal/public/games/gameboy/roms/LICENSE-2048.txt",12,-1.5,-8.5,"txt"],["game_terminal/public/games/gameboy/roms/LICENSE-adjustris.txt",12,-0.5,-8.5,"txt"],["game_terminal/public/games/gameboy/roms/LICENSE-porklike.txt",12,0.5,-8.5,"txt"],["game_terminal/public/games/gameboy/roms/LICENSE-shocklobster.txt",12,1.5,-8.5,"txt"],["game_terminal/public/games/gameboy/roms/LICENSE-tobudx.txt",12,2.5,-8.5,"txt"],["game_terminal/public/games/gameboy/roms/adjustris.gb",12,3.5,-8.5,"gb"],["game_terminal/public/games/gameboy/roms/geometrix.gbc",12,4.5,-8.5,"gbc"],["game_terminal/public/games/gameboy/roms/porklike.gb",12,-5.5,-7.5,"gb"],["game_terminal/public/games/gameboy/roms/shocklobster.gb",12,-4.5,-7.5,"gb"],["game_terminal/public/games/gameboy/roms/tobudx.gb",12,-3.5,-7.5,"gb"],["stockholm3d/.gitignore",24,5.5,12.5,"none"],["stockholm3d/README.md",24,6.5,12.5,"md"],["stockholm3d/build.sh",24,7.5,12.5,"sh"],["stockholm3d/scripts/buildings.py",24,8.5,12.5,"py"],["stockholm3d/scripts/colours.py",24,9.5,12.5,"py"],["stockholm3d/scripts/config.py",24,10.5,12.5,"py"],["stockholm3d/scripts/dem.py",24,5.5,13.5,"py"],["stockholm3d/scripts/extract.py",24,6.5,13.5,"py"],["stockholm3d/scripts/ground.py",24,7.5,13.5,"py"],["stockholm3d/scripts/landcover.py",24,8.5,13.5,"py"],["stockholm3d/scripts/manifest.py",24,9.5,13.5,"py"],["stockholm3d/scripts/structures.py",24,10.5,13.5,"py"],["stockholm3d/scripts/terrain.py",24,5.5,14.5,"py"],["stockholm3d/scripts/trees.py",24,6.5,14.5,"py"],["stockholm3d/serve.sh",24,7.5,14.5,"sh"],["stockholm3d/web/index.html",24,8.5,14.5,"html"],["stockholm3d/web/src/controls.js",24,9.5,14.5,"js"],["stockholm3d/web/src/data.js",24,10.5,14.5,"js"],["stockholm3d/web/src/main.js",24,5.5,15.5,"js"],["stockholm3d/web/src/materials.js",24,6.5,15.5,"js"],["stockholm3d/web/src/sky.js",24,7.5,15.5,"js"],["stockholm3d/web/src/sun.js",24,8.5,15.5,"js"],["stockholm3d/web/src/world.js",24,9.5,15.5,"js"],["stockholm3d/web/style.css",24,10.5,15.5,"css"],["stockholm3d/web/tests/sun.test.mjs",24,5.5,16.5,"mjs"],["stockholm3d/web/vendor/three/LICENSE",24,6.5,16.5,"none"],["stockholm3d/web/vendor/three/addons/controls/OrbitControls.js",24,7.5,16.5,"js"],["stockholm3d/web/vendor/three/addons/csm/CSM.js",24,8.5,16.5,"js"],["stockholm3d/web/vendor/three/addons/csm/CSMFrustum.js",24,9.5,16.5,"js"],["stockholm3d/web/vendor/three/addons/csm/CSMShader.js",24,10.5,16.5,"js"],["stockholm3d/web/vendor/three/addons/objects/Sky.js",24,5.5,17.5,"js"],["stockholm3d/web/vendor/three/addons/objects/Water.js",24,6.5,17.5,"js"],["stockholm3d/web/vendor/three/addons/renderers/CSS2DRenderer.js",24,7.5,17.5,"js"],["stockholm3d/web/vendor/three/three.core.js",24,8.5,17.5,"js"],["stockholm3d/web/vendor/three/three.module.js",24,9.5,17.5,"js"],["gameboy/homebrew/linktron/.gitignore",23,1.5,15.5,"none"],["gameboy/homebrew/linktron/LICENSE",23,2.5,15.5,"none"],["gameboy/homebrew/linktron/build.sh",23,-2.5,16.5,"sh"],["gameboy/homebrew/linktron/gfx.py",23,-1.5,16.5,"py"],["gameboy/homebrew/linktron/linktron.gb",23,-0.5,16.5,"gb"],["gameboy/homebrew/linktron/main.asm",23,0.5,16.5,"asm"],["gameboy/homebrew/linktron/tiles.inc",23,1.5,16.5,"inc"],["gameboy/src/link.js",23,2.5,16.5,"js"],["gameboy/test/link.js",23,-2.5,17.5,"js"],["gameboy/test/netlink.js",23,-1.5,17.5,"js"],["game_terminal/public/games/gameboy/emu/src/link.js",12,-2.5,-7.5,"js"],["game_terminal/public/games/gameboy/roms/LICENSE-linktron.txt",12,-1.5,-7.5,"txt"],["game_terminal/public/games/gameboy/roms/linktron.gb",12,-0.5,-7.5,"gb"],["3dgames/webslinger/README.md",25,13.5,6.5,"md"],["3dgames/webslinger/index.html",25,14.5,6.5,"html"],["3dgames/webslinger/serve.sh",25,15.5,6.5,"sh"],["3dgames/webslinger/src/audio.js",25,16.5,6.5,"js"],["3dgames/webslinger/src/camera.js",25,17.5,6.5,"js"],["3dgames/webslinger/src/character.js",25,18.5,6.5,"js"],["3dgames/webslinger/src/city.js",25,19.5,6.5,"js"],["3dgames/webslinger/src/cityMesh.js",25,13.5,7.5,"js"],["3dgames/webslinger/src/collide.js",25,14.5,7.5,"js"],["3dgames/webslinger/src/input.js",25,15.5,7.5,"js"],["3dgames/webslinger/src/main.js",25,16.5,7.5,"js"],["3dgames/webslinger/src/materials.js",25,17.5,7.5,"js"],["3dgames/webslinger/src/player.js",25,18.5,7.5,"js"],["3dgames/webslinger/src/post.js",25,19.5,7.5,"js"],["3dgames/webslinger/src/sky.js",25,13.5,8.5,"js"],["3dgames/webslinger/src/traffic.js",25,14.5,8.5,"js"],["3dgames/webslinger/src/web.js",25,15.5,8.5,"js"],["3dgames/webslinger/style.css",25,16.5,8.5,"css"],["3dgames/webslinger/tests/city.test.mjs",25,17.5,8.5,"mjs"],["3dgames/webslinger/tests/swing.test.mjs",25,18.5,8.5,"mjs"],["3dgames/webslinger/vendor/three/LICENSE",25,19.5,8.5,"none"],["3dgames/webslinger/vendor/three/addons/csm/CSM.js",25,13.5,9.5,"js"],["3dgames/webslinger/vendor/three/addons/csm/CSMFrustum.js",25,14.5,9.5,"js"],["3dgames/webslinger/vendor/three/addons/csm/CSMShader.js",25,15.5,9.5,"js"],["3dgames/webslinger/vendor/three/three.core.js",25,16.5,9.5,"js"],["3dgames/webslinger/vendor/three/three.module.js",25,17.5,9.5,"js"],["3dgames/webslinger/tests/flow.test.mjs",25,18.5,9.5,"mjs"],["3dgames/webslinger/src/courses.js",25,19.5,9.5,"js"],["3dgames/webslinger/src/minimap.js",25,13.5,10.5,"js"],["3dgames/webslinger/src/race.js",25,14.5,10.5,"js"],["3dgames/webslinger/src/style.js",25,15.5,10.5,"js"],["3dgames/webslinger/tests/style.test.mjs",25,16.5,10.5,"mjs"],["money/roblox/.gitignore",26,-11.5,-16.5,"none"],["money/roblox/README.md",26,-10.5,-16.5,"md"],["money/roblox/RESEARCH.md",26,-9.5,-16.5,"md"],["money/roblox/games/jump-tower/README.md",27,14.5,-5.5,"md"],["money/roblox/games/jump-tower/default.project.json",27,15.5,-5.5,"json"],["money/roblox/games/jump-tower/src/client/Main.client.luau",27,16.5,-5.5,"luau"],["money/roblox/games/jump-tower/src/client/Ui.luau",27,17.5,-5.5,"luau"],["money/roblox/games/jump-tower/src/server/Main.server.luau",27,18.5,-5.5,"luau"],["money/roblox/games/jump-tower/src/server/World.luau",27,14.5,-4.5,"luau"],["money/roblox/games/jump-tower/src/shared/Config.luau",27,15.5,-4.5,"luau"],["money/roblox/games/jump-tower/src/shared/Formulas.luau",27,16.5,-4.5,"luau"],["money/roblox/games/jump-tower/src/shared/TowerLayout.luau",27,17.5,-4.5,"luau"],["money/roblox/games/jump-tower/tests/run.luau",27,18.5,-4.5,"luau"],["money/roblox/lib/server/Monetization.luau",26,-8.5,-16.5,"luau"],["money/roblox/lib/server/SaveStore.luau",26,-11.5,-15.5,"luau"],["money/roblox/roblox.yml",26,-10.5,-15.5,"yml"],["money/roblox/rokit.toml",26,-9.5,-15.5,"toml"],["money/roblox/selene.toml",26,-8.5,-15.5,"toml"],["money/roblox/stylua.toml",26,-11.5,-14.5,"toml"],["money/roblox/tools/check.sh",26,-10.5,-14.5,"sh"],["money/roblox/tools/globalTypes.d.luau",26,-9.5,-14.5,"luau"],["money/roblox/tools/studio-mcp.sh",26,-8.5,-14.5,"sh"],["3dgames/webslinger/tests/aim.test.mjs",25,17.5,10.5,"mjs"],["money/roblox/games/jump-tower/src/client/OneWayLedges.client.luau",27,14.5,-3.5,"luau"],["money/roblox/games/jump-tower/tests/studio/climb.client.luau",27,15.5,-3.5,"luau"],["money/roblox/games/jump-tower/tests/studio/flow.server.luau",27,16.5,-3.5,"luau"],["money/roblox/tools/mcp-call.py",26,-11.5,-13.5,"py"],["money/roblox/tools/studio-run.sh",26,-10.5,-13.5,"sh"],["money/roblox/games/jump-tower/src/client/Juice.client.luau",27,17.5,-3.5,"luau"],["money/roblox/games/jump-tower/src/client/Sfx.luau",27,18.5,-3.5,"luau"],["money/roblox/games/jump-tower/src/server/Decor.luau",27,14.5,-2.5,"luau"],["money/roblox/lib/server/Leaderboard.luau",26,-9.5,-13.5,"luau"],["3dgames/webslinger/src/birds.js",25,18.5,10.5,"js"],["3dgames/webslinger/src/fx.js",25,19.5,10.5,"js"],["3dgames/webslinger/tests/birds.test.mjs",25,13.5,11.5,"mjs"],["money/roblox/games/jump-tower/src/client/Guide.client.luau",27,15.5,-2.5,"luau"],["money/roblox/games/jump-tower/marketing/hero1.png",27,16.5,-2.5,"png"],["money/roblox/games/jump-tower/marketing/hero2.png",27,17.5,-2.5,"png"],["money/roblox/games/jump-tower/marketing/hero3.png",27,18.5,-2.5,"png"],["money/roblox/games/steal-a-satellite/README.md",28,-9.5,14.5,"md"],["money/roblox/games/steal-a-satellite/default.project.json",28,-8.5,14.5,"json"],["money/roblox/games/steal-a-satellite/src/client/Juice.client.luau",28,-7.5,14.5,"luau"],["money/roblox/games/steal-a-satellite/src/client/Main.client.luau",28,-6.5,14.5,"luau"],["money/roblox/games/steal-a-satellite/src/client/Sfx.luau",28,-5.5,14.5,"luau"],["money/roblox/games/steal-a-satellite/src/client/Ui.luau",28,-9.5,15.5,"luau"],["money/roblox/games/steal-a-satellite/src/server/Main.server.luau",28,-8.5,15.5,"luau"],["money/roblox/games/steal-a-satellite/src/server/World.luau",28,-7.5,15.5,"luau"],["money/roblox/games/steal-a-satellite/src/shared/Config.luau",28,-6.5,15.5,"luau"],["money/roblox/games/steal-a-satellite/src/shared/Formulas.luau",28,-5.5,15.5,"luau"],["money/roblox/games/steal-a-satellite/src/shared/Rules.luau",28,-9.5,16.5,"luau"],["money/roblox/games/steal-a-satellite/src/shared/SatModel.luau",28,-8.5,16.5,"luau"],["money/roblox/games/steal-a-satellite/tests/run.luau",28,-7.5,16.5,"luau"],["money/roblox/games/steal-a-satellite/tests/studio/buy.client.luau",28,-6.5,16.5,"luau"],["money/roblox/games/steal-a-satellite/tests/studio/collect_lock.client.luau",28,-5.5,16.5,"luau"],["money/roblox/games/steal-a-satellite/tests/studio/pirate_steal.client.luau",28,-9.5,17.5,"luau"],["money/roblox/games/steal-a-satellite/tests/studio/zap.client.luau",28,-8.5,17.5,"luau"],["money/roblox/tools/studio-sync.py",26,-8.5,-13.5,"py"],["money/roblox/games/steal-a-satellite/marketing/hero1.png",28,-7.5,17.5,"png"],["money/roblox/games/steal-a-satellite/marketing/hero2.png",28,-6.5,17.5,"png"],["money/roblox/games/steal-a-satellite/marketing/hero3.png",28,-5.5,17.5,"png"],["3dgames/webslinger/tests/hold.test.mjs",25,14.5,11.5,"mjs"],["money/roblox/games/anomaly-shift/README.md",29,-17.5,-7.5,"md"],["money/roblox/games/anomaly-shift/default.project.json",29,-16.5,-7.5,"json"],["money/roblox/games/anomaly-shift/marketing/hero1.png",29,-15.5,-7.5,"png"],["money/roblox/games/anomaly-shift/marketing/hero2.png",29,-14.5,-7.5,"png"],["money/roblox/games/anomaly-shift/marketing/hero3.png",29,-17.5,-6.5,"png"],["money/roblox/games/anomaly-shift/marketing/hero4.png",29,-16.5,-6.5,"png"],["money/roblox/games/anomaly-shift/src/client/Juice.client.luau",29,-15.5,-6.5,"luau"],["money/roblox/games/anomaly-shift/src/client/Main.client.luau",29,-14.5,-6.5,"luau"],["money/roblox/games/anomaly-shift/src/client/Sfx.luau",29,-17.5,-5.5,"luau"],["money/roblox/games/anomaly-shift/src/client/Ui.luau",29,-16.5,-5.5,"luau"],["money/roblox/games/anomaly-shift/src/server/Main.server.luau",29,-15.5,-5.5,"luau"],["money/roblox/games/anomaly-shift/src/server/World.luau",29,-14.5,-5.5,"luau"],["money/roblox/games/anomaly-shift/src/shared/Config.luau",29,-17.5,-4.5,"luau"],["money/roblox/games/anomaly-shift/src/shared/Rules.luau",29,-16.5,-4.5,"luau"],["money/roblox/games/anomaly-shift/tests/run.luau",29,-15.5,-4.5,"luau"],["money/roblox/games/anomaly-shift/tests/studio/walk.client.luau",29,-14.5,-4.5,"luau"]],"districts":[{"n":"(town hall)","x":-1,"z":-1,"w":3,"h":2,"born":0},{"n":"3dgames/shooter","x":-1,"z":-5,"w":2,"h":2,"born":0},{"n":"dungeon_crawler","x":-1,"z":3,"w":2,"h":1,"born":0},{"n":"money/alpaca-paper-trader","x":-7,"z":-2,"w":4,"h":4,"born":0},{"n":"money/sports-arb-scanner","x":3,"z":3,"w":4,"h":3,"born":0},{"n":"hand_paintbrush","x":3,"z":-5,"w":2,"h":2,"born":2},{"n":"physics_sandbox","x":-5,"z":4,"w":2,"h":1,"born":3},{"n":"generative_art_gallery","x":4,"z":0,"w":2,"h":1,"born":4},{"n":"money","x":-5,"z":-5,"w":2,"h":1,"born":5},{"n":"raytracer","x":-1,"z":6,"w":2,"h":1,"born":6},{"n":"music_visualizer","x":-5,"z":7,"w":2,"h":1,"born":8},{"n":"mission_control","x":7,"z":-7,"w":5,"h":5,"born":9},{"n":"game_terminal","x":-6,"z":-17,"w":11,"h":10,"born":10},{"n":"ant_colony_optimization","x":3,"z":8,"w":2,"h":1,"born":11},{"n":"terrain_generator","x":-9,"z":4,"w":2,"h":1,"born":38},{"n":"daily_learning","x":7,"z":8,"w":3,"h":2,"born":40},{"n":"money/stream-clipper","x":-13,"z":7,"w":6,"h":5,"born":42},{"n":"cosmic_forge","x":9,"z":0,"w":5,"h":4,"born":54},{"n":".claude","x":-9,"z":-5,"w":2,"h":1,"born":55},{"n":"rhythm_game","x":-1,"z":9,"w":2,"h":1,"born":57},{"n":"claude_usage_analyst","x":-12,"z":-11,"w":4,"h":4,"born":78},{"n":"money/flip-bot","x":7,"z":-15,"w":6,"h":6,"born":125},{"n":"animated_short","x":-14,"z":-2,"w":5,"h":4,"born":137},{"n":"gameboy","x":-3,"z":12,"w":6,"h":6,"born":144},{"n":"stockholm3d","x":5,"z":12,"w":6,"h":6,"born":153},{"n":"3dgames/webslinger","x":13,"z":6,"w":7,"h":6,"born":157},{"n":"money/roblox","x":-12,"z":-17,"w":4,"h":4,"born":162},{"n":"money/roblox/games/jump-tower","x":14,"z":-6,"w":5,"h":4,"born":162},{"n":"money/roblox/games/steal-a-satellite","x":-10,"z":14,"w":5,"h":4,"born":171},{"n":"money/roblox/games/anomaly-shift","x":-18,"z":-8,"w":4,"h":4,"born":181}],"commits":[{"h":"25435aa","t":1789171970,"m":"Initial commit: 3D games, dungeon crawler, and trading bot projects","c":[[0,17,0],[1,1610,0],[2,247,0],[3,6,0],[4,178,0],[5,565,0],[6,7,0],[7,8,0],[8,131,0],[9,175,0],[10,43,0],[11,19,0],[12,157,0],[13,55,0],[14,3,0],[15,39,0],[16,46,0],[17,31,0],[18,25,0],[19,30,0],[20,115,0],[21,130,0],[22,1,0],[23,6,0],[24,89,0],[25,161,0],[26,35,0],[27,136,0],[28,68,0],[29,72,0],[30,3,0],[31,81,0],[32,172,0],[33,21,0]]},{"h":"4e16773","t":1789172273,"m":"Add introductory text to README.md","c":[[34,1,0]]},{"h":"b0de187","t":1789175173,"m":"Add hand paintbrush: webcam watercolor-style hand tracking art","c":[[35,6,0],[36,48,0],[37,357,0],[38,3,0]]},{"h":"bf27cef","t":1789176192,"m":"Add physics sandbox (falling-sand simulation)","c":[[39,458,0]]},{"h":"78e12fe","t":1789176210,"m":"Add generative art gallery","c":[[40,32,0],[41,296,0]]},{"h":"662289e","t":1789176226,"m":"Update project backlog and ideas notes","c":[[4,164,0],[42,14,0],[43,128,0]]},{"h":"2baba2a","t":1789176957,"m":"Add raytracer from scratch","c":[[44,350,0]]},{"h":"9bf7fc8","t":1789178311,"m":"Generative art gallery: black hole renderer, dark-mode/animation-forever toggles, layout fix","c":[[4,1,1],[40,30,15],[41,181,73]]},{"h":"c9c4f82","t":1789252226,"m":"Add audio-reactive music visualizer, fix dead file-upload path","c":[[4,2,2],[42,7,7],[45,391,0]]},{"h":"d5ff79f","t":1789253322,"m":"Add Mission Control terminal dashboard","c":[[4,10,1],[42,2,1],[46,4,0],[47,36,0],[48,55,0],[49,22,0],[50,54,0],[51,0,0],[52,29,0],[53,73,0],[54,73,0],[55,61,0],[56,52,0],[57,94,0],[58,5,0],[59,21,0]]},{"h":"d968802","t":1789255240,"m":"Add game_terminal: real-time multiplayer hub with shared drawing canvas","c":[[0,3,0],[60,56,0],[61,39,0],[62,15,0],[63,131,0],[64,272,0],[65,59,0],[66,35,0],[67,126,0],[68,44,0],[69,8,0],[70,149,0],[71,56,0],[72,99,0],[73,38,0]]},{"h":"4649883","t":1789255248,"m":"Add ant colony optimization visualizer","c":[[4,1,1],[42,1,0],[74,471,0]]},{"h":"dd4c267","t":1789256194,"m":"Mark game_terminal deployed in project backlog","c":[[4,1,1],[42,2,1]]},{"h":"3f84509","t":1789256816,"m":"Mission Control: sparkline history, now-playing panel, mission-control theme","c":[[47,7,2],[48,29,4],[52,24,0],[75,47,0],[55,29,17],[76,20,0],[59,53,3]]},{"h":"d35362b","t":1789257571,"m":"Mission Control: Now Playing via Spotify Web API instead of playerctl","c":[[47,13,5],[48,1,1],[49,12,2],[50,14,0],[75,70,29],[77,103,0]]},{"h":"4616afe","t":1789257893,"m":"Add Hangman mini-game to game_terminal","c":[[0,3,0],[78,155,0],[64,7,2],[79,143,0],[69,2,0],[70,1,1],[72,3,0]]},{"h":"eef1cdf","t":1789257982,"m":"Fix Spotify OAuth setup script hanging on port 8888 collision","c":[[47,4,1],[77,32,7]]},{"h":"8218678","t":1789258278,"m":"Mission Control: move clock into its own panel below Weather","c":[[48,4,2],[80,25,0],[76,3,15],[59,8,16]]},{"h":"dbf3d98","t":1789258622,"m":"Mission Control: Spotify playback controls + queue peek","c":[[48,15,0],[75,100,2],[77,8,4]]},{"h":"ee45e1d","t":1789258927,"m":"Add Checkers to game_terminal","c":[[81,182,0],[64,1,0],[82,252,0],[69,2,0]]},{"h":"2da2d1b","t":1789258999,"m":"Mission Control: fix Spotify play failing after pause","c":[[75,21,6]]},{"h":"1a52134","t":1789259503,"m":"Mission Control: switchable layouts (grid/sidebar/stacked) and added chess game to game terminal","c":[[83,219,0],[64,1,0],[84,429,0],[69,2,0],[48,15,26],[76,5,2],[85,113,0],[59,0,63],[86,58,0],[87,13,0],[88,32,0],[89,11,0]]},{"h":"64442db","t":1789259821,"m":"Mission Control: sidebar as default layout, shrink Projects panel","c":[[85,1,1],[88,2,2]]},{"h":"49df62f","t":1789260177,"m":"Mission Control: taller Projects/Now Playing, deeper queue view","c":[[75,9,3],[88,5,1]]},{"h":"d71a4a1","t":1789260955,"m":"Mission Control: add FUTURE.md with brainstormed feature ideas","c":[[90,73,0]]},{"h":"198e9ff","t":1789261167,"m":"Update project backlog with today's work","c":[[4,40,12],[42,6,8],[91,76,0]]},{"h":"8b56a4c","t":1789261471,"m":"Document git commit --only safety practice, queue tomorrow's work","c":[[92,77,0],[42,4,3]]},{"h":"ef04281","t":1789318165,"m":"Game Terminal: add real-time Slither game with server tick-loop hook","c":[[4,1,1],[42,2,2],[91,41,30],[60,6,0],[93,251,0],[64,1,0],[69,2,0],[94,237,0],[72,24,0]]},{"h":"eefd1a8","t":1789318754,"m":"Slither: add self-collision and shrink-to-zoom","c":[[91,16,6],[93,20,6],[94,47,9]]},{"h":"c33ec91","t":1789319393,"m":"Mission Control: add editable notes/to-do panel","c":[[46,1,0],[95,121,0],[85,4,0],[86,11,1],[88,5,0]]},{"h":"142b0a1","t":1789320447,"m":"Slither: player-readiness polish pass (bandwidth, spawn fairness, mobile, UX)","c":[[91,43,6],[93,66,7],[94,104,23]]},{"h":"20a3db1","t":1789321152,"m":"Mission Control: sidebar layout - tall Calendar column, tighter row heights","c":[[85,6,4],[88,32,6]]},{"h":"1c95e3f","t":1789321372,"m":"Game Terminal: add Connect 4","c":[[4,1,1],[42,2,2],[91,24,7],[60,1,0],[96,178,0],[64,1,0],[97,193,0],[69,2,0]]},{"h":"261d233","t":1789321461,"m":"Game Terminal: link the live site prominently at the top of the README","c":[[60,3,0]]},{"h":"537f67a","t":1789321964,"m":"Trim IDEAS.md: shipped entries down to a one-line pointer","c":[[4,13,82]]},{"h":"1a80d63","t":1789322119,"m":"Update project backlog: Mission Control off the queue, add multi-page idea","c":[[42,1,2],[90,14,3]]},{"h":"e81c7ac","t":1789323321,"m":"Game Terminal FUTURE.md: log Slope, bot/CPU opponents, and playtest feedback","c":[[91,165,4]]},{"h":"e61705d","t":1789341283,"m":"Game Terminal: Connect 4 arrow fix, Slither self-collision removal + jitter fix, Chess move history/legal-move dots","c":[[91,43,66],[83,77,4],[96,3,0],[93,72,16],[84,16,0],[94,9,43]]},{"h":"637b9cf","t":1789341362,"m":"Add Procedural Terrain Generator (IDEAS.md #13); fix stale backlog entries","c":[[4,3,29],[42,6,1],[98,548,0]]},{"h":"bafca44","t":1789385280,"m":"Game Terminal Slither: snake girth grows slightly with length, not just the tail","c":[[91,11,0],[93,13,2],[94,19,5]]},{"h":"4b61690","t":1789411718,"m":"Add Daily Learning (IDEAS.md #22): random Wikipedia deep-dive per day","c":[[4,12,0],[42,1,0],[99,316,0]]},{"h":"73cc708","t":1789414614,"m":"Daily Learning: related articles, voice reflections, daily auto-launch","c":[[100,1,0],[99,247,24],[101,12,0],[102,133,0]]},{"h":"2ba6205","t":1789418815,"m":"Add money/stream-clipper: automated highlight-clip pipeline (v1, no posting live yet)","c":[[43,9,0],[103,27,0],[104,12,0],[105,173,0],[106,20,0],[107,42,0],[108,109,0],[109,68,0],[110,101,0],[111,158,0],[112,98,0],[113,99,0],[114,44,0],[115,185,0],[116,103,0],[117,55,0],[118,11,0],[119,112,0],[120,71,0],[121,121,0],[122,94,0],[123,53,0],[124,77,0],[125,81,0]]},{"h":"2a92ae8","t":1789423087,"m":"stream-clipper: fix Twitch VOD URL bug, wire in Kai Cenat + Speed sources","c":[[109,12,1],[110,6,1],[126,31,0]]},{"h":"f0282e8","t":1789424880,"m":"stream-clipper: 30-minute YouTube posting cadence, raised daily cap","c":[[109,7,2]]},{"h":"9b50f7a","t":1789428287,"m":"stream-clipper: face-tracking crop, kinetic captions, pacing trim, real titles","c":[[104,1,0],[105,37,9],[108,69,12],[109,29,5],[127,161,0],[128,106,0],[115,91,21],[118,2,0],[120,38,0],[129,85,0],[130,126,0],[131,108,0],[123,54,13],[132,87,0],[124,75,16]]},{"h":"60a18fa","t":1789429455,"m":"Add Arena Duel: 1v1 3D shooter to game_terminal","c":[[92,7,5],[4,2,2],[42,1,1],[133,1560,0],[134,6,0],[64,8,2],[69,2,0],[135,608,0]]},{"h":"8a3ecc1","t":1789434093,"m":"daily_learning: add spin-the-wheel category picker","c":[[99,349,15],[102,36,0]]},{"h":"c10b041","t":1789434103,"m":"Fix bugs across all 7 game_terminal games from friend playtest","c":[[81,75,2],[83,30,7],[63,125,15],[78,52,21],[133,7,1],[93,53,0],[82,5,2],[136,73445,0],[68,24,0],[79,25,1],[94,2,2],[70,5,0]]},{"h":"ca445df","t":1789474087,"m":"Route overflow public-lobby joiners into a fresh room instead of spectating","c":[[82,5,0],[84,7,0],[97,5,0],[135,5,0],[70,5,6],[72,19,8]]},{"h":"edd1096","t":1789476270,"m":"Add five new game_terminal games: War, Crazy Eights, BS, Poker, Drawing Phone","c":[[137,215,0],[138,47,0],[139,246,0],[140,305,0],[141,254,0],[142,139,0],[64,5,0],[143,196,0],[144,34,0],[145,192,0],[146,155,0],[69,10,0],[147,460,0],[148,150,0]]},{"h":"7d17f14","t":1789488820,"m":"gaem_terminal url update for EU server re-deployment","c":[[60,1,1]]},{"h":"b237652","t":1789488988,"m":"Fix shots landing left/right of the crosshair while moving","c":[[133,8,1],[135,28,3]]},{"h":"f2fa468","t":1789489067,"m":"Merge remote-tracking branch 'origin/main' into main","c":[]},{"h":"934401e","t":1789572538,"m":"Add Cosmic Forge, an idle/incremental game (IDEAS.md #26)","c":[[149,47,0],[150,1739,0]]},{"h":"e57a884","t":1789665425,"m":"Streamline session-start doc reading and move game_terminal notes to a scoped rule","c":[[151,9,0],[152,8,0],[153,11,0],[92,35,15]]},{"h":"2de09a9","t":1789665433,"m":"Polish Cosmic Forge: juice pass, milestone upgrades, achievement categories","c":[[150,847,88]]},{"h":"676f7b4","t":1789665433,"m":"Add Pulse Catcher, a rhythm game (IDEAS.md #27)","c":[[154,1722,0]]},{"h":"7d9bc6c","t":1789665439,"m":"Update backlog: log Cosmic Forge/Pulse Catcher done, add ideas #23-32, clear stale queue","c":[[4,150,0],[42,3,3]]},{"h":"3305d31","t":1790026869,"m":"Apply playtest fixes: War, Slither, Drawing, Hangman, Poker","c":[[63,89,5],[78,55,5],[141,45,7],[93,35,9],[68,24,0],[79,9,2],[147,7,0],[94,10,6],[148,22,2]]},{"h":"798f5f6","t":1790027131,"m":"Add bot/CPU opponents for Checkers, Chess, and Connect 4 (game_terminal)","c":[[42,1,1],[91,74,51],[60,5,0],[81,69,7],[83,303,12],[96,49,13],[82,102,33],[84,149,30],[97,87,25]]},{"h":"bfab19a","t":1790027400,"m":"Add Spades and Hearts, two 4-seat trick-taking card games","c":[[42,1,1],[91,48,0],[155,279,0],[156,312,0],[64,2,0],[157,352,0],[69,4,0],[158,291,0]]},{"h":"5909ed2","t":1790027886,"m":"Add Backgammon, TRON, Pictionary, and Slope","c":[[42,1,1],[91,145,43],[159,328,0],[160,331,0],[161,406,0],[162,6,0],[163,281,0],[64,4,0],[164,336,0],[69,8,0],[165,307,0],[166,250,0],[167,284,0]]},{"h":"08cdf04","t":1790028537,"m":"Add Maze Dash, a shared-seed maze race (the requested speedrun game)","c":[[42,1,1],[91,52,0],[168,245,0],[64,1,0],[69,2,0],[169,280,0]]},{"h":"f535ff0","t":1790043450,"m":"Expand Hangman dictionary with more good words","c":[[136,41,0]]},{"h":"b3cb04c","t":1790092345,"m":"TRON: smooth interpolated rendering, seamless trail, faster tick","c":[[163,101,8],[167,4,1]]},{"h":"644fb33","t":1790092389,"m":"Revamp Backgammon's GUI: real board look, checker depth, smoother feel","c":[[159,214,77]]},{"h":"45b14c9","t":1790092665,"m":"Slope: smoother gliding steering, gap/jump obstacles, edge-fall visual","c":[[161,68,5],[166,50,7]]},{"h":"7d1ff95","t":1790092989,"m":"Document Slope/Backgammon/TRON playtest fixes in FUTURE.md","c":[[91,28,0]]},{"h":"0e4fbb7","t":1790093777,"m":"Group hub game menu into collapsible categories","c":[[64,100,31],[67,26,3]]},{"h":"18ff113","t":1790093794,"m":"TRON: fix trail-lag rendering bug, finer/faster movement","c":[[163,42,19],[167,12,8]]},{"h":"7267498","t":1790094137,"m":"Slope: permanent speed boosts, downhill visual, moving hazards","c":[[161,113,14],[166,124,17]]},{"h":"7979734","t":1790094508,"m":"Slope: tune the downhill camera pitch up after a live look","c":[[161,1,1]]},{"h":"2f83f61","t":1790094571,"m":"Document round-2 playtest fixes and hub reorganization","c":[[42,1,1],[91,60,0]]},{"h":"de65630","t":1790095399,"m":"Slope: fix staircase ground, telegraph the up/down hazard, steeper angle","c":[[161,44,7],[166,43,14]]},{"h":"31e8dd5","t":1790095420,"m":"Document round-3 Slope fixes (staircase ground, hazard telegraph)","c":[[42,1,1],[91,19,0]]},{"h":"999bfd3","t":1790475008,"m":"Daily Learning: curated useful topics + visual redesign","c":[[4,141,0],[99,794,537],[102,1,1],[170,357,0]]},{"h":"00c8059","t":1790475840,"m":"game_terminal: batch of game-feel bug fixes","c":[[159,20,5],[81,2,0],[83,22,1],[140,75,59],[155,27,1],[168,32,3],[160,5,1],[141,2,0],[171,18,0],[161,14,2],[163,4,1],[169,5,2],[165,1,0],[166,1,0],[167,11,5]]},{"h":"76ae5d7","t":1790476060,"m":"Add Claude Code usage analyst dashboard (claude-usage)","c":[[4,1,1],[42,1,0],[172,79,0],[173,4,0],[174,0,0],[175,2,0],[176,905,0],[177,139,0],[178,475,0],[179,94,0],[180,208,0],[181,231,0],[182,214,0],[183,629,0],[184,38,0]]},{"h":"d785b6f","t":1790476142,"m":"game_terminal: synthesized sound effects + SFX mute toggle","c":[[159,11,0],[137,7,0],[81,5,0],[83,3,0],[96,5,0],[139,7,0],[78,7,0],[155,8,0],[168,8,0],[141,9,0],[185,142,0],[93,8,0],[161,12,0],[156,9,0],[163,23,0],[142,7,0],[64,7,0],[65,4,1],[67,2,0]]},{"h":"44df2bb","t":1790476355,"m":"game_terminal: card overhaul \u2014 real card faces, styled backs, hover lift, deal-in animation","c":[[138,149,27]]},{"h":"80b9d34","t":1790476592,"m":"Usage analyst: fit per-model limit weights from /usage readings","c":[[172,7,1],[176,95,25],[177,17,0],[180,23,4],[181,20,0],[183,22,3]]},{"h":"f09075c","t":1790476649,"m":"game_terminal: board overhaul \u2014 sliding pieces, capture bursts, last-move/check highlights, C4 disc drop","c":[[159,34,0],[186,81,0],[81,38,0],[83,27,0],[96,47,5]]},{"h":"1e59dad","t":1790477166,"m":"game_terminal: real-time effects \u2014 crash/death particle bursts, screen shake, neon trails, countdown pops (TRON, Slither), speed lines, ball trail, debris and FOV kick (Slope)","c":[[187,134,0],[93,121,10],[161,166,4],[163,71,5]]},{"h":"9c7b9cc","t":1790477272,"m":"Usage analyst: exact limits from Anthropic's /usage endpoint","c":[[172,12,1],[176,39,4],[177,13,2],[188,93,0],[180,32,4],[181,36,1],[183,10,8]]},{"h":"87b03b5","t":1790477439,"m":"game_terminal: sharp HiDPI canvases (TRON, Slither + minimap, Maze Dash, Slope) and Maze Dash juice \u2014 smooth racer motion, trails, neon walls, pulsing exit, finish fireworks, countdown pops","c":[[187,14,0],[168,132,36],[93,3,7],[161,9,4],[163,2,4]]},{"h":"38e760d","t":1790477730,"m":"game_terminal: animated game-over results panel \u2014 pop-in card with outcome badge, staggered standings, confetti on a win, shake on a loss, pulsing REMATCH, dismissable to a RESULTS pill (all 10 board/card games)","c":[[159,7,0],[137,8,0],[81,7,0],[83,7,0],[96,7,0],[139,8,0],[155,8,0],[141,8,0],[189,294,0],[156,8,0],[142,8,0]]},{"h":"3950193","t":1790478139,"m":"TODO_FIRST: note live usage limits and dev autostart for the usage analyst","c":[[42,1,1]]},{"h":"1c73a8c","t":1790478299,"m":"game_terminal: fix chess client failing to load (duplicate 'history' declaration from the board overhaul)","c":[[83,0,1]]},{"h":"46ba72e","t":1790478323,"m":"game_terminal: CPU bots for all six card games \u2014 shared driver plays through the real action handlers; War/Crazy Eights/BS/Poker/Hearts/Spades brains (bluff + call BS, pot odds, duck/dump in Hearts, bid-and-make in Spades); + ADD BOT / remove buttons, \ud83e\udd16 names, pop-in seats","c":[[137,4,2],[138,58,1],[139,4,2],[155,15,7],[141,4,2],[156,14,6],[142,3,1],[190,374,0],[145,6,1],[157,2,0],[69,6,1],[147,2,0]]},{"h":"b6ffeee","t":1790478721,"m":"game_terminal: sounds + animations for Shooter, Pictionary and Gartic Phone \u2014 per-weapon gunshots, hit/headshot dings, floating damage numbers, screen shake, low-HP heartbeat, ELIMINATED/FIGHT callouts, countdown pops; draining round timer with ticks, pencil scribble, confetti + '+points' on a correct guess, letter-flip word reveal; Gartic submit stamps, live submission pips, staggered chain reveal. Also fixes Pictionary's guess box never hiding.","c":[[191,138,0],[140,86,4],[160,81,8],[185,29,1],[133,115,6]]},{"h":"e3ec9a5","t":1790479373,"m":"cosmic_forge: polish into a retention-focused clicker \u2014 per-era animated core (ember \u2192 cosmic web) with click squash, Stellar Surge meter ring, rotating Goals with CLAIM rewards, 7-day daily gift streak + Cosmic Blessing, era cinematic, tutorial hints, milestone bars/affordable glow/locked teaser, tab dots, 27 new Feats; rebalanced generators so all 7 tiers unlock in ~40 min; CrazyGames SDK adapter with optional rewarded ads; HiDPI/resize-only canvases","c":[[149,45,8],[150,1102,74]]},{"h":"1b06d28","t":1790479532,"m":"game_terminal: face cards \u2014 court frame no longer overlaps the corner rank/suit indices","c":[[138,3,3]]},{"h":"94f9cd9","t":1790479920,"m":"cosmic_forge: Void Front combat \u2014 Ignites fire bolts and production beams into hex-cell Void enemies that shatter as HP drops; 10 kills per zone, timed boss every 5th zone (fail \u2192 farm + Challenge button with DPS estimate); bounties, boss Matter, Dominion +0.5%/zone, bonus Singularities; Void feats/goals, sounds, debug helpers","c":[[149,19,0],[150,524,6]]},{"h":"760b97e","t":1790479926,"m":"game_terminal: real chess + Connect 4 bots \u2014 replaces random-move bots with search engines run in a worker thread","c":[[192,574,0],[193,207,0],[194,43,0],[195,19,0],[84,31,7],[97,15,6]]},{"h":"14a0484","t":1790540757,"m":"claude_usage_analyst: total tokens \u2014 Overview tile (range + all-time, breakdown tooltip) and an all-time cumulative 'Tokens over time' chart with milestone markers and next-milestone ETA","c":[[172,1,0],[183,34,0]]},{"h":"f54ebff","t":1790541282,"m":"game_terminal: bot difficulty (Easy/Medium/Hard/Expert) for chess, Connect 4 and checkers, plus a real checkers engine \u2014 levels cap search depth and add root-score noise; picker next to PLAY VS BOT (remembered per browser) and on a seated bot; checkers bot plays whole multi-jump turns leg by leg","c":[[196,37,0],[81,4,1],[83,4,1],[96,4,1],[197,261,0],[192,37,4],[193,30,4],[198,19,0],[195,1,0],[82,37,14],[84,14,3],[97,12,1]]},{"h":"fe49c9e","t":1790541528,"m":"game_terminal: backgammon bot with Easy/Medium/Hard/Expert \u2014 full-turn move generation + evaluator (pips, points, primes, anchors, blot shots, bar vs home board, race mode); Expert adds 2-ply look-ahead over all 21 rolls; bot rolls and plays checker by checker; PLAY VS BOT + level picker in the client","c":[[159,16,0],[199,285,0],[195,1,0],[164,80,2]]},{"h":"8e278b0","t":1790541652,"m":"cosmic_forge: Void Front depth \u2014 6 hotkey abilities (Nova Lance, Overdrive, Chrono Lock, Plunder, Star Cascade, Big Crunch) unlocked by deepest zone; rarity-rolled permanent relics (8 kinds, luck-weighted) from bosses and Gilded Wisps with an Armory view; boss affixes (shielded/regen/swift/armored); named sectors with arena tint; arena banners, relic cards, loot gems; consistent Challenge DPS estimate; mobile layout pass","c":[[149,19,2],[150,564,39]]},{"h":"5e794c3","t":1790542185,"m":"game_terminal: card-bot difficulty (Easy/Medium/Hard/Expert) for Crazy Eights, BS, Poker, Hearts, Spades \u2014 level rides in the bot id and shows next to its name; Easy/Medium blunder into random legal moves; Expert: Monte Carlo equity poker, card-counting Hearts (safe leads, queen hunting, moon defence, smarter passing), Spades that cashes sure winners and covers a nil partner, sharper BS calls, suit-switching Crazy Eights; level picker beside every ADD BOT","c":[[138,21,7],[142,1,1],[190,286,22],[147,1,1],[158,2,0]]},{"h":"270f716","t":1790542433,"m":"game_terminal: TRON bots with Easy/Medium/Hard/Expert \u2014 Easy looks a few cells ahead and reacts late, Medium/Hard flood-fill for room (Hard also dodges head-ons), Expert plays Voronoi territory to cut riders off; shared tick-game bot helpers + ADD BOT bar with level picker","c":[[200,36,0],[163,4,0],[201,33,0],[167,128,0]]},{"h":"0f25cf3","t":1790542542,"m":"game_terminal: Slither bots with Easy/Medium/Hard/Expert \u2014 heading search with short look-ahead against walls and bodies, food/clump seeking with per-level sensing range, reaction lag for weaker levels, value-only boosting, Expert cuts off smaller snakes; ADD BOT bar","c":[[93,4,0],[94,99,0]]},{"h":"9c2e313","t":1790542611,"m":"game_terminal: Maze Dash bots with Easy/Medium/Hard/Expert \u2014 depth-first explorers that backtrack out of dead ends; levels differ in branch choice (random / exit-leaning / mostly true route / always true route) and pace (Expert ~15s median on a 15x15 maze, Easy ~50s); ADD BOT bar","c":[[168,4,0],[169,93,13]]},{"h":"4ca49e4","t":1790542652,"m":"cosmic_forge: fix Erase save (beforeunload re-saved the old universe during the reload); Journey pacing log (\ud83d\udcdc) with per-milestone targets; Void HP curve x1.6/zone to Z25 then x1.3 and ability unlocks moved to Z3/10/20/30/40/50 so the Front no longer snowballs past every ability in 4 min; in-page pacing bot (pacing_sim.js) and README pacing numbers from it","c":[[149,21,9],[150,62,9],[202,44,0]]},{"h":"ca8e117","t":1790542715,"m":"cosmic_forge: credit time spent in a background tab (rAF pauses there, so the loop earned nothing and the gap was clamped away) \u2014 toast for short absences, welcome-back screen for 5+ min; friendlier away-time wording; TODO_FIRST note","c":[[42,1,1],[150,13,4]]},{"h":"c09fabe","t":1790542762,"m":"game_terminal: Hangman bots \u2014 a bot can pick the word (adding one when alone makes it the picker, so solo play works; word difficulty by level up to rare-letter shorties on Expert) or help guess (Easy near-random, Medium letter frequency, Hard dictionary frequency by length, Expert pattern-filtered dictionary solver); paced slower when humans are guessing too","c":[[78,7,0],[79,120,0]]},{"h":"2147533","t":1790542865,"m":"game_terminal: Shooter CPU duelist with Easy/Medium/Hard/Expert \u2014 drives the same server inputs as a player (turn-rate-capped aim with wobble, reaction delay on sight, pillar line-of-sight, range-based weapon swaps, reloads in cover, strafing, jumps/slides on higher levels, Expert goes for headshots); PLAY VS BOT + level picker in the lobby","c":[[133,32,0],[135,125,3]]},{"h":"12026a6","t":1790543751,"m":"game_terminal: Slope rebuilt from scratch \u2014 real downhill physics (gravity, ramps that launch you over gaps, cliff drops, landings with impact shake) simulated client-side at 60fps from a shared sim.js; procedural track of ramps/gaps, drops, banked turns, shifting lanes, narrow bridges, holes and block walls (some moving) that are always passable at the speed you'll be going; smooth ~90s difficulty ramp with ever-creeping speed; neon tile track that shifts colour with difficulty, synthwave wireframe valley, striped sun, stars, speed-reactive chase cam; room races with ghosts, room best board, personal best; CPU racers Easy/Medium/Hard/Expert running the same physics server-side","c":[[161,529,717],[203,379,0],[166,161,366]]},{"h":"fb37002","t":1790543827,"m":"TODO_FIRST: log game_terminal bots pass + Slope rebuild","c":[[42,1,1]]},{"h":"095de61","t":1790545091,"m":"game_terminal: Slope polish \u2014 chase cam locked dead behind the ball (no more drifting off to one side), tight at the start and easing back only a little with speed; render interpolation between physics steps so motion is smooth at any refresh rate; cyan boost pads (+speed, FOV kick, always followed by open track or a jump); red piston blocks that punch up out of the floor and sink back (own section plus in block fields), spaced so a dodge is always makeable; Hard/Expert CPUs go for pads","c":[[161,76,14],[203,79,11]]},{"h":"f8201cb","t":1790545390,"m":"cosmic_forge: gentler start \u2014 feats unlocked together share one toast, slightly pricier first two generators and beefier early Void enemies (bounty rate lowered to match), 'Per kill' payout + tooltips in the Void panel, seeded runs in pacing_sim","c":[[149,11,6],[150,27,7],[202,2,0]]},{"h":"4e507ba","t":1790545596,"m":"game_terminal: Slope \u2014 sideways momentum (a flick keeps rolling a moment, like a real ball), boost pads from the very start and more often, no more floor-hole obstacles","c":[[203,8,18]]},{"h":"8f5ccbf","t":1790545876,"m":"game_terminal: Slope \u2014 boost pads now raise your cruising speed for the rest of the run (+6 each, up to +12) on top of the short kick, with obstacles laid out for the boosted speed; one pad at the start and only occasional ones after; opens with a big drop and far more jumps/drops/steps early on","c":[[203,21,18]]},{"h":"7ec3dd6","t":1790546322,"m":"cosmic_forge: kills pay ~1.5s of current production (bosses ~30s) on top of the HP-based floor, scaled down for enemies shredded in under 2s so farming can't beat pushing \u2014 bounty goes from ~5% to ~25\u201335% of income","c":[[149,5,2],[150,9,2]]},{"h":"82f829f","t":1790546636,"m":"game_terminal: Slope \u2014 platforms are solid towers now: walls on the sides, front and back run all the way down to the valley floor (colour fading to dark, lit corner edges), so drops and gaps read as real cliffs and you can't see under tilted pieces","c":[[161,29,4]]},{"h":"77c59e2","t":1790546795,"m":"game_terminal: Slope \u2014 calmer ball skin: glossy green marble with one band running along the roll direction (holds steady while spinning) and faint dots, instead of strobing diagonal stripes","c":[[161,16,6]]},{"h":"a631db4","t":1790546854,"m":"cosmic_forge: bigger rewards \u2014 kills ~2.5s of production (bosses ~45s), goals 60\u2013120s (was 30\u201360s)","c":[[149,3,3],[150,3,3]]},{"h":"146ebb9","t":1790547045,"m":"game_terminal: Slope smoothness \u2014 HUD only touches the DOM when its text changes (was re-laying-out the page every frame), track/terrain stream in a couple of pieces per frame ahead of the fog instead of in bursts, render resolution capped at 1.5x; landing shake toned down to a short smooth wobble","c":[[161,43,23]]},{"h":"3bb5c37","t":1790547153,"m":"cosmic_forge: remove the Journey pacing log (button, modal, milestone hooks) \u2014 players set their own pace and Feats mark progress; README pacing numbers refreshed","c":[[42,1,1],[149,5,9],[150,0,43],[202,1,2]]},{"h":"b218ae2","t":1790547273,"m":"game_terminal: Slope \u2014 gravity pulls you sideways on tilted track (rolling-ball 5/7\u00b7g\u00b7sin\u03b8, scaled to read clearly), lots of ordinary track now leans a little and swinging sections lean into the swing; tilt eases in/out at piece seams so there's no edge step","c":[[161,1,1],[203,18,6]]},{"h":"84030b5","t":1790547655,"m":"cosmic_forge: release kit for CrazyGames + itch.io \u2014 title-only covers (1920x1080/800x1200/800x800, itch 630x500) rendered from the game's own art, 3 gameplay screenshots, store text + submission checklists, build.sh producing the SDK build and itch zip into git-ignored dist/","c":[[149,4,0],[204,1,0],[205,107,0],[206,20,0],[207,40,0],[208,40,0],[209,40,0],[210,40,0],[211,40,0],[212,40,0],[213,40,0]]},{"h":"a933574","t":1790548128,"m":"TODO_FIRST: log Slope playtest polish round","c":[[42,1,1]]},{"h":"3e461ad","t":1790548297,"m":"cosmic_forge: build.sh also zips the CrazyGames build","c":[[206,1,0]]},{"h":"ff8f77f","t":1790550172,"m":"cosmic_forge: CrazyGames preview videos (1920x1080 + 1080x1620 portrait, 19.8s, silent, cover opening frame) rendered frame-by-frame under Playwright's fake clock so playback is true real-time; recorder + encoder scripts kept in release/","c":[[205,6,2],[214,40,0],[215,17,0],[216,40,0],[217,40,0],[218,73,0]]},{"h":"b4b8920","t":1790550364,"m":"TODO_FIRST: Cosmic Forge published to itch.io, submitted to CrazyGames","c":[[42,1,1]]},{"h":"5746d14","t":1790550567,"m":"money/flip-bot: MVP plan for the marketplace flip bot (sources, hand-set comps first, scoring, ToS stance, open questions)","c":[[4,1,1],[219,105,0]]},{"h":"aff89e4","t":1790550659,"m":"money/flip-bot: plan decisions \u2014 Stockholm (Blocket + Tradera sold comps), ~1000 SEK budget, candidate categories, Swedish red-flag words","c":[[4,1,1],[219,36,14]]},{"h":"7461898","t":1790550775,"m":"money/flip-bot: verified Blocket access \u2014 old API dead (FINN migration), search page's base64 react-query-state JSON works without login","c":[[219,15,3]]},{"h":"873b879","t":1790550915,"m":"money/flip-bot: verified Tradera \u2014 official SOAP API alive (needs free AppId/Key, ItemStatus field for sold comps); web sold-search JSON works but robots.txt disallows /search, so use the API","c":[[219,21,0]]},{"h":"e2af5bb","t":1790551291,"m":"money/flip-bot: full build spec (BUILD.md) + PROGRESS.md; TODO_FIRST points to it","c":[[42,1,1],[220,144,0],[221,16,0]]},{"h":"3856b74","t":1790551352,"m":"money/flip-bot: scaffold, Blocket source (base64 react-query-state parser + real-page fixture), catalog/matcher, pricing fallbacks, scorer with Swedish red flags; 6 tests","c":[[222,6,0],[223,8,0],[221,9,4],[224,32,0],[225,57,0],[226,13,0],[227,0,0],[228,19,0],[229,4,0],[230,40,0],[231,0,0],[232,61,0],[233,0,0],[234,831,0],[235,24,0],[236,47,0]]},{"h":"7c87e1b","t":1790551393,"m":"money/flip-bot: SQLite flip store + money controls (bankroll, daily cap, max open, STOP), ntfy alerts/reply-command parsing; 11 tests","c":[[221,2,2],[237,64,0],[238,104,0],[239,67,0]]},{"h":"3984522","t":1790551498,"m":"money/flip-bot: flip CLI + Blocket scan/alert loop with phone reply commands; live smoke test fixes (accessory excludes, asking-price outlier filter, min price); PROGRESS.md handoff; 14 tests","c":[[221,40,17],[224,7,1],[240,189,0],[228,5,1],[241,36,0],[236,11,0]]},{"h":"4c7dfaa","t":1790551777,"m":"money/flip-bot: Tradera SOAP client (vendored WSDLs; search, sold comps, Buy, AddItem+images, SetPrices, orders, FetchToken) wired into bot: Buy-Now auto-buy under threshold, phone approval above, expiry, dry-run guard, listing from inbox photos, 3-day repricing, order polling; 20 tests","c":[[240,150,5],[232,1,0],[242,149,0],[243,750,0],[244,500,0],[245,1636,0],[246,2469,0],[247,502,0],[248,155,0]]},{"h":"a90fbd4","t":1790551829,"m":"money/flip-bot: flip auth + catalog check, SETUP.md (Ben's steps), README, systemd user unit, PROGRESS handoff; TODO_FIRST/IDEAS updated","c":[[4,1,1],[42,1,1],[222,1,0],[221,25,40],[249,39,0],[250,55,0],[240,38,1],[251,13,0]]},{"h":"a7e9a66","t":1790552014,"m":"money/flip-bot: apply Tradera doc findings (v4 swagger + v3 op docs) \u2014 ItemType 3 fixed / 1 auction, BuyStatus 'Bought' only success, auction fallback for restricted new sellers (no repricing), buy-never-bids noted; 26 tests","c":[[221,19,5],[249,8,4],[240,17,5],[242,13,13],[238,4,0],[248,30,0]]},{"h":"c23f6d9","t":1790559482,"m":"daily_learning: typed reflection notes as an alternative to voice recording","c":[[99,83,2],[102,21,0]]},{"h":"b4fa5d0","t":1790559808,"m":"animated_short: LANTERN script, shot list, decisions; GPU raymarch renderer + scene (WIP look pass)","c":[[252,4,0],[253,68,0],[254,79,0],[255,65,0],[256,102,0],[257,311,0],[258,688,0],[259,45,0],[260,17,0],[261,4,0],[262,898,0],[263,11,0],[264,41,0],[265,53,0]]},{"h":"976cd09","t":1790560059,"m":"CLAUDE.md: drop Session terminal section (mission_control SessionStart hook removed)","c":[[92,0,8]]},{"h":"3cbfa9f","t":1790560070,"m":"animated_short: review pass 1 \u2014 look fixes across all shots","c":[[266,27,0],[258,20,16],[262,32,19]]},{"h":"0c40a08","t":1790560455,"m":"animated_short: synthesized score + SFX, one-command make_film.sh, first full preview","c":[[253,36,0],[267,28,0],[268,13,0],[269,538,0]]},{"h":"92aacbd","t":1790560689,"m":"animated_short: review passes 2+3, flyover chase + closer drift, README","c":[[267,7,4],[270,61,0],[266,54,2],[258,13,8]]},{"h":"a34b405","t":1790561214,"m":"animated_short: clamp motion-blur sub-samples to their shot (fixes complex u at shot start)","c":[[258,5,0]]},{"h":"f129ca6","t":1790561728,"m":"animated_short: LANTERN final render done \u2014 review incident note, progress/README times, TODO_FIRST done line","c":[[42,1,0],[267,5,2],[270,1,1],[266,10,0]]},{"h":"ec75a84","t":1790593203,"m":"gameboy: emulator core (CPU/PPU/APU/timer/MBCs, DMG+CGB) + headless test-ROM runner","c":[[271,3,0],[272,1,0],[273,18,0],[274,394,0],[275,234,0],[276,341,0],[277,303,0],[278,410,0],[279,85,0],[280,91,0],[281,156,0],[282,24,0]]},{"h":"ac2cf98","t":1790593544,"m":"gameboy: web player (AudioWorklet audio, input, IndexedDB saves/states, rewind, ff) + standalone page, README","c":[[283,51,0],[284,29,0],[285,103,0],[286,425,0],[287,64,0],[288,115,0],[289,225,0]]},{"h":"02c7368","t":1790594211,"m":"gameboy: spectator/lockstep mode in Player, netstate encoder, determinism test, game_terminal sync script","c":[[283,11,0],[290,55,0],[291,14,0],[292,45,0],[286,71,5]]},{"h":"c3b09e5","t":1790594211,"m":"game_terminal: Game Boy / Color emulator room (local play, bundled free homebrew, live lockstep spectating)","c":[[293,336,0],[294,394,0],[295,234,0],[296,341,0],[297,303,0],[298,410,0],[299,85,0],[300,45,0],[301,491,0],[302,64,0],[303,674,0],[304,22,0],[305,8,0],[306,40,0],[307,40,0],[308,40,0],[64,6,0],[309,122,0],[69,2,0]]},{"h":"0463f69","t":1790594276,"m":"TODO_FIRST: Game Boy emulator done line","c":[[42,1,0]]},{"h":"2b8b6b7","t":1790597355,"m":"gameboy: 141/141 test ROMs \u2014 post-boot DIV/P1, divider-clocked serial, PPU LY/LYC/VRAM/OAM edge timing, sprite penalty, DMG wave-RAM access","c":[[283,19,9],[274,2,1],[277,11,11],[278,50,13],[279,2,0]]},{"h":"6b76f83","t":1790597355,"m":"game_terminal: sync Game Boy emulator core (141/141 accuracy fixes)","c":[[294,2,1],[297,11,11],[298,50,13],[299,2,0]]},{"h":"ef5648a","t":1790597820,"m":"gameboy: bundle 6 more free homebrew games (Tobu Tobu Girl DX, Porklike, Shock Lobster, Geometrix, Adjustris, 2048)","c":[[283,6,0],[273,7,0],[290,1,1],[291,1,1],[289,6,0]]},{"h":"3950bbb","t":1790597820,"m":"game_terminal: Game Boy room library grows to 9 homebrew games (all watchable)","c":[[293,6,0],[310,40,0],[311,21,0],[312,117,0],[313,19,0],[314,22,0],[315,21,0],[305,13,0],[316,40,0],[317,40,0],[318,40,0],[319,40,0],[320,40,0],[309,3,1]]},{"h":"464e9c3","t":1790598275,"m":"stockholm3d: browser 3D explorer of Stockholm from OSM + Copernicus DEM (real sun, seasons, walk mode)","c":[[42,1,0],[321,4,0],[322,80,0],[323,29,0],[324,596,0],[325,33,0],[326,27,0],[327,28,0],[328,190,0],[329,177,0],[330,197,0],[331,144,0],[332,283,0],[333,122,0],[334,107,0],[335,3,0],[336,63,0],[337,187,0],[338,85,0],[339,375,0],[340,165,0],[341,153,0],[342,117,0],[343,300,0],[344,78,0],[345,50,0],[346,21,0],[347,1972,0],[348,598,0],[349,234,0],[350,307,0],[351,342,0],[352,374,0],[353,352,0],[354,60586,0],[355,19719,0]]},{"h":"411a12a","t":1790609001,"m":"gameboy: link cable \u2014 two linked consoles in lockstep, input-only netplay, Link Tron homebrew","c":[[283,14,0],[356,2,0],[357,21,0],[358,12,0],[359,83,0],[360,40,0],[361,764,0],[362,75,0],[273,2,0],[277,11,1],[363,75,0],[364,74,0],[365,72,0],[291,2,1],[286,139,8]]},{"h":"3cecd7b","t":1790609006,"m":"game_terminal: Game Boy room link cable \u2014 LINK someone in the room to play Link Tron","c":[[293,125,10],[297,11,1],[366,75,0],[301,139,8],[367,21,0],[305,2,0],[368,40,0],[309,74,5]]},{"h":"38b59df","t":1790609020,"m":"TODO_FIRST: Game Boy status (141/141, 10 games, link cable)","c":[[42,1,1]]},{"h":"2a5e018","t":1790611383,"m":"webslinger: Spider-Man-style web-swinging game in a procedural city (rope physics, reflective glass towers, sky/IBL, CSM, HDR post)","c":[[369,74,0],[370,65,0],[371,11,0],[372,130,0],[373,82,0],[374,274,0],[375,429,0],[376,244,0],[377,200,0],[378,99,0],[379,399,0],[380,596,0],[381,562,0],[382,294,0],[383,316,0],[384,142,0],[385,141,0],[386,49,0],[387,31,0],[388,31,0],[389,21,0],[390,598,0],[391,234,0],[392,318,0],[393,60586,0],[394,19719,0],[42,1,0]]},{"h":"2e2110c","t":1790613019,"m":"stockholm3d: sharper walk mode + visual/perf polish","c":[[322,22,8],[327,3,2],[329,106,21],[330,3,3],[333,26,2],[339,19,3],[340,166,18],[341,12,0],[343,81,17]]},{"h":"6825546","t":1790613483,"m":"webslinger: polish pass \u2014 realistic look (AgX/SSAO/eye adaptation), building detail, smoother swing","c":[[369,10,3],[370,2,2],[373,18,5],[374,2,2],[375,3,3],[376,5,1],[379,39,12],[380,52,6],[381,36,14],[382,147,5],[42,1,1]]},{"h":"f5cceef","t":1790618994,"m":"webslinger: swing assist (arc-preview anchors, heading pivot, wall steering, street alignment, grazes), calmer glass reflections, faster Ultra","c":[[369,35,5],[370,1,0],[379,32,2],[380,19,7],[381,139,6],[382,6,2],[395,37,0],[42,7,1]]},{"h":"df0d84a","t":1790633925,"m":"webslinger: style combos, air tricks, ring races with ghosts, minimap, slow-mo focus, speed lines, saved progress","c":[[369,41,4],[370,26,3],[372,37,1],[374,10,3],[396,69,0],[378,13,5],[379,136,10],[397,79,0],[381,36,1],[382,20,2],[398,184,0],[399,112,0],[386,37,0],[400,66,0],[42,5,0]]},{"h":"5627473","t":1790634634,"m":"roblox: new money/roblox studio (Rojo/Lune/luau-lsp on Linux, Studio via Vinegar + MCP bridge) and first game, +1 Jump Tower","c":[[401,9,0],[402,41,0],[403,55,0],[404,30,0],[405,31,0],[406,522,0],[407,124,0],[408,528,0],[409,279,0],[410,71,0],[411,115,0],[412,56,0],[413,252,0],[414,153,0],[415,238,0],[416,33579,0],[417,12,0],[418,1,0],[419,4,0],[420,22,0],[421,20016,0],[422,15,0]]},{"h":"148c603","t":1790634644,"m":"TODO_FIRST: Roblox studio status","c":[[42,1,0]]},{"h":"15e1e02","t":1790634974,"m":"webslinger: swing targeting \u2014 pole tips (antennas, spires, new rooftop masts) lock the web from the crosshair, web target preview ring, aim-at-wall bonus; H pauses on the controls page","c":[[369,19,2],[370,6,2],[375,33,0],[376,2,1],[377,1,0],[379,70,5],[381,87,24],[386,8,1],[423,100,0],[42,5,0]]},{"h":"747451f","t":1790636827,"m":"webslinger: fix swinging \u2014 drop the crosshair-wall anchor bonus (swung you into walls), pole locks preview the whole arc, rooftop masts no longer collide","c":[[369,10,8],[370,1,1],[375,3,2],[381,8,24],[423,0,18],[42,1,1]]},{"h":"2cebe04","t":1790637655,"m":"jump-tower: Studio playtest pass \u2014 core+ledge tower, one-way ledges, final-zone double-pay fix, readable labels; MCP shell bridge + Studio test runner","c":[[402,6,1],[406,2,2],[424,42,0],[408,49,5],[409,125,57],[410,8,4],[411,10,0],[412,7,5],[413,17,7],[425,69,0],[426,42,0],[427,159,0],[428,14,0]]},{"h":"7a8e272","t":1790638622,"m":"jump-tower: polish pass \u2014 per-zone themes + scenery, altitude-blended sky, real SFX/music/wind, altitude meter, zone banners, confetti, jump/land puffs, FOV kick, lava sea, grassy plaza, global leaderboards","c":[[429,359,0],[406,10,22],[430,54,0],[407,6,1],[431,372,0],[408,21,1],[409,81,14],[410,14,0],[432,169,0]]},{"h":"99d76d2","t":1790638728,"m":"webslinger: life & feel pass \u2014 lit particles (landing dust, web-impact puffs, wall grit, splash, feathers), ~950 pigeons that scatter/circle/return, web twang + creak, camera g-force sag and wind buffet, distant sirens","c":[[369,17,1],[372,47,1],[433,249,0],[373,19,1],[434,148,0],[379,44,3],[385,23,3],[435,72,0],[42,5,0]]},{"h":"9e431af","t":1790638822,"m":"jump-tower: wayfinding \u2014 ledge labels green/red by reach, bouncing arrow to the next reachable ledge, newbie hint bar; gold foil win pads; boards beside the title sign","c":[[436,129,0],[429,1,1],[409,2,0]]},{"h":"c87c89a","t":1790638842,"m":"jump-tower: promo screenshots for thumbnails","c":[[437,40,0],[438,40,0],[439,40,0]]},{"h":"2644367","t":1790640449,"m":"steal-a-satellite: new game \u2014 conveyor belt of 19 satellites, 8 bases, stealing/carry/delivery, zapper, base lock laser curtain, space pirate NPC bases, passes/products, daily, offline, leaderboards; studio-sync tool + @file MCP args","c":[[440,64,0],[441,32,0],[442,437,0],[443,529,0],[444,56,0],[445,129,0],[446,1418,0],[447,418,0],[448,140,0],[449,183,0],[450,86,0],[451,195,0],[452,186,0],[453,24,0],[454,34,0],[455,38,0],[456,12,0],[427,5,1],[457,117,0]]},{"h":"8a95d48","t":1790640780,"m":"steal-a-satellite: spawn faces the belt, named HUD buttons, \ud83d\udd12 Rebirth tags on locked pads","c":[[443,2,1],[446,8,0],[447,5,1]]},{"h":"8bda7fd","t":1790640844,"m":"steal-a-satellite: collect plates only glow under satellites; reset pad state when a base is released","c":[[446,21,2],[447,1,1]]},{"h":"f8b4334","t":1790641375,"m":"steal-a-satellite: pirate drone raids \u2014 drone beams a satellite out of your base, zap it for a bounty or steal it back from the pirates","c":[[440,7,0],[446,317,5],[448,12,0]]},{"h":"af7de38","t":1790650982,"m":"steal-a-satellite: first-time hints with a guide beam (buy from belt \u2192 collect \u2192 steal from pirates); bolder guide ribbon; empty plates fainter","c":[[442,101,7],[446,2,1]]},{"h":"654ebf1","t":1790651016,"m":"steal-a-satellite: promo screenshots for thumbnails","c":[[458,40,0],[459,40,0],[460,40,0]]},{"h":"68c80f2","t":1790651030,"m":"roblox: notes \u2014 Steal a Satellite status","c":[[42,1,1],[402,1,0]]},{"h":"982ab99","t":1790652926,"m":"webslinger: fix held-swing momentum \u2014 auto-release on the upswing (~39\u00b0 / apex under the roofline) instead of at the top, no slack-rope snaps, eased reel + release pop + catch, camera eases out after walls; hold test","c":[[369,12,1],[433,3,1],[373,7,4],[381,48,12],[461,44,0],[42,1,0]]},{"h":"a1c7bb5","t":1790653237,"m":"webslinger: held-swing auto-release a bit later (~47\u00b0, apex 4 m under the roofline) \u2014 39\u00b0 felt early","c":[[369,1,1],[381,2,2],[461,1,1],[42,1,1]]},{"h":"96210a6","t":1790653242,"m":"webslinger: README release angle","c":[[369,1,1]]},{"h":"937811c","t":1790654341,"m":"anomaly-shift: new Exit-8-style anomaly horror game \u2014 looping office corridor, 28 anomalies, revive/radar, Index, titles, leaderboards; studio walk test, README, marketing shots","c":[[462,76,0],[463,48,0],[464,40,0],[465,40,0],[466,40,0],[467,40,0],[468,300,0],[469,542,0],[470,62,0],[471,129,0],[472,719,0],[473,982,0],[474,108,0],[475,117,0],[476,156,0],[477,44,0]]}]};
+const { files, districts, commits } = DATA;
+const N = commits.length, F = files.length;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ---------- file classification ----------
+const TYPES = [
+  ["JavaScript", "#e8c547", ["js", "mjs", "ts"]],
+  ["Python", "#4f8fd6", ["py"]],
+  ["Luau", "#a77be0", ["luau", "lua"]],
+  ["HTML", "#e2744a", ["html"]],
+  ["CSS", "#df5f93", ["css", "tcss"]],
+  ["Shaders", "#46c6d6", ["frag", "vert", "glsl"]],
+  ["Game Boy asm", "#9ccc4a", ["asm", "inc", "s"]],
+  ["Shell & config", "#5bb59e", ["sh", "json", "toml", "yaml", "yml", "example", "service", "none"]],
+  ["Docs", "#d8d2c4", ["md", "txt"]],
+];
+const extColor = {};
+for (const [, c, exts] of TYPES) for (const e of exts) extColor[e] = c;
+const WAREHOUSE = "#555b66";
+const isWarehouse = (p, ext) =>
+  /(^|\/)(vendor|data)\//.test(p) || /\.d\.luau$/.test(p) || /roblox\.yml$/.test(p) ||
+  ["wsdl", "png", "mp4", "gb", "gbc", "jpg", "wav", "ogg"].includes(ext);
+const fileMeta = files.map(([p, d, x, z, ext]) => {
+  const wh = isWarehouse(p, ext);
+  return { p, d, x, z, ext, wh, color: new THREE.Color(wh ? WAREHOUSE : (extColor[ext] || "#8a8f98")) };
+});
+const born = new Array(F).fill(-1);
+commits.forEach((c, i) => c.c.forEach(([fi]) => { if (born[fi] < 0) born[fi] = i; }));
+
+const shortName = n => n === "money" ? "money (misc)" : n.split("/").pop();
+const hourOf = t => { const d = new Date(t * 1000); return d.getUTCHours() + d.getUTCMinutes() / 60; };
+const fmtTime = t => new Date(t * 1000).toISOString().slice(11, 16);
+const fmtDate = t => new Date(t * 1000).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+const heightFor = (lines, wh) => lines <= 0 ? 0 : wh ? Math.min(0.25 + 0.03 * Math.sqrt(lines), 1.8) : Math.min(0.25 + 0.1 * Math.sqrt(lines), 14);
+
+// ---------- renderer / scene ----------
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+stage.appendChild(renderer.domElement);
+const labelRenderer = new CSS2DRenderer({ element: document.getElementById("labels") });
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x070b1a, 60, 150);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500);
+camera.position.set(34, 29, 37);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(2, 0, -1);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.47;
+controls.minDistance = 12; controls.maxDistance = 140;
+controls.autoRotateSpeed = 0.5;
+let lastUserMove = -1e9;
+controls.addEventListener("start", () => { lastUserMove = performance.now(); });
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.45, 0.82);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const hemi = new THREE.HemisphereLight(0xbfd6ff, 0x1a1c22, 0.6);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 2);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 160 });
+sun.shadow.bias = -0.0008;
+scene.add(sun, sun.target);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0x1b1f28, roughness: 0.95 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(120, 120, 0x2a3040, 0x222734);
+grid.position.y = 0.005; grid.material.transparent = true; grid.material.opacity = 0.35;
+scene.add(grid);
+
+// stars
+const starGeo = new THREE.BufferGeometry();
+const sp = new Float32Array(1500 * 3);
+for (let i = 0; i < 1500; i++) {
+  const th = Math.random() * Math.PI * 2, ph = Math.random() * Math.PI * 0.42, r = 220;
+  sp.set([r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th)], i * 3);
+}
+starGeo.setAttribute("position", new THREE.BufferAttribute(sp, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, transparent: true, fog: false, sizeAttenuation: true }));
+scene.add(stars);
+
+// ---------- district plates + labels ----------
+const GROUND_NIGHT = new THREE.Color(0x1b1f28), GROUND_DAY = new THREE.Color(0x4a505c);
+const PLATE_NIGHT = new THREE.Color(0x343a47), PLATE_DAY = new THREE.Color(0x8a8f99);
+const plateMat = new THREE.MeshStandardMaterial({ color: 0x343a47, roughness: 0.85 });
+const plates = districts.map(d => {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(d.w + 0.7, 0.14, d.h + 0.7), plateMat);
+  m.position.set(d.x + d.w / 2, 0.07, d.z + d.h / 2);
+  m.receiveShadow = true; m.scale.setScalar(0.001); m.visible = false;
+  scene.add(m);
+  const el = document.createElement("div");
+  el.className = "dlabel"; el.textContent = shortName(d.n);
+  const lab = new CSS2DObject(el);
+  lab.position.set(m.position.x, 0.4, d.z + d.h + 0.9);
+  lab.visible = false;
+  scene.add(lab);
+  return { d, m, lab, el, s: 0, fresh: 0, size: 0 };
+});
+
+// ---------- buildings (one instance per file) ----------
+const uNight = { value: 1 };
+const boxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+const glowAttr = new THREE.InstancedBufferAttribute(new Float32Array(F), 1);
+glowAttr.setUsage(THREE.DynamicDrawUsage);
+boxGeo.setAttribute("aGlow", glowAttr);
+const bMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.1 });
+bMat.onBeforeCompile = sh => {
+  sh.uniforms.uNight = uNight;
+  sh.vertexShader = sh.vertexShader
+    .replace("#include <common>", `#include <common>
+      attribute float aGlow; varying float vGlow; varying vec3 vLocal; varying vec3 vScale; varying vec3 vObjN; varying float vSeed;`)
+    .replace("#include <begin_vertex>", `#include <begin_vertex>
+      vGlow = aGlow; vLocal = position; vObjN = normal;
+      vScale = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+      vSeed = instanceMatrix[3].x * 12.9898 + instanceMatrix[3].z * 78.233;`);
+  sh.fragmentShader = sh.fragmentShader
+    .replace("#include <common>", `#include <common>
+      uniform float uNight; varying float vGlow; varying vec3 vLocal; varying vec3 vScale; varying vec3 vObjN; varying float vSeed;
+      float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + vSeed) * 43758.5453); }`)
+    .replace("#include <color_fragment>", `#include <color_fragment>
+      vec3 pm = (vLocal + vec3(0.5, 0.0, 0.5)) * vScale;
+      float side = step(abs(vObjN.y), 0.5);
+      vec2 wuv = abs(vObjN.x) > 0.5 ? vec2(pm.z, pm.y) : vec2(pm.x, pm.y);
+      vec2 wcell = floor(wuv * vec2(5.0, 3.4));
+      vec2 wf = fract(wuv * vec2(5.0, 3.4));
+      float win = side * step(0.22, wf.x) * step(wf.x, 0.78) * step(0.28, wf.y) * step(wf.y, 0.82)
+                * step(0.25, pm.y) * step(pm.y, vScale.y - 0.12);
+      float lit = step(0.42, h21(wcell + vObjN.xz * 3.0));
+      diffuseColor.rgb *= 1.0 - win * 0.55;`)
+    .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+      totalEmissiveRadiance += win * lit * uNight * vec3(1.0, 0.72, 0.38) * 1.3;
+      totalEmissiveRadiance += vec3(1.0, 0.62, 0.2) * vGlow * 1.6;`);
+};
+const city = new THREE.InstancedMesh(boxGeo, bMat, F);
+city.castShadow = true; city.receiveShadow = true;
+city.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+fileMeta.forEach((f, i) => city.setColorAt(i, f.color));
+scene.add(city);
+
+// construction beams (one per touched district per commit)
+const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 12, 1, true).translate(0, 0.5, 0);
+const beams = [];
+function spawnBeam(x, z, r) {
+  let b = beams.find(b => b.life <= 0);
+  if (!b) {
+    const m = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    scene.add(m); b = { m, life: 0 }; beams.push(b);
+  }
+  b.life = 1; b.m.visible = true; b.m.position.set(x, 0, z); b.r = r;
+}
+
+// ---------- state ----------
+const lines = new Float64Array(F), touches = new Uint16Array(F);
+const shownH = new Float32Array(F), glow = new Float32Array(F);
+const hourCounts = new Array(24).fill(0);
+let cur = N;               // commits applied
+let sky = { hour: 23 };
+
+function recompute(k) {
+  lines.fill(0); touches.fill(0); hourCounts.fill(0);
+  for (let i = 0; i < k; i++) applyData(i);
+  cur = k;
+}
+function applyData(i) {
+  const c = commits[i];
+  for (const [fi, a, d] of c.c) { lines[fi] += a - d; touches[fi]++; }
+  hourCounts[Math.floor(hourOf(c.t))]++;
+}
+function step() {
+  if (cur >= N) return false;
+  applyData(cur);
+  const c = commits[cur];
+  cur++;
+  const per = new Map();
+  for (const [fi, a, d] of c.c) {
+    glow[fi] = 1;
+    const di = fileMeta[fi].d;
+    per.set(di, (per.get(di) || 0) + a + d);
+  }
+  for (const [di, churn] of per) {
+    const d = districts[di];
+    spawnBeam(d.x + d.w / 2, d.z + d.h / 2, Math.min(0.15 + Math.log10(1 + churn) * 0.18, 1.1));
+    plates[di].fresh = 1;
+  }
+  return true;
+}
+
+// ---------- sky ----------
+const SKY = [[0, "#060a18"], [4.5, "#0a1027"], [5.8, "#2d2447"], [6.8, "#d58a68"], [8, "#86b2da"], [12, "#9ac5ea"], [17, "#a3bfdc"], [18.6, "#e0955a"], [19.6, "#4a3157"], [21, "#0f1330"], [24, "#060a18"]]
+  .map(([h, c]) => [h, new THREE.Color(c)]);
+function skyColor(h, out) {
+  for (let i = 0; i < SKY.length - 1; i++) {
+    const [h0, c0] = SKY[i], [h1, c1] = SKY[i + 1];
+    if (h >= h0 && h <= h1) return out.copy(c0).lerp(c1, (h - h0) / (h1 - h0));
+  }
+  return out.copy(SKY[0][1]);
+}
+// Stockholm in late September: sunrise ~06:50, sunset ~18:55
+const daylight = h => THREE.MathUtils.smoothstep(h, 6.2, 8) * (1 - THREE.MathUtils.smoothstep(h, 18.3, 20));
+const skyCol = new THREE.Color();
+let skyHour = 23, targetHour = 23;
+
+// ---------- HUD ----------
+const $ = id => document.getElementById(id);
+const first = commits[0], last = commits[N - 1];
+$("sub").textContent = `~/${DATA.repo} · ${fmtDate(first.t)} → ${fmtDate(last.t)}`;
+$("legend").innerHTML = TYPES.map(([n, c]) => `<span class="k"><i style="background:${c}"></i>${n}</span>`).join("") +
+  `<span class="k"><i style="background:${WAREHOUSE}"></i>Warehouse</span>` +
+  `<span class="note">One building per file, height from line count. Warehouses are vendored libraries, data and binaries, kept low so they don't hide the real code.</span>`;
+
+const hoursCv = $("hours"), hctx = hoursCv.getContext("2d");
+function drawHours() {
+  const w = hoursCv.clientWidth, h = hoursCv.clientHeight, dpr = devicePixelRatio;
+  if (!w) return;
+  hoursCv.width = w * dpr; hoursCv.height = h * dpr;
+  hctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const max = Math.max(4, ...hourCounts), bw = w / 24;
+  const nowH = cur ? Math.floor(hourOf(commits[cur - 1].t)) : -1;
+  for (let i = 0; i < 24; i++) {
+    const v = hourCounts[i] / max * (h - 8);
+    hctx.fillStyle = daylight(i + 0.5) > 0.5 ? "#8fc1ea" : "#ffb347";
+    hctx.globalAlpha = i === nowH ? 1 : 0.55;
+    hctx.fillRect(i * bw + 1, h - 6 - v, bw - 2, Math.max(v, 1));
+  }
+  hctx.globalAlpha = 1;
+}
+
+const tl = $("timeline"), tctx = tl.getContext("2d");
+const churn = commits.map(c => c.c.reduce((s, [, a, d]) => s + a + d, 0));
+function drawTimeline() {
+  const w = tl.clientWidth, h = tl.clientHeight, dpr = devicePixelRatio;
+  if (!w) return;
+  if (tl.width !== Math.round(w * dpr)) { tl.width = w * dpr; tl.height = h * dpr; }
+  tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  tctx.clearRect(0, 0, w, h);
+  const xOf = i => 4 + (i / (N - 1)) * (w - 8);
+  const base = h - 12;
+  tctx.font = "9px 'IBM Plex Mono', monospace";
+  tctx.fillStyle = "#9aa0ab";
+  let lastDay = "", lastLabelX = -99;
+  commits.forEach((c, i) => {
+    const day = new Date(c.t * 1000).toISOString().slice(0, 10);
+    if (day !== lastDay) {
+      const x = xOf(i);
+      tctx.fillStyle = "rgba(233,230,223,0.18)"; tctx.fillRect(x - 0.5, 0, 1, base);
+      if (x - lastLabelX > 34) { tctx.fillStyle = "#9aa0ab"; tctx.fillText(day.slice(8) + "/" + day.slice(5, 7), x + 2, h - 2); lastLabelX = x; }
+      lastDay = day;
+    }
+    const v = Math.min(1, Math.log10(1 + churn[i]) / 4.5) * (base - 4) + 2;
+    tctx.fillStyle = daylight(hourOf(c.t)) > 0.5 ? "#8fc1ea" : "#ffb347";
+    tctx.globalAlpha = i < cur ? 0.95 : 0.25;
+    tctx.fillRect(xOf(i) - 1, base - v, 2, v);
+  });
+  tctx.globalAlpha = 1;
+  const px = cur ? xOf(cur - 1) : 2;
+  tctx.fillStyle = "#e9e6df"; tctx.fillRect(px - 1, 0, 2, base + 2);
+}
+
+let tickerShown = -1;
+function updateHud() {
+  const c = cur ? commits[cur - 1] : null;
+  let loc = 0, bld = 0; const live = new Set();
+  for (let i = 0; i < F; i++) if (lines[i] > 0) { bld++; live.add(fileMeta[i].d); if (!fileMeta[i].wh) loc += lines[i]; }
+  $("sCommits").textContent = cur;
+  $("sLines").textContent = loc >= 1000 ? (loc / 1000).toFixed(loc >= 1e5 ? 0 : 1) + "k" : loc;
+  $("sBldg").textContent = bld;
+  $("sDist").textContent = live.size;
+  $("cnt").textContent = `${cur}/${N}`;
+  if (c) {
+    $("time").textContent = fmtTime(c.t);
+    $("date").textContent = fmtDate(c.t);
+    const day = daylight(hourOf(c.t)) > 0.5;
+    const ph = $("phase"); ph.textContent = day ? "day shift" : "night shift"; ph.style.color = day ? "var(--daylight)" : "var(--sodium)";
+  } else { $("time").textContent = "--:--"; $("date").textContent = "empty lot"; $("phase").textContent = ""; }
+  if (tickerShown !== cur) {
+    tickerShown = cur;
+    const rows = [];
+    for (let i = Math.max(0, cur - 3); i < cur; i++) {
+      const cc = commits[i];
+      const ds = [...new Set(cc.c.map(([fi]) => shortName(districts[fileMeta[fi].d].n)))];
+      rows.push(`<div class="tick"><span class="h">${cc.h}</span><span class="d">${ds.slice(0, 2).join(" + ")}${ds.length > 2 ? " +" + (ds.length - 2) : ""}</span><span class="m"></span></div>`);
+    }
+    $("ticker").innerHTML = rows.join("");
+    [...$("ticker").querySelectorAll(".m")].forEach((el, k) => { el.textContent = commits[Math.max(0, cur - 3) + k].m; });
+  }
+  drawHours(); drawTimeline();
+}
+
+// ---------- playback ----------
+let playing = false, speed = 1, acc = 0;
+const SPEEDS = [1, 2, 4, 0.5];
+const playBtn = $("play");
+function setPlaying(p) {
+  playing = p;
+  playBtn.textContent = p ? "Pause" : cur >= N ? "Replay" : "Play";
+}
+playBtn.onclick = () => {
+  if (!playing && cur >= N) { recompute(0); glow.fill(0); shownH.fill(0); plates.forEach(p => p.s = 0); acc = 0.6; }
+  setPlaying(!playing); updateHud();
+};
+$("speed").onclick = () => { speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; $("speed").textContent = speed + "×"; };
+
+function scrubTo(k, flash) {
+  k = Math.max(0, Math.min(N, k));
+  if (k === cur) return;
+  if (k === cur + 1) step(); else { recompute(k); glow.fill(0); if (flash && k) commits[k - 1].c.forEach(([fi]) => glow[fi] = 1); }
+  if (cur) targetHour = hourOf(commits[cur - 1].t);
+  setPlaying(playing && cur < N); updateHud();
+}
+let dragging = false;
+const tlIndex = e => { const r = tl.getBoundingClientRect(); return Math.round(((e.clientX - r.left - 4) / (r.width - 8)) * (N - 1)) + 1; };
+tl.addEventListener("pointerdown", e => { dragging = true; tl.setPointerCapture(e.pointerId); setPlaying(false); scrubTo(tlIndex(e), true); });
+tl.addEventListener("pointermove", e => { if (dragging) scrubTo(tlIndex(e), true); });
+tl.addEventListener("pointerup", () => { dragging = false; });
+addEventListener("keydown", e => {
+  if (e.target.tagName === "BUTTON" && (e.key === " " || e.key === "Enter")) return;
+  if (e.key === " ") { e.preventDefault(); playBtn.click(); }
+  else if (e.key === "ArrowRight") { setPlaying(false); scrubTo(cur + (e.shiftKey ? 10 : 1), true); }
+  else if (e.key === "ArrowLeft") { setPlaying(false); scrubTo(cur - (e.shiftKey ? 10 : 1), true); }
+});
+
+// ---------- hover inspection ----------
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(), tip = $("tip");
+let hoverEv = null;
+renderer.domElement.addEventListener("pointermove", e => { hoverEv = e; });
+renderer.domElement.addEventListener("pointerleave", () => { hoverEv = null; tip.hidden = true; });
+function inspect() {
+  if (!hoverEv) return;
+  const e = hoverEv; hoverEv = null;
+  mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hit = ray.intersectObject(city)[0];
+  if (!hit || shownH[hit.instanceId] < 0.05) { tip.hidden = true; return; }
+  const f = fileMeta[hit.instanceId], i = hit.instanceId;
+  tip.innerHTML = `<div class="p"></div><div class="meta"></div>`;
+  tip.querySelector(".p").textContent = f.p;
+  tip.querySelector(".meta").textContent =
+    `${Math.round(lines[i]).toLocaleString()} lines · ${touches[i]} commit${touches[i] === 1 ? "" : "s"} · built ${fmtDate(commits[born[i]].t)} ${fmtTime(commits[born[i]].t)}${f.wh ? " · warehouse" : ""}`;
+  tip.hidden = false;
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8) + "px";
+}
+
+// ---------- frame loop ----------
+const tmpM = new THREE.Matrix4(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
+let framed = false;
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h); composer.setSize(w, h); labelRenderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.fov = w < 640 ? 55 : 42;
+  camera.updateProjectionMatrix();
+  if (!framed) {   // first fit only: pull back on portrait screens so the whole city is in frame
+    framed = true;
+    const aspect = w / h, dir = camera.position.clone().sub(controls.target);
+    camera.position.copy(controls.target).addScaledVector(dir, aspect < 1 ? 1 / Math.pow(aspect, 0.55) : 1);
+  }
+  tl.width = 0; updateHud();
+}
+addEventListener("resize", resize);
+
+// hide labels that would overlap a more important one (fresh construction first, then bigger districts)
+let frameNo = 0;
+fileMeta.forEach(f => plates[f.d].size++);
+const projV = new THREE.Vector3();
+function declutter() {
+  const w = innerWidth, h = innerHeight, placed = [];
+  const order = plates.filter(p => p.d.born < cur).sort((a, b) => (b.fresh > 0.3) - (a.fresh > 0.3) || b.size - a.size);
+  for (const p of plates) if (p.d.born >= cur) p.lab.visible = false;
+  for (const p of order) {
+    projV.copy(p.lab.position).project(camera);
+    const x = (projV.x + 1) / 2 * w, y = (1 - projV.y) / 2 * h;
+    const bw = p.el.offsetWidth || p.d.n.length * 7 + 12, bh = 18;
+    const r = [x - bw / 2 - 3, y - bh / 2 - 2, x + bw / 2 + 3, y + bh / 2 + 2];
+    const clash = projV.z > 1 || placed.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1]);
+    p.lab.visible = !clash;
+    if (!clash) placed.push(r);
+  }
+}
+
+let prev = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
+  if (playing) {
+    acc += dt * speed;
+    const interval = 0.42;
+    while (acc >= interval && playing) {
+      acc -= interval;
+      if (!step()) { setPlaying(false); break; }
+      targetHour = hourOf(commits[cur - 1].t);
+      updateHud();
+    }
+    if (cur >= N) setPlaying(false);
+  }
+
+  // sky eases toward the current commit's wall-clock hour, always forward around the dial
+  let dh = targetHour - skyHour; if (dh < -12) dh += 24; if (dh > 12) dh -= 24;
+  skyHour = (skyHour + dh * Math.min(1, dt * 3) + 24) % 24;
+  const day = daylight(skyHour);
+  uNight.value = 1 - day;
+  skyColor(skyHour, skyCol);
+  scene.background = skyCol; scene.fog.color.copy(skyCol);
+  const ang = ((skyHour - 6) / 12) * Math.PI;
+  sun.position.set(Math.cos(ang) * 60, Math.max(Math.sin(ang), 0.25) * 70, 30);
+  sun.intensity = 0.25 + 2.3 * day;
+  sun.color.setHSL(day > 0.5 ? 0.12 : 0.62, day > 0.5 ? 0.3 : 0.4, day > 0.5 ? 0.95 : 0.75);
+  hemi.intensity = 0.35 + 0.7 * day;
+  ground.material.color.copy(GROUND_NIGHT).lerp(GROUND_DAY, day);
+  plateMat.color.copy(PLATE_NIGHT).lerp(PLATE_DAY, day);
+  stars.material.opacity = (1 - day) * 0.9;
+  renderer.toneMappingExposure = 0.9 + 0.25 * day;
+
+  // buildings grow toward their line counts
+  const k = reduceMotion ? 1 : Math.min(1, dt * 6);
+  for (let i = 0; i < F; i++) {
+    const f = fileMeta[i];
+    const target = heightFor(lines[i], f.wh);
+    shownH[i] += (target - shownH[i]) * k;
+    if (Math.abs(target - shownH[i]) < 0.002) shownH[i] = target;
+    glow[i] = Math.max(0, glow[i] - dt * 1.1);
+    glowAttr.array[i] = glow[i] * glow[i];
+    const fp = f.wh ? 0.92 : 0.7;
+    const h = shownH[i];
+    tmpP.set(f.x, 0.14, f.z);
+    tmpS.set(h > 0.001 ? fp : 0.0001, Math.max(h, 0.0001), h > 0.001 ? fp : 0.0001);
+    city.setMatrixAt(i, tmpM.compose(tmpP, tmpQ, tmpS));
+  }
+  city.instanceMatrix.needsUpdate = true; glowAttr.needsUpdate = true;
+  city.computeBoundingSphere();
+
+  // districts appear the first time they're touched
+  for (const pl of plates) {
+    const on = pl.d.born < cur;
+    pl.s += ((on ? 1 : 0) - pl.s) * k;
+    pl.m.visible = pl.s > 0.01; pl.m.scale.set(Math.max(pl.s, 0.001), 1, Math.max(pl.s, 0.001));
+    pl.fresh = Math.max(0, pl.fresh - dt * 0.6);
+    pl.el.classList.toggle("fresh", pl.fresh > 0.3);
+  }
+  for (const b of beams) {
+    if (b.life <= 0) continue;
+    b.life -= dt * 0.9;
+    const t = Math.max(b.life, 0);
+    b.m.scale.set(b.r * (0.3 + 0.7 * t), 18 * (1.2 - t * 0.2), b.r * (0.3 + 0.7 * t));
+    b.m.material.opacity = t * t * t * (0.1 + 0.12 * uNight.value);
+    if (b.life <= 0) b.m.visible = false;
+  }
+
+  if (++frameNo % 8 === 0) declutter();
+  controls.autoRotate = !reduceMotion && playing && now - lastUserMove > 6000;
+  controls.update();
+  inspect();
+  bloom.strength = 0.35 + 0.55 * uNight.value;
+  composer.render();
+  labelRenderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+// open on the finished city, then start the replay unless the viewer has already taken over
+recompute(N);
+targetHour = skyHour = hourOf(last.t);
+for (let i = 0; i < F; i++) shownH[i] = heightFor(lines[i], fileMeta[i].wh);
+plates.forEach(p => p.s = p.d.born < N ? 1 : 0);
+$("loading").remove();
+resize();
+setPlaying(false);
+requestAnimationFrame(frame);
+let touched = false;
+["pointerdown", "keydown", "wheel"].forEach(t => addEventListener(t, () => { touched = true; }, { once: true }));
+if (!reduceMotion && location.hash !== "#still") setTimeout(() => { if (!touched && !playing) playBtn.click(); }, 2800);
+</script>
+
+</body>
+</html>
