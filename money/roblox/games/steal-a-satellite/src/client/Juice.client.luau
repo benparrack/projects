@@ -195,17 +195,14 @@ guideA.Name = "GuideTarget"
 guideA.Parent = Workspace.Terrain
 local beam = Instance.new("Beam")
 beam.Attachment1 = guideA
-beam.Width0 = 1.2
-beam.Width1 = 1.2
+beam.Width0 = 1.8
+beam.Width1 = 1.8
 beam.FaceCamera = true
 beam.LightEmission = 1
 beam.LightInfluence = 0
 beam.Color = ColorSequence.new(Color3.fromRGB(255, 220, 90))
-beam.Transparency = NumberSequence.new(0.2)
-beam.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-beam.TextureMode = Enum.TextureMode.Wrap
-beam.TextureLength = 4
-beam.TextureSpeed = 2
+-- A solid glowing ribbon, faded where it leaves the player so it doesn't hide them.
+beam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.9), NumberSequenceKeypoint.new(0.12, 0.25), NumberSequenceKeypoint.new(1, 0.25) })
 beam.Segments = 20
 beam.CurveSize0 = 0
 beam.Enabled = false
@@ -251,6 +248,103 @@ local function updateCarry()
 	end
 end
 player:GetAttributeChangedSignal("Carrying"):Connect(updateCarry)
+
+-- First-time hints: buy from the belt, collect, then raid the pirates -------------------------
+
+local hintTarget = Instance.new("Attachment")
+hintTarget.Name = "HintTarget"
+hintTarget.Parent = Workspace.Terrain
+local hintBeam = beam:Clone()
+hintBeam.Attachment1 = hintTarget
+hintBeam.Color = ColorSequence.new(Color3.fromRGB(120, 230, 255))
+hintBeam.Parent = Workspace.Terrain
+local hintBanner = Ui.label({
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -24),
+	Size = UDim2.fromOffset(640, 44),
+	Text = "",
+	TextColor3 = Color3.fromRGB(150, 235, 255),
+	Visible = false,
+	Parent = hud,
+})
+
+-- The nearest visible (bright) collect plate in your base, or the nearest pirate base's sign.
+local function nearest(parts: { BasePart }, from: Vector3): BasePart?
+	local best, bestDist = nil, math.huge
+	for _, part in parts do
+		local d = (part.Position - from).Magnitude
+		if d < bestDist then
+			best, bestDist = part, d
+		end
+	end
+	return best
+end
+
+local function hintStep(root: BasePart): (string?, Vector3?)
+	local used = player:GetAttribute("Used") or 0
+	local earned = player:GetAttribute("Earned") or 0
+	local steals = player:GetAttribute("Steals") or 0
+	local found = player:GetAttribute("Found") or ""
+	if used == 0 and found == "" then
+		local half = Config.BeltLength / 2 - 10
+		local side = if root.Position.Z >= 0 then 8 else -8
+		return "🛰 Walk to the conveyor belt and hold E to buy a satellite!", Vector3.new(math.clamp(root.Position.X, -half, half), 4, side)
+	end
+	if used > 0 and earned == 0 then
+		local base = myBase()
+		local plates = {}
+		if base then
+			for _, d in base:GetChildren() do
+				if d.Name == "Collect" and d:IsA("BasePart") and d.Transparency < 0.5 then
+					table.insert(plates, d)
+				end
+			end
+		end
+		local plate = nearest(plates, root.Position)
+		return "💰 Your satellite makes cash! Step on its green plate to collect it", if plate then plate.Position + Vector3.new(0, 1, 0) else nil
+	end
+	if earned >= 300 and steals == 0 and not player:GetAttribute("Carrying") then
+		local signs = {}
+		for _, base in map:GetChildren() do
+			local sign = base:FindFirstChild("Sign")
+			if base:FindFirstChild("PirateCrew") and sign and sign:IsA("BasePart") then
+				table.insert(signs, sign)
+			end
+		end
+		local sign = nearest(signs, root.Position)
+		if sign then
+			return "☠ Space pirates are hoarding satellites! Sneak in and hold E to steal one", sign.Position - Vector3.new(0, 18, 0)
+		end
+	end
+	return nil, nil
+end
+
+task.spawn(function()
+	local shown: string? = nil
+	while true do
+		task.wait(0.5)
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		local text, target = nil, nil
+		if root and not player:GetAttribute("Carrying") then
+			text, target = hintStep(root)
+		end
+		hintBanner.Visible = text ~= nil
+		hintBeam.Enabled = target ~= nil and root ~= nil and (target - root.Position).Magnitude > 10
+		if text and text ~= shown then
+			hintBanner.Text = text
+			Ui.pop(hintBanner, 0.5)
+		end
+		shown = text
+		if root and target then
+			local a = root:FindFirstChild("GuideSource") :: Attachment? or Instance.new("Attachment")
+			a.Name = "GuideSource"
+			a.Parent = root
+			hintBeam.Attachment0 = a
+			hintTarget.WorldPosition = target
+		end
+	end
+end)
 
 -- Effects from the server ---------------------------------------------------------------
 

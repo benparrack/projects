@@ -247,7 +247,7 @@ end
 local function paintPlate(session: Session, slotIndex: number, open: boolean)
 	local plate = session.base.collect[slotIndex]
 	if plate then
-		plate.Transparency = if not open then 1 elseif session.slots[slotIndex] then 0 else 0.8
+		plate.Transparency = if not open then 1 elseif session.slots[slotIndex] then 0 else 0.93
 	end
 end
 
@@ -651,6 +651,7 @@ function refresh(player: Player)
 	player:SetAttribute("Rebirths", data.rebirths)
 	player:SetAttribute("RebirthCost", Formulas.rebirthCost(data.rebirths))
 	player:SetAttribute("Steals", data.steals)
+	player:SetAttribute("Earned", data.totalEarned)
 	player:SetAttribute("Slots", slotCount(player, data))
 	player:SetAttribute("Used", Rules.usedSlots(session.slots))
 	player:SetAttribute("BaseIndex", session.base.index)
