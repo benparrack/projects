@@ -45,3 +45,5 @@ Gotcha: never kill Vinegar mid-download. It then treats the half-written Studio 
 |---|---|
 | `games/jump-tower` (+1 Jump Tower) | v1 playtested in Studio: all 40 steps physically climbable, server flow verified. Next: publish, then fill in the pass/product ids. |
 | `games/steal-a-satellite` (Steal a Satellite) | v1 playtested in Studio. Verified: buy, collect, lock, zap, stealing, space-pirate bases, drone raids and the first-time hints. Promo shots are in `marketing/`. Next: publish with max players 8, then fill in the pass/product ids. |
+| `games/anomaly-shift` (Anomaly Shift) | v1 playtested in Studio. Exit-8-style looping corridor with 28 anomalies, revive/radar, Index, titles and leaderboards. Next: publish with max players 12, then fill in the pass/product ids. |
+| `games/candy-garden` (Grow a Candy Garden) | v1 playtested in Studio. Grow-a-Garden-style: 10 regrowing candies, server-wide seed restocks, weather mutations up to x50, row unlocks, Index and store. The `loop` studio test passes. Next: publish with max players 6, then fill in the pass/product ids. |
