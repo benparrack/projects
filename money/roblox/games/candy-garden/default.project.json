@@ -1,0 +1,48 @@
+{
+  "name": "candy-garden",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      },
+      "ServerLib": {
+        "$path": "../../lib/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterUseJumpPower": true,
+        "CharacterJumpPower": 50,
+        "CharacterWalkSpeed": 16,
+        "CameraMaxZoomDistance": 80
+      },
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "Gravity": 196.2,
+        "StreamingEnabled": false
+      }
+    },
+    "SoundService": {},
+    "Lighting": {
+      "$properties": {
+        "Technology": "ShadowMap",
+        "ClockTime": 14.5,
+        "Brightness": 2.4,
+        "EnvironmentDiffuseScale": 1,
+        "EnvironmentSpecularScale": 1
+      }
+    }
+  }
+}
