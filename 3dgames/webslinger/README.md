@@ -104,7 +104,7 @@ Gamepad: RT swing · A jump · LT zip · X dash · B dive · Y trick · RB slow-
     and swings most of your fall speed forward instead of stopping you dead.
   - Rendering uses `player.rp`, which is interpolated between substeps, so display
     rates that aren't a divisor of 240 don't stutter.
-  - Holding the swing lets go on the upswing by itself, at about 39° or earlier,
+  - Holding the swing lets go on the upswing by itself, at about 47° or earlier,
     once the flight would already peak just under the anchor's roofline
     (`P.REL_PITCH`, `P.APEX_UNDER`). Spare energy then goes into speed instead
     of climbing out of the street. It used to wait for the top of the arc, which
