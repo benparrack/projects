@@ -1,0 +1,48 @@
+{
+  "name": "anomaly-shift",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      },
+      "ServerLib": {
+        "$path": "../../lib/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CharacterUseJumpPower": true,
+        "CharacterJumpPower": 40,
+        "CharacterWalkSpeed": 16,
+        "CameraMaxZoomDistance": 40
+      },
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "Gravity": 196.2,
+        "StreamingEnabled": false
+      }
+    },
+    "SoundService": {},
+    "Lighting": {
+      "$properties": {
+        "Technology": "Future",
+        "ClockTime": 0,
+        "Brightness": 0,
+        "EnvironmentDiffuseScale": 0.4,
+        "EnvironmentSpecularScale": 0.4
+      }
+    }
+  }
+}
