@@ -11,7 +11,7 @@ import { gatherTargets } from '../sim/interact.js';
 const TAU = Math.PI * 2;
 const C = {
   bg: '#07101d', floor: '#0d1a2e', floorAlt: '#0f1d33', grid: 'rgba(120,170,255,0.06)',
-  wall: '#1d3557', wallEdge: '#7fb3ff', window: '#3d6fa8', exit: '#12301f', exitStripe: '#2bd97a',
+  wall: '#1d3557', wallEdge: '#7fb3ff', gate: '#b48cff', window: '#3d6fa8', exit: '#12301f', exitStripe: '#2bd97a',
   door: '#9ec5ff', guard: '#ff4d5e', cone: 'rgba(255,214,102,', coneHot: 'rgba(255,77,94,',
   cam: '#c9d6ea', laser: '#ff2e4d', loot: '#ffd166', text: '#dbe7ff', paradox: '#c66bff',
 };
@@ -293,6 +293,30 @@ export class Renderer {
   }
 
   drawDevices(L, S) {
+    // Pressure plates, with a faint wire to the gate they hold.
+    L.plates.forEach((p, i) => {
+      const down = S.plates[i].down;
+      const ts = this.ts, X = this.ox + p.x * ts, Y = this.oy + p.y * ts;
+      const g = L.doors.find((d) => d.id === p.gate);
+      const ctx = this.ctx;
+      if (g) {
+        ctx.strokeStyle = C.gate;
+        ctx.globalAlpha = down ? 0.55 : 0.18;
+        ctx.setLineDash([2, 5]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(X + ts / 2, Y + ts / 2); ctx.lineTo(this.ox + (g.x + 0.5) * ts, this.oy + (g.y + 0.5) * ts); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+      const inset = ts * (down ? 0.2 : 0.14);
+      if (down) { ctx.shadowColor = C.gate; ctx.shadowBlur = ts * 0.5; }
+      ctx.fillStyle = down ? C.gate : 'rgba(180,140,255,0.18)';
+      ctx.fillRect(X + inset, Y + inset, ts - 2 * inset, ts - 2 * inset);
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = C.gate;
+      ctx.lineWidth = Math.max(1, ts / 20);
+      ctx.strokeRect(X + ts * 0.14, Y + ts * 0.14, ts * 0.72, ts * 0.72);
+    });
     const ctx = this.ctx, ts = this.ts;
     const tc = (t) => (t + 0.5) * ts;
     // Lasers.
@@ -436,6 +460,30 @@ export class Renderer {
     });
   }
 
+  // A gate: steel bars that slide into the wall while a pressure plate is down.
+  drawGate(def, d, X, Y, horiz) {
+    const ctx = this.ctx, ts = this.ts;
+    const k = d.open ? 0.12 : 1; // how much of the gateway the bars cover
+    ctx.strokeStyle = C.gate;
+    ctx.lineWidth = Math.max(2, ts / 10);
+    ctx.globalAlpha = d.open ? 0.45 : 1;
+    ctx.beginPath();
+    for (let b = 1; b <= 3; b++) {
+      const o = (ts * b) / 4;
+      if (horiz) { ctx.moveTo(X, Y + o); ctx.lineTo(X + ts * k, Y + o); }
+      else { ctx.moveTo(X + o, Y); ctx.lineTo(X + o, Y + ts * k); }
+    }
+    ctx.stroke();
+    if (!d.open) {
+      ctx.lineWidth = Math.max(1, ts / 18);
+      ctx.beginPath();
+      if (horiz) { ctx.moveTo(X + ts * 0.5, Y + ts * 0.15); ctx.lineTo(X + ts * 0.5, Y + ts * 0.85); }
+      else { ctx.moveTo(X + ts * 0.15, Y + ts * 0.5); ctx.lineTo(X + ts * 0.85, Y + ts * 0.5); }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
   drawDoors(L, S) {
     const ctx = this.ctx, ts = this.ts;
     S.doors.forEach((d, i) => {
@@ -446,6 +494,7 @@ export class Renderer {
       const col = d.locked ? (KEY_COLORS[d.locked] ?? '#ff9f43') : C.door;
       ctx.fillStyle = C.floor;
       ctx.fillRect(X, Y, ts, ts);
+      if (def.gate) { this.drawGate(def, d, X, Y, horiz); return; }
       ctx.strokeStyle = col;
       ctx.fillStyle = col;
       ctx.lineWidth = Math.max(2, ts / 8);

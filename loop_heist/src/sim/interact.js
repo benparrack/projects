@@ -13,6 +13,7 @@ export function gatherTargets(sim, a) {
   const near = (x, y) => { const d = dist(x - a.x, y - a.y); return d <= REACH ? d : -1; };
 
   L.doors.forEach((def, i) => {
+    if (def.gate) return; // gates only answer to their pressure plates
     const d = near(tileCenter(def.x), tileCenter(def.y));
     if (d < 0) return;
     const door = S.doors[i];

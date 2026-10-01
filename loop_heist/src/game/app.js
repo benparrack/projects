@@ -414,7 +414,7 @@ class TakeScreen {
       else if (e.k === 'alarm') { this.toast(text, 'alarm'); audio.alarm(); }
       else if (e.k === 'escape') { this.toast(text, 'good'); audio.escape(); }
       else if (e.k === 'power-restored' || e.k === 'takedown') this.toast(text, '');
-      if (e.a === this.index) audio.interact(e.k);
+      if (e.a === this.index || e.k.startsWith('gate-')) audio.interact(e.k);
     }
     const ri = this.heist.L.radioInterval, warn = 5 * TICK_RATE;
     if (ri > 0 && S.tick > 0 && (S.tick + warn) % ri === 0 && S.tick + warn < this.heist.L.loopTicks) {

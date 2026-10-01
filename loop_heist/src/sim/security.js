@@ -1,5 +1,5 @@
 // Cameras, laser grids and power circuits.
-import { SUB, tileCenter, inCone, dist } from './fixed.js';
+import { SUB, tileCenter, inCone, dist, toTile } from './fixed.js';
 import { losClear, boxOverlapsTile } from './world.js';
 
 export const CAM_RANGE = SUB * 6;
@@ -23,6 +23,31 @@ export function initSecurity(L, S) {
     facing: dirAngle(c.facing), looped: 0, disabled: false, sus: 0, seeing: -1,
   }));
   S.lasers = L.lasers.map((l) => ({ id: l.id, off: false, on: true }));
+  S.plates = L.plates.map((p) => ({ id: p.id, down: false }));
+}
+
+// Pressure plates. Anyone standing on one (crew, a guard, a body left lying
+// there) holds its gate open; the gate shuts as soon as every linked plate is
+// clear, unless something is standing in the gateway.
+function updatePlates(sim) {
+  const { L, S } = sim;
+  if (!L.plates.length) return;
+  const on = (x, y, p) => toTile(x) === p.x && toTile(y) === p.y;
+  L.plates.forEach((p, i) => {
+    const down = S.actors.some((a) => !a.escaped && on(a.x, a.y, p)) ||
+      S.guards.some((g) => g.carriedBy < 0 && on(g.x, g.y, p));
+    S.plates[i].down = down;
+  });
+  L.doors.forEach((def, di) => {
+    if (!def.gate) return;
+    const door = S.doors[di];
+    const want = L.plates.some((p, i) => p.gate === def.id && S.plates[i].down);
+    if (want === door.open) return;
+    if (!want && (S.actors.some((a) => !a.escaped && boxOverlapsTile(a.x, a.y, def.x, def.y)) ||
+      S.guards.some((g) => g.carriedBy < 0 && boxOverlapsTile(g.x, g.y, def.x, def.y)))) return;
+    door.open = want;
+    S.log.push({ t: S.tick, k: want ? 'gate-open' : 'gate-close', a: -1, id: def.id });
+  });
 }
 
 export const cameraActive = (L, S, i) => {
@@ -59,6 +84,7 @@ export function cameraFacing(def, tick) {
 
 export function updateSecurity(sim) {
   const { L, S } = sim;
+  updatePlates(sim);
 
   // Cameras.
   S.cameras.forEach((c, i) => {

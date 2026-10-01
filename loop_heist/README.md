@@ -33,8 +33,9 @@ No build step and no dependencies. It's plain ES modules served by a tiny Node s
   missing guard is noticed at the next check-in.
 
 ### Content
-- **9 handcrafted heists**, from one guard and one corridor up to *The Grand Vault*, a four-crew
-  finale, plus *The Showroom*, a cover-and-shadows encore. Each one has a reference solution that the test suite replays.
+- **10 handcrafted heists**, from one guard and one corridor up to *The Grand Vault*, a four-crew
+  finale, plus encores: *The Showroom* (cover and shadows) and *Hold the Door* (a pressure plate
+  that your earlier self has to stand on). Each one has a reference solution that the test suite replays.
 - **Contracts**: procedurally generated buildings in Easy, Medium and Hard, plus a **Daily Job**
   (the same building for everyone each day). Every generated job is checked solvable before you
   see it (see below).
@@ -46,6 +47,8 @@ No build step and no dependencies. It's plain ES modules served by a tiny Node s
   are just input recordings, which is why a replay is exact.
   - A clone is lost when it drifts more than ~¼ tile from its recorded path.
   - It is also lost when an interaction turns out differently from the recording.
+- Pressure plates (`security.js`) hold a linked gate open while anyone, or anything, is on them.
+  That includes a frozen clone or a dumped body. Gates can't be opened by hand, and guards wait at them.
 - Guards (`guards.js`) patrol, see in cones, sense close-by crew, hear footsteps and whistles
   (more faintly through walls), investigate, search, open doors, fix cut power and do radio
   check-ins.

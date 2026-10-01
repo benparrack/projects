@@ -26,7 +26,9 @@ Built autonomously in a `/loop`. The design is in `../game_ideas.md` #2.
   - [x] Contracts: "Show me a way in" walkthrough on the plan screen replays the planner's solo-Ghost solution on the map.
   - [x] Radio warning toast 5s before a check-in when a guard is down.
   - [x] Heist 9 "The Showroom": display-case cover vs two sweeping cameras + a lap guard. Solo Ghost (28/5376 timings win on the straight route — tight) or Hacker camera loop (600 ticks) + Ghost (32/242). Both in SOLUTIONS.
-  - Next mechanic ideas: lights/dark rooms, pressure plates, guard dog that follows scent trails of earlier takes, security tapes.
+  - [x] Pressure plates + gates: a `plate` entity holds a `gate: true` door open while an actor, guard or body is on it (`updatePlates` in security.js). Gates can't be opened by hand, guards wait at them, and an occupied gateway never closes. They render as purple bars, a glowing pad and a dashed wire, and have sounds. Tests are in tests/plates.test.mjs, including the paradox when the plate-holder is removed.
+  - [x] Heist 10 "Hold the Door": the Ghost holds a plate down a dead-end nook while the Cracker loots the strongroom past guard Viv (173/7192 timings win).
+  - Next mechanic ideas: lights/dark rooms, plates in procgen, guard dog that follows scent trails of earlier takes, security tapes.
 
 ## Notes
 - Run tests: `npm test` (node --test, no deps).

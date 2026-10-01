@@ -6,6 +6,7 @@
 //   '.' floor     'S' crew spawn (floor)     'E' getaway van / exit (floor)
 //   ' ' outside void (solid)
 // Every door, item, guard and security device is an entity; see docs in README.
+// A door with `gate: true` has no handle: it opens only while a linked `plate` is weighed down.
 
 export const T = { FLOOR: 0, WALL: 1, WINDOW: 2, VOID: 3, EXIT: 4, PROP: 5 };
 
@@ -59,6 +60,7 @@ export function parseLevel(def) {
     powerboxes: byType('powerbox'),
     terminals: byType('terminal'),
     vaults: byType('vault'),
+    plates: byType('plate'), // pressure plates: hold a gate (door with gate: true) open while weighed down
     circuits: def.circuits ?? [],
     def,
   };

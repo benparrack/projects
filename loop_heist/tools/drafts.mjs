@@ -153,3 +153,16 @@ DRAFTS['showroom#loop'] = {
     ] },
   ],
 };
+DRAFTS['hold-the-door'] = {
+  params: { a: R(100, 700, 20), w: R(0, 200, 10), b: R(0, 200, 20) },
+  crew: [
+    { role: 'ghost', cmds: [
+      { to: [6, 2] }, { use: true }, { path: [[8, 2], [12, 3], [12, 6]], sneak: true }, { wait: '$a' },
+      { path: [[12, 3], [8, 2], [2, 2]] }, { use: true },
+    ] },
+    { role: 'cracker', cmds: [
+      { wait: '$w' }, { path: [[2, 2], [16, 2], [18, 2], [20, 5]], sneak: true }, { use: true }, { wait: '$b' },
+      { path: [[18, 2], [8, 2], [2, 2]], sneak: true }, { use: true },
+    ] },
+  ],
+};

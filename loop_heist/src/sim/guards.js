@@ -95,6 +95,7 @@ function walk(sim, g, speed) {
   const next = g.path[0];
   const nx = next % L.w, ny = (next / L.w) | 0;
   const door = doorAtTile(L, S, nx, ny);
+  if (door && !door.open && L.doors[L.doorIndex[next]].gate) return false; // wait at a shut gate
   if (door && !door.open) {
     door.open = true; // guards carry keys; they open and later re-close
     g.opened.push(L.doors.findIndex((d) => d.id === door.id));

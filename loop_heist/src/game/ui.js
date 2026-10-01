@@ -47,6 +47,8 @@ export function describeEvent(e, sim) {
     case 'done:vault': return `${who} cracked ${e.id}`;
     case 'paradox': return `PARADOX: ${who} ${e.id}`;
     case 'alarm': return `ALARM: ${e.id}`;
+    case 'gate-open': return `gate ${e.id} slid open`;
+    case 'gate-close': return `gate ${e.id} slammed shut`;
     case 'guard-door': { const [g, d] = e.id.split(':'); return `${g} opened door ${d}`; }
     case 'power-restored': { const [g, b] = e.id.split(':'); return `${g} fixed power box ${b}`; }
     default: return `${who} ${e.k} ${e.id}`;

@@ -115,4 +115,14 @@ export const SOLUTIONS = {
       { path: [[27, 3], [6, 3], [2, 3], [2, 2]], sneak: true }, { use: true },
     ] },
   ],
+  'hold-the-door': [
+    { role: 'ghost', cmds: [
+      { to: [6, 2] }, { use: true }, { path: [[8, 2], [12, 3], [12, 6]], sneak: true }, { wait: 520 },
+      { path: [[12, 3], [8, 2], [2, 2]] }, { use: true },
+    ] },
+    { role: 'cracker', cmds: [
+      { wait: 40 }, { path: [[2, 2], [16, 2], [18, 2], [20, 5]], sneak: true }, { use: true },
+      { path: [[18, 2], [8, 2], [2, 2]], sneak: true }, { use: true },
+    ] },
+  ],
 };

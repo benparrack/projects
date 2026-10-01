@@ -69,6 +69,8 @@ export const audio = {
     else if (k === 'locked') tone({ f: 180, dur: 0.12, vol: 0.12, type: 'square' });
     else if (k === 'key' || k === 'loot') { tone({ f: 880, dur: 0.08, vol: 0.1 }); tone({ f: 1320, dur: 0.12, vol: 0.1, at: 0.07 }); }
     else if (k.startsWith('done:')) { tone({ f: 523, dur: 0.1, vol: 0.1, type: 'triangle' }); tone({ f: 784, dur: 0.16, vol: 0.1, type: 'triangle', at: 0.09 }); }
+    else if (k === 'gate-open') { tone({ f: 110, f2: 220, dur: 0.25, vol: 0.12, type: 'sawtooth' }); noise({ dur: 0.2, vol: 0.06, hp: 3000 }); }
+    else if (k === 'gate-close') { tone({ f: 220, f2: 70, dur: 0.18, vol: 0.16, type: 'sawtooth' }); noise({ dur: 0.1, vol: 0.2, hp: 400 }); }
     else if (k === 'takedown') { noise({ dur: 0.15, vol: 0.25, hp: 200 }); tone({ f: 90, f2: 50, dur: 0.2, vol: 0.25 }); }
   },
   suspicion(level) {
