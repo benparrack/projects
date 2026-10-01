@@ -40,6 +40,6 @@ export const HOLD = {
   restorePower: 50,
 };
 
-export const WHISTLE_NOISE = SUB * 7;
+export const WHISTLE_NOISE = SUB * 9;
 export const WHISTLE_COOLDOWN = 60;
 export const GHOST_SNEAK_SPEED = 26;

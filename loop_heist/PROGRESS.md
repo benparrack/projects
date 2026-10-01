@@ -7,14 +7,23 @@ Built autonomously in a `/loop`. The design is in `../game_ideas.md` #2.
 - [x] 2. Clone record/replay + paradox detection (position drift and interaction-outcome mismatch → clone "lost")
 - [x] 3. Guard AI: patrol/wait/investigate/search/restore, vision cones + close-range notice, suspicion → alarm, hearing (footsteps, whistle, thuds, vault), BFS pathing, guards open and re-close doors, bodies, radio check-ins
 - [x] 4. Security: sweeping cameras (loopable/disable via terminal), lasers (circuit-powered, optional blink), power boxes (guard dispatched to restore), terminals, vaults
-- [ ] 5. Renderer + game UI: planning screen, live take, ghost paths of clones, paradox visualisation, timeline scrubber, rewind during a take
+- [x] 5. Renderer + game UI: planning screen, live take, ghost paths of clones, paradox visualisation, timeline scrubber, rewind during a take
 - [ ] 6. Handcrafted tutorial heists (one mechanic each) + solver-verified solutions
+  - done: night-shift (sneak/timing), double-act (whistle lure, 2 crew); `src/levels/solutions.js` + `tests/levels.test.mjs`
+  - todo: keycards, cracker lockpick, hacker/cameras, power cut + lasers, muscle takedowns + radio, a finale combining them
 - [ ] 7. Procedural campaign (building generator + solvability check)
 - [ ] 8. Polish: juice, audio, menus, save progress, README
 
 ## Notes
 - Run tests: `npm test` (node --test, no deps).
 - `src/sim/bot.js` is a scripted crew member used by tests (and later the level solver).
+
+- Run the game: `npm start` → http://localhost:5090
+- Browser testing: the Playwright MCP's Firefox can't start here (AppArmor blocks unprivileged user namespaces:
+  `kernel.apparmor_restrict_unprivileged_userns = 1`). Workaround: drive playwright-core directly from a Node script
+  with `MOZ_DISABLE_CONTENT_SANDBOX=1`. `window.loopHeist` exposes `screen`, `open(id)`, `store`, `input` for tests.
+- Tuning log: guard alarm threshold 22 → 40 (≈1–2s of being seen), whistle radius 9 tiles (beats 7-tile sight),
+  noise through walls heard at 2/3 radius.
 
 ## Needs sudo
 (none yet)

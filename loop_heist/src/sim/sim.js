@@ -13,7 +13,7 @@
 import { SUB, tileCenter, toTile, dist } from './fixed.js';
 import {
   IN, MOVE_MASK, WALK_SPEED, SNEAK_SPEED, GHOST_SNEAK_SPEED, CARRY_FACTOR, DIAG,
-  WALK_NOISE, CARRY_NOISE, DESYNC_DIST, TICK_RATE,
+  WALK_NOISE, CARRY_NOISE, DESYNC_DIST, TICK_RATE, WHISTLE_NOISE,
 } from './constants.js';
 import { moveBox, onExit } from './world.js';
 import { gatherTargets, performInstant, completeHold, dropLoot } from './interact.js';
@@ -37,9 +37,9 @@ export function initialState(L, crew) {
     log: [],        // global event log for the UI: {t, k, a, id}
     noises: [],     // noises made this tick, heard by guards next tick
     actors: crew.map((c, i) => {
-      const [sx, sy] = L.spawns[i % L.spawns.length];
+      const [sx, sy] = L.spawns[(c.slot ?? i) % L.spawns.length];
       return {
-        i, role: c.role,
+        i, role: c.role, slot: c.slot ?? i,
         x: tileCenter(sx), y: tileCenter(sy), facing: 0,
         carrying: -1, body: -1, keys: [],
         using: null, prev: 0, cooldown: 0,
@@ -184,7 +184,7 @@ export class Sim {
     if (a.cooldown > 0) return;
     if (a.role === 'ghost') {
       a.cooldown = 60;
-      this.noise(a.x, a.y, SUB * 7, 'whistle', a.i);
+      this.noise(a.x, a.y, WHISTLE_NOISE, 'whistle', a.i);
       this.event(a, 'whistle', '');
     }
   }
@@ -230,7 +230,7 @@ export class Sim {
     const allOut = S.actors.every((a) => a.escaped);
     const loot = S.items.filter((it) => it.kind === 'loot');
     const required = loot.filter((it) => it.required);
-    if (allOut) {
+    if (allOut && S.actors.length) {
       const ok = required.every((it) => it.secured);
       S.over = ok
         ? { kind: 'success', t: S.tick, take: loot.filter((it) => it.secured).reduce((s, it) => s + it.value, 0) }

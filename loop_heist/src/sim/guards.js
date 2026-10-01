@@ -13,8 +13,8 @@ import { dirAngle } from './security.js';
 export const G_RANGE = SUB * 7;
 export const G_HALF = 30;            // ~42 degrees each side
 export const G_CLOSE = SUB + 96;     // notices anyone this close, any direction
-export const SUS_ALARM = 22;
-export const SUS_INVESTIGATE = 6;
+export const SUS_ALARM = 40;
+export const SUS_INVESTIGATE = 10;
 const PATROL_SPEED = 20;
 const ALERT_SPEED = 30;
 const TURN = 14;
@@ -206,7 +206,7 @@ function perceive(sim, g) {
       return;
     }
     if (g.sus >= SUS_INVESTIGATE && g.state !== 'investigate' && g.state !== 'restore') investigate(sim, g, a.x, a.y, true);
-  } else if (g.sus > 0 && (S.tick & 1)) g.sus--;
+  } else if (g.sus > 0) g.sus--;
 
   // Bodies.
   for (const o of S.guards) {
@@ -221,7 +221,7 @@ function perceive(sim, g) {
   if (g.state === 'restore') return;
   for (const n of S.noises) {
     const d = dist(n.x - g.x, n.y - g.y);
-    const r = losClear(sim.L, S, g.x, g.y, n.x, n.y) ? n.r : n.r >> 1;
+    const r = losClear(sim.L, S, g.x, g.y, n.x, n.y) ? n.r : idiv(n.r * 2, 3);
     if (d <= r) {
       if (g.state !== 'investigate' || n.kind !== 'step') investigate(sim, g, n.x, n.y, n.kind !== 'step');
       break;
