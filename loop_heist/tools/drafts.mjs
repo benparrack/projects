@@ -75,3 +75,60 @@ export const DRAFTS = {
     ],
   },
 };
+DRAFTS['grand-vault'] = {
+  params: { a: R(0, 120, 10) },
+  crew: [
+    { role: 'hacker', cmds: [
+      { to: [6, 2] }, { use: true }, { wait: '$a' }, { path: [[8, 2], [11, 2], [11, 3]] }, { use: true }, { path: [[11, 5], [10, 6]] }, { hold: 42 },
+      { wait: 2000 },
+    ] },
+  ],
+};
+DRAFTS['grand-vault'].params = { a: [90], b: R(380, 500, 20), g: R(0, 300, 20), w: R(0, 60, 20) };
+DRAFTS['grand-vault'].crew = [
+  { role: 'hacker', cmds: [
+    { to: [6, 2] }, { use: true }, { wait: '$a' }, { path: [[8, 2], [11, 2], [11, 3]] }, { use: true }, { path: [[11, 5], [10, 6]] }, { hold: 42 },
+    { wait: '$b' }, { hold: 42 }, { wait: '$b' }, { hold: 42 }, { wait: 40 }, { path: [[11, 5], [11, 2], [8, 2], [2, 2]] }, { use: true },
+  ] },
+  { role: 'ghost', cmds: [
+    { wait: 600 }, { wait: '$g' }, { path: [[6, 2], [15, 2]] }, { wait: '$w' }, { ability: true }, { path: [[6, 2], [2, 2]] }, { use: true },
+  ] },
+];
+DRAFTS['grand-vault'].params = { a: [90], b: [420], g: [200], w: [20], m: [600], k: R(150, 400, 5) };
+DRAFTS['grand-vault'].crew.push(
+  { role: 'muscle', cmds: [
+    { wait: '$m' }, { path: [[6, 2], [20, 1]] }, { wait: '$k' }, { to: [17, 2], sneak: true }, { use: true }, { wait: 2 }, { use: true },
+    { path: [[16, 2], [16, 5], [17, 5]] }, { use: true }, { to: [19, 6] }, { hold: 32 },
+    { path: [[16, 5], [16, 2], [6, 2], [2, 2]] }, { use: true },
+  ] },
+);
+DRAFTS['grand-vault'].params = { a: [90], b: [420], g: R(150, 250, 25), w: [10], v: R(0, 60, 20), m: [600], k: R(0, 300, 10), t: R(0, 300, 10) };
+DRAFTS['grand-vault'].crew[1] = { role: 'ghost', cmds: [
+  { wait: 600 }, { wait: '$g' }, { path: [[6, 2], [15, 2]] }, { wait: '$w' }, { ability: true }, { to: [8, 2] }, { wait: '$v' }, { ability: true },
+  { path: [[6, 2], [2, 2]] }, { use: true },
+] };
+DRAFTS['grand-vault'].crew[2] = { role: 'muscle', cmds: [
+  { wait: '$m' }, { path: [[6, 2], [20, 1], [22, 1]] }, { wait: '$k' }, { path: [[20, 2], [16, 2], [16, 5], [19, 6]], sneak: true }, { wait: '$t' },
+  { to: [17, 7], sneak: true }, { use: true }, { to: [19, 6] }, { hold: 32 },
+  { path: [[16, 5], [16, 2], [6, 2], [2, 2]] }, { use: true },
+] };
+DRAFTS['grand-vault'].params = { a: [90], b: [420], g: R(150, 250, 50), w: [10], m: [500], k: R(280, 400, 2), q: [[15, 3], [16, 3], [15, 2]] };
+DRAFTS['grand-vault'].crew[1] = { role: 'ghost', cmds: [
+  { wait: 600 }, { wait: '$g' }, { path: [[6, 2], [15, 2]] }, { wait: '$w' }, { ability: true }, { path: [[12, 2], [11, 3], [11, 5], [13, 7]] },
+  { wait: 300 }, { path: [[11, 5], [11, 2], [6, 2], [2, 2]] }, { use: true },
+] };
+DRAFTS['grand-vault'].crew[2] = { role: 'muscle', cmds: [
+  { wait: '$m' }, { path: [[6, 2], [11, 2], [11, 5], [12, 5]] }, { wait: '$k' }, { path: [[11, 3], '$q'], sneak: true }, { use: true }, { wait: 2 }, { use: true },
+  { path: [[16, 2], [16, 5], [17, 6]] }, { use: true }, { to: [19, 6] }, { hold: 32 },
+  { path: [[16, 5], [16, 2], [6, 2], [2, 2]] }, { use: true },
+] };
+DRAFTS['grand-vault'].params = { a: [90], b: [420], g: [200], w: [10], m: [500], k: [358], q: [[15, 3]], c: R(300, 800, 50), d: R(400, 900, 20) };
+DRAFTS['grand-vault'].crew[3] = { role: 'cracker', cmds: [
+  { wait: '$c' }, { path: [[6, 2], [20, 2], [22, 2], [24, 3]] }, { wait: '$d' },
+  { path: [[26, 3], [29, 3]] }, { hold: 102 }, { use: true },
+  { path: [[26, 3], [22, 2], [20, 2], [6, 2], [2, 2]] }, { use: true },
+] };
+DRAFTS['grand-vault'].crew[3].cmds.splice(1, 1, { path: [[6, 2], [20, 2]] }, { use: true }, { path: [[22, 2], [24, 3]] });
+DRAFTS['grand-vault'].params.k = R(340, 380, 2);
+DRAFTS['grand-vault'].params.c = R(300, 700, 50);
+DRAFTS['grand-vault'].params.d = R(400, 800, 20);

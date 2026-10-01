@@ -59,3 +59,10 @@ test('relay needs all three: without the ghost the cracker is caught', () => {
   const sim = playSolution(L, [hacker, cracker]);
   assert.notEqual(sim.over.kind, 'success');
 });
+
+test('grand-vault: without the ghost, nell never leaves and the muscle is caught', () => {
+  const L = parseLevel(LEVELS.find((l) => l.id === 'grand-vault'));
+  const [hacker, , muscle, cracker] = SOLUTIONS['grand-vault'];
+  const sim = playSolution(L, [hacker, muscle, cracker]);
+  assert.notEqual(sim.over.kind, 'success');
+});

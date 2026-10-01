@@ -8,12 +8,14 @@ Built autonomously in a `/loop`. The design is in `../game_ideas.md` #2.
 - [x] 3. Guard AI: patrol/wait/investigate/search/restore, vision cones + close-range notice, suspicion → alarm, hearing (footsteps, whistle, thuds, vault), BFS pathing, guards open and re-close doors, bodies, radio check-ins
 - [x] 4. Security: sweeping cameras (loopable/disable via terminal), lasers (circuit-powered, optional blink), power boxes (guard dispatched to restore), terminals, vaults
 - [x] 5. Renderer + game UI: planning screen, live take, ghost paths of clones, paradox visualisation, timeline scrubber, rewind during a take
-- [ ] 6. Handcrafted tutorial heists (one mechanic each) + solver-verified solutions
+- [x] 6. Handcrafted tutorial heists (one mechanic each) + solver-verified solutions
   - done: night-shift (sneak/timing), double-act (whistle lure, 2 crew), keycard (card or lockpick — both routes tested), closed-circuit (hacker re-loops cameras for the ghost; reusable terminals), blackout (power cut → lasers off, repair guard), heavy-hands (muscle takedowns, carrying bodies, radio check-ins shown on the timeline), relay (3 crew: hacker unlocks, ghost walks the guard to the van with 3 whistles, cracker hides in the office → vault → corner; 759 winning timings)
-  - todo: a 4-crew finale
-  - level design workflow: write a parametrised draft in `tools/drafts.mjs`, `MAXWINS=100000 EMIT=1 node tools/search.mjs <id> --all` → counts winning timings (robustness) and prints the median plan for `solutions.js`
+  - grand-vault finale (4 crew: hacker keeps cameras looped, ghost whistles Nell out and hides, muscle ambushes her right after the 45s radio check and cuts laser power, cracker cracks the vault; 333 winning timings)
+  - level design workflow: write a parametrised draft in `tools/drafts.mjs`, `MAXWINS=100000 EMIT=1 node tools/search.mjs <id> --all` → counts winning timings (robustness) and prints the median plan for `solutions.js`. `PARTIAL=1` treats the last drafted member's clean take as a win (build big heists one member at a time).
 - [ ] 7. Procedural campaign (building generator + solvability check)
 - [ ] 8. Polish: juice, audio, menus, save progress, README
+  - menu: the animated background map runs under the title and level cards; tone it down / reposition
+- [ ] 9. Ongoing (Ben, 2026-10-01): after 7–8, keep looping — new exciting levels, new mechanics/features, and keep making it look as good as possible
 
 ## Notes
 - Run tests: `npm test` (node --test, no deps).

@@ -47,7 +47,7 @@ function dfs(k, crew, env) {
     else if (rec.escapedAt == null) why = `m${k}: didn't escape (${sim.over?.reason ?? 'still inside'})`;
     else if (sim.over && sim.over.t <= rec.escapedAt + 1 && sim.over.kind === 'alarm') why = `m${k}: ${sim.over.reason}`;
     else if (sim.S.alarm && !last) why = `m${k}: alarm ${sim.S.alarm.reason ?? ''}`;
-    if (!why && last) {
+    if (!why && last && !process.env.PARTIAL) {
       const full = new Sim(L, [...crew, { role: m.role, rec }]);
       full.runToEnd(L.loopTicks + 5);
       if (full.over.kind === 'success' && !full.S.actors.some((a) => a.lost)) {
@@ -59,6 +59,7 @@ function dfs(k, crew, env) {
       }
       why = `final: ${full.over.kind} ${full.over.reason ?? ''}`;
     }
+    if (!why && last && process.env.PARTIAL) { wins++; winEnvs.push(e); if (process.env.VERBOSE) console.log(`OK ${JSON.stringify(e)}`); continue; }
     if (why) { fails.set(why, (fails.get(why) ?? 0) + 1); continue; }
     if (dfs(k + 1, [...crew, { role: m.role, rec }], e)) return true;
   }

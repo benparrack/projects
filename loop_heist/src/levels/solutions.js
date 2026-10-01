@@ -78,4 +78,26 @@ export const SOLUTIONS = {
       { path: [[19, 3], [19, 2], [17, 2]], sneak: true }, { path: [[6, 2], [2, 2]] }, { use: true },
     ] },
   ],
+  // Hacker keeps the gallery cameras looped, Ghost whistles Nell out and hides, Muscle
+  // ambushes her as she returns (just after the 45s radio check) and cuts the laser
+  // power, Cracker waits in the antechamber for the grid to drop.
+  'grand-vault': [
+    { role: 'hacker', cmds: [
+      { to: [6, 2] }, { use: true }, { wait: 90 }, { path: [[8, 2], [11, 2], [11, 3]] }, { use: true }, { path: [[11, 5], [10, 6]] }, { hold: 42 },
+      { wait: 420 }, { hold: 42 }, { wait: 420 }, { hold: 42 }, { wait: 40 }, { path: [[11, 5], [11, 2], [8, 2], [2, 2]] }, { use: true },
+    ] },
+    { role: 'ghost', cmds: [
+      { wait: 800 }, { path: [[6, 2], [15, 2]] }, { wait: 10 }, { ability: true }, { path: [[12, 2], [11, 3], [11, 5], [13, 7]] },
+      { wait: 300 }, { path: [[11, 5], [11, 2], [6, 2], [2, 2]] }, { use: true },
+    ] },
+    { role: 'muscle', cmds: [
+      { wait: 500 }, { path: [[6, 2], [11, 2], [11, 5], [12, 5]] }, { wait: 358 }, { path: [[11, 3], [15, 3]], sneak: true },
+      { use: true }, { wait: 2 }, { use: true }, { path: [[16, 2], [16, 5], [17, 6]] }, { use: true }, { to: [19, 6] }, { hold: 32 },
+      { path: [[16, 5], [16, 2], [6, 2], [2, 2]] }, { use: true },
+    ] },
+    { role: 'cracker', cmds: [
+      { wait: 450 }, { path: [[6, 2], [20, 2]] }, { use: true }, { path: [[22, 2], [24, 3]] }, { wait: 700 },
+      { path: [[26, 3], [29, 3]] }, { hold: 102 }, { use: true }, { path: [[26, 3], [22, 2], [20, 2], [6, 2], [2, 2]] }, { use: true },
+    ] },
+  ],
 };
