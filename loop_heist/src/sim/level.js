@@ -2,11 +2,12 @@
 //
 // Map legend:
 //   '#' wall      'w' window (blocks movement, not sight)
+//   'o' furniture: crates, desks, display cases (blocks movement and sight; cover)
 //   '.' floor     'S' crew spawn (floor)     'E' getaway van / exit (floor)
 //   ' ' outside void (solid)
 // Every door, item, guard and security device is an entity; see docs in README.
 
-export const T = { FLOOR: 0, WALL: 1, WINDOW: 2, VOID: 3, EXIT: 4 };
+export const T = { FLOOR: 0, WALL: 1, WINDOW: 2, VOID: 3, EXIT: 4, PROP: 5 };
 
 export function parseLevel(def) {
   const rows = def.map;
@@ -21,6 +22,7 @@ export function parseLevel(def) {
       switch (c) {
         case '#': t = T.WALL; break;
         case 'w': t = T.WINDOW; break;
+        case 'o': t = T.PROP; break;
         case ' ': t = T.VOID; break;
         case 'E': t = T.EXIT; break;
         case 'S': t = T.FLOOR; spawns.push([x, y]); break;

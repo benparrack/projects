@@ -11,14 +11,14 @@ export function doorAtTile(L, S, tx, ty) {
 
 export function solidTile(L, S, tx, ty) {
   const t = tileAt(L, tx, ty);
-  if (t === T.WALL || t === T.WINDOW || t === T.VOID) return true;
+  if (t === T.WALL || t === T.WINDOW || t === T.VOID || t === T.PROP) return true;
   const d = doorAtTile(L, S, tx, ty);
   return !!(d && !d.open);
 }
 
 export function opaqueTile(L, S, tx, ty) {
   const t = tileAt(L, tx, ty);
-  if (t === T.WALL || t === T.VOID) return true;
+  if (t === T.WALL || t === T.VOID || t === T.PROP) return true;
   const d = doorAtTile(L, S, tx, ty);
   return !!(d && !d.open);
 }

@@ -1,6 +1,7 @@
 // Loop Heist: screens, flow and persistence.
 import { parseLevel } from '../sim/level.js';
 import { Sim } from '../sim/sim.js';
+import { Bot, runBot } from '../sim/bot.js';
 import { ROLES, TICK_RATE } from '../sim/constants.js';
 import { Renderer } from '../render/render.js';
 import { Input } from './input.js';
@@ -210,6 +211,10 @@ class PlanScreen {
               onclick: () => this.take(heist.crew.length, r),
             }, h('span', { class: 'rn' }, ROLES[r].name), h('span', { class: 'rb' }, L.roles.includes(r) ? ROLES[r].blurb : 'Not on this job.'))))),
         L.tips.length ? h('div', {}, h('div', { class: 'section-title' }, 'Notes'), h('ul', { class: 'tips' }, ...L.tips.map((t) => h('li', {}, t)))) : null,
+        heist.def.solution ? h('div', {}, h('div', { class: 'section-title' }, 'Stuck?'),
+          this.hintBtn = h('button', { class: `btn small ghost hint-btn ${this.hint ? 'on' : ''}`, onclick: () => this.toggleHint() },
+            this.hint ? '◼ Stop the walkthrough' : '◉ Show me a way in'),
+          h('div', { class: 'dim', style: 'font-size:.8rem;margin-top:6px' }, 'The building was checked with a lone sneaking Ghost. Watch the route on the map.')) : null,
       ),
       h('footer', {},
         h('button', { class: 'btn ghost', onclick: () => show(new MenuScreen()) }, '← Heists'),
@@ -225,7 +230,19 @@ class PlanScreen {
       if (e.code === 'Enter' && res) show(new ReplayScreen(heist));
     });
   }
-  destroy() { this.unkey?.(); }
+  destroy() { this.unkey?.(); document.body.classList.remove('hinting'); }
+  toggleHint() {
+    audio.click();
+    this.hint = !this.hint;
+    this.preview = null;
+    if (this.hint && !this.hintCrew) {
+      const sim = new Sim(this.heist.L, [{ role: 'ghost', rec: null }]);
+      this.hintCrew = [{ role: 'ghost', rec: runBot(sim, new Bot(this.heist.def.solution[0].cmds)) }];
+    }
+    this.hintBtn.textContent = this.hint ? '◼ Stop the walkthrough' : '◉ Show me a way in';
+    this.hintBtn.classList.toggle('on', this.hint);
+    document.body.classList.toggle('hinting', this.hint);
+  }
   take(index, role) {
     audio.click();
     show(new TakeScreen(this.heist, index, role ?? this.heist.crew[index].role));
@@ -233,7 +250,7 @@ class PlanScreen {
   layout() { R.fit(this.heist.L, sideRect()); }
   frame(dt) {
     // The plan replays in the background on a loop.
-    if (!this.preview) { this.preview = new Sim(this.heist.L, this.heist.crew); this.acc = 0; R.prev = null; }
+    if (!this.preview) { this.preview = new Sim(this.heist.L, this.hint ? this.hintCrew : this.heist.crew); this.acc = 0; R.prev = null; }
     const sim = this.preview;
     if (sim.over) {
       if ((this.pause += dt) > 1.5) { this.preview = null; this.pause = 0; }
@@ -398,6 +415,11 @@ class TakeScreen {
       else if (e.k === 'escape') { this.toast(text, 'good'); audio.escape(); }
       else if (e.k === 'power-restored' || e.k === 'takedown') this.toast(text, '');
       if (e.a === this.index) audio.interact(e.k);
+    }
+    const ri = this.heist.L.radioInterval, warn = 5 * TICK_RATE;
+    if (ri > 0 && S.tick > 0 && (S.tick + warn) % ri === 0 && S.tick + warn < this.heist.L.loopTicks) {
+      const out = S.guards.find((g) => g.state === 'ko');
+      if (out) { this.toast(`Radio check-in in 5s — ${out.id} won't answer`, 'alarm'); audio.suspicion(30); }
     }
     for (const n of S.noises) if (n.kind === 'whistle') audio.whistle();
     if (S.guards.some((g) => g.seeing >= 0 && g.sus > 0)) audio.suspicion(Math.max(...S.guards.map((g) => g.sus)));

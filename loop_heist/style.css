@@ -149,3 +149,6 @@ kbd { font-family: var(--mono); font-size: 0.8em; padding: 1px 6px; border: 1px 
   .side { width: 100%; top: auto; height: 46vh; border-left: 0; border-top: 1px solid var(--line); }
   .scrubber { right: 12px; bottom: calc(46vh + 12px); }
 }
+
+.hint-btn.on { color: var(--accent, #5ef2c2); border-color: currentColor; }
+body.hinting::after { content: 'WALKTHROUGH · one way in'; position: fixed; left: 16px; top: 14px; z-index: 4; font: 600 .72rem 'JetBrains Mono', monospace; letter-spacing: .14em; color: #5ef2c2; padding: 6px 10px; border: 1px solid rgba(94,242,194,.4); border-radius: 6px; background: rgba(7,16,29,.8); animation: casing 1.6s ease-in-out infinite; }

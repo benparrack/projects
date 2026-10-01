@@ -22,6 +22,10 @@ Built autonomously in a `/loop`. The design is in `../game_ideas.md` #2.
   - Menu: background map blurred/dimmed via `body[data-screen]` CSS. Mute button (corner) + M key. README.md written.
   - Still worth doing later: radio-warning toast before check-ins, more audio variety (footsteps, door creaks), a planner-based hint for contracts.
 - [ ] 9. Ongoing (Ben, 2026-10-01): after 7–8, keep looping — new exciting levels, new mechanics/features, and keep making it look as good as possible
+  - [x] Furniture tile `o` (crates/desks/display cases): solid cover that blocks sight. Procgen scatters it (never adjacent to another piece or a doorway, never disconnecting the building; test-checked); drawn as raised blocks with shadows.
+  - [x] Contracts: "Show me a way in" walkthrough on the plan screen replays the planner's solo-Ghost solution on the map.
+  - [x] Radio warning toast 5s before a check-in when a guard is down.
+  - Next: use furniture in a new handcrafted heist (hiding behind display cases in a gallery?), new mechanic ideas: lights/dark rooms, pressure plates, guard dog that follows scent trails of earlier takes, security tapes.
 
 ## Notes
 - Run tests: `npm test` (node --test, no deps).

@@ -28,3 +28,23 @@ for (const tier of [1, 2, 3]) {
     }
   });
 }
+
+test('furniture never cuts a building in two, and blocks sight', async () => {
+  const { opaqueTile, solidTile } = await import('../src/sim/world.js');
+  for (let seed = 1; seed <= 30; seed++) for (const tier of [1, 2, 3]) {
+    const def = generateHeist(seed, tier);
+    const m = def.map;
+    const open = (x, y) => '.ES'.includes(m[y]?.[x] ?? '#');
+    let total = 0, sx = -1, sy = -1;
+    m.forEach((row, y) => [...row].forEach((c, x) => { if (open(x, y)) { total++; if (sx < 0) { sx = x; sy = y; } } }));
+    const seen = new Set([`${sx},${sy}`]), st = [[sx, sy]];
+    while (st.length) {
+      const [x, y] = st.pop();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (open(x + dx, y + dy) && !seen.has(`${x + dx},${y + dy}`)) { seen.add(`${x + dx},${y + dy}`); st.push([x + dx, y + dy]); }
+    }
+    assert.equal(seen.size, total, `seed ${seed} tier ${tier}`);
+    const L = parseLevel(def), S = { doors: [] };
+    const py = m.findIndex((row) => row.includes('o'));
+    if (py >= 0) { const px = m[py].indexOf('o'); assert.ok(opaqueTile(L, S, px, py) && solidTile(L, S, px, py)); }
+  }
+});

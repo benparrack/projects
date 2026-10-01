@@ -109,6 +109,45 @@ export class Renderer {
     ctx.restore();
   }
 
+  // Furniture: crates, desks and display cases. Solid cover, drawn as raised blocks.
+  drawProps(ctx, L) {
+    const ts = this.ts, p = Math.max(2, ts * 0.08);
+    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+      if (tileAt(L, x, y) !== T.PROP) continue;
+      const X = this.ox + x * ts + p, Y = this.oy + y * ts + p, s = ts - 2 * p;
+      const kind = (x * 7 + y * 13) % 3;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(X + p * 0.8, Y + p * 1.2, s, s);
+      ctx.fillStyle = kind === 2 ? '#13283f' : '#1a2c46';
+      ctx.fillRect(X, Y, s, s);
+      ctx.fillStyle = 'rgba(160,200,255,0.10)';
+      ctx.fillRect(X, Y, s, s * 0.28);
+      ctx.strokeStyle = '#5d8fd0';
+      ctx.lineWidth = Math.max(1, ts / 24);
+      ctx.strokeRect(X + 0.5, Y + 0.5, s - 1, s - 1);
+      ctx.beginPath();
+      if (kind === 0) { // crate: cross brace
+        ctx.strokeStyle = 'rgba(93,143,208,0.55)';
+        ctx.moveTo(X + p, Y + p); ctx.lineTo(X + s - p, Y + s - p);
+        ctx.moveTo(X + s - p, Y + p); ctx.lineTo(X + p, Y + s - p);
+        ctx.stroke();
+      } else if (kind === 1) { // desk: papers and a lamp
+        ctx.fillStyle = 'rgba(220,235,255,0.35)';
+        ctx.fillRect(X + s * 0.18, Y + s * 0.45, s * 0.3, s * 0.32);
+        ctx.fillStyle = 'rgba(255,214,120,0.8)';
+        ctx.arc(X + s * 0.72, Y + s * 0.6, Math.max(1.5, s * 0.08), 0, Math.PI * 2);
+        ctx.fill();
+      } else { // display case: glass with something glinting inside
+        ctx.strokeStyle = 'rgba(140,220,255,0.5)';
+        ctx.strokeRect(X + s * 0.2 + 0.5, Y + s * 0.2 + 0.5, s * 0.6, s * 0.6);
+        ctx.fillStyle = 'rgba(140,220,255,0.18)';
+        ctx.fillRect(X + s * 0.2, Y + s * 0.2, s * 0.6, s * 0.6);
+        ctx.fillStyle = 'rgba(255,240,180,0.8)';
+        ctx.fillRect(X + s * 0.45, Y + s * 0.45, s * 0.1, s * 0.1);
+      }
+    }
+  }
+
   drawVignette() {
     const ctx = this.ctx, w = this.vw, h = this.vh;
     if (this.vigKey !== `${w}x${h}`) {
@@ -147,7 +186,8 @@ export class Renderer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const ts = this.ts;
     const solid = (x, y) => { const t = tileAt(L, x, y); return t === T.WALL || t === T.VOID; };
-    const open = (x, y) => { const t = tileAt(L, x, y); return t === T.FLOOR || t === T.EXIT || t === T.WINDOW; };
+    const open = (x, y) => { const t = tileAt(L, x, y); return t === T.FLOOR || t === T.EXIT || t === T.WINDOW || t === T.PROP; };
+    const caster = (x, y) => solid(x, y) || tileAt(L, x, y) === T.PROP;
 
     // Floor: checker plus a soft glow per room-ish area, so rooms read as lit spaces.
     for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
@@ -158,19 +198,19 @@ export class Renderer {
     }
     // Ambient occlusion: walls cast a short shadow onto the floor below / beside them.
     for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
-      if (!open(x, y)) continue;
+      if (!open(x, y) || tileAt(L, x, y) === T.PROP) continue;
       const X = this.ox + x * ts, Y = this.oy + y * ts;
-      if (solid(x, y - 1)) {
+      if (caster(x, y - 1)) {
         const g = ctx.createLinearGradient(0, Y, 0, Y + ts * 0.45);
         g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g; ctx.fillRect(X, Y, ts, ts * 0.45);
       }
-      if (solid(x - 1, y)) {
+      if (caster(x - 1, y)) {
         const g = ctx.createLinearGradient(X, 0, X + ts * 0.3, 0);
         g.addColorStop(0, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g; ctx.fillRect(X, Y, ts * 0.3, ts);
       }
-      if (solid(x + 1, y)) {
+      if (caster(x + 1, y)) {
         const g = ctx.createLinearGradient(X + ts, 0, X + ts * 0.8, 0);
         g.addColorStop(0, 'rgba(0,0,0,0.18)'); g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g; ctx.fillRect(X + ts * 0.8, Y, ts * 0.2, ts);
@@ -219,6 +259,7 @@ export class Renderer {
     ctx.strokeStyle = C.wallEdge;
     ctx.lineWidth = Math.max(1, ts / 16);
     ctx.stroke();
+    this.drawProps(ctx, L);
     return cv;
   }
 

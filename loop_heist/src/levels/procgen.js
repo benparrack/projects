@@ -174,10 +174,40 @@ export function generateHeist(seed, tier = 2) {
     ents.push({ type: 'camera', id: `C${i + 1}`, x, y, facing: top ? 's' : 'n', sweep: ri(28, 44), period: ri(100, 170), range: 6 });
   }
 
+  // Furniture last, so it never changes the layout above. Each piece is cover
+  // (blocks movement and sight); keep pieces apart, off doorways, and never cut
+  // the building in two.
+  const walkable = (x, y) => '.ES'.includes(grid[y]?.[x] ?? '#');
+  let total = grid.flat().filter((c) => '.ES'.includes(c)).length;
+  const connected = () => {
+    const seen = new Set([`${van.x},${van.y}`]), st = [[van.x, van.y]];
+    while (st.length) {
+      const [x, y] = st.pop();
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const k = `${x + ox},${y + oy}`;
+        if (!seen.has(k) && walkable(x + ox, y + oy)) { seen.add(k); st.push([x + ox, y + oy]); }
+      }
+    }
+    return seen.size === total - 1; // minus the piece just placed
+  };
+  const props = [];
+  for (let k = 0; k < cells.length; k++) {
+    if (k === vanK) continue;
+    const cell = cells[k];
+    const n = k === lootK ? ri(1, 2) : ri(0, tier === 1 ? 2 : 3);
+    for (let i = 0, placed = 0; i < n * 4 && placed < n; i++) {
+      const x = cell.x + ri(0, cell.w - 1), y = cell.y + ri(0, cell.h - 1);
+      if (grid[y][x] !== '.' || used.has(`${x},${y}`) || nearGap(x, y)) continue;
+      if (props.some(([px, py]) => Math.abs(px - x) <= 1 && Math.abs(py - y) <= 1)) continue;
+      grid[y][x] = 'o';
+      if (connected()) { props.push([x, y]); used.add(`${x},${y}`); placed++; total--; } else grid[y][x] = '.';
+    }
+  }
+
   return {
     id: `job-${tier}-${seed}`,
     name: place,
-    brief: `${place}. The ${lootName} ${lock ? 'sit behind a keycard door' : 'sit in the back room'}. ${nGuards} guard${nGuards > 1 ? 's' : ''} on shift${nCams ? `, ${nCams} camera${nCams > 1 ? 's' : ''}` : ''}.`,
+    brief: `${place}. Target: ${lootName}, ${lock ? 'behind a keycard door' : 'in the back room'}. ${nGuards} guard${nGuards > 1 ? 's' : ''} on shift${nCams ? `, ${nCams} camera${nCams > 1 ? 's' : ''}` : ''}.`,
     tips: lock ? ['The keycard opens the vault door. A Hacker can unlock it from a terminal if there is one; a Cracker can pick it.'] : [],
     loopSeconds: 120,
     maxCrew: 3,
