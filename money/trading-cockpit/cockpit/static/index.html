@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trading Cockpit</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/chart.umd.min.js"></script>
+</head>
+<body>
+<header>
+  <div class="brand">Trading Cockpit</div>
+  <nav id="tabs">
+    <a href="#check">Check</a>
+    <a href="#portfolio">Portfolio</a>
+    <a href="#journal">Journal</a>
+    <a href="#stats">Stats &amp; Tax</a>
+    <a href="#alerts">Alerts</a>
+    <a href="#lab">Lab</a>
+    <a href="#settings">Settings</a>
+  </nav>
+  <div class="acct">
+    <select id="account"></select>
+    <span id="acct-equity" class="muted"></span>
+  </div>
+</header>
+<main id="view"></main>
+<div id="modal" class="modal hidden"><div class="modal-box"><button class="x" onclick="closeModal()">×</button><div id="modal-body"></div></div></div>
+<div id="toast" class="toast hidden"></div>
+<script src="/static/app.js"></script>
+<script src="/static/alerts.js"></script>
+<script src="/static/lab.js"></script>
+</body>
+</html>

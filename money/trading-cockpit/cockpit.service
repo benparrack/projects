@@ -1,0 +1,13 @@
+# systemd --user unit: keeps the cockpit (and its alert scanner) running. Install: see SETUP.md step 3.
+[Unit]
+Description=Trading Cockpit (web UI + phone alerts)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/projects/money/trading-cockpit
+ExecStart=%h/projects/money/trading-cockpit/.venv/bin/python -m cockpit.server
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=default.target
