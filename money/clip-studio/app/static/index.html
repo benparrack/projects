@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clip Studio</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%237c5cff'/><path d='M12 9l12 7-12 7z' fill='white'/></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a href="#/" class="brand"><span class="logo">▶</span> Clip Studio</a>
+  <div class="crumbs" id="crumbs"></div>
+  <div class="spacer"></div>
+  <button class="btn ghost" id="exportsBtn" title="Export queue">⬇ Exports <span class="pill" id="exportsCount" hidden></span></button>
+</header>
+<main id="view"></main>
+<aside class="drawer" id="exportsDrawer" hidden>
+  <div class="drawer-head"><b>Exports</b><button class="icon" id="exportsClose">✕</button></div>
+  <div id="exportsList" class="exports-list"></div>
+</aside>
+<div class="toast" id="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

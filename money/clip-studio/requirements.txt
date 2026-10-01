@@ -1,0 +1,9 @@
+flask>=3.0
+faster-whisper>=1.1
+av<19  # av 19 breaks faster-whisper 1.2.1 (metadata_errors kwarg)
+mediapipe>=0.10.14
+opencv-python-headless
+numpy
+pillow
+yt-dlp
+anthropic>=1.0

@@ -18,6 +18,11 @@ or difficulty is — not just the pitch.
   permission risks DMCA strikes against the posting account, so this is only
   as durable as whichever source channels it's pointed at have actually
   agreed to being clipped.
+- **`clip-studio/`** — local ssemble.com clone (Flask + vanilla JS, `./run.sh`
+  → localhost:5055) for hand-making higher-quality clips: whisper transcript,
+  viral-moment finder (local or Claude), face-tracked 9:16 reframe, animated
+  caption presets, hook titles, transcript-based cuts, filler/silence removal,
+  MP4 export. Same ToS caveat as stream-clipper applies to whatever gets posted.
 
 ---
 
