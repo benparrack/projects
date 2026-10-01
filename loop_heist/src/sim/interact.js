@@ -163,7 +163,7 @@ export function completeHold(sim, a, tgt) {
     }
     case 'terminal': {
       const tm = S.terminals[tgt.idx];
-      tm.used = true;
+      if (!L.terminals[tgt.idx].reusable) tm.used = true;
       applyTerminal(sim, L.terminals[tgt.idx]);
       sim.event(a, 'done:hack', tm.id);
       return;

@@ -20,4 +20,28 @@ export const SOLUTIONS = {
       { to: [26, 3] }, { wait: 60 }, { path: [[25, 2], [9, 2], [2, 2]] }, { use: true },
     ] },
   ],
+  keycard: [
+    { role: 'ghost', cmds: [
+      { to: [7, 2] }, { use: true }, { wait: 72 }, { path: [[9, 2], [16, 1]] }, { use: true }, { wait: 70 },
+      { path: [[12, 3]] }, { use: true }, { path: [[12, 5], [21, 6]] }, { use: true }, { wait: 230 },
+      { path: [[12, 5], [12, 3], [9, 2], [2, 2]] }, { use: true },
+    ] },
+  ],
+  // Alternative routes ('level#variant') are checked by the tests too.
+  'keycard#crack': [
+    { role: 'cracker', cmds: [
+      { to: [7, 2] }, { use: true }, { wait: 80 }, { path: [[9, 2], [12, 3]] }, { hold: 62 },
+      { path: [[12, 5], [21, 6]] }, { use: true }, { wait: 240 },
+      { path: [[12, 5], [12, 3], [9, 2], [2, 2]] }, { use: true },
+    ] },
+  ],
+  'closed-circuit': [
+    { role: 'hacker', cmds: [
+      { to: [4, 6] }, { hold: 42 }, { wait: 190 }, { hold: 42 }, { path: [[2, 3], [2, 2]] }, { use: true },
+    ] },
+    { role: 'ghost', cmds: [
+      { path: [[2, 4], [6, 4]] }, { use: true }, { wait: 60 }, { path: [[8, 4], [24, 4]] }, { use: true },
+      { path: [[8, 4], [5, 4], [2, 2]] }, { use: true },
+    ] },
+  ],
 };

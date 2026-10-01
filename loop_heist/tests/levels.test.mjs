@@ -32,6 +32,20 @@ for (const def of LEVELS) {
   });
 }
 
+for (const key of Object.keys(SOLUTIONS).filter((k) => k.includes('#'))) {
+  test(`alternative route ${key} works`, () => {
+    const L = parseLevel(LEVELS.find((l) => l.id === key.split('#')[0]));
+    const sim = playSolution(L, SOLUTIONS[key]);
+    assert.equal(sim.over.kind, 'success', JSON.stringify(sim.over));
+  });
+}
+
+test('closed-circuit cannot be done by one ghost alone', () => {
+  const L = parseLevel(LEVELS.find((l) => l.id === 'closed-circuit'));
+  const sim = playSolution(L, SOLUTIONS['closed-circuit'].slice(1));
+  assert.notEqual(sim.over.kind, 'success');
+});
+
 test('double-act cannot be done by one ghost alone', () => {
   const L = parseLevel(LEVELS.find((l) => l.id === 'double-act'));
   const sim = playSolution(L, SOLUTIONS['double-act'].slice(0, 1));

@@ -4,7 +4,7 @@ import { losClear, boxOverlapsTile } from './world.js';
 
 export const CAM_RANGE = SUB * 6;
 export const CAM_HALF = 22;          // ~31 degrees each side
-export const CAM_ALARM = 24;         // suspicion ticks before a camera raises the alarm
+export const CAM_ALARM = 30;         // suspicion ticks before a camera raises the alarm
 export const DIRS = { e: 0, se: 32, s: 64, sw: 96, w: 128, nw: 160, n: 192, ne: 224 };
 export const dirAngle = (f) => (typeof f === 'string' ? DIRS[f] : (f ?? 0)) & 255;
 
