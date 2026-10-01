@@ -17,6 +17,33 @@ _process_q = queue.Queue()
 _export_q = queue.Queue()
 exports = {}  # export id -> status dict
 _exports_lock = threading.Lock()
+# callbacks other modules register: fn(pid) when a project finishes processing,
+# fn(job) when an export finishes (job["status"] is "done" or "error")
+ready_hooks = []
+export_hooks = []
+
+
+def _fire(hooks, *a):
+    for fn in hooks:
+        try:
+            fn(*a)
+        except Exception:  # noqa: BLE001 - a hook must never break the pipeline
+            traceback.print_exc()
+
+
+def new_project(settings, url=None, name=None, autopilot=False, **extra):
+    """Creates the project folder + project.json. For URL projects it is queued
+    straight away; uploads call submit() after saving the file."""
+    pid = store.new_id()
+    os.makedirs(store.pdir(pid))
+    p = {"id": pid, "created": time.time(), "status": "processing", "stage": "Queued", "progress": 0,
+         "settings": settings, "autopilot": bool(autopilot), **extra}
+    if url:
+        p.update(name=name or url, source={"type": "url", "url": url})
+    store.write_json(store.pdir(pid, "project.json"), p)
+    if url:
+        submit(pid)
+    return p
 
 
 def stage(pid, name, progress, **kw):
@@ -58,6 +85,7 @@ def process(pid):
             raise RuntimeError("No speech was found in this video")
         find_clips(pid, opts)
         stage(pid, "Done", 1, status="ready")
+        _fire(ready_hooks, pid)
     except Exception as e:  # noqa: BLE001 - surface any failure in the UI
         traceback.print_exc()
         store.update_project(pid, status="error", error=str(e)[:500])
@@ -115,12 +143,12 @@ def add_manual_clip(pid, start, end, title="Custom clip"):
     return c
 
 
-def queue_export(pid, cid):
+def queue_export(pid, cid, post_id=None):
     eid = store.new_id(5)
     clip = store.get_clip(pid, cid)
     with _exports_lock:
         exports[eid] = {"id": eid, "pid": pid, "cid": cid, "title": clip["title"], "status": "queued",
-                        "progress": 0, "created": time.time()}
+                        "progress": 0, "created": time.time(), "post": post_id}
     _export_q.put(eid)
     return exports[eid]
 
@@ -148,6 +176,7 @@ def _export(eid):
         job.update(status="error", error=str(e)[:600])
         if os.path.exists(tmp):
             os.remove(tmp)
+    _fire(export_hooks, job)
 
 
 def _worker(q, fn):

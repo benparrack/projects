@@ -7,3 +7,6 @@ numpy
 pillow
 yt-dlp
 anthropic>=1.0
+requests
+google-api-python-client
+google-auth-oauthlib

@@ -108,8 +108,12 @@ async function route() {
   view.innerHTML = "";
   $("#crumbs").innerHTML = "";
   try {
+    Nav.mark();
     if (parts[0] === "p" && parts[2] === "c") await editorView(view, parts[1], parts[3]);
     else if (parts[0] === "p") await projectView(view, parts[1]);
+    else if (parts[0] === "publish") await publishView(view);
+    else if (parts[0] === "accounts") await accountsView(view);
+    else if (parts[0] === "autopilot") await autopilotView(view);
     else await homeView(view);
   } catch (e) {
     console.error(e);
@@ -164,6 +168,7 @@ async function homeView(view) {
   const urlIn = h("input", { type: "url", placeholder: "Paste a YouTube / Twitch / any video link…" });
   const fileIn = h("input", { type: "file", accept: "video/*,.mkv,.flv,.ts", hidden: true });
   const settings = settingsFields();
+  const autoBox = h("input", { type: "checkbox", checked: CFG.autopilot });
   const upBar = h("div", { class: "bar hidden" }, h("div", { style: { width: "0%" } }));
   const go = h("button", { class: "btn", onclick: () => create() }, "✨ Get clips");
   const drop = h("div", { class: "drop", onclick: () => fileIn.click() }, "or drop a video file here / click to upload");
@@ -171,6 +176,7 @@ async function homeView(view) {
   async function create(file) {
     const fd = new FormData();
     Object.entries(readSettings(settings)).forEach(([k, v]) => fd.append(k, v));
+    if (autoBox.checked) fd.append("autopilot", "1");
     if (file) fd.append("file", file);
     else if (urlIn.value.trim()) fd.append("url", urlIn.value.trim());
     else return toast("Paste a link or pick a file first", true);
@@ -216,7 +222,10 @@ async function homeView(view) {
     h("section", { class: "hero" },
       h("h1", {}, "Turn long videos into viral shorts"),
       h("p", {}, "Import a video → AI transcribes it, finds the best moments, reframes to vertical with face tracking and adds animated captions. Everything runs on this computer."),
-      h("div", { class: "import" }, urlIn, go), drop, fileIn, upBar, settings),
+      h("div", { class: "import" }, urlIn, go), drop, fileIn, upBar, settings,
+      h("label", { class: "switch", style: { marginTop: "14px" } }, autoBox,
+        h("span", {}, "🤖 Autopilot: render the best clips and queue them for posting when it's done ",
+          h("a", { href: "#/autopilot", class: "muted", style: { textDecoration: "underline" } }, "(settings)")))),
     h("div", { class: "row", style: { marginBottom: "12px" } }, h("h2", { style: { margin: 0 } }, "Projects")),
     grid);
 
@@ -267,7 +276,18 @@ async function projectView(view, pid) {
       p.status === "ready" ? [
         h("button", { class: "btn ghost", onclick: () => addClipModal(p) }, "＋ Add clip manually"),
         h("button", { class: "btn ghost", onclick: () => refindModal(p) }, "🔁 Find clips again"),
-        h("button", { class: "btn", disabled: !clips.length, onclick: () => exportAll(clips) }, "⬇ Export all"),
+        h("button", { class: "btn ghost", disabled: !clips.length, onclick: () => exportAll(clips) }, "⬇ Export all"),
+        h("button", {
+          class: "btn", disabled: !clips.length, title: "Render the best clips and queue them for posting, using your Autopilot settings", onclick: async () => {
+            if (!(await confirmBox("Render the top clips and queue them for posting (Autopilot settings)?", "🤖 Go"))) return;
+            try {
+              const r = await api(`/api/projects/${pid}/autopilot`, { method: "POST" });
+              toast(r.n ? `${r.n} clips queued — see Publish` : "No clips matched your Autopilot score threshold", !r.n);
+              Exports.poke();
+              Nav.refresh();
+            } catch (e) { toast(e.message, true); }
+          },
+        }, "🤖 Auto-post best"),
       ] : null);
     wrap.append(head);
     if (p.note) wrap.append(h("div", { class: "note" }, p.note));
@@ -298,7 +318,8 @@ async function projectView(view, pid) {
         h("div", { class: "actions" },
           h("a", { class: "btn small", href: `#/p/${pid}/c/${c.id}` }, "✏️ Edit"),
           h("button", { class: "btn small ghost", onclick: () => queueExport(pid, c.id) }, "⬇ Export"),
-          last ? h("a", { class: "btn small ghost", href: `/api/projects/${pid}/exports/${encodeURIComponent(last.file)}?dl=1` }, "💾 Download") : null,
+          h("button", { class: "btn small ghost", onclick: () => publishModal(pid, c) }, "🚀 Publish"),
+          last ? h("a", { class: "btn small ghost", title: "Download latest export", href: `/api/projects/${pid}/exports/${encodeURIComponent(last.file)}?dl=1` }, "💾") : null,
           h("div", { class: "grow" }),
           h("button", {
             class: "icon", title: "Duplicate", onclick: async () => { await api(`/api/projects/${pid}/clips/${c.id}/duplicate`, { method: "POST" }); refresh(); },
@@ -489,6 +510,7 @@ async function editorView(view, pid, cid) {
             ed = structuredClone(r.clip.edit); apply(r); renderTab(); drawTimeline(true);
           },
         }, "↺ Reset"),
+        h("button", { class: "btn small ghost", onclick: () => publishNow() }, "🚀 Publish"),
         h("button", { class: "btn small", onclick: () => exportNow() }, "⬇ Export")),
       h("div", { class: "canvas-wrap" }, canvas, overlay),
       h("div", { class: "transport" }, playBtn, timeEl, scrub, muteBtn),
@@ -1233,11 +1255,18 @@ async function editorView(view, pid, cid) {
     put(pane, 
       h("div", { class: "sec" }, h("div", { class: "sec-title" }, "Export"),
         h("div", { class: "hint", style: { marginBottom: "10px" } }, `${W}×${H} · 30 fps · H.264 + AAC · ${tl.duration.toFixed(1)}s`),
-        h("button", { class: "btn", style: { width: "100%", justifyContent: "center", padding: "12px" }, onclick: () => exportNow() }, "⬇ Export MP4")),
+        h("button", { class: "btn", style: { width: "100%", justifyContent: "center", padding: "12px" }, onclick: () => exportNow() }, "⬇ Export MP4"),
+        h("button", { class: "btn ghost", style: { width: "100%", justifyContent: "center", padding: "12px", marginTop: "8px" }, onclick: () => publishNow() }, "🚀 Publish to socials…")),
       h("div", { class: "sec" }, h("div", { class: "sec-title" }, "Previous exports"), list),
       h("div", { class: "sec" }, h("div", { class: "sec-title" }, "Posting tips"),
         h("div", { class: "hint", html: "Title idea: <b></b><br>Post 1–3 clips a day per account. Keep the first 2 seconds strong — the hook title + a mid-sentence start help. Credit the original creator and follow their clipping rules if it isn't your content." })));
     $("b", pane).textContent = clip.title;
+  }
+
+  async function publishNow() {
+    save.flush();
+    await new Promise((r) => setTimeout(r, 350));
+    publishModal(pid, clip, { fresh: true });
   }
 
   async function exportNow() {
@@ -1264,4 +1293,4 @@ async function editorView(view, pid, cid) {
   if (!tracks?.found && ed.layout.mode === "fill") toast("No face found in this clip — try Layout → Fit + blur");
 }
 
-route();
+window.addEventListener("DOMContentLoaded", route);  // after social.js has loaded

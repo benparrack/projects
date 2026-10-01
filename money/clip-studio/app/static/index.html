@@ -10,6 +10,12 @@
 <body>
 <header class="topbar">
   <a href="#/" class="brand"><span class="logo">▶</span> Clip Studio</a>
+  <nav class="nav">
+    <a href="#/" data-r="">Projects</a>
+    <a href="#/publish" data-r="publish">Publish <span class="pill" id="approvalCount" hidden></span></a>
+    <a href="#/autopilot" data-r="autopilot">Autopilot</a>
+    <a href="#/accounts" data-r="accounts">Accounts</a>
+  </nav>
   <div class="crumbs" id="crumbs"></div>
   <div class="spacer"></div>
   <button class="btn ghost" id="exportsBtn" title="Export queue">⬇ Exports <span class="pill" id="exportsCount" hidden></span></button>
@@ -21,5 +27,6 @@
 </aside>
 <div class="toast" id="toast" hidden></div>
 <script src="/static/app.js"></script>
+<script src="/static/social.js"></script>
 </body>
 </html>
