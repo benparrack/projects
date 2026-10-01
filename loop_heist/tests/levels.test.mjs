@@ -52,3 +52,10 @@ test('double-act cannot be done by one ghost alone', () => {
   const sim = playSolution(L, SOLUTIONS['double-act'].slice(0, 1));
   assert.notEqual(sim.over.kind, 'success');
 });
+
+test('relay needs all three: without the ghost the cracker is caught', () => {
+  const L = parseLevel(LEVELS.find((l) => l.id === 'relay'));
+  const [hacker, , cracker] = SOLUTIONS.relay;
+  const sim = playSolution(L, [hacker, cracker]);
+  assert.notEqual(sim.over.kind, 'success');
+});

@@ -59,4 +59,23 @@ export const SOLUTIONS = {
       { path: [[24, 2], [8, 2], [2, 2]] }, { use: true },
     ] },
   ],
+  // Hacker unlocks the strongroom, Ghost walks Rex all the way to the van with three
+  // whistles, Cracker hides in the office, cracks the vault and waits out Rex's return.
+  relay: [
+    { role: 'hacker', cmds: [
+      { to: [6, 2] }, { use: true }, { path: [[8, 2], [12, 2], [12, 3]] }, { use: true }, { path: [[12, 5], [9, 5]] }, { hold: 42 },
+      { path: [[12, 5], [12, 3], [8, 2], [2, 2]] }, { use: true },
+    ] },
+    { role: 'ghost', cmds: [
+      { wait: 60 }, { path: [[6, 2], [17, 2]] }, { use: true }, { to: [15, 2] }, { wait: 20 }, { ability: true },
+      { to: [8, 2] }, { wait: 10 }, { ability: true }, { path: [[6, 2], [4, 5]] }, { wait: 20 }, { ability: true },
+      { path: [[2, 3], [2, 2]] }, { use: true },
+    ] },
+    { role: 'cracker', cmds: [
+      { wait: 60 }, { path: [[6, 2], [12, 2], [12, 5], [15, 6]] }, { wait: 130 },
+      { path: [[12, 5], [12, 2], [19, 2], [22, 5], [26, 3]] }, { hold: 72 }, { use: true },
+      { path: [[22, 6], [19, 6]] }, { wait: 340 },
+      { path: [[19, 3], [19, 2], [17, 2]], sneak: true }, { path: [[6, 2], [2, 2]] }, { use: true },
+    ] },
+  ],
 };
