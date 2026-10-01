@@ -118,7 +118,8 @@ def api_update_plan(pid):
 @app.post("/api/plans/<int:pid>/<side>")
 def api_trade(pid, side):
     d = body()
-    tid = service.record_trade(pid, side, d.get("qty"), d.get("price"), d.get("fees"), None, d.get("note", ""))
+    tid = service.record_trade(pid, side, d.get("qty"), d.get("price"), d.get("fees"), None, d.get("note", ""),
+                               d.get("override"))
     return jsonify({"id": tid})
 
 
@@ -132,9 +133,26 @@ def api_curve(aid):
     return jsonify(service.curve(aid))
 
 
+@app.get("/api/chart/<ticker>")
+def api_chart(ticker):
+    """Daily candles plus every plan/fill on this ticker (all accounts unless ?account=)."""
+    from . import market
+    t = market.norm(ticker)
+    df = market.history(t, years=int(request.args.get("years", 2)))
+    bars = [{"t": d.strftime("%Y-%m-%d"), "o": round(float(r.Open), 4), "h": round(float(r.High), 4),
+             "l": round(float(r.Low), 4), "c": round(float(r.Close), 4), "v": int(r.Volume or 0)}
+            for d, r in df.iterrows()]
+    aid = request.args.get("account", type=int)
+    where, args = ("ticker = ?" + (" AND account_id = ?" if aid else "")), ((t, aid) if aid else (t,))
+    plans = db.rows(f"SELECT id, status, entry, stop, initial_stop, target, created_at, closed_at, setup FROM plans"
+                    f" WHERE {where} AND status != 'cancelled' ORDER BY id DESC LIMIT 20", args)
+    trades = db.rows(f"SELECT plan_id, side, qty, price, ts FROM trades WHERE {where} ORDER BY ts", args)
+    return jsonify({"ticker": t, "bars": bars, "plans": plans, "trades": trades})
+
+
 @app.get("/api/settings")
 def api_settings():
-    return jsonify(db.settings())
+    return jsonify(db.public_settings())
 
 
 @app.post("/api/settings")
@@ -144,18 +162,26 @@ def api_set_settings():
             db.set_setting(k, v)
         except KeyError:
             raise UserError(f"Unknown setting {k}")
-    return jsonify(db.settings())
+    return jsonify(db.public_settings())
 
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     db.init()
-    from . import alerts, lab
+    from . import alerts, broker, lab, pwa, reports, screener
+    pwa.register(app)
     alerts.register(app)
     lab.register(app)
+    broker.register(app)
+    screener.register(app)
+    reports.register(app)
     port = int(os.environ.get("PORT", 5070))
     print(f"Trading cockpit on http://localhost:{port}")
-    app.run(host="127.0.0.1", port=port, threaded=True, debug=False)
+    host = os.environ.get("COCKPIT_HOST", "127.0.0.1")
+    if host not in ("127.0.0.1", "localhost") and not db.settings().get("access_pin"):
+        print("Refusing to listen beyond localhost without an access PIN. Set one in Settings first.")
+        host = "127.0.0.1"
+    app.run(host=host, port=port, threaded=True, debug=False)
 
 
 if __name__ == "__main__":

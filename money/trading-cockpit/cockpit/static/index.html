@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Trading Cockpit</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f1216">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/chart.umd.min.js"></script>
 </head>
@@ -11,16 +15,19 @@
 <header>
   <div class="brand">Trading Cockpit</div>
   <nav id="tabs">
+    <a href="#today">Today</a>
     <a href="#check">Check</a>
     <a href="#portfolio">Portfolio</a>
     <a href="#journal">Journal</a>
     <a href="#stats">Stats &amp; Tax</a>
     <a href="#alerts">Alerts</a>
+    <a href="#chart">Chart</a>
+    <a href="#screener">Screener</a>
     <a href="#lab">Lab</a>
     <a href="#settings">Settings</a>
   </nav>
   <div class="acct">
-    <select id="account"></select>
+    <select id="account" autocomplete="off"></select>
     <span id="acct-equity" class="muted"></span>
   </div>
 </header>
@@ -30,5 +37,6 @@
 <script src="/static/app.js"></script>
 <script src="/static/alerts.js"></script>
 <script src="/static/lab.js"></script>
+<script src="/static/more.js"></script>
 </body>
 </html>

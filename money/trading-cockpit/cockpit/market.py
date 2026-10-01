@@ -57,7 +57,7 @@ def history(ticker: str, years: int = 5, max_age_s: int = 4 * 3600) -> pd.DataFr
 
     def load():
         CACHE.mkdir(parents=True, exist_ok=True)
-        path = CACHE / f"hist_{t.replace('^', '_').replace('=', '_')}_{years}y.csv"
+        path = _hist_path(t, years)
         if path.exists() and time.time() - path.stat().st_mtime < max_age_s:
             return _clean(pd.read_csv(path, index_col=0, parse_dates=True))
         try:
@@ -75,6 +75,35 @@ def history(ticker: str, years: int = 5, max_age_s: int = 4 * 3600) -> pd.DataFr
         return df
 
     return _memo(("hist", t, years), 600, load)
+
+
+def _hist_path(t: str, years: int):
+    return CACHE / f"hist_{t.replace('^', '_').replace('=', '_')}_{years}y.csv"
+
+
+def prefetch(tickers: list[str], years: int = 2, max_age_s: int = 4 * 3600, chunk: int = 100) -> None:
+    """Bulk-download stale histories in batches (far faster than one request per ticker for screens)."""
+    CACHE.mkdir(parents=True, exist_ok=True)
+    stale = [norm(t) for t in tickers
+             if not (_hist_path(norm(t), years).exists()
+                     and time.time() - _hist_path(norm(t), years).stat().st_mtime < max_age_s)]
+    for i in range(0, len(stale), chunk):
+        part = stale[i:i + chunk]
+        try:
+            raw = _yf().download(part, period=f"{years}y", interval="1d", auto_adjust=True, progress=False,
+                                 group_by="ticker", threads=True)
+        except Exception as e:
+            log.warning("bulk download failed: %s", e)
+            continue
+        for t in part:
+            try:
+                df = _clean(raw[t]) if isinstance(raw.columns, pd.MultiIndex) else _clean(raw)
+            except KeyError:
+                continue
+            if len(df):
+                df.to_csv(_hist_path(t, years))
+                with _lock:
+                    _mem.pop(("hist", t, years), None)
 
 
 def quote(ticker: str) -> dict:
@@ -121,6 +150,19 @@ def fx_history(currency: str, years: int = 5) -> pd.Series:
     if c == "USD":
         return pd.Series(dtype=float)
     return history(f"{c}USD=X", years)["Close"]
+
+
+def fx_at(currency: str, ts: str) -> float:
+    """USD per unit of `currency` on the day of `ts` (live rate for recent timestamps)."""
+    c = (currency or "USD").upper()
+    if c == "USD":
+        return 1.0
+    day = pd.Timestamp(ts[:10])
+    if (pd.Timestamp.now().normalize() - day).days <= 1:
+        return fx(c)
+    h = fx_history("GBP" if c == "GBX" else c)
+    v = h.asof(day) if len(h) and day >= h.index[0] else (h.iloc[0] if len(h) else fx(c))
+    return float(v) / (100 if c == "GBX" else 1)
 
 
 def info(ticker: str) -> dict:

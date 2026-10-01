@@ -72,9 +72,9 @@ async function refreshHeader() {
 
 // ---------- router ----------
 async function route() {
-  const name = (location.hash || "#check").slice(1).split("/")[0];
+  const name = (location.hash || "#today").slice(1).split(/[/?]/)[0];
   document.querySelectorAll("#tabs a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + name));
-  const view = VIEWS[name] || VIEWS.check;
+  const view = VIEWS[name] || VIEWS.today;
   $("#view").innerHTML = `<div class="empty"><span class="spin"></span> Loading…</div>`;
   try { await view(); } catch (e) { $("#view").innerHTML = `<div class="panel bad">${esc(e.message)}</div>`; }
 }
@@ -92,7 +92,32 @@ async function boot() {
   sel.onchange = () => { S.acct = Number(sel.value); try { localStorage.setItem("acct", S.acct); } catch (e) {} refreshHeader(); route(); };
   refreshHeader();
   route();
-  setInterval(refreshHeader, 60000);
+  if (!S._timer) S._timer = setInterval(refreshHeader, 60000);
+}
+
+// Trailing-stop / scale-out rule inputs, shared by the check form and the stop/target modal.
+function trailInputs(pre, t) {
+  t = t || {};
+  const v = (k, m = 1) => (isNum(t[k]) ? +(t[k] * m).toFixed(4) : "");
+  return `<div><label>Stop to breakeven at (R)</label><input id="${pre}-be" type="number" step="any" placeholder="e.g. 1" value="${v("breakeven_r")}"></div>
+    <div><label>Trail × ATR below high</label><input id="${pre}-ta" type="number" step="any" placeholder="e.g. 3" value="${v("trail_atr")}"></div>
+    <div><label>…or trail % below high</label><input id="${pre}-tp" type="number" step="any" placeholder="e.g. 8" value="${v("trail_pct", 100)}"></div>
+    <div><label>Sell part at (R)</label><input id="${pre}-sr" type="number" step="any" placeholder="e.g. 2" value="${v("scale_r")}"></div>
+    <div><label>…this % of the position</label><input id="${pre}-sf" type="number" step="any" placeholder="50" value="${v("scale_frac", 100)}"></div>`;
+}
+function readTrail(pre) {
+  const g = (k) => $(`#${pre}-${k}`)?.value || "";
+  const t = { breakeven_r: g("be"), trail_atr: g("ta"), trail_pct: g("tp"), scale_r: g("sr"), scale_frac: g("sf") };
+  return Object.values(t).some((x) => x !== "") ? t : null;
+}
+function trailText(t) {
+  if (!t) return "";
+  const parts = [];
+  if (t.breakeven_r) parts.push(`stop to breakeven at +${t.breakeven_r}R`);
+  if (t.trail_atr) parts.push(`trail ${t.trail_atr}× ATR below the high`);
+  if (t.trail_pct) parts.push(`trail ${pct(t.trail_pct, 0)} below the high`);
+  if (t.scale_r) parts.push(`sell ${pct(t.scale_frac ?? 0.5, 0)} at +${t.scale_r}R`);
+  return parts.join(" · ");
 }
 
 // ---------- Check (pre-trade) ----------
@@ -118,8 +143,13 @@ VIEWS.check = async function () {
       <div><label>Confidence (1–5)</label><select id="c-conf"><option value="">–</option>${[1, 2, 3, 4, 5].map((i) => `<option>${i}</option>`).join("")}</select></div>
       <div style="align-self:end"><button class="primary" id="c-run" style="width:100%">Run check</button></div>
     </div>
+    <details style="margin-top:10px"><summary class="small muted">Manage the trade automatically (optional): trailing stop, breakeven, partial profit</summary>
+      <p class="small muted">Checked on every alert scan. The stop only ever moves up. Paper accounts act on it; for real accounts you get a push
+        (and a linked Alpaca stop order is moved for you, if orders are allowed).</p>
+      <div class="form">${trailInputs("c")}</div></details>
   </div>
-  <div id="c-result"></div>`;
+  <div id="c-result"></div>
+  <div class="panel hidden" id="c-news"></div>`;
   const run = () => guard(runCheck, $("#c-run"));
   $("#c-run").onclick = run;
   $("#c-ticker").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
@@ -131,7 +161,7 @@ function checkPayload() {
   return {
     ticker: $("#c-ticker").value, entry: $("#c-entry").value, stop: $("#c-stop").value, target: $("#c-target").value,
     hold_days: $("#c-hold").value, risk_pct: $("#c-risk").value, thesis: $("#c-thesis").value,
-    setup: $("#c-setup").value, confidence: $("#c-conf").value,
+    setup: $("#c-setup").value, confidence: $("#c-conf").value, trail: readTrail("c"),
   };
 }
 
@@ -156,6 +186,8 @@ async function runCheck() {
   $("#c-stop").value = (+r.stop).toFixed(2);
   $("#c-target").value = r.target ? (+r.target).toFixed(2) : "";
   renderCheck(r);
+  $("#c-news").classList.remove("hidden");
+  newsPanel($("#c-news"), r.ticker);
 }
 
 function renderCheck(r) {
@@ -167,7 +199,7 @@ function renderCheck(r) {
   <div class="verdict ${r.verdict}"><div class="big">${r.verdict}</div><div>${esc(r.verdict_text)}</div></div>
   <div class="grid g2">
     <div class="panel">
-      <h3 style="margin-top:0">${esc(r.ticker)} <span class="muted">${esc(name)} · ${esc(r.info.sector || "")}</span></h3>
+      <h3 style="margin-top:0"><a href="#chart?t=${encodeURIComponent(r.ticker)}">${esc(r.ticker)}</a> <span class="muted">${esc(name)} · ${esc(r.info.sector || "")}</span></h3>
       <div class="grid g3">
         <div class="card"><div class="k">Buy</div><div class="v">${qty(sz.shares)} sh</div><div class="small muted">≈ ${usd(sz.cost_usd)}</div></div>
         <div class="card"><div class="k">Max loss at stop</div><div class="v bad">${usd(sz.risk_usd)}</div><div class="small muted">${pct(sz.risk_usd / r.equity, 2)} of account</div></div>
@@ -221,11 +253,12 @@ function renderCheck(r) {
   $("#c-buy").onclick = () => {
     if (isPaper()) return guard(async () => {
       const { id } = await POST(`/api/accounts/${S.acct}/plans`, checkPayload());
-      await POST(`/api/plans/${id}/buy`, {});
+      if (!(await buyPost(`/api/plans/${id}/buy`, {}))) { toast(`Not bought. Plan #${id} is saved as planned.`); return; }
       toast("Paper buy filled.");
       refreshHeader();
       location.hash = "#portfolio";
     }, $("#c-buy"));
+    if (acct()?.broker === "alpaca") toast("Linked to Alpaca: fills sync automatically. You can save the plan and let the sync record the buy.");
     const f = $("#c-fill");
     f.classList.remove("hidden");
     f.innerHTML = `<div class="hint">Place the order at your broker first, then enter what you actually got.</div>
@@ -235,7 +268,9 @@ function renderCheck(r) {
       <div style="align-self:end"><button class="primary" id="f-go">Record buy</button></div></div>`;
     $("#f-go").onclick = (e) => guard(async () => {
       const { id } = await POST(`/api/accounts/${S.acct}/plans`, Object.assign(checkPayload(), { shares: $("#f-qty").value }));
-      await POST(`/api/plans/${id}/buy`, { qty: $("#f-qty").value, price: $("#f-px").value, fees: $("#f-fee").value });
+      if (!(await buyPost(`/api/plans/${id}/buy`, { qty: $("#f-qty").value, price: $("#f-px").value, fees: $("#f-fee").value }))) {
+        toast(`Not recorded. Plan #${id} is saved as planned.`); return;
+      }
       toast("Buy recorded.");
       refreshHeader();
       location.hash = "#portfolio";
@@ -249,7 +284,10 @@ VIEWS.portfolio = async function () {
   const open = st.plans.filter((p) => p.status === "open");
   const planned = st.plans.filter((p) => p.status === "planned");
   const vsSpy = isNum(cv.value) && isNum(cv.spy) ? cv.value - cv.spy : null;
+  const a = acct();
   $("#view").innerHTML = `
+  ${a?.broker ? `<div class="row small muted" style="margin-bottom:10px">${a.broker === "alpaca" ? "Linked to Alpaca" : "CSV imports"} · ${esc(a.sync_status || "")}${a.synced_at ? " · " + esc(String(a.synced_at).slice(0, 16).replace("T", " ")) : ""}
+    ${a.broker === "alpaca" ? `<button class="sm" id="p-sync">Sync now</button>` : `<a href="#settings">import more</a>`}</div>` : ""}
   <div class="grid g5">
     <div class="card"><div class="k">Account value</div><div class="v">${usd(st.equity)}</div></div>
     <div class="card"><div class="k">Cash</div><div class="v">${usd(st.cash)}</div></div>
@@ -264,7 +302,7 @@ VIEWS.portfolio = async function () {
   <div class="panel"><h2>Open trades</h2>
     ${open.length ? `<div class="tablewrap"><table><tr><th>Ticker</th><th class="num">Shares</th><th class="num">Entry</th><th class="num">Price</th><th class="num">P/L</th><th class="num">Now</th><th class="num">To stop</th><th class="num">To target</th><th class="num">Days</th><th></th></tr>
       ${open.map((p) => `<tr>
-        <td><b>${esc(p.ticker)}</b> <span class="small muted">#${p.id}${p.setup ? " · " + esc(p.setup) : ""}</span></td>
+        <td><a href="#chart?t=${encodeURIComponent(p.ticker)}"><b>${esc(p.ticker)}</b></a> <span class="small muted">#${p.id}${p.setup ? " · " + esc(p.setup) : ""}</span>${p.trail_json ? ' <span class="pill" title="trailing / scale-out rules active">auto</span>' : ""}</td>
         <td class="num">${qty(p.qty_open)}</td><td class="num">${num(p.avg_entry)}</td><td class="num">${num(p.price)}</td>
         <td class="num">${money(p.unrealized)}</td><td class="num ${cls(p.r_multiple)}">${rmult(p.r_multiple)}</td>
         <td class="num">${num(p.stop)} <span class="small muted">${pct(p.to_stop_pct, 1)}</span></td>
@@ -274,7 +312,7 @@ VIEWS.portfolio = async function () {
       </tr>`).join("")}</table></div>` : `<div class="empty">No open trades. Run a <a href="#check">pre-trade check</a> to start one.</div>`}
   </div>
   ${planned.length ? `<div class="panel"><h2>Planned (not bought yet)</h2><div class="tablewrap"><table><tr><th>Ticker</th><th class="num">Shares</th><th class="num">Entry</th><th class="num">Stop</th><th class="num">Target</th><th class="num">Price now</th><th>Saved</th><th></th></tr>
-    ${planned.map((p) => `<tr><td><b>${esc(p.ticker)}</b> <span class="small muted">#${p.id}</span></td><td class="num">${qty(p.shares)}</td><td class="num">${num(p.entry)}</td><td class="num">${num(p.stop)}</td><td class="num">${num(p.target)}</td><td class="num">${num(p.price)}</td><td>${date(p.created_at)}</td>
+    ${planned.map((p) => `<tr><td><a href="#chart?t=${encodeURIComponent(p.ticker)}"><b>${esc(p.ticker)}</b></a> <span class="small muted">#${p.id}</span></td><td class="num">${qty(p.shares)}</td><td class="num">${num(p.entry)}</td><td class="num">${num(p.stop)}</td><td class="num">${num(p.target)}</td><td class="num">${num(p.price)}</td><td>${date(p.created_at)}</td>
       <td><button class="sm primary" data-buy="${p.id}">Buy</button> <button class="sm" data-view="${p.id}">Plan</button> <button class="sm danger" data-cancel="${p.id}">Cancel</button></td></tr>`).join("")}
   </table></div></div>` : ""}
   <div class="panel"><h2>Holdings by ticker</h2>
@@ -304,6 +342,10 @@ VIEWS.portfolio = async function () {
   $("#view").querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => guard(async () => {
     await PATCH(`/api/plans/${b.dataset.cancel}`, { status: "cancelled" }); toast("Plan cancelled."); route();
   }, b)));
+  if ($("#p-sync")) $("#p-sync").onclick = (e) => guard(async () => {
+    const r = await POST(`/api/accounts/${S.acct}/sync`);
+    S.accounts = await GET("/api/accounts"); syncResult(S.acct, r); route();
+  }, e.target);
   $("#cm-go").onclick = (e) => guard(async () => {
     await POST(`/api/accounts/${S.acct}/cash`, { amount: $("#cm-amt").value, note: $("#cm-note").value });
     toast("Saved."); refreshHeader(); route();
@@ -328,7 +370,10 @@ function tradeModal(p, side) {
     </div>
     <div class="row" style="margin-top:14px"><button class="primary" id="t-go">${side === "buy" ? "Buy" : "Sell"}</button><button onclick="closeModal()">Cancel</button></div>`);
   $("#t-go").onclick = (e) => guard(async () => {
-    await POST(`/api/plans/${p.id}/${side}`, { qty: $("#t-qty").value, price: $("#t-px")?.value, fees: $("#t-fee")?.value });
+    const body = { qty: $("#t-qty").value, price: $("#t-px")?.value, fees: $("#t-fee")?.value };
+    if (side === "buy") {
+      if (!(await buyPost(`/api/plans/${p.id}/buy`, body))) return;
+    } else await POST(`/api/plans/${p.id}/sell`, body);
     if (side === "sell") {
       await PATCH(`/api/plans/${p.id}`, { exit_reason: $("#t-reason").value, followed_plan: $("#t-followed").value, lesson: $("#t-lesson").value });
     }
@@ -342,10 +387,11 @@ function editLevelsModal(p) {
     classic way small losses become big ones, so the journal records it as breaking your plan.</div>
     <div class="form"><div class="span3"><label>Stop (was ${num(p.stop)})</label><input id="e-stop" type="number" step="any" value="${p.stop}"></div>
     <div class="span3"><label>Target (was ${num(p.target)})</label><input id="e-target" type="number" step="any" value="${p.target ?? ""}"></div></div>
+    <h3>Automatic management</h3><div class="form">${trailInputs("e", JSON.parse(p.trail_json || "null"))}</div>
     <div class="row" style="margin-top:14px"><button class="primary" id="e-go">Save</button></div>`);
   $("#e-go").onclick = (e) => guard(async () => {
     const ns = Number($("#e-stop").value);
-    const body = { stop: $("#e-stop").value, target: $("#e-target").value };
+    const body = { stop: $("#e-stop").value, target: $("#e-target").value, trail: readTrail("e") };
     if (ns < p.stop) body.followed_plan = 0;
     await PATCH(`/api/plans/${p.id}`, body);
     closeModal(); toast(ns < p.stop ? "Saved. Stop lowered, so this is marked as breaking your plan." : "Saved."); route();
@@ -357,12 +403,25 @@ async function planModal(id) {
   const c = p.check || {};
   openModal(`<h2>${esc(p.ticker)} plan #${p.id} <span class="pill ${p.status}">${p.status}</span></h2>
     <p class="small muted">Saved ${date(p.created_at)} · entry ${num(p.entry)} · stop ${num(p.stop)} · target ${num(p.target)} · hold ${p.hold_days}d · risk ${pct(p.risk_pct, 1)}${p.setup ? " · " + esc(p.setup) : ""}${p.confidence ? " · confidence " + p.confidence + "/5" : ""}</p>
+    <p class="small"><a href="#chart?t=${encodeURIComponent(p.ticker)}" onclick="closeModal()">Open chart</a>${p.source === "broker" ? ' · <span class="warn">bought at the broker without a plan</span>' : ""}
+      ${p.initial_stop && p.stop > p.initial_stop ? ` · stop raised from ${num(p.initial_stop)}` : ""}</p>
+    ${p.trail ? `<p class="small">Auto-management: ${esc(trailText(p.trail))}${p.scaled ? " · <b>scale-out done</b>" : ""}</p>` : ""}
+    ${p.override_reason ? `<div class="hint" style="border-left-color:var(--bad)">Bought despite a guardrail: “${esc(p.override_reason)}”</div>` : ""}
+    ${p.status === "planned" && acct()?.broker === "alpaca" && acct()?.broker_info?.allow_orders ? `<div class="row" style="margin:8px 0">
+      <input id="al-lim" type="number" step="any" placeholder="limit price (empty = market)" style="max-width:220px" value="${p.entry ?? ""}">
+      <button class="primary" id="al-send">Send bracket order to Alpaca</button></div>` : ""}
+    ${p.broker_order_id ? `<p class="small muted">Alpaca order ${esc(p.broker_order_id)}</p>` : ""}
     <h3>Why I bought</h3><p>${esc(p.thesis) || '<span class="muted">(nothing written)</span>'}</p>
     ${c.verdict ? `<h3>The check said: <span class="${c.verdict === "GO" ? "good" : c.verdict === "STOP" ? "bad" : "warn"}">${c.verdict}</span></h3>
       <ul class="flags">${(c.flags || []).map((f) => `<li class="${f.level}">${esc(f.text)}</li>`).join("")}</ul>` : ""}
     <h3>Fills</h3>
     ${p.trades.length ? `<table><tr><th>Date</th><th>Side</th><th class="num">Shares</th><th class="num">Price</th><th class="num">Fees</th><th>Note</th></tr>
       ${p.trades.map((t) => `<tr><td>${date(t.ts)}</td><td>${t.side}</td><td class="num">${qty(t.qty)}</td><td class="num">${num(t.price)} ${t.currency !== "USD" ? esc(t.currency) : ""}</td><td class="num">${usd(t.fees)}</td><td class="small muted">${esc(t.note)}</td></tr>`).join("")}</table>` : `<p class="muted">None yet.</p>`}
+    ${p.after_exit ? `<h3>After you sold</h3>
+      <p class="small">Price relative to your exit, in R: 5 days <b class="${cls(p.after_exit.close5_r)}">${rmult(p.after_exit.close5_r)}</b> ·
+        10 days <b class="${cls(p.after_exit.close10_r)}">${rmult(p.after_exit.close10_r)}</b> · 20 days <b class="${cls(p.after_exit.close20_r)}">${rmult(p.after_exit.close20_r)}</b>
+        · best ${rmult(p.after_exit.max_r)} / worst ${rmult(p.after_exit.min_r)} within 10 days.</p>
+      <p class="small muted">Positive means it kept rising after you got out. One trade says little; the Stats tab adds them up by exit reason.</p>` : ""}
     <h3>Review</h3>
     <div class="form">
       <div class="span2"><label>Exit reason</label><select id="r-reason"><option value="">–</option>${EXIT_REASONS.map((r) => `<option ${p.exit_reason === r ? "selected" : ""}>${r}</option>`).join("")}</select></div>
@@ -371,6 +430,10 @@ async function planModal(id) {
       <div class="span6"><label>Lesson</label><textarea id="r-lesson">${esc(p.lesson || "")}</textarea></div>
     </div>
     <div class="row" style="margin-top:12px"><button class="primary" id="r-go">Save review</button></div>`);
+  if ($("#al-send")) $("#al-send").onclick = (e) => guard(async () => {
+    const r = await POST(`/api/plans/${id}/alpaca_order`, { limit: $("#al-lim").value });
+    toast(`Alpaca order ${r.status}: ${r.qty} shares. The fill shows up on the next sync.`); planModal(id);
+  }, e.target);
   $("#r-go").onclick = (e) => guard(async () => {
     await PATCH(`/api/plans/${id}`, { exit_reason: $("#r-reason").value || null, followed_plan: $("#r-followed").value,
       lesson: $("#r-lesson").value, setup: $("#r-setup").value || null });
@@ -387,7 +450,7 @@ VIEWS.journal = async function () {
     ${needs.length ? `<div class="hint">${needs.length} closed trade${needs.length > 1 ? "s" : ""} still need a review. Reviews power the "followed plan vs broke plan" stats.</div>` : ""}
     ${j.plans.length ? `<div class="tablewrap"><table><tr><th>#</th><th>Ticker</th><th>Status</th><th>Opened</th><th class="num">Days</th><th class="num">Entry → exit</th><th class="num">P/L</th><th class="num">Return</th><th class="num">R</th><th>Setup</th><th>Exit</th><th>Why</th></tr>
     ${j.plans.map((p) => `<tr class="click" data-id="${p.id}"><td class="muted">${p.id}</td><td><b>${esc(p.ticker)}</b></td>
-      <td><span class="pill ${p.status}">${p.status}</span>${needs.includes(p) ? ' <span class="pill review">review</span>' : ""}</td>
+      <td><span class="pill ${p.status}">${p.status}</span>${p.source === "broker" ? ' <span class="pill review" title="came from a broker fill with no saved plan">unplanned</span>' : ""}${needs.includes(p) ? ' <span class="pill review">review</span>' : ""}</td>
       <td>${date(p.first_buy || p.created_at)}</td><td class="num">${p.hold_days ?? "—"}</td>
       <td class="num">${num(p.avg_entry ?? p.entry)} → ${p.avg_exit ? num(p.avg_exit) : "…"}</td>
       <td class="num">${money(p.status === "closed" ? p.realized : (p.realized || 0) + (p.unrealized || 0))}</td>
@@ -418,9 +481,17 @@ VIEWS.stats = async function () {
       <div class="card"><div class="k">Avg hold</div><div class="v">${s.avg_hold_days.toFixed(1)} days</div></div>
     </div>
     ${s.closed < 20 ? `<p class="small muted">With ${s.closed} trade${s.closed > 1 ? "s" : ""} these numbers are mostly luck. Judge a strategy after 20–30 trades.</p>` : ""}
-    <div class="grid g3">${grp("By setup", s.by_setup)}${grp("Discipline", s.by_followed)}${grp("By exit reason", s.by_exit)}</div>`
+    <div class="grid g3">${grp("By setup", s.by_setup)}${grp("Discipline", s.by_followed)}${grp("By exit reason", s.by_exit)}</div>
+    ${s.by_override ? `<div class="grid g3">${grp("Guardrails &amp; unplanned trades", s.by_override)}</div>` : ""}`
     : `<div class="empty">Close a few trades and your stats show up here: win rate, average R, and whether following your plans pays.</div>`}
   </div>
+  ${j.after_exit && j.after_exit.n ? `<div class="panel"><h2>After you sell</h2>
+    <p>Across ${j.after_exit.n} exits, 10 trading days later the price was on average <b class="${cls(j.after_exit.avg_close10_r)}">${rmult(j.after_exit.avg_close10_r)}</b>
+      from where you sold (median ${rmult(j.after_exit.median_close10_r)}), and higher ${pct(j.after_exit.share_higher, 0)} of the time.</p>
+    <p class="small muted">If one exit reason keeps showing a big positive number, those exits are leaving money on the table (often "fear / nerves" or "took profit early").
+      If it's near zero or negative, the exits are fine.</p>
+    <table><tr><th>Exit reason</th><th class="num">Exits</th><th class="num">Avg 10 days later</th></tr>
+      ${Object.entries(j.after_exit.by_exit).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${cls(v.avg_close10_r)}">${rmult(v.avg_close10_r)}</td></tr>`).join("")}</table></div>` : ""}
   <div class="panel"><h2>Taxes (US federal estimate)</h2>
     <div class="hint">Short-term gains (held ≤ 1 year) are taxed at your income rate (set to ${pct(S.settings.st_tax_rate, 0)} in Settings);
     long-term at ${pct(S.settings.lt_tax_rate, 0)}. Net losses offset up to $3,000 of other income a year; the rest carries forward.
@@ -454,15 +525,46 @@ const SETTING_FIELDS = [
   ["alert_fast_min", "Scan every (min) while markets are open", 1, ""],
   ["alert_slow_min", "Scan every (min) while closed", 1, ""],
 ];
+const GUARD_FIELDS = [
+  ["daily_loss_limit_pct", "Daily loss limit (% of account)", 100, "Realized losses past this block new buys until tomorrow. 0 = off."],
+  ["weekly_loss_limit_pct", "Weekly loss limit (% of account)", 100, "Blocks new buys until Monday. 0 = off."],
+  ["max_loss_streak", "Cooldown after this many losses in a row", 1, "0 = off."],
+  ["cooldown_days", "Cooldown length (days)", 1, ""],
+];
+const TEXT_KEYS = ["ntfy_topic", "sec_user_agent", "timezone", "briefing_time", "screener_time", "public_url",
+  "anthropic_api_key", "ai_model", "ai_fast_model", "access_pin"];
+const onoff = (k, on = "On", off = "Off") => `<select data-k="${k}"><option value="1" ${S.settings[k] ? "selected" : ""}>${on}</option><option value="0" ${S.settings[k] ? "" : "selected"}>${off}</option></select>`;
+const numField = ([k, label, mult, help]) => `<div class="span2"><label>${label}</label><input data-k="${k}" data-m="${mult}" type="number" step="any" value="${+(S.settings[k] * mult).toFixed(4)}"><div class="small muted">${help}</div></div>`;
 VIEWS.settings = async function () {
   S.settings = await GET("/api/settings");
   const s = S.settings;
   $("#view").innerHTML = `<div class="panel"><h2>Risk rules</h2><div class="form">
-    ${SETTING_FIELDS.map(([k, label, mult, help]) => `<div class="span2"><label>${label}</label><input data-k="${k}" data-m="${mult}" type="number" step="any" value="${+(s[k] * mult).toFixed(4)}"><div class="small muted">${help}</div></div>`).join("")}
+    ${SETTING_FIELDS.map(numField).join("")}
     <div class="span2"><label>Fractional shares</label><select data-k="fractional"><option value="1" ${s.fractional ? "selected" : ""}>Allowed</option><option value="0" ${s.fractional ? "" : "selected"}>Whole shares only</option></select></div>
     <div class="span2"><label>Alert scanning</label><select data-k="alerts_enabled"><option value="1" ${s.alerts_enabled ? "selected" : ""}>On</option><option value="0" ${s.alerts_enabled ? "" : "selected"}>Off</option></select></div>
     <div class="span2"><label>Paper: exit automatically at stop/target</label><select data-k="paper_auto_exit"><option value="1" ${s.paper_auto_exit ? "selected" : ""}>Yes (practice discipline)</option><option value="0" ${s.paper_auto_exit ? "" : "selected"}>No</option></select></div>
   </div></div>
+  <div class="panel"><h2>Guardrails</h2><div class="hint">Rules for the moments when discipline is hardest. A blocked buy can still go through,
+    but only after you write down why, and the journal keeps score of how those trades do.</div><div class="form">
+    ${GUARD_FIELDS.map(numField).join("")}
+    <div class="span2"><label>Block adding to a losing position</label>${onoff("block_avg_down", "Yes", "No")}</div>
+  </div></div>
+  <div class="panel"><h2>Briefing, reports &amp; AI</h2><div class="form">
+    <div class="span2"><label>Morning briefing push</label>${onoff("briefing_enabled")}</div>
+    <div class="span2"><label>Briefing time (weekdays)</label><input data-k="briefing_time" type="time" value="${esc(s.briefing_time)}"></div>
+    <div class="span2"><label>Your time zone</label><input data-k="timezone" value="${esc(s.timezone)}"><div class="small muted">e.g. Europe/Stockholm, America/New_York</div></div>
+    <div class="span2"><label>Screener + weekly report time</label><input data-k="screener_time" type="time" value="${esc(s.screener_time)}"><div class="small muted">After the US close. Weekly report runs Fridays.</div></div>
+    <div class="span2"><label>Weekly report</label>${onoff("weekly_report")}</div>
+    <div class="span2"><label>Coach note with the weekly report</label>${onoff("coach_weekly")}</div>
+    <div class="span3"><label>Anthropic API key (for news summaries + coach)</label><input data-k="anthropic_api_key" type="password" autocomplete="off" value="${esc(s.anthropic_api_key)}" placeholder="sk-ant-…"><div class="small muted">From console.anthropic.com. Stored only in this computer's database. A weekly coach run costs a few cents.</div></div>
+    <div class="span3"><label>Models (coach · summaries)</label><div class="row"><input data-k="ai_model" value="${esc(s.ai_model)}"><input data-k="ai_fast_model" value="${esc(s.ai_fast_model)}"></div></div>
+  </div></div>
+  <div class="panel"><h2>Phone app</h2><div class="hint">Open the cockpit on your phone and use <b>Add to Home Screen</b>. To reach it away from home, run it behind
+    Tailscale (see SETUP.md). Anything not coming from this computer has to enter the PIN.</div><div class="form">
+    <div class="span3"><label>Access PIN (required for phone access)</label><input data-k="access_pin" type="password" autocomplete="new-password" value="${esc(s.access_pin)}" placeholder="not set"></div>
+    <div class="span3"><label>Public URL (for links in push notifications)</label><input data-k="public_url" value="${esc(s.public_url)}" placeholder="https://your-pc.tailnet-name.ts.net"></div>
+  </div></div>
+  <div class="panel" id="s-accounts"></div>
   <div class="panel"><h2>Phone alerts &amp; data</h2><div class="form">
     <div class="span3"><label>ntfy topic</label><input data-k="ntfy_topic" value="${esc(s.ntfy_topic)}" placeholder="generated on first start"><div class="small muted">Install the ntfy app and subscribe to this topic. Keep it secret: anyone with the name can read your alerts.</div></div>
     <div class="span3"><label>SEC contact (for insider-buy alerts)</label><input data-k="sec_user_agent" value="${esc(s.sec_user_agent)}" placeholder="Your Name you@example.com"><div class="small muted">The SEC asks automated tools to identify themselves with a name and email. Leave empty to skip insider alerts.</div></div>
@@ -472,13 +574,14 @@ VIEWS.settings = async function () {
     const out = {};
     $("#view").querySelectorAll("[data-k]").forEach((el) => {
       const k = el.dataset.k;
-      if (["ntfy_topic", "sec_user_agent"].includes(k)) out[k] = el.value.trim();
+      if (TEXT_KEYS.includes(k)) out[k] = el.value.trim();
       else if (el.dataset.m) out[k] = Number(el.value) / Number(el.dataset.m);
       else out[k] = Number(el.value);
     });
     S.settings = await POST("/api/settings", out);
     toast("Settings saved.");
   }, e.target);
+  accountsPanel($("#s-accounts"));
   $("#s-test").onclick = (e) => guard(async () => { await POST("/api/alerts/test"); toast("Test alert sent. Check your phone."); }, e.target);
 };
 

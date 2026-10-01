@@ -1,0 +1,93 @@
+ticker,name,sector
+ABB.ST,ABB Ltd,Industrials
+ALFA.ST,Alfa Laval AB,Industrials
+ALIV-SDB.ST,Autoliv Inc. SDB,Consumer Cyclical
+ASSA-B.ST,ASSA ABLOY AB ser. B,Industrials
+ATCO-A.ST,Atlas Copco AB ser. A,Industrials
+ATCO-B.ST,Atlas Copco AB ser. B,Industrials
+AZN.ST,AstraZeneca PLC,Healthcare
+BOL.ST,Boliden AB,Basic Materials
+ELUX-B.ST,"Electrolux, AB ser. B",Consumer Cyclical
+ERIC-B.ST,"Ericsson, Telefonab. L M ser. B",Technology
+ESSITY-B.ST,Essity AB ser. B,Consumer Defensive
+EVO.ST,Evolution AB,Consumer Cyclical
+GETI-B.ST,Getinge AB ser. B,Healthcare
+HEXA-B.ST,Hexagon AB ser. B,Technology
+HM-B.ST,"Hennes & Mauritz AB, H & M ser.",Consumer Cyclical
+INVE-B.ST,Investor AB ser. B,Financial Services
+KINV-B.ST,Kinnevik AB ser. B,Financial Services
+NDA-SE.ST,Nordea Bank Abp,Financial Services
+NIBE-B.ST,NIBE Industrier AB ser. B,Industrials
+SAAB-B.ST,SAAB AB ser. B,Industrials
+SAND.ST,Sandvik AB,Industrials
+SBB-B.ST,Samhällsbyggnadsbo. i Norden A,Real Estate
+SCA-B.ST,Svenska Cellulosa AB SCA ser. B,Basic Materials
+SEB-A.ST,Skandinaviska Enskilda Banken s,Financial Services
+SHB-A.ST,Svenska Handelsbanken ser. A,Financial Services
+SINCH.ST,Sinch AB,Communication Services
+SKA-B.ST,Skanska AB ser. B,Industrials
+SKF-B.ST,"SKF, AB ser. B",Industrials
+SSAB-A.ST,SSAB AB ser. A,Basic Materials
+SWED-A.ST,Swedbank AB ser A,Financial Services
+TEL2-B.ST,Tele2 AB ser. B,Communication Services
+TELIA.ST,Telia Company AB,Communication Services
+VOLV-B.ST,"Volvo, AB ser. B",Industrials
+EQT.ST,EQT AB,Financial Services
+INDU-C.ST,"Industrivärden, AB ser. C",Financial Services
+LATO-B.ST,"Latour, Investmentab. ser. B",Industrials
+LUND-B.ST,"Lundbergföretagen AB, L E ser.",Industrials
+HUSQ-B.ST,Husqvarna AB ser. B,Industrials
+TREL-B.ST,Trelleborg AB ser. B,Industrials
+EPI-A.ST,Epiroc AB ser. A,Industrials
+BALD-B.ST,Fastighets AB Balder ser. B,Real Estate
+CAST.ST,Castellum AB,Real Estate
+FABG.ST,Fabege AB,Real Estate
+SAGA-B.ST,Sagax AB B,Real Estate
+WALL-B.ST,Wallenstam AB ser. B,Real Estate
+HOLM-B.ST,Holmen AB ser. B,Basic Materials
+INDT.ST,Indutrade AB,Industrials
+LIFCO-B.ST,Lifco AB ser.B,Industrials
+ADDT-B.ST,Addtech AB ser. B,Industrials
+BEIJ-B.ST,Beijer Ref AB ser. B,Industrials
+AAK.ST,AAK AB,Consumer Defensive
+AXFO.ST,Axfood AB,Consumer Defensive
+SECU-B.ST,Securitas AB ser. B,Industrials
+LOOMIS.ST,Loomis AB,Industrials
+SWEC-B.ST,SWECO AB ser. B,Industrials
+PEAB-B.ST,Peab AB ser. B,Industrials
+NCC-B.ST,NCC AB ser. B,Industrials
+JM.ST,JM AB,Consumer Cyclical
+CAMX.ST,Camurus AB,Healthcare
+VITR.ST,Vitrolife AB,Healthcare
+MYCR.ST,Mycronic AB,Industrials
+SECT-B.ST,SECTRA AB ser B,Healthcare
+EKTA-B.ST,Elekta AB ser. B,Healthcare
+BILL.ST,Billerud Aktiebolag,Basic Materials
+AZA.ST,Avanza Bank Holding AB,Financial Services
+CLAS-B.ST,Clas Ohlson AB ser. B,Consumer Cyclical
+THULE.ST,Thule Group AB,Consumer Cyclical
+DOM.ST,Dometic Group AB,Consumer Cyclical
+NOLA-B.ST,Nolato AB ser. B,Healthcare
+INWI.ST,Inwido AB,Industrials
+MTRS.ST,Munters Group AB,Industrials
+BURE.ST,Bure Equity AB,Financial Services
+VPLAY-B.ST,Viaplay Group AB ser. B,Communication Services
+SOBI.ST,Swedish Orphan Biovitrum AB,Healthcare
+HPOL-B.ST,HEXPOL AB ser. B,Basic Materials
+AFRY.ST,AFRY AB,Industrials
+STOR-B.ST,Storskogen Group AB ser. B,Industrials
+BHG.ST,BHG Group AB,Consumer Cyclical
+VIMIAN.ST,Vimian Group AB,Healthcare
+SAVE.ST,Nordnet AB,Financial Services
+EMBRAC-B.ST,Embracer Group AB ser. B,Communication Services
+STE-R.ST,Stora Enso Oyj ser. R,Consumer Cyclical
+MCOV-B.ST,Medicover AB ser. B,Healthcare
+HTRO.ST,Hexatronic Group AB,Technology
+SHOT.ST,Scandic Hotels Group AB,Consumer Cyclical
+NETI-B.ST,Net Insight AB ser. B,Technology
+BETS-B.ST,Betsson AB ser. B,Consumer Cyclical
+TRUE-B.ST,Truecaller AB ser. B,Technology
+ELAN-B.ST,Elanders AB ser. B,Industrials
+OEM-B.ST,OEM International AB ser. B,Industrials
+HUFV-A.ST,Hufvudstaden AB ser. A,Real Estate
+PNDX-B.ST,Pandox AB ser. B,Real Estate

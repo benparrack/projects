@@ -153,8 +153,9 @@ def plan_results(plans: list[dict], trades: list[dict], prices_usd: dict[str, fl
                   "return_pct": None, "first_buy": buys[0]["ts"] if buys else None,
                   "last_sell": sells[-1]["ts"] if sells else None, "hold_days": None,
                   "initial_risk": None})
-        if bq and p.get("stop") and avg_in and avg_in > p["stop"]:
-            r["initial_risk"] = bq * (avg_in - p["stop"]) * fx_in
+        stop0 = p.get("initial_stop") or p.get("stop")  # trailing a stop up must not shrink R
+        if bq and stop0 and avg_in and avg_in > stop0:
+            r["initial_risk"] = bq * (avg_in - stop0) * fx_in
         if bq:
             sold_cost = bcost * (sq / bq)
             r["realized"] = sproc - sold_cost if sq else 0.0
@@ -204,6 +205,8 @@ def journal_stats(results: list[dict]) -> dict:
     s["by_setup"] = group(lambda r: r.get("setup") or "(none)")
     s["by_followed"] = group(lambda r: {1: "followed plan", 0: "broke plan"}.get(r.get("followed_plan"), "not reviewed"))
     s["by_exit"] = group(lambda r: r.get("exit_reason") or "(none)")
+    s["by_override"] = group(lambda r: "overrode a guardrail" if r.get("override_reason") else
+                             "unplanned (broker fill)" if r.get("source") == "broker" else "within the rules")
     return s
 
 

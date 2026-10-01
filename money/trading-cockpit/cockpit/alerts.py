@@ -33,7 +33,8 @@ def ensure_topic() -> None:
         db.set_setting("ntfy_topic", notify.new_topic())
 
 
-def fire(key: str, ticker: str | None, kind: str, title: str, message: str, tags=(), priority: int = 3) -> bool:
+def fire(key: str, ticker: str | None, kind: str, title: str, message: str, tags=(), priority: int = 3,
+         click: str | None = None) -> bool:
     """Log + push once per key. Returns True if this was new."""
     cur_id = None
     with db.connect() as con:
@@ -43,7 +44,7 @@ def fire(key: str, ticker: str | None, kind: str, title: str, message: str, tags
             cur_id = cur.lastrowid
     if cur_id is None:
         return False
-    sent = notify.send(db.settings().get("ntfy_topic", ""), title, message, tags, priority)
+    sent = notify.send(db.settings().get("ntfy_topic", ""), title, message, tags, priority, click)
     if sent:
         db.execute("UPDATE alert_log SET sent = 1 WHERE id = ?", (cur_id,))
     return True
@@ -64,7 +65,7 @@ def _today(ticker: str) -> str:
 
 def check_plans() -> None:
     s = db.settings()
-    plans = db.rows("SELECT p.*, a.mode FROM plans p JOIN accounts a ON a.id = p.account_id"
+    plans = db.rows("SELECT p.*, a.mode, a.broker FROM plans p JOIN accounts a ON a.id = p.account_id"
                     " WHERE p.status IN ('planned','open')")
     for p in plans:
         tk = p["ticker"]
@@ -80,9 +81,20 @@ def check_plans() -> None:
                      f"{tk} is at your planned entry",
                      f"Now {px:.2f}, plan #{p['id']} entry {p['entry']:.2f}. Re-run the check before buying.", ["eyes"])
             continue
+        if p.get("trail_json"):
+            try:
+                from . import manage
+                manage.manage_open(p, q, fire)
+                p = dict(p, **db.one("SELECT stop, scaled FROM plans WHERE id = ?", (p["id"],)))
+                if db.one("SELECT status FROM plans WHERE id = ?", (p["id"],))["status"] != "open":
+                    continue
+            except Exception as e:
+                log.warning("trade management for plan %s failed: %s", p["id"], e)
         hit = None
         if p["stop"] and px <= p["stop"]:
-            hit = ("stop", "hit stop", f"{tk} hit your stop", ["rotating_light"], 5)
+            trailed = p.get("initial_stop") and p["stop"] > p["initial_stop"]
+            hit = ("stop", "trailing stop" if trailed else "hit stop", f"{tk} hit your {'trailing ' if trailed else ''}stop",
+                   ["rotating_light"], 5)
         elif p["target"] and px >= p["target"]:
             hit = ("target", "hit target", f"{tk} reached your target", ["dart"], 4)
         if hit:
@@ -99,7 +111,8 @@ def check_plans() -> None:
             else:
                 fire(f"{kind}:{p['id']}", tk, kind, title,
                      f"Now {px:.2f}, your {kind} was {level:.2f}. "
-                     + ("Sell at your broker, then record the sell in the cockpit." if p["mode"] == "real"
+                     + ("If your broker's stop order filled, the next sync records it." if p.get("broker") == "alpaca"
+                        else "Sell at your broker, then record the sell in the cockpit." if p["mode"] == "real"
                         else "Sell it in the cockpit (auto-exit is off or the market is closed)."), tags, prio)
             continue
         # Time stop: held longer than planned.
@@ -260,6 +273,11 @@ def check_insiders(ticker: str, days: int = 5) -> None:
 def run_once() -> dict:
     t0 = time.time()
     before = db.one("SELECT COUNT(*) AS n FROM alert_log")["n"]
+    try:
+        from . import broker
+        broker.sync_all()  # fills from linked brokers first, so plan checks see the real position
+    except Exception as e:
+        log.warning("broker sync failed: %s", e)
     check_plans()
     check_rules()
     tickers = watched_tickers()
@@ -385,6 +403,8 @@ def register(app) -> None:
 
     if os.environ.get("COCKPIT_NO_WATCHER") != "1":
         threading.Thread(target=loop, name="alert-watcher", daemon=True).start()
+        from . import reports
+        threading.Thread(target=reports.scheduler, name="scheduler", daemon=True).start()
 
 
 def main():

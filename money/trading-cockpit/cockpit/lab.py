@@ -217,6 +217,7 @@ def outcomes(df: pd.DataFrame, spec: dict, exit_sig: pd.Series | None) -> pd.Dat
     ret = np.full(n, np.nan)
     rmul = np.full(n, np.nan)
     exit_i = np.full(n, -1)
+    rfrac = np.full(n, np.nan)
     why = np.empty(n, dtype=object)
     for d in range(1, n):
         e = o[d]
@@ -254,7 +255,8 @@ def outcomes(df: pd.DataFrame, spec: dict, exit_sig: pd.Series | None) -> pd.Dat
         ret[d], exit_i[d], why[d] = r, j, reason
         if risk:
             rmul[d] = r * e / risk
-    return pd.DataFrame({"ret": ret, "r": rmul, "exit_i": exit_i, "why": why}, index=df.index)
+            rfrac[d] = risk / e
+    return pd.DataFrame({"ret": ret, "r": rmul, "exit_i": exit_i, "why": why, "risk_frac": rfrac}, index=df.index)
 
 
 def _stats(rets: np.ndarray, rs: np.ndarray, holds: np.ndarray) -> dict:
@@ -292,19 +294,9 @@ def backtest(d: dict, n_random: int = 500, seed: int = 7) -> dict:
         for i in np.flatnonzero(valid):
             pools["all"].append((oc["ret"].iat[i], oc["r"].iat[i], holds_all[i]))
             pools["is" if i < split else "oos"].append((oc["ret"].iat[i], oc["r"].iat[i], holds_all[i]))
-        # Strategy: signal at close of day i -> buy open of i+1; one position per ticker at a time.
-        sig_days = np.flatnonzero(sig.to_numpy())
-        busy_until, n_tk = -1, 0
-        for i in sig_days:
-            d0 = i + 1
-            if d0 >= len(df) or d0 <= busy_until or d0 < 200 or not valid[d0]:
-                continue
-            j = int(oc["exit_i"].iat[d0])
-            trades.append({"ticker": tk, "entry_date": df.index[d0].strftime("%Y-%m-%d"),
-                           "exit_date": df.index[j].strftime("%Y-%m-%d"), "entry": float(df["Open"].iat[d0]),
-                           "ret": float(oc["ret"].iat[d0]), "r": float(oc["r"].iat[d0]) if np.isfinite(oc["r"].iat[d0]) else None,
-                           "hold": int(j - d0 + 1), "why": oc["why"].iat[d0], "oos": bool(d0 >= split)})
-            busy_until, n_tk = j, n_tk + 1
+        tk_trades = _ticker_trades(tk, df, sig, oc, split, valid)
+        trades += tk_trades
+        n_tk = len(tk_trades)
         bh = float(df["Close"].iat[-1] / df["Close"].iat[200] - 1)
         per_ticker.append({"ticker": tk, "trades": n_tk, "buy_hold": bh,
                            "split_date": df.index[split].strftime("%Y-%m-%d"),
@@ -341,10 +333,169 @@ def backtest(d: dict, n_random: int = 500, seed: int = 7) -> dict:
         verdict, text = "NO EDGE", (f"Out-of-sample it averaged {o['avg_ret']:+.2%} per trade; random entries with the "
                                     f"same exits averaged {o.get('random_avg_ret', 0):+.2%}. "
                                     f"Not distinguishable from luck (p={o.get('p_value', 1):.2f}).")
-    res.update(verdict=verdict, verdict_text=text,
+    s = db.settings()
+    sim = portfolio_sim(trades, risk_pct=float(d.get("sim_risk_pct") or s["risk_pct"] * 100) / 100,
+                        max_positions=int(d.get("sim_max_pos") or 5), max_pos_pct=s["max_position_pct"])
+    res.update(verdict=verdict, verdict_text=text, sim=sim,
                trades=sorted(trades, key=lambda x: x["entry_date"], reverse=True)[:400],
                curve=_curve(trades))
     return res
+
+
+def _ticker_trades(tk, df, sig, oc, split, valid) -> list[dict]:
+    """Signal at the close of day i -> buy the open of i+1; one position per ticker at a time."""
+    out, busy_until = [], -1
+    for i in np.flatnonzero(sig.to_numpy()):
+        d0 = i + 1
+        if d0 >= len(df) or d0 <= busy_until or d0 < 200 or not valid[d0]:
+            continue
+        j = int(oc["exit_i"].iat[d0])
+        rf = oc["risk_frac"].iat[d0]
+        out.append({"ticker": tk, "entry_date": df.index[d0].strftime("%Y-%m-%d"),
+                    "exit_date": df.index[j].strftime("%Y-%m-%d"), "entry": float(df["Open"].iat[d0]),
+                    "ret": float(oc["ret"].iat[d0]), "r": float(oc["r"].iat[d0]) if np.isfinite(oc["r"].iat[d0]) else None,
+                    "risk_frac": float(rf) if np.isfinite(rf) else None,
+                    "hold": int(j - d0 + 1), "why": oc["why"].iat[d0], "oos": bool(d0 >= split)})
+        busy_until = j
+    return out
+
+
+def portfolio_sim(trades: list[dict], start: float = 10_000, risk_pct: float = 0.01, max_positions: int = 5,
+                  max_pos_pct: float = 0.25) -> dict:
+    """Run the trades as one account: risk a fixed share of equity per trade (sized by the stop), at most
+    `max_positions` at once, skipping signals when full or out of cash. Positions are marked at cost while open."""
+    if not trades:
+        return {"trades": 0}
+    cash, open_, curve, taken, skipped = start, [], [], 0, 0
+    peak, mdd = start, 0.0
+
+    def close_until(day):
+        nonlocal cash, peak, mdd
+        for pos in sorted([p for p in open_ if p[0] <= day]):
+            open_.remove(pos)
+            cash += pos[1] * (1 + pos[2])
+            eq = cash + sum(p[1] for p in open_)
+            peak = max(peak, eq)
+            mdd = min(mdd, eq / peak - 1)
+            curve.append({"t": pos[0], "v": round(eq, 2)})
+
+    for t in sorted(trades, key=lambda x: (x["entry_date"], x["ticker"])):
+        close_until(t["entry_date"])
+        eq = cash + sum(p[1] for p in open_)
+        if len(open_) >= max_positions:
+            skipped += 1
+            continue
+        size = eq * risk_pct / t["risk_frac"] if t.get("risk_frac") else eq * max_pos_pct
+        size = min(size, eq * max_pos_pct, cash)
+        if size < 1:
+            skipped += 1
+            continue
+        cash -= size
+        open_.append((t["exit_date"], size, t["ret"]))
+        taken += 1
+    close_until("9999")
+    final = cash
+    d0, d1 = pd.Timestamp(min(t["entry_date"] for t in trades)), pd.Timestamp(max(t["exit_date"] for t in trades))
+    years = max((d1 - d0).days / 365.25, 0.1)
+    out = {"trades": taken, "skipped": skipped, "start": start, "final": final, "total_return": final / start - 1,
+           "cagr": (final / start) ** (1 / years) - 1, "max_drawdown": mdd, "years": years, "curve": curve,
+           "risk_pct": risk_pct, "max_positions": max_positions}
+    try:
+        spy = market.history("SPY")["Close"]
+        a, b = spy.asof(d0), spy.asof(d1)
+        out["spy_return"] = float(b / a - 1)
+        out["spy_cagr"] = float((b / a) ** (1 / years) - 1)
+    except Exception:
+        pass
+    return out
+
+
+def _load(tickers):
+    data, skipped = {}, []
+    for tk in tickers:
+        try:
+            df = market.completed(market.history(tk), tk)
+        except Exception as e:
+            skipped.append(f"{tk}: {e}")
+            continue
+        if len(df) < 260:
+            skipped.append(f"{tk}: not enough history")
+            continue
+        data[tk] = df
+    return data, skipped
+
+
+def _grid_vals(v, default, cast=float, allow_none=False):
+    if v in (None, ""):
+        return default
+    out = []
+    for x in str(v).replace(",", " ").split():
+        if allow_none and x.lower() in ("none", "-", "0"):
+            out.append(None)
+        else:
+            out.append(cast(x))
+    return out or default
+
+
+def optimize(d: dict) -> dict:
+    """Try every combination of exit settings (and values of $p in the rule) on the OLDER 70% only, pick the best,
+    then show how that pick and all others did on the newer 30%. If in-sample rank doesn't predict out-of-sample
+    rank, tuning is just fitting noise."""
+    base = _spec(dict(d, entry=(d.get("entry") or "").replace("$p", "1")))
+    st = base["stop_type"]
+    stops = _grid_vals(d.get("grid_stop"), {"atr": [1.5, 2, 3], "pct": [4, 7, 10], "none": [0]}[st])
+    holds = _grid_vals(d.get("grid_hold"), [5, 10, 20], int)
+    targets = _grid_vals(d.get("grid_target"), [None, 2, 3] if st != "none" else [None], allow_none=True)
+    pvals = _grid_vals(d.get("grid_p"), [None]) if "$p" in (d.get("entry") or "") else [None]
+    combos = [(sv, mh, tr, pv) for sv in stops for mh in holds for tr in targets for pv in pvals]
+    if len(combos) > 81:
+        raise UserError(f"{len(combos)} combinations; keep it to 81 or fewer")
+    data, skipped = _load(base["tickers"])
+    if not data:
+        raise UserError("No usable price history. " + "; ".join(skipped))
+    sigs, exits = {}, {}
+    for pv in pvals:
+        rule = (d.get("entry") or "").replace("$p", str(pv)) if pv is not None else base["entry"]
+        sigs[pv] = {tk: evaluate(rule, df) for tk, df in data.items()}
+    exits = {tk: evaluate(base["exit"], df) if base["exit"] else None for tk, df in data.items()}
+    rows = []
+    for sv, mh, tr, pv in combos:
+        spec = dict(base, stop_value=sv, max_hold=mh, target_r=tr if st != "none" else None)
+        tt = []
+        for tk, df in data.items():
+            oc = outcomes(df, spec, exits[tk])
+            split = int(len(df) * 0.7)
+            valid = oc["ret"].notna().to_numpy() & (np.arange(len(df)) >= 200)
+            tt += _ticker_trades(tk, df, sigs[pv][tk], oc, split, valid)
+        is_ = [t["ret"] for t in tt if not t["oos"]]
+        oos = [t["ret"] for t in tt if t["oos"]]
+        rows.append({"stop_value": sv, "max_hold": mh, "target_r": tr, "p": pv, "is_trades": len(is_),
+                     "oos_trades": len(oos), "is_avg": float(np.mean(is_)) if is_ else None,
+                     "oos_avg": float(np.mean(oos)) if oos else None})
+    ok = [r for r in rows if r["is_avg"] is not None and r["oos_avg"] is not None and r["is_trades"] >= 20]
+    if len(ok) < 3:
+        raise UserError("Too few trades in most combinations to compare; add tickers or loosen the rule")
+    is_rank = pd.Series([r["is_avg"] for r in ok]).rank(ascending=False)
+    oos_rank = pd.Series([r["oos_avg"] for r in ok]).rank(ascending=False)
+    for r, a, b in zip(ok, is_rank, oos_rank):
+        r["is_rank"], r["oos_rank"] = int(a), int(b)
+    best = min(ok, key=lambda r: r["is_rank"])
+    rho = float(is_rank.corr(oos_rank)) if len(ok) > 2 else None
+    median_oos = float(np.median([r["oos_avg"] for r in ok]))
+    if rho is not None and rho > 0.5 and best["oos_avg"] > median_oos and best["oos_avg"] > 0:
+        verdict = "ROBUST-ISH"
+        text = (f"In-sample rank predicted out-of-sample rank fairly well (ρ={rho:.2f}), and the in-sample pick made "
+                f"{best['oos_avg']:+.2%}/trade on new data (rank {best['oos_rank']} of {len(ok)}). Still run it through "
+                "the backtest's random baseline before trusting it.")
+    else:
+        verdict = "OVERFIT RISK"
+        text = (f"The best in-sample settings ranked {best['oos_rank']} of {len(ok)} on new data "
+                f"({best['oos_avg']:+.2%}/trade vs median {median_oos:+.2%}); rank correlation ρ="
+                f"{rho if rho is not None else float('nan'):.2f}. Picking the 'best' settings here mostly fits noise. "
+                "Prefer simple, round settings.")
+    return {"rows": sorted(rows, key=lambda r: (r.get("is_rank") or 999)), "best": best, "rho": rho,
+            "median_oos": median_oos, "verdict": verdict, "verdict_text": text, "combos": len(combos),
+            "skipped": skipped, "has_p": pvals != [None]}
 
 
 def _curve(trades):
@@ -388,6 +539,24 @@ def register(app) -> None:
     def api_lab_backtest():
         return jsonify(backtest(request.get_json(silent=True) or {}))
 
+    @app.post("/api/lab/optimize")
+    def api_lab_optimize():
+        return jsonify(optimize(request.get_json(silent=True) or {}))
+
+    @app.post("/api/lab/compare")
+    def api_lab_compare():
+        ids = [int(i) for i in (request.get_json(silent=True) or {}).get("ids", [])][:6]
+        out = []
+        for sid in ids:
+            s = db.one("SELECT * FROM strategies WHERE id = ?", (sid,))
+            if not s:
+                continue
+            r = backtest(json.loads(s["spec_json"]), n_random=200)
+            out.append({"id": sid, "name": s["name"], "verdict": r["verdict"], "all": r["all"],
+                        "out_of_sample": r["out_of_sample"], "curve": r["curve"],
+                        "sim": {k: v for k, v in r["sim"].items() if k != "curve"}, "sim_curve": r["sim"].get("curve")})
+        return jsonify(out)
+
     @app.get("/api/lab/strategies")
     def api_lab_list():
         out = []
@@ -405,7 +574,9 @@ def register(app) -> None:
         if not spec["name"]:
             raise UserError("Give the strategy a name")
         res = d.get("result") or {}
-        keep = {k: res.get(k) for k in ("verdict", "verdict_text", "all", "in_sample", "out_of_sample")}
+        keep = {k: res.get(k) for k in ("verdict", "verdict_text", "all", "in_sample", "out_of_sample", "curve")}
+        if res.get("sim"):
+            keep["sim"] = {k: v for k, v in res["sim"].items() if k != "curve"}
         sid = db.execute("INSERT INTO strategies(name, spec_json, result_json, alert, created_at) VALUES (?,?,?,?,?)",
                          (spec["name"], json.dumps(spec), json.dumps(keep, default=float), int(bool(d.get("alert"))),
                           db.now()))

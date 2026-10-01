@@ -50,8 +50,44 @@ CREATE TABLE IF NOT EXISTS strategies (
   result_json TEXT, alert INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS screens (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, rule TEXT NOT NULL, universe TEXT NOT NULL,
+  min_price REAL, min_dollar_vol REAL, min_atr_pct REAL, alert INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS screen_hits (
+  id INTEGER PRIMARY KEY, screen_id INTEGER NOT NULL REFERENCES screens(id) ON DELETE CASCADE,
+  day TEXT NOT NULL, ticker TEXT NOT NULL, close REAL, atr_pct REAL, dollar_vol REAL, change_pct REAL,
+  created_at TEXT NOT NULL, UNIQUE(screen_id, day, ticker)
+);
+CREATE TABLE IF NOT EXISTS reports (
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL, account_id INTEGER, ts TEXT NOT NULL,
+  title TEXT, summary TEXT, body TEXT
+);
+CREATE TABLE IF NOT EXISTS ai_cache (key TEXT PRIMARY KEY, ts TEXT NOT NULL, value TEXT);
 CREATE INDEX IF NOT EXISTS trades_acct ON trades(account_id, ticker, ts);
 """
+
+# Columns added after the first release; init() adds any that an older database is missing.
+MIGRATIONS = [
+    ("accounts", "broker", "TEXT"),         # None (manual), 'alpaca' or 'csv'
+    ("accounts", "broker_cfg", "TEXT"),     # JSON: keys, paper/live, last activity id
+    ("accounts", "synced_at", "TEXT"),
+    ("accounts", "sync_status", "TEXT"),
+    ("trades", "ext_id", "TEXT"),           # broker/import id, so a sync never adds a fill twice
+    ("trades", "source", "TEXT"),
+    ("cash_moves", "ext_id", "TEXT"),
+    ("plans", "initial_stop", "REAL"),      # R is always measured against this, even after trailing
+    ("plans", "trail_json", "TEXT"),        # trailing-stop / scale-out rules
+    ("plans", "scaled", "INTEGER NOT NULL DEFAULT 0"),
+    ("plans", "override_reason", "TEXT"),   # why a guardrail was overridden
+    ("plans", "source", "TEXT"),            # 'broker' when created from an unplanned broker fill
+    ("plans", "broker_order_id", "TEXT"),   # Alpaca bracket order placed from this plan
+]
+INDEXES = [
+    "CREATE UNIQUE INDEX IF NOT EXISTS trades_ext ON trades(account_id, ext_id) WHERE ext_id IS NOT NULL",
+    "CREATE UNIQUE INDEX IF NOT EXISTS moves_ext ON cash_moves(account_id, ext_id) WHERE ext_id IS NOT NULL",
+]
+SECRET_KEYS = ("anthropic_api_key", "access_pin")
 
 DEFAULTS = {
     "risk_pct": 0.01,          # risk per trade as a fraction of account equity
@@ -71,6 +107,22 @@ DEFAULTS = {
     "alert_move_sigma": 3.0,      # day move vs the stock's normal daily swing
     "alert_fast_min": 5,          # scan interval while a watched market is open
     "alert_slow_min": 60,         # ...and while they're all closed
+    "timezone": "Europe/Stockholm",  # for briefing / report / screener times
+    "briefing_enabled": 1,
+    "briefing_time": "08:30",
+    "weekly_report": 1,           # Friday evening after the US close
+    "screener_time": "22:30",     # after the US close
+    "daily_loss_limit_pct": 0.02,   # realized losses today ≥ this share of equity → no new trades today
+    "weekly_loss_limit_pct": 0.05,
+    "max_loss_streak": 3,           # this many losing trades in a row → cooldown
+    "cooldown_days": 1,
+    "block_avg_down": 1,            # refuse adding to a position that's below your entry
+    "anthropic_api_key": "",        # falls back to the ANTHROPIC_API_KEY environment variable
+    "ai_model": "claude-sonnet-5-5",
+    "ai_fast_model": "claude-haiku-4-5-20251001",
+    "coach_weekly": 1,
+    "public_url": "",               # e.g. your Tailscale https address, used for links in phone alerts
+    "access_pin": "",               # required for requests that don't come from this computer
 }
 
 
@@ -90,6 +142,12 @@ def connect() -> sqlite3.Connection:
 def init(paper_cash: float = 1000.0) -> None:
     with connect() as con:
         con.executescript(SCHEMA)
+        for table, col, ddl in MIGRATIONS:
+            if col not in {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+        for ddl in INDEXES:
+            con.execute(ddl)
+        con.execute("UPDATE plans SET initial_stop = stop WHERE initial_stop IS NULL AND stop IS NOT NULL")
         if not con.execute("SELECT 1 FROM accounts").fetchone():
             ts = now()
             cur = con.execute("INSERT INTO accounts(name, mode, created_at) VALUES ('Paper', 'paper', ?)", (ts,))
@@ -108,9 +166,19 @@ def settings() -> dict:
         return out
 
 
+def public_settings() -> dict:
+    """Settings for the browser, with secrets masked."""
+    s = settings()
+    for k in SECRET_KEYS:
+        s[k] = ("••••" + str(s[k])[-4:]) if s[k] else ""
+    return s
+
+
 def set_setting(key: str, value) -> None:
     if key not in DEFAULTS:
         raise KeyError(key)
+    if key in SECRET_KEYS and str(value).startswith("••••"):
+        return  # the masked value came back unchanged
     with connect() as con:
         con.execute("INSERT OR REPLACE INTO settings(key, value) VALUES (?, ?)", (key, json.dumps(value)))
 
@@ -128,3 +196,9 @@ def one(sql: str, args=()) -> dict | None:
 def execute(sql: str, args=()) -> int:
     with connect() as con:
         return con.execute(sql, args).lastrowid
+
+
+def changed(sql: str, args=()) -> int:
+    """Run a write and return how many rows it touched (e.g. 0 for an INSERT OR IGNORE duplicate)."""
+    with connect() as con:
+        return con.execute(sql, args).rowcount
