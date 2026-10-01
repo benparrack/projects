@@ -20,6 +20,7 @@ const PATCH = (u, b) => api("PATCH", u, b || {});
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+const cssv = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const isNum = (x) => typeof x === "number" && isFinite(x);
 function usd(x, d = 2) { return isNum(x) ? (x < 0 ? "-$" : "$") + Math.abs(x).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : "—"; }
 function pct(x, d = 1, sign = false) { return isNum(x) ? (sign && x > 0 ? "+" : "") + (x * 100).toFixed(d) + "%" : "—"; }
@@ -56,8 +57,8 @@ function lineChart(id, labels, datasets, opts = {}) {
       responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index", intersect: false },
       plugins: { legend: { labels: { color: "#8b95a3", boxWidth: 12 } } },
       elements: { point: { radius: 0 }, line: { borderWidth: 1.6 } },
-      scales: { x: { ticks: { color: "#8b95a3", maxTicksLimit: 8 }, grid: { color: "#20262e" } },
-                y: { ticks: { color: "#8b95a3" }, grid: { color: "#20262e" } } },
+      scales: { x: { ticks: { color: "#8b95a3", maxTicksLimit: 8 }, grid: { color: cssv("--grid") }, border: { display: false } },
+                y: { ticks: { color: "#8b95a3" }, grid: { color: cssv("--grid") }, border: { display: false } } },
     }, opts),
   });
 }
@@ -65,18 +66,31 @@ function lineChart(id, labels, datasets, opts = {}) {
 async function refreshHeader() {
   try {
     const st = await GET(`/api/accounts/${S.acct}/state`);
-    $("#acct-equity").innerHTML = `${usd(st.equity)} · <span class="${cls(st.total_pnl)}">${usd(st.total_pnl)}</span>`;
+    $("#acct-equity").innerHTML = `<div class="eq">${usd(st.equity)}</div><span class="small ${cls(st.total_pnl)}">${usd(st.total_pnl)} all time</span>`;
     return st;
   } catch (e) { $("#acct-equity").textContent = ""; }
 }
 
 // ---------- router ----------
-async function route() {
-  const name = (location.hash || "#today").slice(1).split(/[/?]/)[0];
-  document.querySelectorAll("#tabs a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + name));
-  const view = VIEWS[name] || VIEWS.today;
-  $("#view").innerHTML = `<div class="empty"><span class="spin"></span> Loading…</div>`;
-  try { await view(); } catch (e) { $("#view").innerHTML = `<div class="panel bad">${esc(e.message)}</div>`; }
+const PAGE_TITLES = { today: "Home", check: "New trade", portfolio: "Positions", journal: "Journal", stats: "Stats & tax", chart: "Chart",
+  screener: "Screener", lab: "Strategy lab", alerts: "Watchlist & alerts", settings: "Settings" };
+// quiet: re-render in place (live refresh) without the loading placeholder.
+async function route(quiet) {
+  let name = (location.hash || "#today").slice(1).split(/[/?]/)[0];
+  if (!VIEWS[name]) name = "today";
+  document.querySelectorAll("a.nav").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + name));
+  $("#page-title").textContent = PAGE_TITLES[name] || "";
+  document.title = `${PAGE_TITLES[name] || ""} · Trading Cockpit`;
+  if (quiet !== true) {
+    if (window.closeOverlays) closeOverlays();
+    $("#view").innerHTML = `<div class="empty"><span class="spin"></span> Loading…</div>`;
+    $("#view").style.animation = "none"; void $("#view").offsetWidth; $("#view").style.animation = "";
+  }
+  const seq = S.routeSeq = (S.routeSeq || 0) + 1;
+  try { await VIEWS[name](); } catch (e) { $("#view").innerHTML = `<div class="panel bad">${esc(e.message)}</div>`; }
+  // A slower, older render finished after a newer one and overwrote it: draw the current page again.
+  if (seq !== S.routeSeq) { if (S.routeDone === S.routeSeq) route(true); return; }
+  S.routeDone = seq;
 }
 window.addEventListener("hashchange", route);
 
@@ -93,6 +107,7 @@ async function boot() {
   refreshHeader();
   route();
   if (!S._timer) S._timer = setInterval(refreshHeader, 60000);
+  if (window.uiBoot) uiBoot();
 }
 
 // Trailing-stop / scale-out rule inputs, shared by the check form and the stop/target modal.
@@ -288,26 +303,25 @@ VIEWS.portfolio = async function () {
   $("#view").innerHTML = `
   ${a?.broker ? `<div class="row small muted" style="margin-bottom:10px">${a.broker === "alpaca" ? "Linked to Alpaca" : "CSV imports"} · ${esc(a.sync_status || "")}${a.synced_at ? " · " + esc(String(a.synced_at).slice(0, 16).replace("T", " ")) : ""}
     ${a.broker === "alpaca" ? `<button class="sm" id="p-sync">Sync now</button>` : `<a href="#settings">import more</a>`}</div>` : ""}
-  <div class="grid g5">
-    <div class="card"><div class="k">Account value</div><div class="v">${usd(st.equity)}</div></div>
-    <div class="card"><div class="k">Cash</div><div class="v">${usd(st.cash)}</div></div>
-    <div class="card"><div class="k">Profit / loss (all time)</div><div class="v ${cls(st.total_pnl)}">${usd(st.total_pnl)}</div><div class="small muted">${pct(st.deposits ? st.total_pnl / st.deposits : null, 1, true)} on ${usd(st.deposits, 0)} deposited</div></div>
-    <div class="card"><div class="k">vs. same money in S&amp;P 500</div><div class="v ${cls(vsSpy)}">${usd(vsSpy)}</div><div class="small muted">SPY would be ${usd(cv.spy)}</div></div>
-    <div class="card"><div class="k">Open risk (to stops)</div><div class="v ${st.heat_pct > S.settings.max_heat_pct ? "warn" : ""}">${usd(st.heat)}</div><div class="small muted">${pct(st.heat_pct, 1)} of account (limit ${pct(S.settings.max_heat_pct, 0)})</div></div>
+  <div class="kpis">
+    <div class="kpi"><div class="k">Account value</div><div class="v">${usd(st.equity)}</div></div>
+    <div class="kpi"><div class="k">Cash</div><div class="v">${usd(st.cash)}</div></div>
+    <div class="kpi"><div class="k">Profit / loss (all time)</div><div class="v ${cls(st.total_pnl)}">${usd(st.total_pnl)}</div><div class="s">${pct(st.deposits ? st.total_pnl / st.deposits : null, 1, true)} on ${usd(st.deposits, 0)} deposited</div></div>
+    <div class="kpi"><div class="k">vs. same money in S&amp;P 500</div><div class="v ${cls(vsSpy)}">${usd(vsSpy)}</div><div class="s">SPY would be ${usd(cv.spy)}</div></div>
+    <div class="kpi"><div class="k">Open risk (to stops)</div><div class="v ${st.heat_pct > S.settings.max_heat_pct ? "warn" : ""}">${usd(st.heat)}</div><div class="s">${pct(st.heat_pct, 1)} of account (limit ${pct(S.settings.max_heat_pct, 0)})</div></div>
   </div>
-  <div class="panel" style="margin-top:16px"><div class="row" style="justify-content:space-between"><h2>Account vs. S&amp;P 500</h2>
+  <div class="panel"><div class="ph"><h2>Account vs. S&amp;P 500</h2>
     <span class="small muted">Max drawdown ${pct(cv.max_drawdown, 1)}</span></div>
     ${cv.points.length > 1 ? `<div class="chartbox"><canvas id="p-curve"></canvas></div>` : `<div class="empty small">The chart starts filling in after your first trading day.</div>`}
   </div>
   <div class="panel"><h2>Open trades</h2>
-    ${open.length ? `<div class="tablewrap"><table><tr><th>Ticker</th><th class="num">Shares</th><th class="num">Entry</th><th class="num">Price</th><th class="num">P/L</th><th class="num">Now</th><th class="num">To stop</th><th class="num">To target</th><th class="num">Days</th><th></th></tr>
+    ${open.length ? `<div class="tablewrap"><table><tr><th>Ticker</th><th class="num">Shares</th><th class="num">Entry</th><th class="num">Price</th><th class="num">P/L</th><th class="num">Now</th><th style="min-width:190px">Stop → target</th><th class="num">Days</th><th></th></tr>
       ${open.map((p) => `<tr>
         <td><a href="#chart?t=${encodeURIComponent(p.ticker)}"><b>${esc(p.ticker)}</b></a> <span class="small muted">#${p.id}${p.setup ? " · " + esc(p.setup) : ""}</span>${p.trail_json ? ' <span class="pill" title="trailing / scale-out rules active">auto</span>' : ""}</td>
         <td class="num">${qty(p.qty_open)}</td><td class="num">${num(p.avg_entry)}</td><td class="num">${num(p.price)}</td>
         <td class="num">${money(p.unrealized)}</td><td class="num ${cls(p.r_multiple)}">${rmult(p.r_multiple)}</td>
-        <td class="num">${num(p.stop)} <span class="small muted">${pct(p.to_stop_pct, 1)}</span></td>
-        <td class="num">${p.target ? num(p.target) + ` <span class="small muted">${pct(p.to_target_pct, 1, true)}</span>` : "—"}</td>
-        <td class="num">${p.hold_days ?? 0}d <span class="small muted">plan ${p.hold_days_plan ?? "—"} trading</span></td>
+        <td title="stop ${num(p.stop)} (${pct(p.to_stop_pct, 1)}) · target ${num(p.target)} (${pct(p.to_target_pct, 1, true)})">${progBar(p.stop, p.avg_entry, p.target, p.price)}</td>
+        <td class="num">${p.hold_days ?? 0}<span class="small muted"> / ${p.hold_days_plan ?? "—"}d</span></td>
         <td><button class="sm" data-sell="${p.id}">Sell</button> <button class="sm" data-edit="${p.id}">Stop/target</button> <button class="sm" data-view="${p.id}">Plan</button></td>
       </tr>`).join("")}</table></div>` : `<div class="empty">No open trades. Run a <a href="#check">pre-trade check</a> to start one.</div>`}
   </div>
@@ -317,8 +331,8 @@ VIEWS.portfolio = async function () {
   </table></div></div>` : ""}
   <div class="panel"><h2>Holdings by ticker</h2>
     ${st.positions.length ? `<div class="tablewrap"><table><tr><th>Ticker</th><th class="num">Shares</th><th class="num">Avg cost</th><th class="num">Price</th><th class="num">Today</th><th class="num">Value</th><th class="num">Cost basis</th><th class="num">Unrealized</th><th class="num">% of account</th><th class="num">Long-term in</th></tr>
-      ${st.positions.map((p) => `<tr><td><b>${esc(p.ticker)}</b>${p.currency !== "USD" ? ` <span class="small muted">${esc(p.currency)}</span>` : ""}</td><td class="num">${qty(p.qty)}</td><td class="num">${num(p.avg_cost_native)}</td><td class="num">${num(p.price)}</td>
-        <td class="num ${cls(p.day_change_pct)}">${pct(p.day_change_pct, 1, true)}</td><td class="num">${usd(p.value)}</td><td class="num">${usd(p.cost)}</td>
+      ${st.positions.map((p) => `<tr><td>${tkLink(p.ticker)}${p.currency !== "USD" ? ` <span class="small muted">${esc(p.currency)}</span>` : ""}</td><td class="num">${qty(p.qty)}</td><td class="num">${num(p.avg_cost_native)}</td><td class="num">${num(p.price)}</td>
+        <td class="num">${delta(p.day_change_pct)}</td><td class="num">${usd(p.value)}</td><td class="num">${usd(p.cost)}</td>
         <td class="num">${money(p.unrealized)} <span class="small ${cls(p.unrealized_pct)}">${pct(p.unrealized_pct, 1, true)}</span></td>
         <td class="num">${pct((p.value || p.cost) / st.equity, 0)}</td><td class="num">${p.days_to_long_term ? p.days_to_long_term + " days" : "now"}</td></tr>`).join("")}
     </table></div>` : `<div class="empty small">Nothing held.</div>`}
@@ -466,11 +480,11 @@ VIEWS.journal = async function () {
 VIEWS.stats = async function () {
   const j = await GET(`/api/accounts/${S.acct}/journal`);
   const s = j.stats;
-  const grp = (title, g) => `<h3>${title}</h3><table><tr><th></th><th class="num">Trades</th><th class="num">Win rate</th><th class="num">Avg R</th><th class="num">P/L</th></tr>
-    ${Object.entries(g || {}).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num">${pct(v.win_rate, 0)}</td><td class="num ${cls(v.avg_r)}">${rmult(v.avg_r)}</td><td class="num">${money(v.pnl)}</td></tr>`).join("")}</table>`;
+  const grp = (title, g) => `<div><h3>${title}</h3><table><tr><th></th><th class="num">Trades</th><th class="num">Win rate</th><th class="num">Avg R</th><th class="num">P/L</th></tr>
+    ${Object.entries(g || {}).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num">${pct(v.win_rate, 0)}</td><td class="num ${cls(v.avg_r)}">${rmult(v.avg_r)}</td><td class="num">${money(v.pnl)}</td></tr>`).join("")}</table></div>`;
   $("#view").innerHTML = `
   <div class="panel"><h2>How you're trading</h2>
-    ${s.closed ? `<div class="grid g5">
+    ${s.closed ? `<div class="grid g4">
       <div class="card"><div class="k">Closed trades</div><div class="v">${s.closed}</div></div>
       <div class="card"><div class="k">Win rate</div><div class="v">${pct(s.win_rate, 0)}</div></div>
       <div class="card"><div class="k">Avg win / avg loss</div><div class="v"><span class="good">${pct(s.avg_win_pct, 1, true)}</span> / <span class="bad">${pct(s.avg_loss_pct, 1)}</span></div></div>
@@ -481,6 +495,8 @@ VIEWS.stats = async function () {
       <div class="card"><div class="k">Avg hold</div><div class="v">${s.avg_hold_days.toFixed(1)} days</div></div>
     </div>
     ${s.closed < 20 ? `<p class="small muted">With ${s.closed} trade${s.closed > 1 ? "s" : ""} these numbers are mostly luck. Judge a strategy after 20–30 trades.</p>` : ""}
+    <div class="grid g2" style="margin-top:18px"><div><h3>Daily realized P/L (last 6 months)</h3>${pnlHeat(j.realized)}</div>
+      <div><h3>Trade results in R</h3><div class="chartbox" style="height:200px"><canvas id="st-r"></canvas></div></div></div>
     <div class="grid g3">${grp("By setup", s.by_setup)}${grp("Discipline", s.by_followed)}${grp("By exit reason", s.by_exit)}</div>
     ${s.by_override ? `<div class="grid g3">${grp("Guardrails &amp; unplanned trades", s.by_override)}</div>` : ""}`
     : `<div class="empty">Close a few trades and your stats show up here: win rate, average R, and whether following your plans pays.</div>`}
@@ -506,9 +522,41 @@ VIEWS.stats = async function () {
   </div>
   <div class="panel"><h2>Fill log</h2>
     ${j.trades.length ? `<div class="tablewrap"><table><tr><th>Date</th><th>Ticker</th><th>Side</th><th class="num">Shares</th><th class="num">Price</th><th class="num">USD value</th><th class="num">Fees</th><th>Plan</th><th>Note</th></tr>
-      ${j.trades.map((t) => `<tr><td>${String(t.ts).slice(0, 16).replace("T", " ")}</td><td>${esc(t.ticker)}</td><td>${t.side}</td><td class="num">${qty(t.qty)}</td><td class="num">${num(t.price)} ${t.currency !== "USD" ? esc(t.currency) : ""}</td><td class="num">${usd(t.qty * t.price * t.fx)}</td><td class="num">${usd(t.fees)}</td><td>#${t.plan_id ?? ""}</td><td class="small muted">${esc(t.note)}</td></tr>`).join("")}</table></div>` : `<div class="empty small">No fills yet.</div>`}
+      ${j.trades.map((t) => `<tr><td>${String(t.ts).slice(0, 16).replace("T", " ")}</td><td>${tkLink(t.ticker)}</td><td>${t.side}</td><td class="num">${qty(t.qty)}</td><td class="num">${num(t.price)} ${t.currency !== "USD" ? esc(t.currency) : ""}</td><td class="num">${usd(t.qty * t.price * t.fx)}</td><td class="num">${usd(t.fees)}</td><td>#${t.plan_id ?? ""}</td><td class="small muted">${esc(t.note)}</td></tr>`).join("")}</table></div>` : `<div class="empty small">No fills yet.</div>`}
   </div>`;
+  rHistogram("st-r", j.plans);
+  const hm = $("#view .heat"); if (hm) hm.scrollLeft = hm.scrollWidth;  // newest weeks in view on small screens
 };
+
+// Calendar heatmap of realized P/L per weekday, newest column on the right.
+function pnlHeat(realized) {
+  const byDay = {};
+  (realized || []).forEach((r) => { const d = String(r.close_ts).slice(0, 10); byDay[d] = (byDay[d] || 0) + (r.gain || 0); });
+  const end = new Date(); end.setHours(12, 0, 0, 0);
+  const start = new Date(end); start.setDate(start.getDate() - 7 * 26 - ((end.getDay() + 6) % 7));
+  const vals = Object.values(byDay), mx = Math.max(1, ...vals.map(Math.abs));
+  let cells = "";
+  for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`, v = byDay[k];
+    const a = isNum(v) ? (0.25 + 0.75 * Math.min(1, Math.abs(v) / mx)).toFixed(2) : 0;
+    cells += `<i title="${k}${isNum(v) ? ": " + usd(v) : ""}" style="${isNum(v) ? `background:${v >= 0 ? "var(--good)" : "var(--bad)"};opacity:${a}` : ""}"></i>`;
+  }
+  const days = vals.length, green = vals.filter((v) => v > 0).length;
+  return `<div class="heat">${cells}</div><div class="heat-legend"><i style="background:var(--bad)"></i> loss <i style="background:var(--panel3)"></i> no sales
+    <i style="background:var(--good)"></i> gain <span style="margin-left:auto">${days ? `${green}/${days} green days · best ${usd(Math.max(...vals))} · worst ${usd(Math.min(...vals))}` : ""}</span></div>`;
+}
+function rHistogram(id, plans) {
+  const rs = plans.filter((p) => p.status === "closed" && isNum(p.r_multiple)).map((p) => p.r_multiple);
+  const edges = []; for (let x = -3; x < 5; x += 0.5) edges.push(x);
+  const counts = edges.map((e, i) => rs.filter((r) => (i === 0 ? r < e + 0.5 : i === edges.length - 1 ? r >= e : r >= e && r < e + 0.5)).length);
+  if (S.charts[id]) S.charts[id].destroy();
+  const el = document.getElementById(id); if (!el) return;
+  S.charts[id] = new Chart(el, { type: "bar", data: { labels: edges.map((e, i) => (i === 0 ? "≤" : i === edges.length - 1 ? "≥" : "") + (e + (i === 0 ? 0.5 : 0)) + "R"),
+      datasets: [{ data: counts, backgroundColor: edges.map((e) => (e < 0 ? cssv("--bad") : cssv("--good"))), borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: "#8b95a3", maxRotation: 0, autoSkip: true }, grid: { display: false } }, y: { ticks: { color: "#8b95a3", precision: 0 }, grid: { color: cssv("--grid") }, border: { display: false } } } } });
+}
 
 // ---------- Settings ----------
 const SETTING_FIELDS = [

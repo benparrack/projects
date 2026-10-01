@@ -98,8 +98,8 @@ async function runOptimize() {
   if (S.charts["o-sc"]) S.charts["o-sc"].destroy();
   S.charts["o-sc"] = new Chart($("#o-sc"), { type: "scatter", data: { datasets: [{ label: "combination", data: pts, backgroundColor: "#4c8dff" }] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } },
-      scales: { x: { title: { display: true, text: "in-sample rank (1 = best)", color: "#8b95a3" }, ticks: { color: "#8b95a3" }, grid: { color: "#20262e" } },
-                y: { title: { display: true, text: "out-of-sample rank", color: "#8b95a3" }, ticks: { color: "#8b95a3" }, grid: { color: "#20262e" } } } } });
+      scales: { x: { title: { display: true, text: "in-sample rank (1 = best)", color: "#8b95a3" }, ticks: { color: "#8b95a3" }, grid: { color: cssv("--grid") } },
+                y: { title: { display: true, text: "out-of-sample rank", color: "#8b95a3" }, ticks: { color: "#8b95a3" }, grid: { color: cssv("--grid") } } } } });
 }
 
 const CMP_COLORS = ["#4c8dff", "#2fbf71", "#e6a23c", "#b07cff", "#e5534b", "#8b95a3"];

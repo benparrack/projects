@@ -23,7 +23,7 @@ VIEWS.alerts = async function () {
     <div class="panel"><h2>Watchlist</h2>
       <div class="row"><input id="w-t" placeholder="ticker" style="max-width:130px"><input id="w-n" placeholder="note (why you're watching)"><button id="w-add">Add</button></div>
       ${wq.length ? `<div class="tablewrap"><table><tr><th>Ticker</th><th class="num">Price</th><th class="num">Today</th><th>Earnings</th><th>Note</th><th></th></tr>
-        ${wq.map((w) => `<tr><td><b>${esc(w.ticker)}</b></td><td class="num">${num(w.price)}</td><td class="num ${cls(w.change_pct)}">${pct(w.change_pct, 1, true)}</td>
+        ${wq.map((w) => `<tr><td>${tkLink(w.ticker)}</td><td class="num">${num(w.price)}</td><td class="num">${delta(w.change_pct)}</td>
           <td>${esc((w.earnings || "").slice(0, 10)) || "—"}</td><td class="small muted">${esc(w.note)}</td>
           <td><a class="sm" href="#check?t=${encodeURIComponent(w.ticker)}">check</a> <button class="sm danger" data-unwatch="${esc(w.ticker)}">×</button></td></tr>`).join("")}</table></div>`
         : `<div class="empty small">Add stocks you're interested in. You'll hear about earnings, volume spikes, big moves and insider buying.</div>`}

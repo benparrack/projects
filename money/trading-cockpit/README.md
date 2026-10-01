@@ -11,15 +11,25 @@ to keep each trade small, planned and recorded.
 
 (Port 5070 because Firefox refuses to open 5060/5061, which are SIP ports.)
 
+## Getting around
+
+A sidebar on desktop and a bottom bar on phones. **Ctrl K** or **/** opens a search across tickers (the S&P 500,
+Stockholm and your own holdings, plans and watchlist), pages and actions. **Clicking any ticker** opens a quick view
+that slides in from the side: a 6-month chart with your stop and target, the 52-week range, next earnings, your plans
+and news, plus buttons to Check, Watch or set an Alert. Ctrl/⌘-click goes straight to the full chart. The top bar
+shows whether the US and Stockholm markets are open and how long until that changes (exchange holidays aren't
+tracked). There's a light and a dark theme (`t`), `g`+letter shortcuts for every page (`?` lists them), and the Home
+and Positions numbers refresh every minute.
+
 ## The tabs
 
 | Tab | What it does |
 |---|---|
-| **Today** | Morning briefing (also pushed to your phone on weekdays): positions near their stop or target, hold time up, planned entries in reach, earnings in the next 2 days, heat over the cap, lab signals and screener hits. Discipline status (today/week realized P/L vs your limits, losing streak). **AI journal coach** (Claude reviews your process, not stock picks). Weekly HTML reports. |
+| **Home** | Dashboard: account value with a sparkline, today's move, open P/L, vs. S&P 500, open risk against your cap. Open positions with a stop → entry → target bar showing where the price sits. Earnings in the next 30 days for anything you hold, plan or watch, and your watchlist with quotes. Morning briefing (also pushed to your phone on weekdays): positions near their stop or target, hold time up, planned entries in reach, earnings in the next 2 days, heat over the cap, lab signals and screener hits. Discipline status (today/week realized P/L vs your limits, losing streak). **AI journal coach** (Claude reviews your process, not stock picks). Weekly HTML reports. |
 | **Check** | Pre-trade check. Enter a ticker (and optionally entry/stop/target; defaults are 2×ATR / 4×ATR). You get a position size so a stop-out costs ~1% of the account, plus a GO / CAUTION / STOP verdict with flags: reward:risk, stop too tight vs ATR, overnight gaps through the stop, **earnings inside your hold window** (with that stock's past earnings moves), portfolio heat, sector concentration, correlation with holdings, liquidity, penny stock, below the 200-day average. It also shows **base rates**: from every day in the last 3 years, how often this exact stop/target hit the target first vs the stop. Save the plan, then paper-buy or record your real fill. |
-| **Portfolio** | Equity, cash, P/L, **your account vs. the same deposits put in SPY**, total open risk, open trades with distance to stop/target, planned trades, holdings with days until long-term, deposits/withdrawals. |
+| **Positions** | Equity, cash, P/L, **your account vs. the same deposits put in SPY**, total open risk, open trades with a stop → target progress bar, planned trades, holdings with days until long-term, deposits/withdrawals. |
 | **Journal** | Every plan with thesis, setup tag, fills, R-multiple, return, exit reason, and whether you followed the plan. Closed trades without a review get flagged. |
-| **Stats & Tax** | Win rate, expectancy in R, profit factor, stats by setup / discipline / exit reason. Estimated US tax per year (FIFO lots, short- vs long-term, $3k loss limit + carryover, wash-sale flags). |
+| **Stats & Tax** | Win rate, expectancy in R, profit factor, a **calendar heatmap of daily realized P/L** (last 6 months), a **histogram of trade results in R**, stats by setup / discipline / exit reason. Estimated US tax per year (FIFO lots, short- vs long-term, $3k loss limit + carryover, wash-sale flags). |
 | **Alerts** | Watchlist + price alerts + ntfy phone pushes. Automatic for open trades: stop hit, target hit (paper trades auto-sell), planned hold time up; for planned trades: price at entry. For watched tickers: earnings within N days, volume spike, 52-week high/low, unusually large move, **insider open-market buys** from SEC Form 4 (needs an SEC contact in Settings). |
 | **Chart** | Candlesticks with volume and 20/50/200-day averages, your buys and sells as markers, and the open plan's entry/stop/target (and the original stop, once trailing has raised it). Crosshair readout, 3M–2Y. Headlines for the ticker, plus an optional Claude summary of them. |
 | **Screener** | Run any Lab rule across the S&P 500, Stockholm large/mid cap, a volatile-US list, or your watchlist, with price / dollar-volume / ATR% filters. Saved screens run every weekday evening; hits land in the briefing and (optionally) as a push. |
@@ -52,10 +62,12 @@ cockpit/
   manage.py   guardrails, trailing stops / scale-outs, after-exit tracker
   screener.py market-wide scans (universes/*.csv)
   reports.py  morning briefing, weekly HTML report, scheduler; /api/today, news routes
+  dash.py     dashboard endpoints: market clocks, ticker search, quick view, upcoming earnings
   ai.py       Anthropic API: news summaries, journal coach (optional)
   pwa.py      phone app: manifest, service worker, icons, PIN gate for non-local requests
   db.py       SQLite schema + settings (data/cockpit.sqlite)
-  static/     index.html, app.js (check/portfolio/journal/stats/settings), alerts.js, lab.js, more.js (today/screener/chart/broker), Chart.js
+  static/     index.html, style.css, app.js (router, check/portfolio/journal/stats/settings), alerts.js, lab.js,
+              more.js (screener/chart/broker), ui.js (home, search palette, quick-view drawer, theme, shortcuts), Chart.js
 tests/        pytest, offline (`.venv/bin/python -m pytest -q tests`)
 ```
 

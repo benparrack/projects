@@ -1,4 +1,4 @@
-// Today (briefing + reports + coach), Screener, candlestick Chart, broker linking, and shared helpers.
+// Screener, candlestick Chart, broker linking, and shared helpers.
 "use strict";
 
 // ---------- shared helpers ----------
@@ -61,64 +61,6 @@ async function newsPanel(el, ticker) {
     $("#nw-sum", el).innerHTML = `<div class="ai">${md(r.text)}<div class="small muted">Summary of the headlines below only. Not advice.</div></div>`;
   }, b);
 }
-
-// ---------- Today ----------
-VIEWS.today = async function () {
-  const t = await GET("/api/today");
-  const b = t.briefing;
-  const g = t.guardrails[S.acct] || { blocks: [] };
-  const icon = { bad: "✕", warn: "!", info: "i" };
-  $("#view").innerHTML = `
-  ${g.blocks.length ? `<div class="verdict STOP"><div class="big">PAUSE</div><div>${g.blocks.map((x) => esc(x.text)).join("<br>")}</div></div>` : ""}
-  <div class="grid g2">
-    <div class="panel"><div class="row" style="justify-content:space-between"><h2>Today</h2><button class="sm" id="t-push">Send to phone</button></div>
-      ${b.items.length ? `<ul class="flags">${b.items.map((i) => `<li class="${i.level}">${i.ticker ? `<a href="#chart?t=${encodeURIComponent(i.ticker)}">${esc(i.ticker)}</a> ` : ""}${esc(i.text.replace(i.ticker + " ", ""))}
-        <span class="small muted">· ${esc(i.account)}</span></li>`).join("")}</ul>` : `<div class="empty small">Nothing needs attention. Stick to the plan.</div>`}
-      ${b.signals.length ? `<h3>Lab signals (last 18h)</h3><p>${[...new Set(b.signals.map((s) => s.ticker))].map((tk) => `<a href="#check?t=${encodeURIComponent(tk)}">${esc(tk)}</a>`).join(" · ")}</p>` : ""}
-      ${Object.keys(b.screens).length ? `<h3>Screener hits</h3>${Object.entries(b.screens).map(([n, tks]) => `<p><b>${esc(n)}:</b> ${tks.map((tk) => `<a href="#chart?t=${encodeURIComponent(tk)}">${esc(tk)}</a>`).join(" · ")}</p>`).join("")}` : ""}
-      <p class="small muted">The briefing is pushed at ${esc(S.settings.briefing_time)} on weekdays (${esc(S.settings.timezone)}).</p>
-    </div>
-    <div class="panel"><h2>Discipline</h2>
-      <div class="grid g3">
-        <div class="card"><div class="k">Realized today</div><div class="v ${cls(g.day_pnl)}">${usd(g.day_pnl)}</div><div class="small muted">limit −${pct(S.settings.daily_loss_limit_pct, 0)} of account</div></div>
-        <div class="card"><div class="k">This week</div><div class="v ${cls(g.week_pnl)}">${usd(g.week_pnl)}</div><div class="small muted">limit −${pct(S.settings.weekly_loss_limit_pct, 0)}</div></div>
-        <div class="card"><div class="k">Losing streak</div><div class="v ${g.streak >= S.settings.max_loss_streak ? "bad" : ""}">${g.streak ?? 0}</div><div class="small muted">cooldown at ${S.settings.max_loss_streak}</div></div>
-      </div>
-      <h3>Journal coach</h3>
-      <p class="small muted">Claude reads your closed trades, plans, exits and overrides and points out patterns in your process. It doesn't pick stocks.
-        ${t.ai ? (S.settings.coach_weekly ? "Runs every Friday with the weekly report." : "") : "Needs an Anthropic API key (Settings)."}</p>
-      <div class="row"><button id="t-coach" ${t.ai ? "" : "disabled"}>Review my trading now</button><button id="t-week">Make weekly report</button></div>
-      <div id="t-coach-out"></div>
-    </div>
-  </div>
-  <div class="panel"><h2>Reports</h2>
-    ${t.reports.length ? `<table><tr><th>Date</th><th>Report</th><th>Summary</th><th></th></tr>${t.reports.map((r) => `<tr>
-      <td>${date(r.ts)}</td><td>${esc(r.title)}</td><td class="small muted wrap">${esc(r.summary || "")}</td>
-      <td><button class="sm" data-rep="${r.id}" data-kind="${r.kind}">Open</button> <button class="sm danger" data-rdel="${r.id}">×</button></td></tr>`).join("")}</table>`
-      : `<div class="empty small">Weekly reports land here every Friday evening, with a push to your phone.</div>`}
-  </div>`;
-  $("#t-push").onclick = (e) => guard(async () => { await POST("/api/briefing/send"); toast("Sent."); }, e.target);
-  $("#t-coach").onclick = (e) => guard(async () => {
-    $("#t-coach-out").innerHTML = `<p class="small muted"><span class="spin"></span> Reading your journal…</p>`;
-    try {
-      const r = await POST(`/api/accounts/${S.acct}/coach`);
-      $("#t-coach-out").innerHTML = `<div class="ai">${md(r.text)}</div>`;
-    } catch (err) { $("#t-coach-out").innerHTML = ""; throw err; }
-  }, e.target);
-  $("#t-week").onclick = (e) => guard(async () => {
-    const r = await POST(`/api/accounts/${S.acct}/weekly`);
-    window.open(`/reports/${r.id}`, "_blank");
-    route();
-  }, e.target);
-  $("#view").querySelectorAll("[data-rep]").forEach((b) => (b.onclick = () => guard(async () => {
-    if (b.dataset.kind === "weekly") return window.open(`/reports/${b.dataset.rep}`, "_blank");
-    const r = await GET(`/api/reports/${b.dataset.rep}`);
-    openModal(`<h2>${esc(r.title)} <span class="small muted">${date(r.ts)}</span></h2><div class="ai">${md(r.body)}</div>`);
-  }, b)));
-  $("#view").querySelectorAll("[data-rdel]").forEach((b) => (b.onclick = () => guard(async () => {
-    await api("DELETE", `/api/reports/${b.dataset.rdel}`); route();
-  }, b)));
-};
 
 // ---------- Screener ----------
 let scrMeta = null;
@@ -249,9 +191,9 @@ function candleChart(cv, d, range, info) {
   const up = css.getPropertyValue("--good").trim(), dn = css.getPropertyValue("--bad").trim();
   const paint = (hover) => {
     g.clearRect(0, 0, W, H);
-    g.font = "11px system-ui"; g.textBaseline = "middle";
+    g.font = "11px Inter, system-ui"; g.textBaseline = "middle";
     // grid + price axis
-    g.strokeStyle = "#20262e"; g.fillStyle = "#8b95a3"; g.lineWidth = 1;
+    g.strokeStyle = cssv("--grid"); g.fillStyle = "#8b95a3"; g.lineWidth = 1;
     for (let k = 0; k <= 5; k++) {
       const p = lo + (hi - lo) * k / 5, y = Y(p);
       g.beginPath(); g.moveTo(0, y); g.lineTo(W - padR, y); g.stroke();
@@ -308,7 +250,7 @@ function candleChart(cv, d, range, info) {
     // crosshair
     if (hover != null) {
       const b = bars[hover];
-      g.strokeStyle = "rgba(230,233,238,.35)"; g.beginPath(); g.moveTo(X(hover), 0); g.lineTo(X(hover), H - padB); g.stroke();
+      g.strokeStyle = cssv("--crosshair"); g.beginPath(); g.moveTo(X(hover), 0); g.lineTo(X(hover), H - padB); g.stroke();
       const chg = hover + i0 > 0 ? b.c / all[hover + i0 - 1].c - 1 : null;
       const fills = d.trades.filter((t) => t.ts.slice(0, 10) === b.t).map((t) => `${t.side} ${qty(t.qty)} @ ${num(t.price)}`).join(", ");
       info.innerHTML = `<b>${b.t}</b> O ${num(b.o)} H ${num(b.h)} L ${num(b.l)} C ${num(b.c)} <span class="${cls(chg)}">${pct(chg, 1, true)}</span> · vol ${(b.v / 1e6).toFixed(2)}M${fills ? ` · <b>${esc(fills)}</b>` : ""}`;

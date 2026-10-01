@@ -24,6 +24,16 @@ gap-down reversal NO EDGE, golden cross TOO FEW TRADES. That's expected and is t
 - [x] Candlestick chart with your trades and plan levels; PWA (manifest, service worker, PIN gate for remote)
 - [x] 39 offline tests (Alpaca mocked with fake HTTP; no real keys were available); UI tested in Firefox
 
+## 2026-10-01 (evening): redesign
+- [x] New look: sidebar + topbar layout, Inter font, dark and light themes, SVG icons, mobile bottom bar and side sheet
+- [x] Home dashboard replaces Today: KPI tiles with sparkline, positions with stop → entry → target bars, earnings
+      in the next 30 days, watchlist quotes, discipline meters, briefing, reports and coach in one place
+- [x] Command palette (Ctrl K or /): ticker search over S&P 500 + Stockholm + your own tickers, pages, actions
+- [x] Ticker quick-view drawer from any ticker link (chart with plan levels, 52-week range, earnings, watch/alert, news)
+- [x] US / Stockholm market open/closed clocks, keyboard shortcuts, 60s live refresh on Home/Positions
+- [x] Stats: daily P/L calendar heatmap and R-multiple histogram
+- [x] 42 tests; UI checked in Firefox at desktop and 390px widths, both themes, no horizontal overflow
+
 ## Waiting on Ben
 - Subscribe to the ntfy topic (Alerts tab) and press "Send test alert".
 - Optionally add an SEC contact in Settings for insider-buy alerts.

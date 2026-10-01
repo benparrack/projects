@@ -2,41 +2,98 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Trading Cockpit</title>
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#0f1216">
+<meta name="theme-color" content="#0b0e13">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/static/style.css">
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <script src="/static/chart.umd.min.js"></script>
 </head>
 <body>
-<header>
-  <div class="brand">Trading Cockpit</div>
-  <nav id="tabs">
-    <a href="#today">Today</a>
-    <a href="#check">Check</a>
-    <a href="#portfolio">Portfolio</a>
-    <a href="#journal">Journal</a>
-    <a href="#stats">Stats &amp; Tax</a>
-    <a href="#alerts">Alerts</a>
-    <a href="#chart">Chart</a>
-    <a href="#screener">Screener</a>
-    <a href="#lab">Lab</a>
-    <a href="#settings">Settings</a>
-  </nav>
-  <div class="acct">
-    <select id="account" autocomplete="off"></select>
-    <span id="acct-equity" class="muted"></span>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M16 15h2M7 6V4h10v2"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z"/><path d="M4 17a3 3 0 0 1 3-3h11"/></symbol>
+  <symbol id="i-bars" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></symbol>
+  <symbol id="i-candle" viewBox="0 0 24 24"><path d="M7 3v4M7 17v4M17 3v6M17 19v2"/><rect x="5" y="7" width="4" height="10" rx="1"/><rect x="15" y="9" width="4" height="10" rx="1"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17l5-5 4 3 8-9"/><path d="M15 6h5v5"/></symbol>
+</svg>
+
+<div id="shell">
+  <aside id="side">
+    <a class="brand" href="#today"><span class="logo"><svg><use href="#i-logo"/></svg></span><span>Cockpit</span></a>
+    <nav id="tabs">
+      <a class="nav" href="#today"><svg><use href="#i-home"/></svg><span>Home</span><kbd>g h</kbd></a>
+      <a class="nav" href="#check"><svg><use href="#i-check"/></svg><span>New trade</span><kbd>n</kbd></a>
+      <div class="nav-h">Portfolio</div>
+      <a class="nav" href="#portfolio"><svg><use href="#i-wallet"/></svg><span>Positions</span><kbd>g p</kbd></a>
+      <a class="nav" href="#journal"><svg><use href="#i-book"/></svg><span>Journal</span><kbd>g j</kbd></a>
+      <a class="nav" href="#stats"><svg><use href="#i-bars"/></svg><span>Stats &amp; tax</span><kbd>g s</kbd></a>
+      <div class="nav-h">Research</div>
+      <a class="nav" href="#chart"><svg><use href="#i-candle"/></svg><span>Chart</span><kbd>g c</kbd></a>
+      <a class="nav" href="#screener"><svg><use href="#i-filter"/></svg><span>Screener</span><kbd>g r</kbd></a>
+      <a class="nav" href="#lab"><svg><use href="#i-flask"/></svg><span>Strategy lab</span><kbd>g l</kbd></a>
+      <a class="nav" href="#alerts"><svg><use href="#i-bell"/></svg><span>Watchlist &amp; alerts</span><kbd>g a</kbd></a>
+      <div class="nav-h"></div>
+      <a class="nav" href="#settings"><svg><use href="#i-gear"/></svg><span>Settings</span><kbd>g ,</kbd></a>
+    </nav>
+    <div class="side-foot">
+      <label class="small muted" for="account">Account</label>
+      <select id="account" autocomplete="off"></select>
+      <div id="acct-equity"></div>
+      <div class="row side-tools">
+        <button class="ghost sm" id="theme-btn" title="Light / dark (t)"><svg class="ic"><use href="#i-moon"/></svg> Theme</button>
+        <button class="ghost sm" id="keys-btn" title="Keyboard shortcuts (?)">?</button>
+      </div>
+    </div>
+  </aside>
+  <div id="col">
+    <header id="topbar">
+      <h1 id="page-title">Home</h1>
+      <button id="search-btn" class="searchbox"><svg class="ic"><use href="#i-search"/></svg><span>Search ticker or jump to…</span><kbd>Ctrl K</kbd></button>
+      <div id="mkts"></div>
+    </header>
+    <main id="view"></main>
   </div>
-</header>
-<main id="view"></main>
-<div id="modal" class="modal hidden"><div class="modal-box"><button class="x" onclick="closeModal()">×</button><div id="modal-body"></div></div></div>
+</div>
+
+<nav id="bottom">
+  <a class="nav" href="#today"><svg><use href="#i-home"/></svg><span>Home</span></a>
+  <a class="nav" href="#portfolio"><svg><use href="#i-wallet"/></svg><span>Positions</span></a>
+  <a class="nav fab" href="#check"><svg><use href="#i-check"/></svg><span>Trade</span></a>
+  <button class="nav" id="m-search"><svg><use href="#i-search"/></svg><span>Search</span></button>
+  <button class="nav" id="m-more"><svg><use href="#i-more"/></svg><span>More</span></button>
+</nav>
+
+<div id="palette" class="hidden"><div class="pal-box">
+  <div class="pal-in"><svg class="ic"><use href="#i-search"/></svg><input id="pal-q" placeholder="Ticker, company or page…" autocomplete="off" spellcheck="false"><kbd>esc</kbd></div>
+  <div id="pal-list"></div>
+  <div class="pal-foot small muted"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>enter</kbd> open</span><span><kbd>shift</kbd>+<kbd>enter</kbd> full chart</span></div>
+</div></div>
+<div id="drawer-bg" class="hidden"></div>
+<aside id="drawer" aria-hidden="true"><div id="drawer-body"></div></aside>
+<div id="modal" class="modal hidden"><div class="modal-box"><button class="x" onclick="closeModal()"><svg class="ic"><use href="#i-x"/></svg></button><div id="modal-body"></div></div></div>
 <div id="toast" class="toast hidden"></div>
 <script src="/static/app.js"></script>
 <script src="/static/alerts.js"></script>
 <script src="/static/lab.js"></script>
 <script src="/static/more.js"></script>
+<script src="/static/ui.js"></script>
 </body>
 </html>
