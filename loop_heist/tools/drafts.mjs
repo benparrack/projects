@@ -127,8 +127,29 @@ DRAFTS['grand-vault'].crew[3] = { role: 'cracker', cmds: [
   { wait: '$c' }, { path: [[6, 2], [20, 2], [22, 2], [24, 3]] }, { wait: '$d' },
   { path: [[26, 3], [29, 3]] }, { hold: 102 }, { use: true },
   { path: [[26, 3], [22, 2], [20, 2], [6, 2], [2, 2]] }, { use: true },
-] };
+]};
 DRAFTS['grand-vault'].crew[3].cmds.splice(1, 1, { path: [[6, 2], [20, 2]] }, { use: true }, { path: [[22, 2], [24, 3]] });
 DRAFTS['grand-vault'].params.k = R(340, 380, 2);
 DRAFTS['grand-vault'].params.c = R(300, 700, 50);
 DRAFTS['grand-vault'].params.d = R(400, 800, 20);
+DRAFTS.showroom = {
+    params: { a: R(0, 400, 20), b: R(0, 300, 20), c: R(0, 300, 20) },
+    crew: [
+      { role: 'ghost', cmds: [
+        { path: [[2, 3], [4, 3]], sneak: true }, { use: true }, { wait: '$a' },
+        { path: [[6, 3], [14, 3]], sneak: true }, { wait: '$c' }, { path: [[26, 3], [27, 4]], sneak: true }, { use: true }, { wait: '$b' },
+        { path: [[27, 3], [6, 3], [2, 3], [2, 2]], sneak: true }, { use: true },
+      ] },
+    ],
+  };
+DRAFTS['showroom#loop'] = {
+  params: { h: R(0, 200, 20), w: R(0, 200, 10) },
+  crew: [
+    { role: 'hacker', cmds: [{ to: [2, 6] }, { wait: '$h' }, { hold: 42 }, { path: [[2, 3], [2, 2]] }, { use: true }] },
+    { role: 'ghost', cmds: [
+      { path: [[2, 3], [4, 3]], sneak: true }, { use: true }, { wait: '$w' },
+      { path: [[6, 3], [26, 3], [27, 4]], sneak: true }, { use: true },
+      { path: [[27, 3], [6, 3], [2, 3], [2, 2]], sneak: true }, { use: true },
+    ] },
+  ],
+};

@@ -33,8 +33,8 @@ No build step and no dependencies. It's plain ES modules served by a tiny Node s
   missing guard is noticed at the next check-in.
 
 ### Content
-- **8 handcrafted heists**, from one guard and one corridor up to *The Grand Vault*, a four-crew
-  finale. Each one has a reference solution that the test suite replays.
+- **9 handcrafted heists**, from one guard and one corridor up to *The Grand Vault*, a four-crew
+  finale, plus *The Showroom*, a cover-and-shadows encore. Each one has a reference solution that the test suite replays.
 - **Contracts**: procedurally generated buildings in Easy, Medium and Hard, plus a **Daily Job**
   (the same building for everyone each day). Every generated job is checked solvable before you
   see it (see below).

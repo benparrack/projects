@@ -100,4 +100,19 @@ export const SOLUTIONS = {
       { path: [[26, 3], [29, 3]] }, { hold: 102 }, { use: true }, { path: [[26, 3], [22, 2], [20, 2], [6, 2], [2, 2]] }, { use: true },
     ] },
   ],
+  showroom: [
+    { role: 'ghost', cmds: [
+      { path: [[2, 3], [4, 3]], sneak: true }, { use: true }, { wait: 320 },
+      { path: [[6, 3], [26, 3], [27, 4]], sneak: true }, { use: true }, { wait: 180 },
+      { path: [[27, 3], [6, 3], [2, 3], [2, 2]], sneak: true }, { use: true },
+    ] },
+  ],
+  'showroom#loop': [
+    { role: 'hacker', cmds: [{ to: [2, 6] }, { wait: 60 }, { hold: 42 }, { path: [[2, 3], [2, 2]] }, { use: true }] },
+    { role: 'ghost', cmds: [
+      { path: [[2, 3], [4, 3]], sneak: true }, { use: true }, { wait: 110 },
+      { path: [[6, 3], [26, 3], [27, 4]], sneak: true }, { use: true },
+      { path: [[27, 3], [6, 3], [2, 3], [2, 2]], sneak: true }, { use: true },
+    ] },
+  ],
 };

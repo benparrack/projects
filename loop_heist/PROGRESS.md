@@ -25,7 +25,8 @@ Built autonomously in a `/loop`. The design is in `../game_ideas.md` #2.
   - [x] Furniture tile `o` (crates/desks/display cases): solid cover that blocks sight. Procgen scatters it (never adjacent to another piece or a doorway, never disconnecting the building; test-checked); drawn as raised blocks with shadows.
   - [x] Contracts: "Show me a way in" walkthrough on the plan screen replays the planner's solo-Ghost solution on the map.
   - [x] Radio warning toast 5s before a check-in when a guard is down.
-  - Next: use furniture in a new handcrafted heist (hiding behind display cases in a gallery?), new mechanic ideas: lights/dark rooms, pressure plates, guard dog that follows scent trails of earlier takes, security tapes.
+  - [x] Heist 9 "The Showroom": display-case cover vs two sweeping cameras + a lap guard. Solo Ghost (28/5376 timings win on the straight route — tight) or Hacker camera loop (600 ticks) + Ghost (32/242). Both in SOLUTIONS.
+  - Next mechanic ideas: lights/dark rooms, pressure plates, guard dog that follows scent trails of earlier takes, security tapes.
 
 ## Notes
 - Run tests: `npm test` (node --test, no deps).
