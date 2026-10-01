@@ -35,7 +35,7 @@ kbd { font-family: var(--mono); font-size: 0.8em; padding: 1px 6px; border: 1px 
 .dim { color: var(--dim); }
 
 /* Title */
-.title-screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; background: radial-gradient(ellipse at center, rgba(7,16,29,0.55), rgba(7,16,29,0.92)); }
+.title-screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 24px; padding: 32px 0; overflow-y: auto; background: radial-gradient(ellipse at center, rgba(7,16,29,0.82), rgba(7,16,29,0.95)); }
 .logo { font-family: var(--mono); font-weight: 700; font-size: clamp(48px, 9vw, 110px); letter-spacing: -0.04em; line-height: .9; text-align: center; }
 .logo .loop { color: var(--accent); text-shadow: 0 0 30px rgba(94,242,194,.5); }
 .logo .heist { color: var(--text); }
@@ -48,6 +48,14 @@ kbd { font-family: var(--mono); font-size: 0.8em; padding: 1px 6px; border: 1px 
 .level-card .stars { color: var(--gold); font-size: .9rem; letter-spacing: 2px; }
 .level-card:disabled { opacity: .35; cursor: default; }
 .level-card.procedural { border-style: dashed; }
+.contracts { display: flex; flex-direction: column; gap: 8px; width: min(960px, 92vw); }
+.contracts .levels { width: 100%; max-height: none; }
+.level-card.procedural .stars { color: var(--dim); font-size: .78rem; letter-spacing: 0; }
+.level-card.daily { border-color: rgba(255,201,77,.45); background: linear-gradient(135deg, rgba(255,201,77,.08), var(--panel) 60%); }
+.level-card.daily .num { color: var(--gold); }
+.level-card.daily .stars { color: var(--gold); }
+.center-card.casing h2 { animation: casing 1.2s ease-in-out infinite; }
+@keyframes casing { 50% { opacity: .45; } }
 .footer-note { color: var(--dim); font-size: .8rem; font-family: var(--mono); }
 
 /* Side panel */

@@ -22,7 +22,7 @@ const bot = new Bot(fill(m.cmds));
 const f = (v) => (v / 256).toFixed(1);
 while (!sim.over) {
   const a = sim.S.actors[+k];
-  sim.step(a.escaped ? 0 : bot.input(a));
+  sim.step(a.escaped ? 0 : bot.input(a, sim.S.tick));
   if (sim.tick % +every === 0) {
     console.log(sim.tick, 'me', f(a.x), f(a.y), a.lost ? 'LOST' : '', '|', sim.S.guards.map((g) => `${g.id}:${g.state} ${f(g.x)},${f(g.y)} sus${g.sus} f${g.facing}`).join(' '));
   }

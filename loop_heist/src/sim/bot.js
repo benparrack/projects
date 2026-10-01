@@ -8,6 +8,7 @@
 //   { hold: ticks }           hold USE for n ticks (timed interactions)
 //   { wait: ticks }           do nothing
 //   { ability: true }         tap ABILITY
+//   { until: tick }           do nothing until the sim reaches this tick
 import { tileCenter } from './fixed.js';
 import { IN } from './constants.js';
 
@@ -25,7 +26,7 @@ export class Bot {
 
   get done() { return this.i >= this.cmds.length; }
 
-  input(actor) {
+  input(actor, tick = 0) {
     while (this.i < this.cmds.length) {
       const c = this.cmds[this.i];
       if (c.to) {
@@ -48,6 +49,10 @@ export class Bot {
         if (this.n++ < c.hold) return IN.USE;
         this.next(); return 0;
       }
+      if (c.until != null) {
+        if (tick < c.until) return 0;
+        this.next(); continue;
+      }
       if (c.wait != null) {
         if (this.n++ < c.wait) return 0;
         this.next(); continue;
@@ -65,7 +70,7 @@ export function runBot(sim, bot, maxTicks = 100000) {
   let n = 0;
   while (!sim.over && n++ < maxTicks) {
     const a = sim.S.actors[sim.live];
-    sim.step(a.escaped ? 0 : bot.input(a));
+    sim.step(a.escaped ? 0 : bot.input(a, sim.S.tick));
   }
   return sim.liveRec;
 }

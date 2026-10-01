@@ -5,6 +5,7 @@ import { ROLES, TICK_RATE } from '../sim/constants.js';
 import { Renderer } from '../render/render.js';
 import { Input } from './input.js';
 import { LEVELS } from '../levels/campaign.js';
+import { makeJob, TIERS } from '../levels/procgen.js';
 import { h, clear, fmtTime, describeEvent, eventClass } from './ui.js';
 import { audio } from './audio.js';
 
@@ -22,6 +23,7 @@ const store = (() => {
 })();
 store.progress ??= {};
 store.plans ??= {};
+store.contracts ??= { done: 0, best: {} };
 const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch { /* private mode */ } };
 
 // ---------- level context ----------
@@ -57,6 +59,13 @@ function stars(L, over, crewCount) {
 function recordWin(heist, over) {
   const id = heist.def.id;
   const st = stars(heist.L, over, heist.crew.length);
+  if (heist.def.procedural) {
+    const c = store.contracts;
+    if (!(id in c.best)) c.done++;
+    c.best[id] = Math.max(c.best[id] ?? 0, st);
+    save();
+    return st;
+  }
   const prev = store.progress[id] ?? {};
   store.progress[id] = {
     done: true,
@@ -115,6 +124,23 @@ class MenuScreen {
           );
         }),
       ),
+      h('div', { class: 'contracts' },
+        h('div', { class: 'section-title' }, `Contracts · generated jobs, each one checked beatable${store.contracts.done ? ` · ${store.contracts.done} pulled` : ''}`),
+        h('div', { class: 'levels' },
+          h('button', { class: 'level-card procedural daily', onclick: () => { audio.click(); openContract(todaySeed(), 2); } },
+            h('span', { class: 'num' }, 'DAILY JOB'),
+            h('span', { class: 'name' }, new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })),
+            h('span', { class: 'stars' }, (() => { const b = store.contracts.best[`job-2-${todaySeed()}`]; return b ? '★'.repeat(b) + '☆'.repeat(3 - b) : 'same building for everyone today'; })())),
+          ...[1, 2, 3].map((tier) => h('button', { class: 'level-card procedural', onclick: () => { audio.click(); newContract(tier); } },
+            h('span', { class: 'num' }, `CONTRACT · ${TIERS[tier].name.toUpperCase()}`),
+            h('span', { class: 'name' }, ['', 'Smash and grab', 'Keycard job', 'Full security'][tier]),
+            h('span', { class: 'stars' }, 'new building every time'))),
+          store.contract && store.plans[`job-${store.contract.tier}-${store.contract.seed}`]?.length
+            ? h('button', { class: 'level-card procedural', onclick: () => { audio.click(); openContract(store.contract.seed, store.contract.tier); } },
+              h('span', { class: 'num' }, 'IN PROGRESS'),
+              h('span', { class: 'name' }, 'Resume last contract'),
+              h('span', { class: 'stars' }, TIERS[store.contract.tier].name))
+            : null)),
       h('div', { class: 'footer-note' }, 'WASD move · Shift sneak · E use · Q ability · Backspace rewind'),
     ));
   }
@@ -168,7 +194,7 @@ class PlanScreen {
 
     ui.append(h('aside', { class: 'side' },
       h('header', {},
-        h('div', { class: 'section-title' }, `Heist ${LEVELS.indexOf(heist.def) + 1} · ${L.loopTicks / TICK_RATE}s loop · up to ${L.maxCrew} crew`),
+        h('div', { class: 'section-title' }, `${heistLabel(heist.def)} · ${L.loopTicks / TICK_RATE}s loop · up to ${L.maxCrew} crew`),
         h('h1', {}, L.name),
         h('p', { class: 'brief' }, L.brief)),
       h('div', { class: 'scroll' },
@@ -189,6 +215,8 @@ class PlanScreen {
         h('button', { class: 'btn', disabled: !res, onclick: () => show(new ReplayScreen(heist)) }, '▶ Watch the plan'),
         res?.over.kind === 'success' && nextLevel(heist.def)
           ? h('button', { class: 'btn', onclick: () => show(new PlanScreen(new Heist(nextLevel(heist.def)))) }, 'Next heist →') : null,
+        res?.over.kind === 'success' && heist.def.procedural
+          ? h('button', { class: 'btn', onclick: () => newContract(heist.def.procedural.tier) }, 'New contract →') : null,
       ),
     ));
     this.unkey = input.onKey((e) => {
@@ -216,7 +244,29 @@ class PlanScreen {
   }
 }
 
-const nextLevel = (def) => LEVELS[LEVELS.indexOf(def) + 1] ?? null;
+const nextLevel = (def) => (def.procedural ? null : LEVELS[LEVELS.indexOf(def) + 1] ?? null);
+const heistLabel = (def) => (def.procedural ? `Contract · ${TIERS[def.procedural.tier].name}` : `Heist ${LEVELS.indexOf(def) + 1}`);
+
+// ---------- contracts (procedural jobs) ----------
+const todaySeed = () => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+
+// Generating + verifying takes up to a second or two, so show a card first.
+function openContract(seed, tier) {
+  clear(ui);
+  ui.append(h('div', { class: 'title-screen' }, h('div', { class: 'center-card casing' },
+    h('div', { class: 'section-title' }, `Contract · ${TIERS[tier].name}`),
+    h('h2', {}, 'Casing the building…'),
+    h('div', { class: 'dim' }, 'Mapping patrols and checking there is a way in.'))));
+  setTimeout(() => {
+    const def = makeJob(seed, tier);
+    if (!def) { show(new MenuScreen()); return; }
+    for (const id of Object.keys(store.plans)) if (id.startsWith('job-') && id !== def.id) delete store.plans[id];
+    store.contract = { seed, tier };
+    save();
+    show(new PlanScreen(new Heist(def)));
+  }, 60);
+}
+const newContract = (tier) => openContract(1 + Math.floor(Math.random() * 999999), tier);
 
 class TakeScreen {
   constructor(heist, index, role) {
@@ -402,7 +452,9 @@ class TakeScreen {
           h('button', { class: 'btn ghost', onclick: () => show(new PlanScreen(this.heist)) }, 'Plan'),
           nextLevel(this.heist.def)
             ? h('button', { class: 'btn big', onclick: () => show(new PlanScreen(new Heist(nextLevel(this.heist.def)))) }, 'Next heist →')
-            : h('button', { class: 'btn big', onclick: () => show(new MenuScreen()) }, 'All heists')));
+            : this.heist.def.procedural
+              ? h('button', { class: 'btn big', onclick: () => newContract(this.heist.def.procedural.tier) }, 'New contract →')
+              : h('button', { class: 'btn big', onclick: () => show(new MenuScreen()) }, 'All heists')));
     } else if (escaped) {
       card = h('div', { class: 'center-card' },
         h('div', { class: 'section-title' }, 'Take recorded'),
@@ -521,6 +573,7 @@ window.loopHeist = {
   get screen() { return screen; },
   open(id) { const def = LEVELS.find((l) => l.id === id); show(new PlanScreen(new Heist(def))); },
   menu() { show(new MenuScreen()); },
+  contract(seed, tier) { openContract(seed, tier); },
   store,
   input,
 };
