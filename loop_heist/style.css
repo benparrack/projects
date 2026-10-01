@@ -87,6 +87,7 @@ kbd { font-family: var(--mono); font-size: 0.8em; padding: 1px 6px; border: 1px 
 .timebar { position: relative; width: min(46vw, 520px); height: 10px; border-radius: 5px; background: rgba(255,255,255,0.08); overflow: visible; }
 .timebar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: linear-gradient(90deg, var(--accent), var(--blue)); }
 .timebar .mark { position: absolute; top: -4px; width: 3px; height: 18px; border-radius: 2px; transform: translateX(-1px); }
+.timebar .mark.radio { top: -7px; height: 24px; width: 0; border-left: 2px dashed var(--amber, #f5b942); background: none; }
 .who { display: flex; align-items: center; gap: 8px; font-weight: 700; }
 .hud-crew { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 6px; }
 .hud-chip { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; font-size: .8rem; font-family: var(--mono); }

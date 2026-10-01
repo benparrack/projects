@@ -12,6 +12,7 @@ import { dirAngle } from './security.js';
 
 export const G_RANGE = SUB * 7;
 export const G_HALF = 30;            // ~42 degrees each side
+export const G_CLOSE_SNEAK = SUB / 2;
 export const G_CLOSE = SUB + 96;     // notices anyone this close, any direction
 export const SUS_ALARM = 40;
 export const SUS_INVESTIGATE = 10;
@@ -127,12 +128,13 @@ function closeOpenedDoors(sim, g) {
   });
 }
 
-// Can guard g see point (x,y)?
-export function guardSees(sim, g, x, y) {
+// Can guard g see point (x,y)? Outside the cone a guard still senses anyone right
+// next to them, unless they're sneaking (that's how the Muscle gets a takedown in).
+export function guardSees(sim, g, x, y, sneaking = false) {
   const dx = x - g.x, dy = y - g.y;
   const d = dist(dx, dy);
   if (d > G_RANGE) return false;
-  if (d > G_CLOSE && !inCone(g.facing, G_HALF, G_RANGE, dx, dy)) return false;
+  if (d > (sneaking ? G_CLOSE_SNEAK : G_CLOSE) && !inCone(g.facing, G_HALF, G_RANGE, dx, dy)) return false;
   return losClear(sim.L, sim.S, g.x, g.y, x, y);
 }
 
@@ -189,7 +191,7 @@ function perceive(sim, g) {
   let seen = -1, seenD = Infinity;
   for (const a of S.actors) {
     if (a.escaped) continue;
-    if (guardSees(sim, g, a.x, a.y)) {
+    if (guardSees(sim, g, a.x, a.y, a.sneaking)) {
       const d = dist(a.x - g.x, a.y - g.y);
       if (d < seenD) { seenD = d; seen = a.i; }
     }

@@ -21,6 +21,7 @@ export function playSolution(L, sol) {
 
 for (const def of LEVELS) {
   test(`level ${def.id} parses and has a working solution`, () => {
+    def.map.forEach((row, y) => assert.equal(row.length, def.map[0].length, `map row ${y} has the wrong width`));
     const L = parseLevel(def);
     assert.ok(SOLUTIONS[def.id], 'missing reference solution');
     const sol = SOLUTIONS[def.id];

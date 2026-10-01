@@ -5,7 +5,7 @@ import { tileCenter, dist, angleDiff, angleTo } from './fixed.js';
 import { REACH, HOLD } from './constants.js';
 import { onExit, boxOverlapsTile } from './world.js';
 
-const PRIORITY = { takedown: 0, body: 1, door: 2, key: 3, loot: 4, terminal: 5, powerbox: 6, vault: 7, escape: 9 };
+const PRIORITY = { takedown: 0, door: 1, body: 2, key: 3, loot: 4, terminal: 5, powerbox: 6, vault: 7, escape: 9 };
 
 export function gatherTargets(sim, a) {
   const { L, S } = sim;

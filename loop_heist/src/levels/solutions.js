@@ -44,4 +44,19 @@ export const SOLUTIONS = {
       { path: [[8, 4], [5, 4], [2, 2]] }, { use: true },
     ] },
   ],
+  blackout: [
+    { role: 'ghost', cmds: [
+      { to: [5, 2] }, { use: true }, { path: [[7, 2], [10, 2], [10, 3]] }, { use: true }, { path: [[10, 5], [8, 5]] }, { hold: 32 },
+      { path: [[10, 5], [10, 2], [19, 2]] }, { use: true }, { path: [[21, 2], [24, 2]] }, { use: true }, { wait: 60 },
+      { path: [[21, 2], [7, 2], [5, 2], [2, 2]] }, { use: true },
+    ] },
+  ],
+  'heavy-hands': [
+    { role: 'muscle', cmds: [
+      { wait: 480 }, { path: [[6, 2]] }, { use: true }, { path: [[8, 2], [12, 2]] }, { to: [15, 2], sneak: true }, { use: true },
+      { wait: 2 }, { use: true }, { to: [17, 2] }, { use: true }, { path: [[19, 2], [19, 5]] }, { use: true }, { wait: 20 },
+      { path: [[23, 5]], sneak: true }, { use: true }, { path: [[24, 2], [24, 1]] }, { use: true },
+      { path: [[24, 2], [8, 2], [2, 2]] }, { use: true },
+    ] },
+  ],
 };

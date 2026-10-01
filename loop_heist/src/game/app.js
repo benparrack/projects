@@ -256,6 +256,9 @@ class TakeScreen {
       if (!c.rec) return;
       for (const e of c.rec.events) this.el.bar.append(h('div', { class: 'mark', style: `left:${(e.t / total) * 100}%;background:${ROLES[c.role].color}`, title: `${i + 1}: ${e.k} ${e.id}` }));
     });
+    // Radio check-ins: any guard who is out cold at one of these raises the alarm.
+    const ri = this.heist.L.radioInterval;
+    if (ri > 0) for (let t = ri; t < total; t += ri) this.el.bar.append(h('div', { class: 'mark radio', style: `left:${(t / total) * 100}%`, title: 'Radio check-in' }));
     ui.append(
       h('div', { class: 'hud-top' },
         h('div', { class: 'who' }, h('div', { class: 'crew-dot', style: `background:${ROLES[this.role].color}` }, String(this.index + 1)), ROLES[this.role].name),
