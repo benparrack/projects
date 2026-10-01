@@ -84,6 +84,7 @@ function show(next) {
   clear(ui);
   input.clear();
   screen = next;
+  document.body.dataset.screen = next.constructor.name;
   screen.mount?.();
   layout();
 }
@@ -558,6 +559,13 @@ class ReplayScreen {
     R.draw(sim, { dt, alpha: this.playing ? Math.min(1, this.acc / DT) : 1, prompt: false });
   }
 }
+
+// ---------- mute ----------
+const muteBtn = document.getElementById('mute');
+const syncMute = () => { muteBtn.textContent = audio.muted ? '🔇' : '🔊'; muteBtn.title = `${audio.muted ? 'Unmute' : 'Mute'} (M)`; };
+muteBtn.onclick = () => { audio.toggleMute(); syncMute(); muteBtn.blur(); };
+addEventListener('keydown', (e) => { if (e.code === 'KeyM' && !e.repeat && !(e.target instanceof HTMLInputElement)) { audio.toggleMute(); syncMute(); } });
+syncMute();
 
 // ---------- main loop ----------
 let last = performance.now();

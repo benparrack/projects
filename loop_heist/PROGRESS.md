@@ -17,8 +17,10 @@ Built autonomously in a `/loop`. The design is in `../game_ideas.md` #2.
   - `src/levels/planner.js`: dry-run watch map (per 5-tick slice, which tiles a guard/camera sees) → time-expanded BFS over (phase, tile, slice) for a solo sneaking Ghost (can hide, double back, wait) → Bot commands with absolute `{until}` ticks → verified in the real Sim. `makeJob(seed, tier)` rejects until one passes (~0.2/0.7/1.2s per job for tiers 1/2/3).
   - Menu "Contracts": Daily Job (date seed, Medium), Easy/Medium/Hard (random seed), Resume last. Contracts tracked separately (`store.contracts`); only the current contract's plan is kept.
   - Next ideas: props/cover inside rooms (desks/shelves that block sight), windows, lasers+powerbox in Hard, a "show me a way in" hint using the planner's solution.
-- [ ] 8. Polish: juice, audio, menus, save progress, README
-  - menu: the animated background map runs under the title and level cards; tone it down / reposition
+- [x] 8. Polish: juice, audio, menus, save progress, README
+  - Map layer baked to an offscreen canvas per level/zoom: checker floor, wall ambient-occlusion shadows, hatched blueprint walls, glowing wall outlines, plus a screen vignette.
+  - Menu: background map blurred/dimmed via `body[data-screen]` CSS. Mute button (corner) + M key. README.md written.
+  - Still worth doing later: radio-warning toast before check-ins, more audio variety (footsteps, door creaks), a planner-based hint for contracts.
 - [ ] 9. Ongoing (Ben, 2026-10-01): after 7–8, keep looping — new exciting levels, new mechanics/features, and keep making it look as good as possible
 
 ## Notes

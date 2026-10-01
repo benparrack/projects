@@ -94,7 +94,7 @@ export class Renderer {
       this.shake = Math.max(0, this.shake - dt * 40);
     }
 
-    this.drawTiles(L, S);
+    this.drawTiles(L);
     this.drawExit(L);
     this.drawDevices(L, S);
     this.drawCones(sim, alpha);
@@ -104,8 +104,21 @@ export class Renderer {
     this.drawGuards(sim, alpha);
     this.drawActors(sim, alpha, opts);
     this.drawFx(dt);
+    this.drawVignette();
     if (opts.prompt !== false && sim.live >= 0) this.drawPrompt(sim, alpha);
     ctx.restore();
+  }
+
+  drawVignette() {
+    const ctx = this.ctx, w = this.vw, h = this.vh;
+    if (this.vigKey !== `${w}x${h}`) {
+      this.vigKey = `${w}x${h}`;
+      const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
+      g.addColorStop(0, 'rgba(3,7,14,0)'); g.addColorStop(1, 'rgba(3,7,14,0.55)');
+      this.vig = g;
+    }
+    ctx.fillStyle = this.vig;
+    ctx.fillRect(-20, -20, w + 40, h + 40);
   }
 
   lerpPos(kind, i, x, y, alpha) {
@@ -114,49 +127,99 @@ export class Renderer {
     return [p[0] + (x - p[0]) * alpha, p[1] + (y - p[1]) * alpha];
   }
 
-  drawTiles(L, S) {
-    const ctx = this.ctx, ts = this.ts;
-    for (let y = 0; y < L.h; y++) {
-      for (let x = 0; x < L.w; x++) {
-        const t = tileAt(L, x, y);
-        const X = this.ox + x * ts, Y = this.oy + y * ts;
-        if (t === T.FLOOR || t === T.EXIT) {
-          ctx.fillStyle = (x + y) & 1 ? C.floor : C.floorAlt;
-          ctx.fillRect(X, Y, ts, ts);
-        } else if (t === T.WALL) {
-          ctx.fillStyle = C.wall;
-          ctx.fillRect(X, Y, ts, ts);
-        } else if (t === T.WINDOW) {
-          ctx.fillStyle = C.floor;
-          ctx.fillRect(X, Y, ts, ts);
-          ctx.fillStyle = 'rgba(120,190,255,0.35)';
-          ctx.fillRect(X + ts * 0.3, Y, ts * 0.4, ts);
-        }
-      }
+  // The static map (floor, shadows, walls, grid) is drawn once into an offscreen
+  // canvas and blitted each frame; it only changes with the level or the zoom.
+  drawTiles(L) {
+    const key = `${L.id}|${this.ts}|${this.ox}|${this.oy}|${this.vw}|${this.vh}|${this.cv.width}`;
+    if (this.tileKey !== key || this.tileL !== L) {
+      this.tileKey = key; this.tileL = L;
+      this.tileCanvas = this.bakeTiles(L);
     }
-    // Wall outlines: edges between wall and walkable space, blueprint style.
-    ctx.strokeStyle = C.wallEdge;
-    ctx.lineWidth = Math.max(1, ts / 16);
-    ctx.beginPath();
+    const ctx = this.ctx;
+    ctx.drawImage(this.tileCanvas, 0, 0, this.vw, this.vh);
+  }
+
+  bakeTiles(L) {
+    const dpr = window.devicePixelRatio || 1;
+    const cv = document.createElement('canvas');
+    cv.width = this.cv.width; cv.height = this.cv.height;
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const ts = this.ts;
     const solid = (x, y) => { const t = tileAt(L, x, y); return t === T.WALL || t === T.VOID; };
-    for (let y = 0; y < L.h; y++) {
-      for (let x = 0; x < L.w; x++) {
-        if (!solid(x, y)) continue;
-        const X = this.ox + x * ts, Y = this.oy + y * ts;
-        if (y > 0 && !solid(x, y - 1)) { ctx.moveTo(X, Y); ctx.lineTo(X + ts, Y); }
-        if (y < L.h - 1 && !solid(x, y + 1)) { ctx.moveTo(X, Y + ts); ctx.lineTo(X + ts, Y + ts); }
-        if (x > 0 && !solid(x - 1, y)) { ctx.moveTo(X, Y); ctx.lineTo(X, Y + ts); }
-        if (x < L.w - 1 && !solid(x + 1, y)) { ctx.moveTo(X + ts, Y); ctx.lineTo(X + ts, Y + ts); }
+    const open = (x, y) => { const t = tileAt(L, x, y); return t === T.FLOOR || t === T.EXIT || t === T.WINDOW; };
+
+    // Floor: checker plus a soft glow per room-ish area, so rooms read as lit spaces.
+    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+      if (!open(x, y)) continue;
+      const X = this.ox + x * ts, Y = this.oy + y * ts;
+      ctx.fillStyle = (x + y) & 1 ? C.floor : C.floorAlt;
+      ctx.fillRect(X, Y, ts, ts);
+    }
+    // Ambient occlusion: walls cast a short shadow onto the floor below / beside them.
+    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+      if (!open(x, y)) continue;
+      const X = this.ox + x * ts, Y = this.oy + y * ts;
+      if (solid(x, y - 1)) {
+        const g = ctx.createLinearGradient(0, Y, 0, Y + ts * 0.45);
+        g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.fillRect(X, Y, ts, ts * 0.45);
+      }
+      if (solid(x - 1, y)) {
+        const g = ctx.createLinearGradient(X, 0, X + ts * 0.3, 0);
+        g.addColorStop(0, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.fillRect(X, Y, ts * 0.3, ts);
+      }
+      if (solid(x + 1, y)) {
+        const g = ctx.createLinearGradient(X + ts, 0, X + ts * 0.8, 0);
+        g.addColorStop(0, 'rgba(0,0,0,0.18)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.fillRect(X + ts * 0.8, Y, ts * 0.2, ts);
       }
     }
-    ctx.stroke();
-    // Faint blueprint grid.
+    // Windows.
+    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+      if (tileAt(L, x, y) !== T.WINDOW) continue;
+      const X = this.ox + x * ts, Y = this.oy + y * ts;
+      ctx.fillStyle = 'rgba(120,190,255,0.35)';
+      ctx.fillRect(X + ts * 0.3, Y, ts * 0.4, ts);
+    }
+    // Walls: solid fill with blueprint hatching, only where they border the building.
+    const hatch = document.createElement('canvas');
+    hatch.width = hatch.height = 8;
+    const hc = hatch.getContext('2d');
+    hc.fillStyle = C.wall; hc.fillRect(0, 0, 8, 8);
+    hc.strokeStyle = 'rgba(127,179,255,0.13)'; hc.lineWidth = 1;
+    hc.beginPath(); hc.moveTo(0, 8); hc.lineTo(8, 0); hc.moveTo(-1, 1); hc.lineTo(1, -1); hc.moveTo(7, 9); hc.lineTo(9, 7); hc.stroke();
+    ctx.fillStyle = ctx.createPattern(hatch, 'repeat');
+    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+      if (tileAt(L, x, y) !== T.WALL) continue;
+      ctx.fillRect(this.ox + x * ts, this.oy + y * ts, ts, ts);
+    }
+    // Faint blueprint grid over the floor.
     ctx.strokeStyle = C.grid;
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let x = 0; x <= L.w; x++) { ctx.moveTo(this.ox + x * ts + 0.5, this.oy); ctx.lineTo(this.ox + x * ts + 0.5, this.oy + L.h * ts); }
     for (let y = 0; y <= L.h; y++) { ctx.moveTo(this.ox, this.oy + y * ts + 0.5); ctx.lineTo(this.ox + L.w * ts, this.oy + y * ts + 0.5); }
     ctx.stroke();
+    // Wall outlines with a soft glow: edges between wall and walkable space.
+    ctx.beginPath();
+    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+      if (!solid(x, y)) continue;
+      const X = this.ox + x * ts, Y = this.oy + y * ts;
+      if (y > 0 && !solid(x, y - 1)) { ctx.moveTo(X, Y); ctx.lineTo(X + ts, Y); }
+      if (y < L.h - 1 && !solid(x, y + 1)) { ctx.moveTo(X, Y + ts); ctx.lineTo(X + ts, Y + ts); }
+      if (x > 0 && !solid(x - 1, y)) { ctx.moveTo(X, Y); ctx.lineTo(X, Y + ts); }
+      if (x < L.w - 1 && !solid(x + 1, y)) { ctx.moveTo(X + ts, Y); ctx.lineTo(X + ts, Y + ts); }
+    }
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(127,179,255,0.18)';
+    ctx.lineWidth = Math.max(3, ts / 5);
+    ctx.stroke();
+    ctx.strokeStyle = C.wallEdge;
+    ctx.lineWidth = Math.max(1, ts / 16);
+    ctx.stroke();
+    return cv;
   }
 
   drawExit(L) {
