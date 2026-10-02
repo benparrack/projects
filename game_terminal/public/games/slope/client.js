@@ -22,6 +22,26 @@ function loadScript(src, global) {
   });
 }
 
+const NAMES_KEY = 'game_terminal.slope.showNames';
+function readShowNames() {
+  try { return localStorage.getItem(NAMES_KEY) !== '0'; } catch { return true; }
+}
+function writeShowNames(v) {
+  try { localStorage.setItem(NAMES_KEY, v ? '1' : '0'); } catch { /* private mode */ }
+}
+// Tag opacity by camera distance: faded right next to the camera (a racer level with you would
+// otherwise park its tag over your own ball), fully readable a little ahead, gone by ~70 units.
+const NAME_FADE_NEAR = 14;
+const NAME_FADE_FAR = 70;
+const NAME_HIDE_CLOSE = 5;
+const NAME_MAX_PX = 150;
+const NAME_SHOW_CLOSE = 11;
+function nameOpacity(dist, alive) {
+  const t = Math.min(1, Math.max(0, (dist - NAME_FADE_NEAR) / (NAME_FADE_FAR - NAME_FADE_NEAR)));
+  const near = Math.min(1, Math.max(0, (dist - NAME_HIDE_CLOSE) / (NAME_SHOW_CLOSE - NAME_HIDE_CLOSE)));
+  return (1 - t * t) * (0.25 + 0.75 * near) * (alive ? 0.95 : 0.4);
+}
+
 function readBest() {
   try { return Number(localStorage.getItem(BEST_KEY)) || 0; } catch { return 0; }
 }
@@ -111,18 +131,34 @@ function sunTexture(THREE) {
   return new THREE.CanvasTexture(c);
 }
 
+// Floating name tag: a rounded dark pill with a colour dot, drawn at 2x for crispness. The
+// sprite keeps a constant world size (so far racers' tags shrink naturally) and drawGhosts fades
+// it out with distance so a crowded run doesn't turn into a wall of labels. The world size is
+// capped on screen by NAME_MAX_PX in drawGhosts so a racer right beside you doesn't get a
+// billboard-sized tag.
 function nameSprite(THREE, text, color) {
+  const name = String(text || '?').slice(0, 16);
   const c = document.createElement('canvas');
-  c.width = 256; c.height = 48;
+  c.width = 512; c.height = 96;
   const g = c.getContext('2d');
-  g.font = 'bold 26px monospace';
-  g.textAlign = 'center';
-  g.fillStyle = 'rgba(0,0,0,0.55)';
-  g.fillRect(0, 6, 256, 36);
+  g.font = 'bold 44px monospace';
+  const tw = Math.min(440, g.measureText(name).width);
+  const w = tw + 84; const x0 = (512 - w) / 2; const y0 = 14; const h = 68; const r = 34;
+  g.beginPath();
+  g.moveTo(x0 + r, y0); g.arcTo(x0 + w, y0, x0 + w, y0 + h, r); g.arcTo(x0 + w, y0 + h, x0, y0 + h, r);
+  g.arcTo(x0, y0 + h, x0, y0, r); g.arcTo(x0, y0, x0 + w, y0, r); g.closePath();
+  g.fillStyle = 'rgba(6,2,18,0.72)'; g.fill();
+  g.lineWidth = 4; g.strokeStyle = color; g.globalAlpha = 0.85; g.stroke(); g.globalAlpha = 1;
   g.fillStyle = color;
-  g.fillText(text.slice(0, 16), 128, 34);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
-  sp.scale.set(3.2, 0.6, 1);
+  g.beginPath(); g.arc(x0 + 34, y0 + h / 2, 11, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#fff';
+  g.textBaseline = 'middle';
+  g.fillText(name, x0 + 58, y0 + h / 2 + 2, 440);
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 4;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.set(2.9, 0.545, 1);
+  sp.renderOrder = 10;
   return sp;
 }
 
@@ -160,21 +196,47 @@ export function mount(container, api) {
   const liveEl = mk('top:10px;left:12px;font-size:12.5px;color:#9ef;text-shadow:0 0 4px #000;line-height:1.45');
   const centerEl = mk('top:42%;left:50%;transform:translate(-50%,-50%);font-size:44px;font-weight:bold;color:#fff;text-align:center;white-space:pre-line;text-shadow:0 0 18px #ff2fb0,0 0 3px #000');
   const hintEl = mk('bottom:10px;left:50%;transform:translateX(-50%);font-size:12px;color:#aaa;text-shadow:0 0 3px #000;white-space:nowrap');
-  hintEl.textContent = '← → / A D to steer · tap left/right side on touch';
+  hintEl.textContent = '← → / A D to steer · tap left/right side on touch · N names';
+  hintEl.style.maxWidth = 'calc(100% - 20px)'; hintEl.style.overflow = 'hidden'; hintEl.style.textOverflow = 'ellipsis';
   const botBar = createBotBar(api);
-  botBar.el.style.cssText += ';position:absolute;bottom:30px;left:10px;margin:0;pointer-events:auto;font-family:monospace;font-size:12px';
+  botBar.el.style.cssText += ';position:absolute;bottom:30px;left:10px;margin:0;pointer-events:auto;font-family:monospace;font-size:12px;max-width:calc(100% - 190px);display:flex;flex-wrap:wrap;gap:4px;align-items:center';
   root.appendChild(botBar.el);
   const leaveBtn = document.createElement('button');
   leaveBtn.textContent = 'LEAVE';
-  leaveBtn.style.cssText = 'position:absolute;bottom:8px;right:10px';
   leaveBtn.addEventListener('click', () => api.leaveRoom());
-  root.appendChild(leaveBtn);
+  const btnBar = document.createElement('div');
+  btnBar.style.cssText = 'position:absolute;bottom:30px;right:10px;display:flex;gap:6px;align-items:center;pointer-events:auto';
+  root.appendChild(btnBar);
+  let showNames = readShowNames();
+  const namesBtn = document.createElement('button');
+  namesBtn.title = 'Show/hide racer name tags (N)';
+  for (const b of [namesBtn, leaveBtn]) b.style.cssText = 'font-size:12px;padding:4px 10px';
+  const renderNamesBtn = () => {
+    namesBtn.textContent = showNames ? 'NAMES: ON' : 'NAMES: OFF';
+    namesBtn.setAttribute('aria-pressed', String(showNames));
+    namesBtn.style.opacity = showNames ? '1' : '0.7';
+  };
+  const toggleNames = () => {
+    showNames = !showNames;
+    writeShowNames(showNames);
+    renderNamesBtn();
+    sfx.play('click');
+  };
+  renderNamesBtn();
+  namesBtn.addEventListener('click', (e) => { toggleNames(); namesBtn.blur(); e.stopPropagation(); });
+  btnBar.append(namesBtn, leaveBtn);
 
   // --- Input ---
   const keys = { left: false, right: false };
   const touch = { left: false, right: false };
   function onKey(e, down) {
     const k = e.key.toLowerCase();
+    if (k === 'n') {
+      if (!down || e.repeat || (e.target && /input|textarea|select/i.test(e.target.tagName))) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      toggleNames();
+      return;
+    }
     if (k === 'arrowleft' || k === 'a') keys.left = down;
     else if (k === 'arrowright' || k === 'd') keys.right = down;
     else return;
@@ -503,6 +565,16 @@ export function mount(container, api) {
       g.cur.y += (g.tgt.y - g.cur.y) * k;
       g.mesh.position.set(g.cur.x, g.cur.y, -g.cur.s);
       g.label.position.set(g.cur.x, g.cur.y + 1.3, -g.cur.s);
+      const op = showNames && camera ? nameOpacity(camera.position.distanceTo(g.label.position), g.alive) : 0;
+      g.label.visible = op > 0.02;
+      if (camera && g.label.visible) {
+        // World-size tag (2.9 wide) until it would exceed NAME_MAX_PX on screen, then clamp.
+        const d = Math.max(0.1, camera.position.distanceTo(g.label.position));
+        const pxPerUnit = renderer.domElement.clientHeight / (2 * d * Math.tan((camera.fov * Math.PI) / 360));
+        const k = Math.min(1, NAME_MAX_PX / (2.9 * pxPerUnit));
+        g.label.scale.set(2.9 * k, 0.545 * k, 1);
+      }
+      g.label.material.opacity = op;
     }
   }
 
