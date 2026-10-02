@@ -18,7 +18,8 @@ const GALLOWS = [
 export function mount(container, api) {
   let view = null;
   let roster = [];
-  let wordRejectedFlash = false;
+  let wordRejected = null; // { unknown: [...] } after the server refuses the picker's word
+  let draftWord = ''; // the picker's input survives re-renders (roster updates etc.)
   let pickerRevealWord = false;
 
   function renderLetterGrid(interactive) {
@@ -52,11 +53,28 @@ export function mount(container, api) {
     return grid;
   }
 
+  // Scoped styles for the scoreboard (kept in this module, not the shared stylesheet).
+  const style = document.createElement('style');
+  style.textContent = `
+    .hm-board { border: 1px solid #1f6b2a; padding: 6px 10px; margin: 4px 0 12px; min-width: 220px; max-width: 420px; width: 100%; box-sizing: border-box; }
+    .hm-board h4 { margin: 0 0 4px; font-size: 0.85em; letter-spacing: 2px; opacity: 0.75; font-weight: normal; }
+    .hm-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+    .hm-row.me { color: #b6ff9e; font-weight: bold; }
+    .hm-row .hm-tag { opacity: 0.6; font-size: 0.8em; margin-left: 6px; }
+    .hm-row .hm-wins { font-variant-numeric: tabular-nums; }
+    .hm-row.lead .hm-wins::before { content: '★ '; color: #ffd84d; }
+    .hm-row.flash { animation: hm-flash 1.2s ease-out; }
+    @keyframes hm-flash { 0% { background: rgba(57,255,20,0.35); } 100% { background: transparent; } }
+    .hm-err { color: #ff4d4d; text-align: center; max-width: 420px; }
+  `;
+  container.appendChild(style);
+
   const root = document.createElement('div');
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '12px';
   root.style.alignItems = 'center';
+  root.style.padding = '12px 8px';
   root.style.width = '100%';
   // Bots can pick the word (solo play) or help guess.
   const botBar = createBotBar(api);
@@ -68,6 +86,41 @@ export function mount(container, api) {
     if (bot) return bot.nickname;
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
+  }
+
+  let lastScores = {};
+  function renderScoreboard() {
+    const scores = view.scores || [];
+    if (!scores.length) return null;
+    const board = document.createElement('div');
+    board.className = 'hm-board';
+    const h = document.createElement('h4');
+    h.textContent = 'WINS';
+    board.appendChild(h);
+    const top = scores[0].wins;
+    for (const s of scores) {
+      const row = document.createElement('div');
+      row.className = 'hm-row';
+      if (s.clientId === api.getClientId()) row.classList.add('me');
+      if (top > 0 && s.wins === top) row.classList.add('lead');
+      if (lastScores[s.clientId] !== undefined && s.wins > lastScores[s.clientId]) row.classList.add('flash');
+      const name = document.createElement('span');
+      name.textContent = nicknameFor(s.clientId);
+      if (s.clientId === view.pickerClientId) {
+        const tag = document.createElement('span');
+        tag.className = 'hm-tag';
+        tag.textContent = 'picking';
+        name.appendChild(tag);
+      }
+      const wins = document.createElement('span');
+      wins.className = 'hm-wins';
+      wins.textContent = String(s.wins);
+      row.appendChild(name);
+      row.appendChild(wins);
+      board.appendChild(row);
+    }
+    lastScores = Object.fromEntries(scores.map((s) => [s.clientId, s.wins]));
+    return board;
   }
 
   function render() {
@@ -137,11 +190,22 @@ export function mount(container, api) {
         input.autocomplete = 'off';
         input.spellcheck = true;
         input.lang = 'en';
+        input.value = draftWord;
+        input.addEventListener('input', () => { draftWord = input.value; wordRejected = null; errEl.hidden = true; });
         const submit = document.createElement('button');
         submit.type = 'submit';
         submit.textContent = 'SET WORD';
         form.appendChild(input);
         form.appendChild(submit);
+        const errEl = document.createElement('div');
+        errEl.className = 'hm-err';
+        errEl.hidden = !wordRejected;
+        if (wordRejected) {
+          const bad = (wordRejected.unknown || []).map((w) => `"${w.toUpperCase()}"`).join(', ');
+          errEl.textContent = bad
+            ? `${bad} isn't in the dictionary — try another word (multi-word phrases are OK, e.g. "STAR WARS").`
+            : 'Not a real word/phrase — try again (multi-word phrases are OK, e.g. "STAR WARS").';
+        }
         form.addEventListener('submit', (ev) => {
           ev.preventDefault();
           const word = input.value.trim();
@@ -149,12 +213,9 @@ export function mount(container, api) {
           api.sendAction({ kind: 'setWord', word });
         });
         root.appendChild(form);
-        if (wordRejectedFlash) {
-          const err = document.createElement('div');
-          err.textContent = "Not a real word/phrase — try again (multi-word phrases are OK, e.g. \"STAR WARS\").";
-          err.style.color = '#ff4d4d';
-          root.appendChild(err);
-        }
+        root.appendChild(errEl);
+        // Keep focus in the box across re-renders so typing isn't interrupted.
+        setTimeout(() => { if (input.isConnected && document.activeElement !== input && !document.activeElement?.matches('input,textarea')) input.focus(); }, 0);
         const hint = document.createElement('div');
         hint.textContent = 'You are picking this round — enter a word for everyone else to guess.';
         root.appendChild(hint);
@@ -199,12 +260,24 @@ export function mount(container, api) {
       result.style.fontSize = '1.2em';
       result.textContent = view.result === 'win' ? 'SOLVED! 🎉' : 'OUT OF GUESSES 💀';
       root.appendChild(result);
+      if (view.roundWinner) {
+        const who = document.createElement('div');
+        const me = view.roundWinner === api.getClientId();
+        who.textContent = view.result === 'win'
+          ? `${me ? 'You' : nicknameFor(view.roundWinner)} solved it — +1 win`
+          : `${me ? 'You' : nicknameFor(view.roundWinner)} stumped the room — +1 win`;
+        who.style.color = me ? '#b6ff9e' : '';
+        root.appendChild(who);
+      }
 
       const nextBtn = document.createElement('button');
       nextBtn.textContent = 'NEXT ROUND';
       nextBtn.addEventListener('click', () => api.sendAction({ kind: 'nextRound' }));
       root.appendChild(nextBtn);
     }
+
+    const board = renderScoreboard();
+    if (board) root.appendChild(board);
   }
 
   function onKeydown(ev) {
@@ -231,10 +304,11 @@ export function mount(container, api) {
           else if (view.wrongGuesses > prevView.wrongGuesses) sfx.play('error');
           else if (view.mask !== prevView.mask && JSON.stringify(view.mask) !== JSON.stringify(prevView.mask)) sfx.play('point');
         }
-        wordRejectedFlash = false;
+        if (view && view.phase !== 'waiting') { wordRejected = null; draftWord = ''; }
         render();
       } else if (data.kind === 'wordRejected') {
-        wordRejectedFlash = true;
+        wordRejected = { unknown: Array.isArray(data.unknown) ? data.unknown : [] };
+        sfx.play('error');
         render();
       }
     },

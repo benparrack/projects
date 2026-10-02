@@ -1,16 +1,16 @@
-const fs = require('fs');
-const path = require('path');
+const { DICTIONARY, DICT_LIST, COMMON } = require('./words');
 
 const MAX_WRONG_GUESSES = 6;
 const MAX_WORD_LENGTH = 40;
 
-// Server-authoritative word validation ("spellcheck") — a fixed English wordlist loaded once at
-// startup (~73k words, from this repo's own server/games/data/hangman_words.txt so it's portable
-// across hosts rather than relying on an OS dictionary that may not exist on the deploy target).
-// A picked word/phrase is accepted only if every space-separated token is a real dictionary word.
-const DICTIONARY = new Set(
-  fs.readFileSync(path.join(__dirname, 'data', 'hangman_words.txt'), 'utf8').split('\n').filter(Boolean)
-);
+// Server-authoritative word validation ("spellcheck") against the hub's shared dictionary
+// (server/games/words.js: ENABLE + system list, every inflection — the old hangman-only list was
+// missing even "and"). A picked word/phrase is accepted only if every space-separated token is a
+// real dictionary word.
+
+// Scoring (total wins per player, kept for as long as they stay in the room): when the guessers
+// solve the word, the guesser who revealed the final letter gets the win; when they run out of
+// guesses, the picker gets it (they stumped the room).
 
 // --- CPU players. A bot can be the word picker (so one person can play solo) or a fellow guesser.
 // As picker its level sets the word: short and friendly on Easy, up to short words full of rare
@@ -19,18 +19,25 @@ const DICTIONARY = new Set(
 // lengths, Expert filters the dictionary by the revealed pattern and wrong letters.
 const BOT_NAMES = ['Ace', 'Byte', 'Chip', 'Dot', 'Echo', 'Flux'];
 const LEVEL_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard', expert: 'Expert' };
+// Bot picker words come from the everyday COMMON list (so answers are words people know), filtered
+// per level: Easy short and friendly, Medium mid-length, Hard long, Expert short words heavy in
+// rare letters (few vowels, J/Q/X/Z/... — the genuinely hard kind in hangman). The top ~200 are
+// skipped: they're mostly function words (THAT, WHICH, ...) that make dull puzzles.
+const RARE = 'JQXZVKWYFBGP';
+const rareScore = (w) => [...w].reduce((s, ch) => s + (RARE.includes(ch) ? 2 : 'AEIOU'.includes(ch) ? -1 : 0), 0);
+const COMMON_UP = COMMON.map((w) => w.toUpperCase());
 const BOT_WORDS = {
-  easy: 'APPLE HOUSE WATER PIZZA TIGER CHAIR BEACH TRAIN MOUSE CLOUD HAPPY PLANT RIVER SMILE BREAD STONE GRAPE LEMON PAPER HORSE TABLE BIRD FISH MOON STAR TREE BOAT CAKE DOOR RAIN SNOW BALL KITE FROG DUCK LION BEAR MILK SHOE HAT GAME SONG RING GIFT COIN'.split(' '),
-  medium: 'GARDEN PENCIL ROCKET CASTLE GUITAR ORANGE BASKET WINDOW PLANET BRIDGE DRAGON JUNGLE ISLAND CAMERA TURTLE PUZZLE SCHOOL FOREST SUMMER MARKET PARROT BUTTON HAMMER BOTTLE CANDLE DESERT FLOWER GALAXY KITTEN MIRROR PEPPER ROBOT SILVER TICKET VOLCANO WIZARD BLANKET PIRATE'.split(' '),
-  hard: 'RHYTHM OXYGEN JOCKEY QUARTZ WALTZ ZEPHYR BUZZARD GLYPH SPHINX KAYAK JIGSAW PUZZLED VORTEX WHISKEY ZODIAC BANJO FJORD GAZEBO JACKPOT KNAPSACK MYSTIFY OBJECT PIXEL QUIVER SQUAWK TOPAZ VODKA WRISTWATCH YACHT ZIGZAG ABYSS CRYPT GYPSUM HYPHEN LYNX NYMPH'.split(' '),
-  expert: 'JAZZ FUZZ BUZZ JINX QUIZ FIZZ HYMN LYMPH CRYPT GYPSY MYTH NYMPH PYGMY SHY WAXY JUKEBOX KIWI VEX JAB ZIP YAK WOK IVY FOX JAW HOAX JOWL QUAY VIXEN ZYGOTE WHIZ OXBOW'.split(' '),
+  easy: COMMON_UP.slice(200, 3000).filter((w) => w.length >= 4 && w.length <= 5),
+  medium: COMMON_UP.slice(200, 5000).filter((w) => w.length >= 6 && w.length <= 7),
+  hard: COMMON_UP.slice(200).filter((w) => w.length >= 7 && w.length <= 10),
+  expert: COMMON_UP.slice(200).filter((w) => w.length >= 3 && w.length <= 6 && rareScore(w) >= 2),
 };
 const EN_FREQ = 'ETAOINSRHLDCUMFPGWYBVKXJQZ';
 const isBotId = (id) => typeof id === 'string' && id.startsWith('bot-');
 const botLevel = (id) => { const l = id.split('~')[1]; return LEVEL_LABEL[l] ? l : 'hard'; };
 const BY_LEN = new Map();
 function wordsOfLen(n) {
-  if (!BY_LEN.has(n)) BY_LEN.set(n, [...DICTIONARY].filter((w) => w.length === n && /^[a-z]+$/.test(w)).map((w) => w.toUpperCase()));
+  if (!BY_LEN.has(n)) BY_LEN.set(n, DICT_LIST.filter((w) => w.length === n).map((w) => w.toUpperCase()));
   return BY_LEN.get(n);
 }
 
@@ -93,9 +100,22 @@ function scheduleBots(room) {
   }, delay);
 }
 
-function isValidWordOrPhrase(cleaned) {
-  const tokens = cleaned.toLowerCase().split(' ').filter(Boolean);
-  return tokens.length > 0 && tokens.every((tok) => DICTIONARY.has(tok));
+// Tokens of a cleaned word/phrase that aren't dictionary words (empty array = valid).
+function unknownWords(cleaned) {
+  return cleaned.toLowerCase().split(' ').filter(Boolean).filter((tok) => !DICTIONARY.has(tok));
+}
+
+function addWin(st, id) {
+  if (!id) return;
+  st.wins[id] = (st.wins[id] || 0) + 1;
+}
+
+// Everyone currently in the room (pickerOrder holds humans + bots), most wins first.
+function scoreboard(st) {
+  return st.pickerOrder
+    .map((id, i) => ({ clientId: id, wins: st.wins[id] || 0, i }))
+    .sort((a, b) => b.wins - a.wins || a.i - b.i)
+    .map(({ clientId, wins }) => ({ clientId, wins }));
 }
 
 function buildView(room, forClientId) {
@@ -127,6 +147,9 @@ function buildView(room, forClientId) {
     pickerWord: isPicker ? st.word : null,
     bots: st.pickerOrder.filter(isBotId).map((id) => ({ clientId: id, nickname: botNickname(id) })),
     result: st.phase === 'round_over' ? st.lastResult : null,
+    // Who took the round: the solving guesser on a win, the picker on a loss.
+    roundWinner: st.phase === 'round_over' ? st.roundWinner : null,
+    scores: scoreboard(st),
   };
 }
 
@@ -151,6 +174,7 @@ function resetRound(st) {
   st.guessedLetters = [];
   st.wrongGuesses = 0;
   st.lastResult = null;
+  st.roundWinner = null;
 }
 
 module.exports = {
@@ -166,6 +190,8 @@ module.exports = {
       wrongGuesses: 0,
       maxWrongGuesses: MAX_WRONG_GUESSES,
       lastResult: null,
+      roundWinner: null,
+      wins: {}, // { clientId: total rounds won } — see the scoring note at the top
     };
   },
 
@@ -177,15 +203,26 @@ module.exports = {
     const st = room.state;
     if (!st.pickerOrder.includes(client.clientId)) st.pickerOrder.push(client.clientId);
     if (!st.pickerClientId) st.pickerClientId = client.clientId;
+    // Everyone else's scoreboard should list the newcomer right away (the joiner gets a snapshot).
+    for (const clientId of room.clients.keys()) {
+      if (clientId === client.clientId) continue;
+      room.sendTo(clientId, {
+        v: 1,
+        type: 'game.event',
+        payload: { gameType: 'hangman', data: { kind: 'state', view: buildView(room, clientId) } },
+      });
+    }
   },
 
   onLeave(room, client) {
     const st = room.state;
     const idx = st.pickerOrder.indexOf(client.clientId);
     if (idx !== -1) st.pickerOrder.splice(idx, 1);
+    delete st.wins[client.clientId];
     // No humans left: bots go too.
     if (!st.pickerOrder.some((id) => !isBotId(id))) {
       st.pickerOrder = [];
+      st.wins = {};
       clearTimeout(st._botTimer);
       if (isBotId(st.pickerClientId)) { resetRound(st); st.pickerClientId = null; }
     }
@@ -193,14 +230,17 @@ module.exports = {
     if (st.pickerClientId === client.clientId) {
       resetRound(st);
       st.pickerClientId = st.pickerOrder.length > 0 ? st.pickerOrder[0] : null;
-      for (const clientId of room.clients.keys()) {
-        room.sendTo(clientId, {
-          v: 1,
-          type: 'game.event',
-          payload: { gameType: 'hangman', data: { kind: 'state', view: buildView(room, clientId) } },
-        });
-      }
     }
+    // Always rebroadcast so the scoreboard drops the leaver (and a new picker gets prompted).
+    for (const clientId of room.clients.keys()) {
+      if (clientId === client.clientId) continue;
+      room.sendTo(clientId, {
+        v: 1,
+        type: 'game.event',
+        payload: { gameType: 'hangman', data: { kind: 'state', view: buildView(room, clientId) } },
+      });
+    }
+    scheduleBots(room);
   },
 
   onMessage(room, client, data, ctx) {
@@ -226,6 +266,7 @@ module.exports = {
       const i = st.pickerOrder.indexOf(id);
       if (!isBotId(id) || i === -1) return;
       st.pickerOrder.splice(i, 1);
+      delete st.wins[id];
       if (st.pickerClientId === id) {
         resetRound(st);
         st.pickerClientId = st.pickerOrder[i % Math.max(1, st.pickerOrder.length)] || null;
@@ -241,11 +282,12 @@ module.exports = {
       const cleaned = raw.replace(/[^A-Z ]/g, '').replace(/ {2,}/g, ' ');
       if (!cleaned.replace(/ /g, '').length) return;
       if (cleaned.length > MAX_WORD_LENGTH) return;
-      if (!isValidWordOrPhrase(cleaned)) {
+      const unknown = unknownWords(cleaned);
+      if (unknown.length) {
         ctx.sendTo(ctx.senderId, {
           v: 1,
           type: 'game.event',
-          payload: { gameType: 'hangman', data: { kind: 'wordRejected' } },
+          payload: { gameType: 'hangman', data: { kind: 'wordRejected', unknown: unknown.slice(0, 3) } },
         });
         return;
       }
@@ -272,9 +314,13 @@ module.exports = {
       if (allGuessed) {
         st.phase = 'round_over';
         st.lastResult = 'win';
+        st.roundWinner = ctx.senderId;
+        addWin(st, ctx.senderId);
       } else if (st.wrongGuesses >= st.maxWrongGuesses) {
         st.phase = 'round_over';
         st.lastResult = 'lose';
+        st.roundWinner = st.pickerClientId;
+        addWin(st, st.pickerClientId);
       }
       broadcastState(room, ctx);
       return;
