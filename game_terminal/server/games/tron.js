@@ -183,6 +183,9 @@ function buildPlayersSummary(st) {
       status,
       head: p.inRound && p.x !== null ? { x: p.x, y: p.y } : null,
       dir: p.dir,
+      wins: p.wins,
+      draws: p.draws,
+      rounds: p.rounds,
     });
   }
   return players;
@@ -203,7 +206,8 @@ function baseView(st, now) {
     roundId: st.roundId,
     phase: st.phase,
     countdownRemainingMs: st.phase === 'countdown' ? Math.max(0, st.countdownEndAt - now) : null,
-    roundOver: st.phase === 'round_over' ? { winnerId: st.winnerId, isDraw: st.isDraw, winnerNickname: st.winnerNickname } : null,
+    roundOver: st.phase === 'round_over' ? { winnerId: st.winnerId, isDraw: st.isDraw, winnerNickname: st.winnerNickname, drawIds: st.drawIds } : null,
+    roundsPlayed: st.roundsPlayed,
     players: buildPlayersSummary(st),
   };
 }
@@ -257,6 +261,31 @@ function resetAfterRound(st) {
   st.winnerId = null;
   st.winnerNickname = null;
   st.isDraw = false;
+  st.drawIds = [];
+}
+
+// Room scoreboard (persists across rounds; a leaver's record goes with them). Every participant
+// gets a round played; the survivor gets the win. With no survivor, only the cycles still alive
+// going into the final tick (i.e. the ones that crashed simultaneously) share a draw — someone
+// who crashed earlier just lost that round.
+function scoreRound(st, survivor, aliveBefore) {
+  if (![...st.players.values()].some((p) => p.inRound)) return;
+  st.roundsPlayed = (st.roundsPlayed || 0) + 1;
+  st.drawIds = [];
+  for (const p of st.players.values()) if (p.inRound) p.rounds++;
+  if (survivor) {
+    survivor.wins++;
+  } else {
+    for (const id of aliveBefore) {
+      const p = st.players.get(id);
+      if (p) { p.draws++; st.drawIds.push(id); }
+    }
+  }
+}
+
+function resetScores(st) {
+  st.roundsPlayed = 0;
+  for (const p of st.players.values()) { p.wins = 0; p.draws = 0; p.rounds = 0; }
 }
 
 function stepPlaying(st) {
@@ -312,6 +341,7 @@ function stepPlaying(st) {
 
 module.exports = {
   type: 'tron',
+  _test: { scoreRound, resetScores, TICK_MS, GRID_W, GRID_H },
   tickIntervalMs: TICK_MS,
 
   createInitialState() {
@@ -324,6 +354,8 @@ module.exports = {
       winnerId: null,
       winnerNickname: null,
       isDraw: false,
+      drawIds: [],
+      roundsPlayed: 0,
       nextColorIdx: 0,
       tickTrailAdded: [],
     };
@@ -348,6 +380,9 @@ module.exports = {
       dir: null,
       turnQueue: [],
       trail: [],
+      wins: 0,
+      draws: 0,
+      rounds: 0,
     });
   },
 
@@ -359,6 +394,9 @@ module.exports = {
   onLeave(room, client) {
     room.state.players.delete(client.clientId);
     dropBotsIfAlone(room.state.players);
+    // Empty room: also drop any in-flight round, or the next joiner would see a phantom round
+    // (no participants) get scored on the first tick.
+    if (!room.state.players.size) { resetAfterRound(room.state); room.state.roundsPlayed = 0; }
   },
 
   onMessage(room, client, data, ctx) {
@@ -371,6 +409,11 @@ module.exports = {
     }
     if (data.kind === 'removeBot') {
       if (isBotId(data.clientId)) room.state.players.delete(data.clientId);
+      return;
+    }
+    if (data.kind === 'resetScores') {
+      if (p.bot) return;
+      resetScores(room.state);
       return;
     }
     if (data.kind === 'steer') {
@@ -404,6 +447,7 @@ module.exports = {
       }
     } else if (st.phase === 'playing') {
       steerBots(st);
+      const aliveBefore = [...st.players.values()].filter((p) => p.inRound && p.alive).map((p) => p.clientId);
       stepPlaying(st);
       const aliveCount = [...st.players.values()].filter((p) => p.inRound && p.alive).length;
       if (aliveCount <= 1) {
@@ -413,6 +457,7 @@ module.exports = {
         st.winnerId = survivor ? survivor.clientId : null;
         st.winnerNickname = survivor ? survivor.nickname : null;
         st.isDraw = !survivor;
+        scoreRound(st, survivor, aliveBefore);
       }
     } else if (st.phase === 'round_over') {
       if (now - st.roundOverAt >= ROUND_OVER_DISPLAY_MS) {

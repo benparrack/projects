@@ -30,6 +30,48 @@ const KEY_TO_DIR = {
   ArrowRight: 'right', KeyD: 'right',
 };
 
+const STATUS_TEXT = { waiting: 'next round', ready: 'ready', alive: 'alive', dead: 'out' };
+
+// Most wins first, then most draws, then fewest rounds played (a newcomer with 0-0 isn't ranked
+// above someone who's played and lost), then name.
+export function sortedStandings(players) {
+  return players.slice().sort((a, b) => (b.wins || 0) - (a.wins || 0)
+    || (b.draws || 0) - (a.draws || 0)
+    || (a.rounds || 0) - (b.rounds || 0)
+    || String(a.nickname).localeCompare(String(b.nickname)));
+}
+
+function injectScoreStyles() {
+  if (document.getElementById('tron-score-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'tron-score-styles';
+  style.textContent = `
+.tron-score { min-width: 250px; max-width: 340px; font-size: 0.85em; }
+.tron-score-head { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 6px; }
+.tron-score-round { opacity: 0.6; font-size: 0.85em; letter-spacing: 1px; }
+.tron-score-table { width: 100%; border-collapse: collapse; }
+.tron-score-table th { text-align: left; font-weight: normal; opacity: 0.55; font-size: 0.8em; padding: 0 4px 3px; border-bottom: 1px solid rgba(57,255,20,0.25); }
+.tron-score-table th:nth-child(3), .tron-score-table th:nth-child(4) { text-align: center; }
+.tron-score-row td { padding: 4px; border-bottom: 1px solid rgba(57,255,20,0.08); }
+.tron-score-row .rank { width: 1.4em; text-align: center; opacity: 0.6; }
+.tron-score-row .name { color: var(--c); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tron-score-row .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); margin-right: 6px; vertical-align: middle; }
+.tron-score-row .num { text-align: center; width: 2em; font-variant-numeric: tabular-nums; }
+.tron-score-row .w { font-weight: bold; color: #fff; }
+.tron-score-row .st { font-size: 0.8em; opacity: 0.6; text-align: right; white-space: nowrap; }
+.tron-score-row .st-alive { color: #39ff14; opacity: 0.9; }
+.tron-score-row.dead .name { opacity: 0.45; text-decoration: line-through; }
+.tron-score-row.me .name span { text-decoration: underline; text-underline-offset: 3px; }
+.tron-score-row.leader { background: linear-gradient(90deg, rgba(255,215,0,0.16), transparent); }
+.tron-score-row.leader .rank { color: #ffd700; opacity: 1; text-shadow: 0 0 6px #ffd700; }
+.tron-score-reset { margin-top: 8px; font-size: 0.8em; padding: 2px 8px; }
+.tron-overlay-standings { margin-top: 8px; font-size: 0.45em; font-weight: normal; display: grid; gap: 2px; min-width: 180px; }
+.tron-overlay-standings div { display: flex; justify-content: space-between; gap: 16px; }
+@media (max-width: 900px) { .tron-score { max-width: none; width: 100%; } }
+`;
+  document.head.appendChild(style);
+}
+
 export function mount(container, api) {
   const wrap = document.createElement('div');
   wrap.style.display = 'flex';
@@ -59,6 +101,8 @@ export function mount(container, api) {
   body.style.display = 'flex';
   body.style.gap = '12px';
   body.style.alignItems = 'flex-start';
+  body.style.flexWrap = 'wrap';
+  body.style.justifyContent = 'center';
 
   const canvasWrap = document.createElement('div');
   canvasWrap.style.position = 'relative';
@@ -67,6 +111,8 @@ export function mount(container, api) {
   canvas.style.background = '#05080a';
   canvas.style.touchAction = 'none';
   const ctx = sharpCanvas(canvas, CANVAS_WIDTH, CANVAS_HEIGHT);
+  canvas.style.maxWidth = '100%';
+  canvas.style.height = 'auto';
   const fx = createFx();
   let sparkClock = 0;
 
@@ -117,17 +163,29 @@ export function mount(container, api) {
   canvasWrap.appendChild(overlay);
   canvasWrap.appendChild(dpad);
 
+  // Scoreboard: round wins/draws per player for as long as they stay in the room (server keeps
+  // the tallies; see scoreRound in server/games/tron.js). Styles are scoped under .tron-score.
+  injectScoreStyles();
   const side = document.createElement('div');
-  side.style.minWidth = '160px';
-  const sideTitle = document.createElement('p');
-  sideTitle.textContent = '> PLAYERS';
-  sideTitle.style.margin = '0 0 4px';
-  const playersEl = document.createElement('ul');
-  playersEl.style.margin = '0';
-  playersEl.style.paddingLeft = '18px';
-  playersEl.style.fontSize = '0.85em';
-  side.appendChild(sideTitle);
-  side.appendChild(playersEl);
+  side.className = 'tron-score';
+  const sideTitle = document.createElement('div');
+  sideTitle.className = 'tron-score-head';
+  const sideTitleText = document.createElement('span');
+  sideTitleText.textContent = '> SCOREBOARD';
+  const roundLabel = document.createElement('span');
+  roundLabel.className = 'tron-score-round';
+  sideTitle.append(sideTitleText, roundLabel);
+  const playersEl = document.createElement('table');
+  playersEl.className = 'tron-score-table';
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'tron-score-reset';
+  resetBtn.textContent = 'RESET SCORES';
+  resetBtn.title = 'Set everyone\'s wins and draws back to zero';
+  resetBtn.addEventListener('click', () => {
+    sfx.play('click');
+    api.sendAction({ kind: 'resetScores' });
+  });
+  side.append(sideTitle, playersEl, resetBtn);
 
   body.appendChild(canvasWrap);
   body.appendChild(side);
@@ -168,14 +226,83 @@ export function mount(container, api) {
     return '';
   }
 
+  // Rebuilt only when something visible changes (ticks arrive at 40Hz). A W cell that just went
+  // up pops, so the scoreboard reads as live rather than a static list.
+  let scoreKey = null;
+  const prevWins = new Map();
   function renderPlayers(view) {
-    playersEl.innerHTML = '';
-    for (const p of view.players) {
-      const li = document.createElement('li');
-      const you = p.clientId === myClientId() ? ' (you)' : '';
-      li.textContent = `${p.nickname}${you} — ${p.status}`;
-      li.style.color = p.color;
-      playersEl.appendChild(li);
+    const me = myClientId();
+    const rows = sortedStandings(view.players);
+    const top = rows.length && rows[0].wins > 0 ? rows[0].wins : 0;
+    const key = `${view.roundsPlayed}|${me}|` + rows.map((p) => `${p.clientId}:${p.wins}:${p.draws}:${p.status}`).join('|');
+    if (key === scoreKey) return;
+    scoreKey = key;
+    roundLabel.textContent = view.roundsPlayed ? `${view.roundsPlayed} ROUND${view.roundsPlayed === 1 ? '' : 'S'}` : '';
+    resetBtn.disabled = !rows.some((p) => p.wins || p.draws);
+    playersEl.textContent = '';
+    const head = playersEl.insertRow();
+    head.className = 'tron-score-th';
+    for (const [t, title] of [['#', ''], ['PLAYER', ''], ['W', 'Round wins'], ['D', 'Draws (crashed out together)'], ['', '']]) {
+      const th = document.createElement('th');
+      th.textContent = t;
+      if (title) th.title = title;
+      head.appendChild(th);
+    }
+    rows.forEach((p, i) => {
+      const tr = playersEl.insertRow();
+      const leader = top > 0 && p.wins === top;
+      tr.className = `tron-score-row${leader ? ' leader' : ''}${p.clientId === me ? ' me' : ''}${p.status === 'dead' ? ' dead' : ''}`;
+      tr.style.setProperty('--c', p.color);
+      const rank = tr.insertCell();
+      rank.className = 'rank';
+      rank.textContent = leader ? '♛' : String(i + 1);
+      const name = tr.insertCell();
+      name.className = 'name';
+      const sw = document.createElement('i');
+      sw.className = 'sw';
+      const nm = document.createElement('span');
+      nm.textContent = p.nickname + (p.clientId === me ? ' (you)' : '');
+      name.append(sw, nm);
+      name.title = `${p.nickname} — ${p.rounds || 0} round${p.rounds === 1 ? '' : 's'} played`;
+      const w = tr.insertCell();
+      w.className = 'num w';
+      w.textContent = String(p.wins || 0);
+      const d = tr.insertCell();
+      d.className = 'num';
+      d.textContent = String(p.draws || 0);
+      const st = tr.insertCell();
+      st.className = `st st-${p.status}`;
+      st.textContent = STATUS_TEXT[p.status] || p.status;
+      if (prevWins.has(p.clientId) && (p.wins || 0) > prevWins.get(p.clientId)) {
+        w.animate([{ transform: 'scale(1.9)', color: '#fff' }, { transform: 'scale(1)' }], { duration: 600, easing: 'ease-out' });
+      }
+    });
+    prevWins.clear();
+    for (const p of rows) prevWins.set(p.clientId, p.wins || 0);
+  }
+
+  // Round-over banner: the winner plus a compact standings line underneath.
+  function renderOverlay(view) {
+    overlay.textContent = '';
+    const big = document.createElement('div');
+    big.textContent = view.roundOver && view.roundOver.isDraw ? 'DRAW!' : `${view.roundOver ? view.roundOver.winnerNickname : ''} WINS!`;
+    overlay.appendChild(big);
+    const rows = sortedStandings(view.players).slice(0, 5);
+    if (rows.length) {
+      const tbl = document.createElement('div');
+      tbl.className = 'tron-overlay-standings';
+      for (const p of rows) {
+        const line = document.createElement('div');
+        line.style.color = p.color;
+        const won = view.roundOver && view.roundOver.winnerId === p.clientId;
+        const n = document.createElement('span');
+        n.textContent = p.nickname;
+        const sc = document.createElement('b');
+        sc.textContent = `${p.wins || 0}${won ? ' +1' : ''}`;
+        line.append(n, sc);
+        tbl.appendChild(line);
+      }
+      overlay.appendChild(tbl);
     }
   }
 
@@ -332,9 +459,7 @@ export function mount(container, api) {
       overlay.style.fontSize = '2em';
       overlay.animate([{ transform: 'translate(-50%, -50%) scale(0.3)', opacity: 0 }, { transform: 'translate(-50%, -50%) scale(1.15)', opacity: 1, offset: 0.7 }, { transform: 'translate(-50%, -50%) scale(1)' }], { duration: 420, easing: 'ease-out' });
     }
-    if (!overlay.hidden) {
-      overlay.textContent = view.roundOver && view.roundOver.isDraw ? 'DRAW!' : `${view.roundOver ? view.roundOver.winnerNickname : ''} WINS!`;
-    }
+    if (wasHidden && !overlay.hidden) renderOverlay(view);
   }
 
   let sfxPrev = null;
