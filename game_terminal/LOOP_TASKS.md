@@ -33,7 +33,7 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 - [ ] pool — 8-Ball (+ 9-Ball mode) pool, physics
 - [b] gomoku — Gomoku (15x15, five in a row)
 - [b] dotsboxes — Dots and Boxes
-- [ ] mancala — Mancala (Kalah rules)
+- [b] mancala — Mancala (Kalah rules)
 - [b] codemaster — Codemaster (Mastermind: 4-color code, exact/color-only feedback)
 - [ ] wordtrails — Word Trails (next word starts with last letter of previous, timed)
 
