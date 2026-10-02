@@ -274,6 +274,85 @@ function applyMove(board, state, move, promotionChoice) {
   }
 }
 
+
+// --- Notation (SAN + FEN), kept per game so a finished game can be reviewed move by move. ---
+
+const PIECE_LETTER = { king: 'K', queen: 'Q', rook: 'R', bishop: 'B', knight: 'N', pawn: '' };
+const FEN_LETTER = { king: 'k', queen: 'q', rook: 'r', bishop: 'b', knight: 'n', pawn: 'p' };
+const sqName = (r, c) => `${String.fromCharCode(97 + c)}${8 - r}`;
+
+function clonePos(pos) {
+  return {
+    board: cloneBoard(pos.board),
+    turn: pos.turn,
+    castlingRights: { white: { ...pos.castlingRights.white }, black: { ...pos.castlingRights.black } },
+    enPassantTarget: pos.enPassantTarget ? { ...pos.enPassantTarget } : null,
+  };
+}
+
+// Standard algebraic notation for `move` (one of getLegalMoves' entries) in position `pos`
+// ({ board, turn, castlingRights, enPassantTarget }), with the +/# suffix.
+function sanOf(pos, move, promotionChoice) {
+  const piece = pos.board[move.from.r][move.from.c];
+  let san;
+  if (move.castle) {
+    san = move.castle === 'king' ? 'O-O' : 'O-O-O';
+  } else {
+    const dest = sqName(move.to.r, move.to.c);
+    if (piece.type === 'pawn') {
+      san = move.isCapture ? `${String.fromCharCode(97 + move.from.c)}x${dest}` : dest;
+      if (move.promotion) san += `=${PIECE_LETTER[promotionChoice || 'queen']}`;
+    } else {
+      const rivals = getLegalMoves(pos.board, piece.color, pos).filter((m) => {
+        if (m.to.r !== move.to.r || m.to.c !== move.to.c) return false;
+        if (m.from.r === move.from.r && m.from.c === move.from.c) return false;
+        const p = pos.board[m.from.r][m.from.c];
+        return p && p.type === piece.type;
+      });
+      let dis = '';
+      if (rivals.length) {
+        const file = String.fromCharCode(97 + move.from.c);
+        const rank = String(8 - move.from.r);
+        if (!rivals.some((m) => m.from.c === move.from.c)) dis = file;
+        else if (!rivals.some((m) => m.from.r === move.from.r)) dis = rank;
+        else dis = file + rank;
+      }
+      san = `${PIECE_LETTER[piece.type]}${dis}${move.isCapture ? 'x' : ''}${dest}`;
+    }
+  }
+  const after = clonePos(pos);
+  applyMove(after.board, after, move, promotionChoice);
+  const them = opponent(piece.color);
+  const king = findKing(after.board, them);
+  const check = king && isSquareAttacked(after.board, king.r, king.c, piece.color);
+  if (check) san += getLegalMoves(after.board, them, after).length ? '+' : '#';
+  return san;
+}
+
+function fenOf(pos, halfmove, fullmove) {
+  const rows = pos.board.map((row) => {
+    let out = '';
+    let empty = 0;
+    for (const cell of row) {
+      if (!cell) { empty++; continue; }
+      if (empty) { out += empty; empty = 0; }
+      const ch = FEN_LETTER[cell.type];
+      out += cell.color === 'white' ? ch.toUpperCase() : ch;
+    }
+    return empty ? out + empty : out;
+  });
+  const cr = pos.castlingRights;
+  const castle = `${cr.white.kingSide ? 'K' : ''}${cr.white.queenSide ? 'Q' : ''}${cr.black.kingSide ? 'k' : ''}${cr.black.queenSide ? 'q' : ''}` || '-';
+  const ep = pos.enPassantTarget ? sqName(pos.enPassantTarget.r, pos.enPassantTarget.c) : '-';
+  return `${rows.join('/')} ${pos.turn === 'white' ? 'w' : 'b'} ${castle} ${ep} ${halfmove} ${fullmove}`;
+}
+
+function snapshotPosition(st) {
+  const pos = clonePos(st);
+  pos.fen = fenOf(st, st.halfmove || 0, Math.floor((st.moveHistory || []).length / 2) + 1);
+  return pos;
+}
+
 function buildPublicState(room) {
   const st = room.state;
   return {
@@ -289,6 +368,9 @@ function buildPublicState(room) {
     legalMoves: st.phase === 'playing' ? getLegalMoves(st.board, st.turn, st) : [],
     timeControlMs: st.timeControlMs || null,
     clocks: st.clocks || null,
+    gameId: st.gameId,
+    // The last finished game stays reviewable (RECAP) until the next game actually starts.
+    review: st.lastGame ? { gameId: st.lastGame.gameId, plies: st.lastGame.moves.length } : null,
   };
 }
 
@@ -317,6 +399,9 @@ function resetBoard(st) {
   st.winner = null;
   st.winReason = null;
   st.moveHistory = [];
+  st.halfmove = 0;
+  st.gameId = (st.gameId || 0) + 1;
+  st.positions = [snapshotPosition(st)];
   // st.timeControlMs is a room-level setting (set via the `setTimeControl` action, independent of
   // resetBoard) — only the remaining-time counters reset here, to the full control, each new game.
   st.clocks = st.timeControlMs ? { white: st.timeControlMs, black: st.timeControlMs } : null;
@@ -330,6 +415,8 @@ function applyChessMove(st, seatColor, match, promotionChoice) {
   const { from, to } = match;
   const movingPiece = st.board[from.r][from.c];
   const capturedPiece = match.enPassant ? st.board[match.from.r][match.to.c] : st.board[to.r][to.c];
+  const san = sanOf(st, match, promotionChoice);
+  st.halfmove = movingPiece.type === 'pawn' || capturedPiece ? 0 : (st.halfmove || 0) + 1;
 
   applyMove(st.board, st, match, promotionChoice);
   st.turn = opponent(seatColor);
@@ -342,7 +429,9 @@ function applyChessMove(st, seatColor, match, promotionChoice) {
     captured: capturedPiece ? capturedPiece.type : null,
     promotion: promotionChoice,
     castle: match.castle || null,
+    san,
   });
+  st.positions.push(snapshotPosition(st));
 
   const nextLegal = getLegalMoves(st.board, st.turn, st);
   const kingPos = findKing(st.board, st.turn);
@@ -350,10 +439,100 @@ function applyChessMove(st, seatColor, match, promotionChoice) {
   st.inCheck = inCheck ? st.turn : null;
 
   if (nextLegal.length === 0) {
-    st.phase = 'game_over';
-    st.winner = inCheck ? seatColor : 'draw';
-    st.winReason = inCheck ? 'checkmate' : 'stalemate';
+    endGame(st, inCheck ? seatColor : 'draw', inCheck ? 'checkmate' : 'stalemate');
   }
+}
+
+// --- Game over + post-game review ---------------------------------------------------------------
+
+function endGame(st, winner, reason) {
+  st.phase = 'game_over';
+  st.winner = winner;
+  st.winReason = reason;
+  // Archive the finished game for RECAP: SAN moves + every position's FEN (positions[i] is the
+  // position before move i; positions[moves.length] the final one). Engine analysis fills
+  // `analysis[i]` lazily, the first time someone opens the review.
+  st.lastGame = {
+    gameId: st.gameId,
+    moves: st.moveHistory.map((m) => ({ from: m.from, to: m.to, san: m.san, color: m.color, piece: m.piece, captured: m.captured, promotion: m.promotion, castle: m.castle })),
+    positions: st.positions,
+    winner,
+    winReason: reason,
+    analysis: [],
+    running: false,
+    subscribers: new Set(),
+  };
+}
+
+// A new game is starting: the previous game's review goes away (clients leave review mode when
+// they see phase 'playing').
+function dropReview(st) {
+  st.lastGame = null;
+}
+
+const ANALYSIS_MS = 350; // per position, expert level — a 40-move game analyses in ~15-25s
+const MATE_SCORE = 30000; // chessEngine.js's MATE
+const reviewEvent = (data) => ({ v: 1, type: 'game.event', payload: { gameType: 'chess', data } });
+
+// Engine score (side-to-move POV, centipawns or mate) -> { cp } or { mate } from White's POV.
+function evalFromScore(score, turn) {
+  const sign = turn === 'white' ? 1 : -1;
+  if (Math.abs(score) > MATE_SCORE - 200) {
+    const moves = Math.ceil((MATE_SCORE - Math.abs(score)) / 2);
+    return { mate: Math.sign(score) * sign * Math.max(1, moves) };
+  }
+  return { cp: score * sign };
+}
+
+function analysisFor(game, i, result) {
+  const pos = game.positions[i];
+  const entry = { index: i, eval: null, best: null };
+  if (i === game.moves.length && (game.winReason === 'checkmate' || game.winReason === 'stalemate')) {
+    entry.eval = game.winReason === 'checkmate' ? { mate: 0, winner: game.winner } : { cp: 0 };
+    return entry;
+  }
+  if (!result) return entry;
+  entry.eval = evalFromScore(result.score, pos.turn);
+  const legal = getLegalMoves(pos.board, pos.turn, pos);
+  const match = legal.find((m) => m.from.r === result.from.r && m.from.c === result.from.c && m.to.r === result.to.r && m.to.c === result.to.c);
+  if (match) {
+    const promo = match.promotion ? result.promotion || 'queen' : null;
+    entry.best = { from: match.from, to: match.to, promotion: promo, san: sanOf(pos, match, promo) };
+  }
+  return entry;
+}
+
+function sendToSubscribers(room, game, msg) {
+  for (const id of game.subscribers) {
+    if (room.clients.has(id)) room.sendTo(id, msg);
+    else game.subscribers.delete(id);
+  }
+}
+
+// Analyses every position of the archived game in order, one engine request at a time on the
+// shared AI worker (so bot moves in other rooms interleave instead of queueing behind a whole
+// game), streaming each result to whoever has the review open. Stops if the archive is replaced.
+async function runAnalysis(room, game) {
+  if (game.running) return;
+  game.running = true;
+  for (let i = 0; i <= game.moves.length; i++) {
+    if (room.state.lastGame !== game) return;
+    if (game.analysis[i]) continue;
+    const pos = game.positions[i];
+    const terminal = i === game.moves.length && (game.winReason === 'checkmate' || game.winReason === 'stalemate');
+    let result = null;
+    if (!terminal) {
+      try {
+        result = await think('chess', { board: pos.board, turn: pos.turn, castlingRights: pos.castlingRights, enPassantTarget: pos.enPassantTarget, level: 'expert', timeMs: ANALYSIS_MS });
+      } catch (err) {
+        result = null;
+      }
+    }
+    if (room.state.lastGame !== game) return;
+    game.analysis[i] = analysisFor(game, i, result);
+    sendToSubscribers(room, game, reviewEvent({ kind: 'reviewAnalysis', gameId: game.gameId, entry: game.analysis[i] }));
+  }
+  game.done = true;
 }
 
 const { think } = require('./ai');
@@ -379,9 +558,7 @@ function maybeScheduleBotMove(room) {
     if (st2.clocks) {
       applyClockElapsed(st2);
       if (st2.clocks[color] <= 0) {
-        st2.phase = 'game_over';
-        st2.winner = opponent(color);
-        st2.winReason = 'timeout';
+        endGame(st2, opponent(color), 'timeout');
         room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
         return;
       }
@@ -400,9 +577,7 @@ function maybeScheduleBotMove(room) {
       if (st3.clocks) {
         applyClockElapsed(st3);
         if (st3.clocks[color] <= 0) {
-          st3.phase = 'game_over';
-          st3.winner = opponent(color);
-          st3.winReason = 'timeout';
+          endGame(st3, opponent(color), 'timeout');
           room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
           return;
         }
@@ -421,6 +596,8 @@ function maybeScheduleBotMove(room) {
 
 module.exports = {
   type: 'chess',
+  // Exposed for tests.
+  _internals: { sanOf, fenOf, getLegalMoves, evalFromScore, createInitialBoard },
 
   createInitialState() {
     const st = { phase: 'waiting', players: { white: null, black: null }, timeControlMs: null };
@@ -436,9 +613,7 @@ module.exports = {
     if (st.phase !== 'playing' || !st.clocks) return;
     applyClockElapsed(st);
     if (st.clocks[st.turn] <= 0) {
-      st.phase = 'game_over';
-      st.winner = opponent(st.turn);
-      st.winReason = 'timeout';
+      endGame(st, opponent(st.turn), 'timeout');
     }
     broadcastState(room, ctx);
   },
@@ -456,6 +631,7 @@ module.exports = {
 
   onLeave(room, client) {
     const st = room.state;
+    if (st.lastGame) st.lastGame.subscribers.delete(client.clientId);
     let changed = false;
     if (st.players.white === client.clientId) {
       st.players.white = null;
@@ -496,6 +672,7 @@ module.exports = {
       if (st.players.white && st.players.black) {
         resetBoard(st);
         st.phase = 'playing';
+        dropReview(st);
       }
       broadcastState(room, ctx);
       maybeScheduleBotMove(room);
@@ -554,8 +731,37 @@ module.exports = {
       if (st.phase !== 'game_over') return;
       resetBoard(st);
       st.phase = st.players.white && st.players.black ? 'playing' : 'waiting';
+      if (st.phase === 'playing') dropReview(st);
       broadcastState(room, ctx);
       maybeScheduleBotMove(room);
+      return;
+    }
+
+    // RECAP: anyone in the room (players or spectators) can open the last finished game's review.
+    // The archive goes out once, to the requester only; analysis entries stream in as they finish.
+    if (data.kind === 'reviewRequest') {
+      const game = st.lastGame;
+      if (!game || (data.gameId != null && data.gameId !== game.gameId)) {
+        ctx.sendTo(ctx.senderId, reviewEvent({ kind: 'reviewUnavailable' }));
+        return;
+      }
+      game.subscribers.add(ctx.senderId);
+      ctx.sendTo(ctx.senderId, reviewEvent({
+        kind: 'reviewData',
+        gameId: game.gameId,
+        moves: game.moves,
+        fens: game.positions.map((p) => p.fen),
+        winner: game.winner,
+        winReason: game.winReason,
+        analysis: game.analysis,
+        done: !!game.done,
+      }));
+      runAnalysis(room, game);
+      return;
+    }
+
+    if (data.kind === 'reviewClose') {
+      if (st.lastGame) st.lastGame.subscribers.delete(ctx.senderId);
       return;
     }
 
@@ -563,9 +769,7 @@ module.exports = {
       if (st.phase !== 'playing') return;
       const seatColor = st.players.white === ctx.senderId ? 'white' : st.players.black === ctx.senderId ? 'black' : null;
       if (!seatColor) return;
-      st.phase = 'game_over';
-      st.winner = opponent(seatColor);
-      st.winReason = 'resignation';
+      endGame(st, opponent(seatColor), 'resignation');
       broadcastState(room, ctx);
       return;
     }
@@ -578,9 +782,7 @@ module.exports = {
       if (st.clocks) {
         applyClockElapsed(st);
         if (st.clocks[seatColor] <= 0) {
-          st.phase = 'game_over';
-          st.winner = opponent(seatColor);
-          st.winReason = 'timeout';
+          endGame(st, opponent(seatColor), 'timeout');
           broadcastState(room, ctx);
           return;
         }

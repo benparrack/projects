@@ -7,6 +7,8 @@ import { sfx, boardSounds } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { slideFrom, captureGhost, changeTracker, LAST_MOVE_TINT, CHECK_GLOW } from '../boardFx.js';
+import { buildReviewView } from './reviewView.js';
+import { clampIndex } from './review.js';
 
 const CELL = 44;
 const GLYPHS = {
@@ -74,7 +76,12 @@ export function mount(container, api) {
   let premove = null; // { from, to } — queued move, auto-sent the instant it becomes my turn
   let awaitingPremoveResult = false; // true right after auto-sending a premove; suppresses the
   // next moveRejected's error flash so a failed premove clears silently instead of alarming
-  let showEvalBar = false; // post-game recap toggle
+  // Post-game review (RECAP) — purely this viewer's local state; the server only supplies the
+  // archived game (SAN + FENs) and streams engine analysis. null when not reviewing.
+  // { gameId, idx, prevIdx, loading, moves, fens, analysis[], winner, winReason, showBest }
+  let review = null;
+  let resultsHiddenFor = null; // gameId whose results card was closed by opening the review
+  let reviewNotice = null; // brief "review closed" note when a new game kicks the viewer out
 
   const root = document.createElement('div');
   const results = createResults(container);
@@ -104,6 +111,7 @@ export function mount(container, api) {
   }
 
   function moveText(m) {
+    if (m.san) return m.san;
     if (m.castle === 'king') return 'O-O';
     if (m.castle === 'queen') return 'O-O-O';
     const sep = m.captured ? 'x' : '→';
@@ -215,16 +223,125 @@ export function mount(container, api) {
     }
   }
 
+  function resultText(winner, winReason) {
+    const reason = { checkmate: 'checkmate', resignation: 'resignation', timeout: 'time', stalemate: 'stalemate' }[winReason] || winReason;
+    if (winner === 'draw') return `Draw by ${reason}`;
+    const name = view && nicknameFor(view.players[winner]);
+    return `${winner === 'white' ? 'White' : 'Black'}${name ? ` (${name})` : ''} wins by ${reason}`;
+  }
+
+  function openReview() {
+    if (!view || !view.review) return;
+    const plies = view.review.plies;
+    review = { gameId: view.review.gameId, idx: plies, prevIdx: plies, loading: true, moves: [], fens: [], analysis: [], winner: null, winReason: null, showBest: true };
+    resultsHiddenFor = view.review.gameId;
+    reviewNotice = null;
+    api.sendAction({ kind: 'reviewRequest', gameId: view.review.gameId });
+    sfx.play('click');
+    render();
+  }
+
+  function closeReview(silent) {
+    if (!review) return;
+    review = null;
+    if (!silent) api.sendAction({ kind: 'reviewClose' });
+    render();
+  }
+
+  function reviewGo(target) {
+    if (!review || review.loading) return;
+    const plies = review.moves.length;
+    const next = target === 'start' ? 0 : target === 'end' ? plies : clampIndex(review.idx + target, plies);
+    if (next === review.idx) return;
+    review.prevIdx = review.idx;
+    review.idx = next;
+    const m = next > 0 && next === review.prevIdx + 1 ? review.moves[next - 1] : null;
+    sfx.play(m && m.captured ? 'capture' : 'move');
+    render();
+  }
+
+  function reviewJump(i) {
+    if (!review || review.loading) return;
+    const next = clampIndex(i, review.moves.length);
+    if (next === review.idx) return;
+    review.prevIdx = review.idx;
+    review.idx = next;
+    sfx.play('move');
+    render();
+  }
+
+  function onKey(e) {
+    if (!review || review.loading) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (!root.isConnected) return;
+    const map = { ArrowLeft: -1, ArrowRight: 1, Home: 'start', End: 'end', ArrowUp: 'start', ArrowDown: 'end' };
+    if (e.key in map) {
+      e.preventDefault();
+      reviewGo(map[e.key]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeReview();
+    }
+  }
+  document.addEventListener('keydown', onKey);
+
+  function renderReview() {
+    const seat = mySeat();
+    const flipped = manualFlip !== null ? manualFlip : seat === 'black';
+    root.appendChild(buildReviewView({
+      review,
+      flipped,
+      cell: Math.max(32, Math.min(CELL, Math.floor((window.innerWidth - 84) / 8))),
+      glyphs: GLYPHS,
+      glyphColors: GLYPH_COLORS,
+      glyphOutline: GLYPH_OUTLINE,
+      resultText: review.loading ? '' : resultText(review.winner, review.winReason),
+      prevIdx: review.prevIdx,
+      nameFor: (color) => nicknameFor(view.players[color]) || (color === 'white' ? 'White' : 'Black'),
+      onNav: reviewGo,
+      onJump: reviewJump,
+      onExit: () => closeReview(),
+      onFlip: () => { manualFlip = !flipped; render(); },
+      onToggleBest: () => { review.showBest = !review.showBest; render(); },
+    }));
+    // A one-shot slide: re-renders for other reasons (analysis arriving) must not replay it.
+    review.prevIdx = review.idx;
+  }
+
   function render() {
-    results.update(view && view.phase === 'game_over' ? duelResults({
+    const showResults = view && view.phase === 'game_over' && !review && resultsHiddenFor !== view.gameId;
+    results.update(showResults ? duelResults({
       winner: view.winner, colors: ['white', 'black'], players: view.players, me: mySeat(), nameFor: nicknameFor,
       subtitle: { checkmate: 'Checkmate', resignation: 'By resignation', timeout: 'On time', stalemate: 'Stalemate' }[view.winReason] || null, onRematch: () => api.sendAction({ kind: 'resetGame' }),
     }) : null);
+    // Add a REVIEW GAME button to the results card (the shared panel only has rematch/view).
+    if (showResults && view.review) {
+      const btns = container.querySelector('.gt-res-btns');
+      if (btns && !btns.querySelector('.chess-review-btn')) {
+        const rb = document.createElement('button');
+        rb.className = 'ghost chess-review-btn';
+        rb.textContent = 'REVIEW GAME';
+        rb.addEventListener('click', openReview);
+        btns.insertBefore(rb, btns.lastChild);
+      }
+    }
     clockEls = {};
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
       return;
+    }
+    if (review) {
+      renderReview();
+      return;
+    }
+    if (reviewNotice) {
+      const note = document.createElement('div');
+      note.textContent = reviewNotice;
+      note.style.color = '#ffb000';
+      note.style.fontSize = '0.85em';
+      root.appendChild(note);
     }
     if (view.phase !== 'playing') {
       premove = null;
@@ -548,72 +665,26 @@ export function mount(container, api) {
       root.appendChild(picker);
     }
 
-    if (view.phase === 'game_over') {
+    if (view.phase !== 'playing' && view.review) {
       const recap = document.createElement('div');
       recap.style.display = 'flex';
-      recap.style.flexDirection = 'column';
-      recap.style.alignItems = 'center';
-      recap.style.gap = '6px';
+      recap.style.gap = '8px';
       recap.style.marginTop = '4px';
-
-      const evalToggle = document.createElement('button');
-      evalToggle.textContent = showEvalBar ? 'HIDE EVAL BAR' : 'SHOW EVAL BAR';
-      evalToggle.addEventListener('click', () => {
-        showEvalBar = !showEvalBar;
-        render();
-      });
-      recap.appendChild(evalToggle);
-
-      if (showEvalBar) {
-        const clamp = (v) => Math.max(-10, Math.min(10, v));
-        const barWrap = document.createElement('div');
-        barWrap.style.width = '260px';
-        barWrap.style.height = '18px';
-        barWrap.style.border = '1px solid #1f8f0c';
-        barWrap.style.position = 'relative';
-        barWrap.style.background = '#1a1a1a';
-        const finalDiff = clamp(material.diff);
-        const whitePct = 50 + finalDiff * 5; // each point of material = 5% of the bar width
-        const fill = document.createElement('div');
-        fill.style.position = 'absolute';
-        fill.style.left = '0';
-        fill.style.top = '0';
-        fill.style.bottom = '0';
-        fill.style.width = `${whitePct}%`;
-        fill.style.background = '#f2fff2';
-        barWrap.appendChild(fill);
-        const blackFill = document.createElement('div');
-        blackFill.style.position = 'absolute';
-        blackFill.style.right = '0';
-        blackFill.style.top = '0';
-        blackFill.style.bottom = '0';
-        blackFill.style.width = `${100 - whitePct}%`;
-        blackFill.style.background = '#ffb347';
-        barWrap.appendChild(blackFill);
-        recap.appendChild(barWrap);
-
-        const evalLabel = document.createElement('div');
-        evalLabel.textContent =
-          material.diff === 0 ? 'Material even' : `Final material: ${material.diff > 0 ? 'White' : 'Black'} +${Math.abs(material.diff)}`;
-        evalLabel.style.fontSize = '0.8em';
-        evalLabel.style.opacity = '0.8';
-        recap.appendChild(evalLabel);
-
-        // A simple move-by-move sparkline of the running material diff, in keeping with the
-        // text-mode terminal aesthetic rather than a plotted chart.
-        const spark = document.createElement('div');
-        spark.style.fontSize = '0.75em';
-        spark.style.opacity = '0.6';
-        spark.style.maxWidth = '260px';
-        spark.style.wordBreak = 'break-all';
-        spark.textContent = material.series.map((v) => clamp(v)).join(' ');
-        recap.appendChild(spark);
+      recap.style.flexWrap = 'wrap';
+      recap.style.justifyContent = 'center';
+      const reviewBtn = document.createElement('button');
+      reviewBtn.textContent = view.phase === 'game_over' ? '▶ REVIEW GAME' : '▶ REVIEW LAST GAME';
+      reviewBtn.title = 'Step through the moves with ← → and see the engine\'s best move';
+      reviewBtn.style.borderColor = '#ffb000';
+      reviewBtn.style.color = '#ffb000';
+      reviewBtn.addEventListener('click', openReview);
+      recap.appendChild(reviewBtn);
+      if (view.phase === 'game_over') {
+        const again = document.createElement('button');
+        again.textContent = 'NEW GAME';
+        again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
+        recap.appendChild(again);
       }
-
-      const again = document.createElement('button');
-      again.textContent = 'NEW GAME';
-      again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
-      recap.appendChild(again);
       root.appendChild(recap);
     }
   }
@@ -638,10 +709,36 @@ export function mount(container, api) {
         }
         const prevView = view;
         view = data;
+        // A new game started (rematch / new opponent) or the archive went away: leave review.
+        if (review && (data.phase === 'playing' || !data.review || data.review.gameId !== review.gameId)) {
+          review = null;
+          reviewNotice = data.phase === 'playing' ? 'A new game started — review closed.' : null;
+        } else if (data.phase !== 'waiting') {
+          reviewNotice = null;
+        }
         boardSounds(prevView, data, mySeat(), { inCheck: !!data.inCheck && !data.winner });
         flashError = false;
         awaitingPremoveResult = false; // the pending move (ours or otherwise) resolved, not rejected
         maybeSubmitPremove();
+        render();
+      } else if (data.kind === 'reviewData') {
+        if (!review || data.gameId !== review.gameId) return;
+        const plies = data.moves.length;
+        Object.assign(review, {
+          loading: false, moves: data.moves, fens: data.fens, winner: data.winner, winReason: data.winReason,
+          analysis: Array.isArray(data.analysis) ? data.analysis.slice() : [],
+        });
+        review.idx = clampIndex(review.idx, plies);
+        review.prevIdx = review.idx;
+        render();
+      } else if (data.kind === 'reviewAnalysis') {
+        if (!review || data.gameId !== review.gameId || !data.entry) return;
+        review.analysis[data.entry.index] = data.entry;
+        render();
+      } else if (data.kind === 'reviewUnavailable') {
+        if (!review) return;
+        review = null;
+        reviewNotice = 'That game is no longer available to review.';
         render();
       } else if (data.kind === 'moveRejected') {
         if (awaitingPremoveResult) {
@@ -659,6 +756,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      document.removeEventListener('keydown', onKey);
       results.destroy();
       container.innerHTML = '';
     },
