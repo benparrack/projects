@@ -1,0 +1,71 @@
+# Copy Trader configuration. Paper only: there is no real broker and no exchange keys anywhere.
+db: copytrader.sqlite
+start_capital: 1000            # USD per strategy
+sec_user_agent: "copy-trader paper research benparrack@gmail.com"   # SEC requires a contact UA
+
+backtest:
+  stocks_start: 2020-01-01      # reported window start for stock strategies
+  history_start: 2018-01-01     # data fetched from here so leader rankings have a trailing year
+  crypto_days: 200              # Hyperliquid only serves ~5000 hourly candles and the last 10k fills per user
+  congress_book_max_age_days: 730   # a disclosed position not added to for 2 years is assumed gone
+
+costs:
+  stocks:
+    commission_usd: 0.0         # most US brokers are $0
+    slippage_bps: 5             # spread + slippage, each side
+    min_trade_usd: 1.0          # fractional shares assumed
+    rebalance_threshold: 0.005  # skip trades smaller than 0.5% of equity (closing a position always trades)
+  crypto:
+    taker_fee: 0.00045          # Hyperliquid base-tier taker fee
+    slippage_bps: 5
+    min_trade_usd: 10.0         # Hyperliquid minimum order value
+    rebalance_threshold: 0.02
+    max_leverage: 1.0           # gross exposure cap; leaders' positions are scaled down to fit
+    bar: 1h                     # copies execute at the open of the first hourly bar after the delay
+
+delays:
+  congress_publish_lag_days: 1  # House/Senate filing date -> assume public by end of the next day
+  edgar_minutes: 5              # 13F acceptance time + this
+  crypto_seconds: 60            # leader fill/snapshot time + this
+
+tax:                            # US federal, for after-tax figures
+  short_term_rate: 0.24         # ordinary income rate (configurable)
+  long_term_rate: 0.15
+  losses_offset_ordinary_income: false   # $3k/yr loss deduction; off because it needs other income
+
+hyperliquid:
+  pool_size: 150                # backtest candidate pool (by all-time volume, filters below)
+  min_account_value: 100000
+  max_monthly_turnover: 30      # month volume / account value; above this looks like a market maker/HFT
+  min_month_volume: 1000000
+  max_fills_30d: 2000           # uncopyable (and fill history too short) above this
+
+funds:                          # 13F filers (CIK). Picked as "well known", which is itself a hindsight bias.
+  berkshire: 1067983
+  pershing_square: 1336528
+  appaloosa: 1656456
+  baupost: 1061768
+  duquesne: 1536411
+  third_point: 1040273
+  lone_pine: 1061165
+  tiger_global: 1167483
+
+strategies:
+  - {id: 13f_berkshire, kind: 13f_fund, fund: berkshire}
+  - {id: 13f_pershing_square, kind: 13f_fund, fund: pershing_square}
+  - {id: 13f_appaloosa, kind: 13f_fund, fund: appaloosa}
+  - {id: 13f_baupost, kind: 13f_fund, fund: baupost}
+  - {id: 13f_duquesne, kind: 13f_fund, fund: duquesne}
+  - {id: 13f_third_point, kind: 13f_fund, fund: third_point}
+  - {id: 13f_lone_pine, kind: 13f_fund, fund: lone_pine}
+  - {id: 13f_tiger_global, kind: 13f_fund, fund: tiger_global}
+  - {id: 13f_all_funds, kind: 13f_basket}
+  - {id: 13f_top3_trailing, kind: 13f_trailing, n: 3, lookback_days: 365}
+  - {id: congress_all, kind: congress_all}
+  - {id: congress_top10_trailing, kind: congress_trailing, n: 10, lookback_days: 365, min_trades: 4}
+  - {id: hl_top5_roi30, kind: hl, rank: roi30, n: 5}
+  - {id: hl_top5_roi90, kind: hl, rank: roi90, n: 5}
+
+notify:
+  summary_after_local: "22:15"  # daily ntfy summary once US markets have closed (Stockholm time)
+  timezone: Europe/Stockholm

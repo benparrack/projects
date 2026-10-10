@@ -1,0 +1,11 @@
+# systemd --user unit, started every 15 min by copytrader.timer. Install: see SETUP.md.
+[Unit]
+Description=Copy-trader paper trading tick
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/money/copy-trader
+ExecStart=%h/projects/money/copy-trader/.venv/bin/python %h/projects/money/copy-trader/copytrade.py tick
+TimeoutStartSec=40min
+Nice=10

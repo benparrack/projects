@@ -585,3 +585,16 @@ day, read in real depth rather than a one-line trivia fact.
 
 **What it needs when resumed:**
 - Done when: perft matches reference counts on standard positions; estimated Elo reported from a match series (e.g. via `cutechess-cli` vs. Stockfish `Skill Level` settings).
+
+---
+
+## 43. Copy-Trading Paper Bot ("does smart money beat the index?")
+
+**Status:** Built 2026-10-10/11 in `money/copy-trader/`; live paper trading via systemd timer (`copytrade.py status`). Spec in its `PROMPT.md`, results and caveats in its `PROGRESS.md`.
+**Pitch:** Copy 13F hedge funds, Congress members' disclosed trades, and Hyperliquid top perp traders with fake money. Backtest and live-paper through the same engine (no lookahead, real costs/funding/liquidation, US after-tax), and report honestly against SPY/BTC.
+
+**Why this one (as a model test):** Messy real data (SEC XML, House PTR PDFs, Senate eFD scraping, a rate-limited crypto API). It also tests the discipline of not fooling yourself: lookahead, survivorship, and hindsight in picking leaders.
+
+**What it needs when resumed:**
+- Revisit live results after ~1–3 months.
+- Possible upgrades: a rule-picked fund universe (e.g. the top 13F filers by AUM as of 2019) to remove hindsight; delisted price data; a longer crypto history source.
