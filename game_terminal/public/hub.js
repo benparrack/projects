@@ -20,6 +20,7 @@ const CATEGORIES = [
       { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
       { type: 'spades', label: 'SPADES' },
       { type: 'hearts', label: 'HEARTS' },
+      { type: 'blackjack', label: 'BLACKJACK' },
     ],
   },
   {
@@ -29,6 +30,11 @@ const CATEGORIES = [
       { type: 'chess', label: 'CHESS' },
       { type: 'connect4', label: 'CONNECT 4' },
       { type: 'backgammon', label: 'BACKGAMMON' },
+      { type: 'reversi', label: 'REVERSI (OTHELLO)' },
+      { type: 'gomoku', label: 'GOMOKU (FIVE IN A ROW)' },
+      { type: 'mancala', label: 'MANCALA' },
+      { type: 'dotsboxes', label: 'DOTS AND BOXES' },
+      { type: 'codemaster', label: 'CODEMASTER (MASTERMIND)' },
     ],
   },
   {
@@ -39,6 +45,28 @@ const CATEGORIES = [
       { type: 'shooter', label: 'ARENA DUEL (1V1 FPS)' },
       { type: 'slope', label: 'SLOPE (3D RUNNER)' },
       { type: 'mazedash', label: 'MAZE DASH (SPEEDRUN)' },
+    ],
+  },
+  {
+    name: 'WORD GAMES',
+    games: [
+      { type: 'scrabble', label: 'SCRABBLE' },
+      { type: 'wordscapes', label: 'WORDSCAPES' },
+      { type: 'wordsearch', label: 'WORD SEARCH' },
+      { type: 'hangman', label: 'HANGMAN' },
+    ],
+  },
+  {
+    name: 'GAMEPIGEON',
+    games: [
+      { type: 'chess', label: 'CHESS' },
+      { type: 'checkers', label: 'CHECKERS' },
+      { type: 'connect4', label: 'FOUR IN A ROW' },
+      { type: 'crazyeights', label: 'CRAZY 8' },
+      { type: 'reversi', label: 'REVERSI' },
+      { type: 'gomoku', label: 'GOMOKU' },
+      { type: 'dotsboxes', label: 'DOTS & BOXES' },
+      { type: 'mancala', label: 'MANCALA' },
     ],
   },
   {
@@ -60,7 +88,8 @@ const CATEGORIES = [
 
 // Flat list, derived from CATEGORIES — everything below that just needs "all games" (initial
 // selection, session restore) keeps working unchanged without knowing about categories.
-const GAMES = CATEGORIES.flatMap((cat) => cat.games);
+// A game may be listed in more than one category (e.g. GAMEPIGEON reuses chess), so dedupe by type.
+const GAMES = [...new Map(CATEGORIES.flatMap((cat) => cat.games).map((g) => [g.type, g])).values()];
 
 const SESSION_KEY = 'game_terminal.session';
 

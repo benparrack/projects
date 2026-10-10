@@ -21,6 +21,15 @@ const pictionary = require('./pictionary');
 const slope = require('./slope');
 const mazedash = require('./mazedash');
 const gameboy = require('./gameboy');
+const blackjack = require('./blackjack');
+const gomoku = require('./gomoku');
+const dotsboxes = require('./dotsboxes');
+const mancala = require('./mancala');
+const codemaster = require('./codemaster');
+const reversi = require('./reversi');
+const wordsearch = require('./wordsearch');
+const wordscapes = require('./wordscapes');
+const scrabble = require('./scrabble');
 
 const registry = {
   [drawing.type]: drawing,
@@ -43,6 +52,15 @@ const registry = {
   [slope.type]: slope,
   [mazedash.type]: mazedash,
   [gameboy.type]: gameboy,
+  [blackjack.type]: blackjack,
+  [gomoku.type]: gomoku,
+  [dotsboxes.type]: dotsboxes,
+  [mancala.type]: mancala,
+  [codemaster.type]: codemaster,
+  [reversi.type]: reversi,
+  [wordsearch.type]: wordsearch,
+  [wordscapes.type]: wordscapes,
+  [scrabble.type]: scrabble,
 };
 
 // CPU players for the card games — patches those plugins' onMessage in place (see cardBots.js).

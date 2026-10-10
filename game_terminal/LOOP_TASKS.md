@@ -14,9 +14,9 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 
 ## Shared infrastructure
 - [x] `server/games/words.js` + `data/dictionary.txt` + `data/common_words.txt`
-- [ ] Hub: new GAMEPIGEON category; allow one game type to appear in two categories
+- [x] Hub: new GAMEPIGEON category; allow one game type to appear in two categories
       (chess/checkers/connect4=Four in a Row/crazyeights=Crazy 8/pool/gomoku/dotsboxes/mancala)
-- [ ] Hub: new WORD GAMES category (wordsearch, crossword, scrabble, wordscapes, wordtrails, hangman...)
+- [x] Hub: new WORD GAMES category (wordsearch, crossword, scrabble, wordscapes, wordtrails, hangman...)
 
 ## Fixes
 - [x] Tron — keep score (per-player round wins across rounds, shown in HUD/roster)
@@ -25,16 +25,16 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 - [x] Chess — post-game recap: step through moves with ←/→, show engine best move per position
 
 ## New games (Ben's list)
-- [b] blackjack — Blackjack (multi-seat vs dealer, chips, split/double)
-- [ ] wordsearch — Word Search (race to find words, shared grid)
+- [x] blackjack — Blackjack (multi-seat vs dealer, chips, split/double)
+- [x] wordsearch — Word Search (race to find words, shared grid)
 - [ ] crossword — Crossword (generated mini crosswords with clues, co-op/race)
-- [ ] scrabble — Scrabble (2-4 players, full board/premiums/dictionary)
-- [ ] wordscapes — Wordscapes-style (letter wheel → fill crossword of words)
+- [x] scrabble — Scrabble (2-4 players, full board/premiums/dictionary)
+- [x] wordscapes — Wordscapes-style (letter wheel → fill crossword of words)
 - [ ] pool — 8-Ball (+ 9-Ball mode) pool, physics
-- [b] gomoku — Gomoku (15x15, five in a row)
-- [b] dotsboxes — Dots and Boxes
-- [b] mancala — Mancala (Kalah rules)
-- [b] codemaster — Codemaster (Mastermind: 4-color code, exact/color-only feedback)
+- [x] gomoku — Gomoku (15x15, five in a row)
+- [x] dotsboxes — Dots and Boxes
+- [x] mancala — Mancala (Kalah rules)
+- [x] codemaster — Codemaster (Mastermind: 4-color code, exact/color-only feedback)
 - [ ] wordtrails — Word Trails (next word starts with last letter of previous, timed)
 
 ## GamePigeon tab (new types beyond the above)
@@ -50,7 +50,7 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 - [ ] wordhunt — Word Hunt (Boggle-style grid swipe)
 - [ ] anagrams — Anagrams
 - [ ] wordbites — Word Bites
-- [b] reversi — Reversi
+- [x] reversi — Reversi
 - [ ] paintball — Paintball (shooting gallery duel)
 - [ ] filler — Filler (color flood)
 - [ ] twentyq — 20 Questions
@@ -69,3 +69,7 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
   server/games/ai/worker.js. Blackjack needs the room tick (`tickIntervalMs`).
 - Forks that may have left partial files: mancala, wordsearch, crossword, scrabble, wordscapes (near done);
   pool, wordtrails, seabattle (stopped right after starting, so redo them).
+- 2026-10-10: wired + browser-verified + committed blackjack, gomoku, dotsboxes, mancala, codemaster,
+  reversi, wordsearch, wordscapes, scrabble (scrabble got its own test). Fixed a wordscapes answer leak
+  (wheel shuffle could spell another target, e.g. board -> broad). Crossword has only
+  data/crossword_clues.json so far.

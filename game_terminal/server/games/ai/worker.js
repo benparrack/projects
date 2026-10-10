@@ -10,6 +10,8 @@ const engines = {
   connect4: require('./connect4Engine'),
   checkers: require('./checkersEngine'),
   backgammon: require('./backgammonEngine'),
+  gomoku: require('./gomokuEngine'),
+  mancala: require('./mancalaEngine'),
 };
 
 parentPort.on('message', ({ id, engine, input }) => {
