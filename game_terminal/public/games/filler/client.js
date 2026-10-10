@@ -341,6 +341,20 @@ export function mount(container, api) {
     wrap.appendChild(board);
     root.appendChild(wrap);
 
+    // Hover preview repaints the existing cells in place — a full render() here would replace the
+    // swatch under the pointer, so the mouseup lands on a detached node and the click never fires.
+    const paintPreview = () => {
+      const pv = myTurn && hoverColor != null ? new Set(absorbPreview(view, SEAT_NUM[seat], hoverColor)) : null;
+      [...board.children].forEach((cell, i) => {
+        const own = view.owner[i];
+        const base = own ? view.current[own === 1 ? 'p1' : 'p2'] : view.colors[i];
+        const inPv = !!pv && pv.has(i);
+        cell.classList.toggle('preview', inPv);
+        cell.classList.toggle('dim', !!pv && !inPv && !own);
+        cell.style.backgroundColor = PALETTE[inPv ? hoverColor : base].hex;
+      });
+    };
+
     // Colour buttons.
     const palette = document.createElement('div');
     palette.className = 'fl-palette';
@@ -362,12 +376,12 @@ export function mount(container, api) {
         btn.addEventListener('pointerenter', (e) => {
           if (e.pointerType === 'touch' || performance.now() < animUntil) return;
           hoverColor = k;
-          render();
+          paintPreview();
         });
         btn.addEventListener('pointerleave', (e) => {
           if (e.pointerType === 'touch' || hoverColor !== k) return;
           hoverColor = null;
-          render();
+          paintPreview();
         });
         btn.addEventListener('click', () => pick(k));
       }
