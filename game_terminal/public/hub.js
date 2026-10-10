@@ -54,6 +54,7 @@ const CATEGORIES = [
       { type: 'wordscapes', label: 'WORDSCAPES' },
       { type: 'wordsearch', label: 'WORD SEARCH' },
       { type: 'hangman', label: 'HANGMAN' },
+      { type: 'anagrams', label: 'ANAGRAMS' },
     ],
   },
   {
@@ -67,6 +68,7 @@ const CATEGORIES = [
       { type: 'gomoku', label: 'GOMOKU' },
       { type: 'dotsboxes', label: 'DOTS & BOXES' },
       { type: 'mancala', label: 'MANCALA' },
+      { type: 'anagrams', label: 'ANAGRAMS' },
     ],
   },
   {

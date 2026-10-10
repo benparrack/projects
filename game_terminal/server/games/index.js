@@ -30,6 +30,7 @@ const reversi = require('./reversi');
 const wordsearch = require('./wordsearch');
 const wordscapes = require('./wordscapes');
 const scrabble = require('./scrabble');
+const anagrams = require('./anagrams');
 
 const registry = {
   [drawing.type]: drawing,
@@ -61,6 +62,7 @@ const registry = {
   [wordsearch.type]: wordsearch,
   [wordscapes.type]: wordscapes,
   [scrabble.type]: scrabble,
+  [anagrams.type]: anagrams,
 };
 
 // CPU players for the card games — patches those plugins' onMessage in place (see cardBots.js).

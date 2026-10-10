@@ -48,7 +48,7 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 - [ ] seabattle — Sea Battle (Battleship)
 - [ ] tanks — Tanks (artillery)
 - [ ] wordhunt — Word Hunt (Boggle-style grid swipe)
-- [ ] anagrams — Anagrams
+- [x] anagrams — Anagrams
 - [ ] wordbites — Word Bites
 - [x] reversi — Reversi
 - [ ] paintball — Paintball (shooting gallery duel)
