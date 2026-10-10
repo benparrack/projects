@@ -55,6 +55,10 @@ const CATEGORIES = [
       { type: 'wordsearch', label: 'WORD SEARCH' },
       { type: 'hangman', label: 'HANGMAN' },
       { type: 'anagrams', label: 'ANAGRAMS' },
+      { type: 'wordbites', label: 'WORD BITES' },
+      { type: 'wordhunt', label: 'WORD HUNT' },
+      { type: 'wordtrails', label: 'WORD TRAILS' },
+      { type: 'crossword', label: 'CROSSWORD' },
     ],
   },
   {
@@ -69,6 +73,10 @@ const CATEGORIES = [
       { type: 'dotsboxes', label: 'DOTS & BOXES' },
       { type: 'mancala', label: 'MANCALA' },
       { type: 'anagrams', label: 'ANAGRAMS' },
+      { type: 'wordbites', label: 'WORD BITES' },
+      { type: 'wordhunt', label: 'WORD HUNT' },
+      { type: 'filler', label: 'FILLER' },
+      { type: 'seabattle', label: 'SEA BATTLE' },
     ],
   },
   {

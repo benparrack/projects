@@ -12,6 +12,7 @@ const engines = {
   backgammon: require('./backgammonEngine'),
   gomoku: require('./gomokuEngine'),
   mancala: require('./mancalaEngine'),
+  filler: require('./fillerEngine'),
 };
 
 parentPort.on('message', ({ id, engine, input }) => {

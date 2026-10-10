@@ -31,6 +31,12 @@ const wordsearch = require('./wordsearch');
 const wordscapes = require('./wordscapes');
 const scrabble = require('./scrabble');
 const anagrams = require('./anagrams');
+const wordbites = require('./wordbites');
+const wordhunt = require('./wordhunt');
+const filler = require('./filler');
+const seabattle = require('./seabattle');
+const wordtrails = require('./wordtrails');
+const crossword = require('./crossword');
 
 const registry = {
   [drawing.type]: drawing,
@@ -63,6 +69,12 @@ const registry = {
   [wordscapes.type]: wordscapes,
   [scrabble.type]: scrabble,
   [anagrams.type]: anagrams,
+  [wordbites.type]: wordbites,
+  [wordhunt.type]: wordhunt,
+  [filler.type]: filler,
+  [seabattle.type]: seabattle,
+  [wordtrails.type]: wordtrails,
+  [crossword.type]: crossword,
 };
 
 // CPU players for the card games — patches those plugins' onMessage in place (see cardBots.js).
