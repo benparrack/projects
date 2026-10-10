@@ -27,32 +27,32 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 ## New games (Ben's list)
 - [x] blackjack — Blackjack (multi-seat vs dealer, chips, split/double)
 - [x] wordsearch — Word Search (race to find words, shared grid)
-- [ ] crossword — Crossword (generated mini crosswords with clues, co-op/race)
+- [x] crossword — Crossword (generated mini crosswords with clues, co-op/race)
 - [x] scrabble — Scrabble (2-4 players, full board/premiums/dictionary)
 - [x] wordscapes — Wordscapes-style (letter wheel → fill crossword of words)
-- [ ] pool — 8-Ball (+ 9-Ball mode) pool, physics
+- [x] pool — 8-Ball (+ 9-Ball mode) pool, physics
 - [x] gomoku — Gomoku (15x15, five in a row)
 - [x] dotsboxes — Dots and Boxes
 - [x] mancala — Mancala (Kalah rules)
 - [x] codemaster — Codemaster (Mastermind: 4-color code, exact/color-only feedback)
-- [ ] wordtrails — Word Trails (next word starts with last letter of previous, timed)
+- [x] wordtrails — Word Trails (next word starts with last letter of previous, timed)
 
 ## GamePigeon tab (new types beyond the above)
-- [ ] cuppong — Cup Pong
-- [ ] darts — Darts (501/cricket-lite)
+- [x] cuppong — Cup Pong
+- [x] darts — Darts (501/cricket-lite)
 - [ ] basketball — Basketball (shootout)
 - [ ] archery — Archery
 - [ ] minigolf — Mini Golf
 - [ ] shuffleboard — Shuffleboard
 - [ ] knockout — Knockout (push opponents off the ice)
-- [ ] seabattle — Sea Battle (Battleship)
+- [x] seabattle — Sea Battle (Battleship)
 - [ ] tanks — Tanks (artillery)
-- [ ] wordhunt — Word Hunt (Boggle-style grid swipe)
+- [x] wordhunt — Word Hunt (Boggle-style grid swipe)
 - [x] anagrams — Anagrams
-- [ ] wordbites — Word Bites
+- [x] wordbites — Word Bites
 - [x] reversi — Reversi
 - [ ] paintball — Paintball (shooting gallery duel)
-- [ ] filler — Filler (color flood)
+- [x] filler — Filler (color flood)
 - [ ] twentyq — 20 Questions
 - [ ] bowling — Bowling
 - [ ] skeeball — Skee-Ball
