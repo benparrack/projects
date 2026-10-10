@@ -37,6 +37,9 @@ const filler = require('./filler');
 const seabattle = require('./seabattle');
 const wordtrails = require('./wordtrails');
 const crossword = require('./crossword');
+const pool = require('./pool');
+const darts = require('./darts');
+const cuppong = require('./cuppong');
 
 const registry = {
   [drawing.type]: drawing,
@@ -75,6 +78,9 @@ const registry = {
   [seabattle.type]: seabattle,
   [wordtrails.type]: wordtrails,
   [crossword.type]: crossword,
+  [pool.type]: pool,
+  [darts.type]: darts,
+  [cuppong.type]: cuppong,
 };
 
 // CPU players for the card games — patches those plugins' onMessage in place (see cardBots.js).

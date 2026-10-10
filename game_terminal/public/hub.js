@@ -77,6 +77,9 @@ const CATEGORIES = [
       { type: 'wordhunt', label: 'WORD HUNT' },
       { type: 'filler', label: 'FILLER' },
       { type: 'seabattle', label: 'SEA BATTLE' },
+      { type: 'pool', label: '8 BALL POOL' },
+      { type: 'darts', label: 'DARTS' },
+      { type: 'cuppong', label: 'CUP PONG' },
     ],
   },
   {
