@@ -123,6 +123,28 @@ button:disabled { opacity: 0.4; cursor: default; }
   margin-bottom: 12px;
 }
 
+.room-actions { display: flex; gap: 8px; align-items: center; }
+.info-wrap { position: relative; }
+.info-btn {
+  width: 30px; height: 30px; padding: 0; border-radius: 50%;
+  font-family: Georgia, serif; font-style: italic; font-weight: bold; font-size: 16px;
+}
+.info-wrap.open .info-btn { background: var(--fg-dim); color: #000; }
+/* hover previews, click pins it open (.open) — hover alone doesn't exist on touch */
+.info-pop {
+  display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 1000;
+  width: min(380px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto;
+  background: #07110a; border: 1px solid var(--fg); border-radius: 6px; padding: 12px 14px;
+  box-shadow: 0 0 18px rgba(57, 255, 20, .25); font-size: 13px; line-height: 1.45; text-align: left;
+}
+.info-wrap:hover .info-pop, .info-wrap.open .info-pop { display: block; }
+/* narrow screens: pin to the viewport so it can't hang off the left edge */
+@media (max-width: 520px) { .info-pop { position: fixed; left: 16px; right: 16px; top: 64px; width: auto; } }
+.info-pop h3 { margin: 0 0 4px; color: var(--accent); font-size: 15px; }
+.info-pop h4 { margin: 10px 0 2px; color: var(--fg); font-size: 12px; letter-spacing: .1em; }
+.info-pop p { margin: 0; color: #b8f5a8; }
+.info-pop ul { margin: 0; padding-left: 18px; color: #b8f5a8; }
+
 .room-body {
   display: flex;
   gap: 16px;

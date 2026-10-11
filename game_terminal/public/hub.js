@@ -1,5 +1,6 @@
 import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode } from './protocol.js';
 import { sfx } from './games/sfx.js';
+import { HOWTO } from './games/howto.js';
 
 const muteBtn = document.getElementById('btn-mute');
 const renderMute = (m) => { muteBtn.textContent = m ? 'SFX: OFF' : 'SFX: ON'; };
@@ -134,6 +135,9 @@ const els = {
   roomCodeLabel: document.getElementById('room-code-label'),
   btnLeaveRoom: document.getElementById('btn-leave-room'),
   gameMount: document.getElementById('game-mount'),
+  infoWrap: document.getElementById('info-wrap'),
+  btnInfo: document.getElementById('btn-info'),
+  infoPop: document.getElementById('info-pop'),
   rosterList: document.getElementById('roster-list'),
 };
 
@@ -352,6 +356,7 @@ function renderRoster(roster) {
 
 async function mountGame(gameType, snapshot, roster) {
   unmountGame();
+  showHowTo(gameType);
   els.gameMount.innerHTML = '';
   try {
     const mod = await import(`./games/${gameType}/client.js`);
@@ -368,6 +373,35 @@ async function mountGame(gameType, snapshot, roster) {
     els.gameMount.textContent = `Failed to load game "${gameType}".`;
   }
 }
+
+// The "i" button in the room header: hover previews the how-to card, click pins it open.
+function showHowTo(gameType) {
+  const info = HOWTO[gameType];
+  setInfoOpen(false);
+  els.infoWrap.hidden = !info;
+  if (!info) return;
+  const label = (GAMES.find((g) => g.type === gameType) || {}).label || gameType;
+  const h = (tag, text) => Object.assign(document.createElement(tag), { textContent: text });
+  const list = (items) => {
+    const ul = document.createElement('ul');
+    for (const t of items) ul.appendChild(h('li', t));
+    return ul;
+  };
+  els.infoPop.replaceChildren(h('h3', `HOW TO PLAY — ${label}`), h('p', info.about),
+    h('h4', 'RULES'), list(info.rules), h('h4', 'CONTROLS'), list(info.controls));
+}
+
+function setInfoOpen(open) {
+  els.infoWrap.classList.toggle('open', open);
+  els.btnInfo.setAttribute('aria-expanded', String(open));
+}
+
+els.btnInfo.addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  setInfoOpen(!els.infoWrap.classList.contains('open'));
+});
+document.addEventListener('click', (ev) => { if (!els.infoWrap.contains(ev.target)) setInfoOpen(false); });
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') setInfoOpen(false); });
 
 function unmountGame() {
   if (state.activeGameHandle && typeof state.activeGameHandle.unmount === 'function') {

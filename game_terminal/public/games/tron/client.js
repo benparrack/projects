@@ -87,7 +87,7 @@ export function mount(container, api) {
 
   const hint = document.createElement('p');
   hint.innerHTML =
-    '<strong>STEER</strong> — arrow keys, WASD, or the on-screen pad<br>' +
+    '<strong>STEER</strong> — arrow keys or WASD (touchscreens get an on-screen pad below the field)<br>' +
     '<strong>GOAL</strong> — survive: avoid walls, your own trail, and everyone else\'s<br>' +
     '<strong>ROUND</strong> — starts once 2+ players are here; last cycle alive wins';
   hint.style.margin = '2px 0 0';
@@ -131,13 +131,13 @@ export function mount(container, api) {
 
   // On-screen D-pad — cheap to add, and this hub's other real-time game (Slither) added touch
   // affordances after playtesting found canvas-only input awkward on phones.
+  // It sits below the field (never over it) and only shows on devices with a touchscreen.
   const dpad = document.createElement('div');
-  dpad.style.position = 'absolute';
-  dpad.style.bottom = '10px';
-  dpad.style.right = '10px';
-  dpad.style.display = 'grid';
-  dpad.style.gridTemplateColumns = 'repeat(3, 36px)';
-  dpad.style.gridTemplateRows = 'repeat(3, 36px)';
+  dpad.style.display = matchMedia('(any-pointer: coarse)').matches ? 'grid' : 'none';
+  dpad.style.justifyContent = 'center';
+  dpad.style.marginTop = '8px';
+  dpad.style.gridTemplateColumns = 'repeat(3, 52px)';
+  dpad.style.gridTemplateRows = 'repeat(3, 52px)';
   dpad.style.gap = '2px';
   dpad.style.opacity = '0.85';
 
@@ -161,7 +161,6 @@ export function mount(container, api) {
 
   canvasWrap.appendChild(canvas);
   canvasWrap.appendChild(overlay);
-  canvasWrap.appendChild(dpad);
 
   // Scoreboard: round wins/draws per player for as long as they stay in the room (server keeps
   // the tallies; see scoreRound in server/games/tron.js). Styles are scoped under .tron-score.
@@ -187,7 +186,9 @@ export function mount(container, api) {
   });
   side.append(sideTitle, playersEl, resetBtn);
 
-  body.appendChild(canvasWrap);
+  const fieldCol = document.createElement('div');
+  fieldCol.append(canvasWrap, dpad);
+  body.appendChild(fieldCol);
   body.appendChild(side);
   wrap.appendChild(hintTitle);
   wrap.appendChild(hint);

@@ -320,16 +320,27 @@ export function mount(container, api) {
         cell.addEventListener('pointerenter', (e) => {
           if (e.pointerType === 'touch' || !myTurn || !legalSet.has(key) || performance.now() < animUntil) return;
           hover = { r, c };
-          render();
+          paintHover();
         });
         cell.addEventListener('pointerleave', (e) => {
           if (e.pointerType === 'touch' || !hover || hover.r !== r || hover.c !== c) return;
           hover = null;
-          render();
+          paintHover();
         });
         cell.addEventListener('click', () => play(r, c));
         board.appendChild(cell);
       }
+    }
+    // Hover only patches classes on the existing cells: re-rendering would replace the cell under
+    // the pointer, which re-fires enter/leave (flicker) and swallows the click.
+    function paintHover() {
+      for (const el of board.querySelectorAll('.rv-ghost')) el.remove();
+      for (const el of board.querySelectorAll('.rv-preview')) el.classList.remove('rv-preview');
+      if (!hover) return;
+      const ghost = document.createElement('div');
+      ghost.className = `rv-ghost rv-face ${seat}`;
+      board.children[hover.r * N + hover.c].appendChild(ghost);
+      for (const f of flipsFor(view.board, hover.r, hover.c, seat)) board.children[f.r * N + f.c].classList.add('rv-preview');
     }
     wrap.appendChild(board);
 

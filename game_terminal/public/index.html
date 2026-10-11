@@ -45,7 +45,13 @@
   <section id="screen-room" class="screen" hidden>
     <div class="room-header">
       <span>ROOM: <strong id="room-code-label"></strong></span>
-      <button id="btn-leave-room">LEAVE</button>
+      <span class="room-actions">
+        <span id="info-wrap" class="info-wrap" hidden>
+          <button id="btn-info" class="info-btn" aria-label="How to play" aria-expanded="false" aria-controls="info-pop">i</button>
+          <div id="info-pop" class="info-pop" role="dialog" aria-label="How to play"></div>
+        </span>
+        <button id="btn-leave-room">LEAVE</button>
+      </span>
     </div>
     <div class="room-body">
       <div id="game-mount" class="game-mount"></div>
