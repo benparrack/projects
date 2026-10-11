@@ -1,0 +1,10 @@
+# systemd --user unit, started Monday mornings by grocery-deals.timer. Install: see README.
+[Unit]
+Description=grocery-deals: push this week's offers matching the shopping list
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/grocery_deals
+ExecStart=/usr/bin/python3 %h/projects/grocery_deals/grocery.py push
+TimeoutStartSec=5min
