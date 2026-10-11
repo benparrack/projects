@@ -106,8 +106,8 @@ call with the right placements. This is the long, careful part of the project.
       `static.js` serves `index.html` for every extensionless path, plus CSP/security headers
 
 ### Phase 2 — Profiles, stats, history
-- [ ] Profile page: avatar, username, join date, level, a per-game stats table, recent matches
-- [ ] Public profile URL `/u/<username>` (read-only HTTP JSON API: `GET /api/user/<name>`)
+- [x] Profile page: avatar, username, join date, level, a per-game stats table, recent matches
+- [x] Public profile URL `/u/<username>` (read-only HTTP JSON API: `GET /api/user/<name>`)
 - [ ] Match history list + replay viewer for turn-based games (chess, checkers, connect4,
       reversi, gomoku, mancala, dots&boxes, blockade, backgammon). The viewer re-feeds the
       moves list through the client's existing render code with prev/next/autoplay
@@ -232,3 +232,4 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
   Follow-ups noted: shooter `leaveSeat` mid-match skips the rated loss (disconnect forfeits);
   minesweeper has no time score (board sizes differ); darts 501/301 averages share one board.
 - 2026-10-11 — Phase 7 pages (Terms, Privacy, Rules, About/FAQ, Credits, og.png, robots.txt) from the game-terminal-65 session wired into the router + footer.
+- 2026-10-11 — Phase 2: profile page `/u/<name>` (KPIs, per-game stats table, recent matches with linked opponents), API adds score meta + `account` flag; dev auth refused on Render.

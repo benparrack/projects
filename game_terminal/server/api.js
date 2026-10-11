@@ -24,7 +24,7 @@ function createApi({ db, accounts, authMode, firebaseWebConfig, registry }) {
       ]);
       return [200, {
         user: publicUser(found.user),
-        stats: stats.map(({ id, uid, ...s }) => s),
+        stats: stats.map(({ id, uid, ...s }) => ({ ...s, score: ((registry[s.gameType] || {}).stats || {}).score || null })),
         matches: matches.map(stripUids),
       }];
     }],
@@ -59,7 +59,7 @@ function createApi({ db, accounts, authMode, firebaseWebConfig, registry }) {
 }
 
 // uids never leave the server; profiles are addressed by username.
-const stripUid = ({ uid, ...p }) => p;
+const stripUid = ({ uid, ...p }) => (uid ? { ...p, account: true } : p);
 const stripUids = (m) => ({ ...m, players: (m.players || []).map(stripUid) });
 
 module.exports = { createApi };

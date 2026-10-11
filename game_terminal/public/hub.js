@@ -5,6 +5,7 @@ import { initAuth } from './auth.js';
 import { avatarEl } from './avatars.js';
 import { h, toast } from './ui.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
+import { renderProfile } from './profile.js';
 import { openSignIn, openUsernameSetup, openTermsUpdate, renderAccountChip, openAvatarChange } from './account-ui.js';
 
 const muteBtn = document.getElementById('btn-mute');
@@ -576,6 +577,14 @@ function route() {
     return 'app';
   }
   if (path === '/' || path === '/index.html') return 'app';
+  const prof = /^\/u\/([A-Za-z0-9_]{1,24})\/?$/.exec(path);
+  if (prof) {
+    const gameLabel = (t) => (GAMES.find((g) => g.type === t) || {}).label || t;
+    renderProfile(els.screenPage, prof[1], { gameLabel, me: state.account })
+      .then((title) => { if (location.pathname === path) document.title = `${title} — Game Terminal`; });
+    showScreen('page');
+    return 'page';
+  }
   const info = INFO_PAGES[path.replace(/\/$/, '')];
   if (info) {
     els.screenPage.replaceChildren(info.render());
