@@ -16,7 +16,8 @@ own after 2 h without use.
   on or off. Offers that are identical at two stores of one chain are shown once.
 - **Trip**: press **+** on any deal to put it on this week's trip, grouped by store, with what you'll save.
   Add anything else (toilet paper, …) as free text. Tick things off as they go in the basket, then
-  "Clear ticked". Saved in `trip.json`; entries whose offer has ended are flagged.
+  "Clear ticked". Saved in `trip.json`; entries whose offer has ended are flagged. Ticked entries you clear count
+  as bought: their saving goes into `saved.json`, and the receipt shows the total saved this month.
   **📱 Send to phone** pushes the not-yet-ticked list to your phone via ntfy, so you have it in the store
   without the laptop. (The app itself is laptop-only: it binds to 127.0.0.1.)
 - **Edit**: shopping list, skip list and stores (search any ICA/Willys/Hemköp/Coop by name or area, or "lidl"). Saves

@@ -138,6 +138,7 @@ input[type=checkbox] { accent-color: var(--ink); }
 .trow.done .grow { text-decoration: line-through; opacity: .45; }
 .ended { color: var(--red); }
 .total { display: flex; justify-content: space-between; border-top: 1px dashed var(--faint); margin-top: 14px; padding-top: 8px; font-weight: 500; }
+.month { margin-top: 6px; font-size: 13px; color: var(--soft); text-align: right; }
 .receipt .addrow { display: flex; gap: 8px; margin-top: 16px; }
 .receipt .addrow input { flex: 1; border: 0; border-bottom: 1px solid var(--faint); background: transparent; padding: 5px 0; font: inherit; outline: none; }
 .receipt-actions { max-width: 520px; margin: 26px auto 0; display: flex; gap: 10px; flex-wrap: wrap; }
@@ -390,6 +391,7 @@ function renderTrip() {
       ${[...groups].map(([g, es]) => `<h4>${esc(g)}</h4>${es.map(row).join("")}`).join("")
         || `<p class="empty">Nothing yet. Press <b>+ Trip</b> on a deal, or write something below.</p>`}
       ${trip.length ? `<div class="total"><span>${left.length} to get</span><span>${save ? `SAVING ${kr(save)}` : ""}</span></div>` : ""}
+      ${data.saved_month ? `<div class="month">Saved so far in ${new Date().toLocaleDateString("en-GB", {month: "long"})}: ${kr(data.saved_month)}</div>` : ""}
       <div class="addrow"><input id="newTrip" placeholder="add something else, e.g. toalettpapper"><button class="btn" id="addTrip">Add</button></div>
     </div>
     <div class="receipt-actions"><button class="btn primary" id="sendTrip" title="Push the list to your phone via ntfy">Send to phone</button>
@@ -452,7 +454,7 @@ document.addEventListener("click", async e => {
   else if (t.id === "refresh") load(true);
   else if (t.dataset.pick) pick(t.dataset.pick);
   else if (t.dataset.unpick) { e.preventDefault(); data.trip = data.trip.filter(x => x.key !== t.dataset.unpick); saveTrip(); render(); }
-  else if (t.id === "clearDone" || t.id === "clearAll") { data.trip = t.id === "clearAll" ? [] : data.trip.filter(x => !x.done); saveTrip(); render(); }
+  else if (t.id === "clearDone" || t.id === "clearAll") { data.trip = t.id === "clearAll" ? [] : data.trip.filter(x => !x.done); await saveTrip(); load(); }
   else if (t.id === "sendTrip") {
     t.disabled = true; t.textContent = "Sending…";
     const r = await fetch("/api/trip/send", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});

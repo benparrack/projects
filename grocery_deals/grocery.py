@@ -22,6 +22,7 @@ import requests
 
 HERE = Path(__file__).resolve().parent
 SETTINGS = HERE / "settings.json"
+SAVED = HERE / "saved.json"  # log of ticked-off trip entries that had a saving: [{date, name, save}]
 TRIP = HERE / "trip.json"  # this week's picked deals + free-text items, shared by the app and `grocery.py trip`
 CACHE = HERE / "cache"
 ALERTED = HERE / "alerted.json"  # offers already pushed (Monday report or an alert) -> their end date
@@ -328,12 +329,29 @@ def save_trip(trip):
     if not isinstance(trip, list) or len(trip) > 500:
         raise ValueError("trip must be a list of at most 500 entries")
     s = lambda v: str(v or "")[:300]
+    log_bought(trip)
     return write_json(TRIP, [{
         "key": s(e["key"]), "chain": s(e.get("chain")), "store": s(e.get("store")), "name": s(e["name"]),
         "brand": s(e.get("brand")), "size": s(e.get("size")), "deal": s(e.get("deal")),
         "save": float(e["save"]) if e.get("save") is not None else None, "until": s(e.get("until"))[:10],
         "image": s(e.get("image")), "done": bool(e.get("done")),
     } for e in trip])
+
+
+def log_bought(new_trip):
+    """Ticked entries that leave the trip (Clear ticked / Clear all) were bought: log their saving."""
+    keys = {str(e.get("key")) for e in new_trip if isinstance(e, dict)}
+    bought = [e for e in load_trip() if e["done"] and e.get("save") and e["key"] not in keys]
+    if bought:
+        log = json.loads(SAVED.read_text()) if SAVED.exists() else []
+        today = date.today().isoformat()
+        write_json(SAVED, log + [{"date": today, "name": e["name"], "save": e["save"]} for e in bought])
+
+
+def saved_this_month():
+    month = date.today().isoformat()[:7]
+    log = json.loads(SAVED.read_text()) if SAVED.exists() else []
+    return round(sum(e["save"] for e in log if e["date"].startswith(month)), 2)
 
 
 def tag(cfg, refresh=False):

@@ -52,7 +52,7 @@ class Handler(SimpleHTTPRequestHandler):
             cfg = grocery.load_settings()
             stores = [{"store": s, "offers": os_, "error": err}
                       for s, os_, err in grocery.tag(cfg, refresh="refresh" in q)]
-            return self.send_json({"settings": cfg, "stores": stores, "member_names": grocery.MEMBER, "trip": grocery.load_trip(),
+            return self.send_json({"settings": cfg, "stores": stores, "member_names": grocery.MEMBER, "trip": grocery.load_trip(), "saved_month": grocery.saved_this_month(),
                                    "fetched": time.time()})
         if u.path == "/api/stores":
             word = (q.get("q") or [""])[0].strip()

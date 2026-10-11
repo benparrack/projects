@@ -189,3 +189,12 @@ z = lambda d: {"name": "Zoégas Kaffe", "brand": "", "deal": d}
 assert grocery.matches("zoégas <45", z("2 för 80 kr")) and not grocery.matches("zoégas <45", z("49,90 kr"))
 assert grocery.matches("zoégas", z("49,90 kr")) and not grocery.matches("zoégas <45", z(""))
 print("ok 8")
+
+# clearing ticked trip entries logs their saving
+grocery.SAVED = Path(tempfile.mkdtemp()) / "saved.json"
+e = lambda k, done, save: {"key": k, "name": k, "done": done, "save": save}
+grocery.save_trip([e("a", True, 10), e("b", False, 5), e("c", True, None)])
+grocery.save_trip([e("b", False, 5)])  # a and c cleared; only a had a saving
+grocery.save_trip([e("b", False, 5)])  # nothing new cleared
+assert grocery.saved_this_month() == 10, grocery.saved_this_month()
+print("ok 9")
