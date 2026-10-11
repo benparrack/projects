@@ -73,6 +73,10 @@ function board(type, g, me) {
 }
 
 export async function renderDaily(mount, { account, auth, play, signIn }) {
+  if (auth && auth.mode === 'off') {
+    mount.replaceChildren(h('article.daily-page', h('h1.page-title', 'DAILY CHALLENGE'), h('p.muted', 'The daily challenge needs accounts, which aren\'t switched on for this server yet. Every game is still free to play as a guest.')));
+    return 'Daily challenge';
+  }
   mount.replaceChildren(h('div.daily-page', h('p.muted.loading', 'Loading today\'s challenge…')));
   let data;
   try { data = await load(true); } catch {

@@ -289,6 +289,14 @@ function renderChip() {
     onChangeAvatar: () => openAvatarChange(state.account.avatar, (avatar) => send(ClientMessage.ACCOUNT_UPDATE, { avatar })),
   });
   els.btnLandingSignin.closest('.panel').hidden = !a || a.mode === 'off';
+  renderFooter();
+}
+
+// The daily challenge needs accounts, so accounts-off deploys don't advertise it.
+function renderFooter() {
+  const accounts = !!state.auth && state.auth.mode !== 'off';
+  document.querySelector('.mainnav a[data-nav="daily"]').hidden = !accounts;
+  document.getElementById('footer-links').replaceChildren(h('a', { href: '/leaderboards', 'data-link': true }, 'Leaderboards'), ' · ', ...(accounts ? [h('a', { href: '/daily', 'data-link': true }, 'Daily'), ' · '] : []), ...footerLinks(), ' · ', h('a', { href: '/settings', 'data-link': true }, 'Settings'));
 }
 
 function renderSettingsPage() {
@@ -823,7 +831,7 @@ els.btnLeaveRoom.addEventListener('click', leaveRoom);
 // reconnect after a Render free-tier cold start can silently rejoin.
 (async function init() {
   initPrefs();
-  document.getElementById('footer-links').replaceChildren(h('a', { href: '/leaderboards', 'data-link': true }, 'Leaderboards'), ' · ', h('a', { href: '/daily', 'data-link': true }, 'Daily'), ' · ', ...footerLinks(), ' · ', h('a', { href: '/settings', 'data-link': true }, 'Settings'));
+  renderFooter();
   const saved = loadSession();
   if (saved && saved.nickname) {
     state.nickname = saved.nickname;
