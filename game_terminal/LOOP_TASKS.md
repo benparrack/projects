@@ -60,7 +60,7 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 
 ## Final
 - [x] Full regression pass: every game type mounts without console errors, server loads all plugins, all tests pass
-- [ ] README / TODO_FIRST / memory updated
+- [x] README / TODO_FIRST / memory updated
 
 ## Notes (sudo-needing or deferred items)
 - No sudo needed so far.

@@ -26,6 +26,13 @@ CPU opponent — see `FUTURE.md`'s "Bot/CPU opponents" section. (This list preda
 games already shipped in `server/games/`/`public/games/` — see those directories or
 `TODO_FIRST.md` for the full current roster.)
 
+The **GAMEPIGEON** tab recreates the GamePigeon set: 8-Ball Pool, Cup Pong, Darts, Basketball,
+Sea Battle, Filler, Word Hunt, Word Bites, 20 Questions, Tanks, Mini Golf, Archery,
+Shuffleboard, Bowling, Knockout, Paintball and Skee-Ball. The **WORD GAMES** tab has Word Hunt,
+Word Bites, Word Trails, Crossword, 20 Questions and others. Every game there has PLAY VS BOT at
+Easy/Medium/Hard/Expert. The physics games share a deterministic `sim.js` between server and
+client (see `public/games/cuppong/`), and the server's result is the authoritative one.
+
 More games plug into the same hub without touching the core server/room code — see
 `server/games/index.js` and the `GAMES` array in `public/hub.js`.
 
