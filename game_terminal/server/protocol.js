@@ -12,6 +12,8 @@ const ClientMessage = {
   ACCOUNT_CLAIM: 'account.claim', // { username, avatar, acceptTerms } — first-time setup or rename
   ACCOUNT_UPDATE: 'account.update', // { avatar?, settings? }
   ACCOUNT_ACCEPT_TERMS: 'account.acceptTerms',
+  ACCOUNT_EXPORT: 'account.export', // {} -> account.exportData
+  ACCOUNT_DELETE: 'account.delete', // { confirm: <username> } -> account.deleted
 };
 
 const ServerMessage = {
@@ -23,6 +25,8 @@ const ServerMessage = {
   SYSTEM_ERROR: 'system.error',
   ACCOUNT_STATE: 'account.state', // { user, needsUsername, needsTerms } — the signed-in user's own view
   ACCOUNT_ERROR: 'account.error', // { message, for }
+  ACCOUNT_EXPORT_DATA: 'account.exportData', // { data } — everything stored about the account
+  ACCOUNT_DELETED: 'account.deleted', // {} — the account is gone; client signs out
   RESULT_RECORDED: 'result.recorded', // { summary, saved } — sent to each human in a finished match
 };
 

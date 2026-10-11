@@ -113,7 +113,48 @@ function createAccounts(db) {
     await db.merge(`users/${uid}`, { termsVersion: TERMS_VERSION, termsAcceptedAt: now });
   }
 
-  return { getUser, getUserByName, uidForUsername, claimUsername, updateProfile, acceptTerms };
+  // GDPR right of access: everything stored about this account, other players' uids removed.
+  async function exportData(uid) {
+    const user = await getUser(uid);
+    if (!user) return null;
+    const [stats, matches] = await Promise.all([
+      db.list('stats', { where: [['uid', '==', uid]] }),
+      db.list(`users/${uid}/matches`, { orderBy: ['endedAt', 'desc'] }),
+    ]);
+    const scrub = (m) => ({ ...m, players: (m.players || []).map(({ uid: u, ...p }) => ({ ...p, ...(u === uid ? { you: true } : {}) })) });
+    return { exportedAt: new Date().toISOString(), account: user, stats: stats.map(({ uid: u, ...st }) => st), matches: matches.map(scrub) };
+  }
+
+  // Right to erasure: drop the account's own docs and anonymise it in every match it shared.
+  async function deleteAccount(uid) {
+    const user = await getUser(uid);
+    if (!user) return false;
+    const anon = (players) => (players || []).map((p) => (p.uid === uid ? { name: DELETED_NAME, bot: false, place: p.place, ...(p.score != null ? { score: p.score } : {}) } : p));
+    const matches = await db.list(`users/${uid}/matches`);
+    for (const m of matches) {
+      const players = anon(m.players);
+      for (const other of new Set((m.players || []).map((p) => p.uid).filter((u) => u && u !== uid))) {
+        const path = `users/${other}/matches/${m.id}`;
+        if (await db.get(path)) await db.merge(path, { players });
+        await db.del(`pairs/${pairKeyOf(uid, other)}/matches/${m.id}`);
+      }
+      if (m.replay && (await db.get(`matches/${m.id}`))) await db.merge(`matches/${m.id}`, { players });
+      await db.del(`users/${uid}/matches/${m.id}`);
+    }
+    const [stats, pairs] = await Promise.all([
+      db.list('stats', { where: [['uid', '==', uid]] }),
+      db.list('pairs', { where: [['uids', 'array-contains', uid]] }),
+    ]);
+    await Promise.all([
+      ...stats.map((st) => db.del(`stats/${st.id}`)),
+      ...pairs.map((pr) => db.del(`pairs/${pr.id}`)),
+      db.del(`usernames/${user.usernameLower}`),
+    ]);
+    await db.del(`users/${uid}`);
+    return true;
+  }
+
+  return { getUser, getUserByName, uidForUsername, claimUsername, updateProfile, acceptTerms, exportData, deleteAccount };
 }
 
 // Only known keys with the right types survive — settings come straight from the client.
@@ -125,6 +166,9 @@ const SETTINGS_SCHEMA = {
   chatOpen: 'boolean',
   showGlobalChat: 'boolean',
 };
+const DELETED_NAME = 'deleted player';
+const pairKeyOf = (a, b) => [a, b].sort().join('_');
+
 function sanitizeSettings(input) {
   const out = {};
   for (const [k, type] of Object.entries(SETTINGS_SCHEMA)) {

@@ -208,6 +208,7 @@ export function renderAccountChip(slot, { mode, user, onSignIn, onSignOut, onCha
   const menu = h('div.chip-menu', { role: 'menu', hidden: true },
     h('a', { role: 'menuitem', href: `/u/${encodeURIComponent(user.username)}`, 'data-link': true }, 'My profile'),
     h('button', { role: 'menuitem', type: 'button', onclick: () => { close(); onChangeAvatar(); } }, 'Change avatar'),
+    h('a', { role: 'menuitem', href: '/settings', 'data-link': true }, 'Settings'),
     h('button', { role: 'menuitem', type: 'button', onclick: () => { close(); onSignOut(); } }, 'Sign out'));
   const chip = h('button.chip', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
     avatarEl(user.avatar, 24), h('span.chip-name', user.username), h('span.chip-level', `LV ${user.level || 1}`));

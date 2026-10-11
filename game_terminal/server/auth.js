@@ -19,6 +19,7 @@ function createAuth(env = process.env) {
           return null;
         }
       },
+      async removeUser(uid) { await admin.auth().deleteUser(uid); },
     };
   }
   if (env.NODE_ENV !== 'production' && !env.RENDER) { // RENDER is set on every Render service: never dev-auth there
@@ -28,9 +29,10 @@ function createAuth(env = process.env) {
         const m = /^dev:([a-z0-9_]{1,24})$/i.exec(String(token || ''));
         return m ? { uid: `dev_${m[1].toLowerCase()}`, email: `${m[1].toLowerCase()}@dev.local`, displayName: m[1] } : null;
       },
+      async removeUser() {},
     };
   }
-  return { mode: 'off', async verify() { return null; } };
+  return { mode: 'off', async verify() { return null; }, async removeUser() {} };
 }
 
 // The public Firebase web config the browser needs to sign in. It isn't secret (it ships to every

@@ -7,6 +7,9 @@ let ctx = null;
 let master = null;
 let muted = false;
 try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch { /* storage blocked */ }
+const VOL_KEY = 'gt.volume';
+let volume = 1; // 0..1 user setting, scales the fixed master level
+try { const v = parseFloat(localStorage.getItem(VOL_KEY)); if (v >= 0 && v <= 1) volume = v; } catch { /* storage blocked */ }
 const listeners = new Set();
 
 function audio() {
@@ -15,7 +18,7 @@ function audio() {
     if (!AC) return null;
     ctx = new AC();
     master = ctx.createGain();
-    master.gain.value = 0.35;
+    master.gain.value = 0.35 * volume;
     master.connect(ctx.destination);
   }
   if (ctx.state === 'suspended') ctx.resume();
@@ -129,6 +132,12 @@ export const sfx = {
     muted = !!m;
     try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch { /* ignore */ }
     listeners.forEach((fn) => fn(muted));
+  },
+  get volume() { return volume; },
+  setVolume(v) {
+    volume = Math.max(0, Math.min(1, Number(v) || 0));
+    if (master) master.gain.value = 0.35 * volume;
+    try { localStorage.setItem(VOL_KEY, String(volume)); } catch { /* ignore */ }
   },
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 };

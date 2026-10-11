@@ -111,8 +111,8 @@ call with the right placements. This is the long, careful part of the project.
 - [x] Match history list + replay viewer for turn-based games (chess, checkers, connect4,
       reversi, gomoku, mancala, dots&boxes, blockade, backgammon). The viewer re-feeds the
       moves list through the client's existing render code with prev/next/autoplay
-- [ ] Settings page synced to the account: volume/mute, reduced motion, default bot difficulty
-- [ ] Account deletion (removes the user doc, subcollections and username claim, and
+- [x] Settings page synced to the account: volume/mute, reduced motion, default bot difficulty
+- [x] Account deletion (removes the user doc, subcollections and username claim, and
       anonymizes the name in old match docs) + "download my data" (a JSON export, for the GDPR right of access)
 
 ### Phase 3 — Friends & social
@@ -234,3 +234,4 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 - 2026-10-11 — Phase 7 pages (Terms, Privacy, Rules, About/FAQ, Credits, og.png, robots.txt) from the game-terminal-65 session wired into the router + footer.
 - 2026-10-11 — Phase 2: profile page `/u/<name>` (KPIs, per-game stats table, recent matches with linked opponents), API adds score meta + `account` flag; dev auth refused on Render.
 - 2026-10-11 — Phase 2: replay viewer `/replay/<id>` (mounts the game's own client read-only; step/scrub/autoplay/speed, keyboard). Known gap: frames carry no seat names, so boards show "(empty)" seats.
+- 2026-10-11 — Phase 2 done: `/settings` (sound/volume/reduce-motion/bot level, synced to the account; guests keep them locally; a reduce-motion setting also flips the games' `matchMedia` checks), rename, download-my-data JSON, and account deletion (typed-name confirm; removes user/stats/pairs/name claim + the Firebase Auth user, and turns the name into "deleted player" in other people's history and replays).

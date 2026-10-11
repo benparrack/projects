@@ -70,7 +70,7 @@ function leaveCurrentRoom(session, clientId) {
 
 // The signed-in user's own view of their account (includes settings; never sent to others).
 function ownAccount(user) {
-  return { ...publicUser(user), settings: user.settings || {}, achievements: user.achievements || {} };
+  return { ...publicUser(user), settings: user.settings || {}, achievements: user.achievements || {}, renamedAt: user.renamedAt || null };
 }
 
 function sendAccountState(ws, session) {
@@ -183,6 +183,27 @@ wss.on('connection', (ws) => {
         await accounts.acceptTerms(session.uid);
         session.user = await accounts.getUser(session.uid);
         sendAccountState(ws, session);
+        break;
+      }
+
+      case ClientMessage.ACCOUNT_EXPORT: {
+        if (!session.uid || !session.user) return;
+        send(ws, ServerMessage.ACCOUNT_EXPORT_DATA, { data: await accounts.exportData(session.uid) });
+        break;
+      }
+
+      case ClientMessage.ACCOUNT_DELETE: {
+        if (!session.uid || !session.user) return;
+        if (!payload || String(payload.confirm || '').toLowerCase() !== session.user.usernameLower) {
+          send(ws, ServerMessage.ACCOUNT_ERROR, { for: 'delete', message: 'Type your username exactly to confirm.' });
+          return;
+        }
+        const uid = session.uid;
+        await accounts.deleteAccount(uid);
+        await auth.removeUser(uid).catch((err) => console.error('auth: removeUser failed', uid, err));
+        session.uid = null;
+        session.user = null;
+        send(ws, ServerMessage.ACCOUNT_DELETED, {});
         break;
       }
 

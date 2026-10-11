@@ -7,6 +7,7 @@ import { h, toast } from './ui.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
 import { renderReplay } from './replay.js';
+import { renderSettings, applyPrefs, currentPrefs, initPrefs, downloadJson } from './settings.js';
 import { openSignIn, openUsernameSetup, openTermsUpdate, renderAccountChip, openAvatarChange } from './account-ui.js';
 
 const muteBtn = document.getElementById('btn-mute');
@@ -280,9 +281,39 @@ function renderChip() {
   els.btnLandingSignin.closest('.panel').hidden = !a || a.mode === 'off';
 }
 
+function renderSettingsPage() {
+  const a = state.auth;
+  renderSettings(els.screenPage, {
+    account: state.account,
+    authUser: a && a.user,
+    mode: a ? a.mode : 'off',
+    saveSettings: (settings) => send(ClientMessage.ACCOUNT_UPDATE, { settings }),
+    rename: (username) => { state.renaming = true; send(ClientMessage.ACCOUNT_CLAIM, { username }); },
+    changeAvatar: () => openAvatarChange(state.account.avatar, (avatar) => send(ClientMessage.ACCOUNT_UPDATE, { avatar })),
+    exportData: () => send(ClientMessage.ACCOUNT_EXPORT, {}),
+    deleteAccount: (confirm, close) => { state.closeDelete = close; send(ClientMessage.ACCOUNT_DELETE, { confirm }); },
+    signIn: () => openSignIn(a),
+    signOut: () => a.signOut(),
+  });
+  state.settingsKey = settingsKey();
+}
+
+// Only re-render /settings when something it shows changed (not on every saved preference,
+// which would steal focus from the control being used).
+const settingsKey = () => JSON.stringify(state.account && [state.account.username, state.account.avatar, state.account.renamedAt]);
+
 function handleAccountState(p) {
+  const prev = state.account;
   state.account = p.user;
   renderChip();
+  if (p.user && (!prev || prev.username !== p.user.username) && !state.renaming) {
+    // Signed in: the account's saved preferences win; a fresh account adopts this device's.
+    if (Object.keys(p.user.settings || {}).length) applyPrefs(p.user.settings);
+    else send(ClientMessage.ACCOUNT_UPDATE, { settings: currentPrefs() });
+  }
+  if (state.renaming && p.user && prev && prev.username !== p.user.username) toast(`You're now ${p.user.username}.`, { kind: 'ok' });
+  state.renaming = false;
+  if (location.pathname === '/settings' && state.settingsKey !== settingsKey()) renderSettingsPage();
   if (p.user && state.setup) {
     state.setup.close();
     state.setup = null;
@@ -369,7 +400,24 @@ function handleServerMessage(type, payload) {
       break;
     }
 
+    case ServerMessage.ACCOUNT_EXPORT_DATA: {
+      if (payload.data) downloadJson(payload.data, `game-terminal-${payload.data.account.username}.json`);
+      break;
+    }
+
+    case ServerMessage.ACCOUNT_DELETED: {
+      if (state.closeDelete) state.closeDelete();
+      state.closeDelete = null;
+      state.account = null;
+      state.auth.signOut();
+      toast('Your account has been deleted.', { kind: 'ok', ms: 8000 });
+      navigate('/');
+      break;
+    }
+
     case ServerMessage.ACCOUNT_ERROR: {
+      if (payload.for === 'delete' && state.closeDelete) { state.closeDelete(); state.closeDelete = null; }
+      if (payload.for === 'claim') state.renaming = false;
       if (payload.for === 'claim' && state.setup) state.setup.showError(payload.message);
       else toast(payload.message, { kind: 'error', ms: payload.banned ? 0 : 6000 });
       if (payload.for === 'auth' && !state.nickname) showScreen('nickname');
@@ -597,6 +645,12 @@ function route() {
     showScreen('page');
     return 'page';
   }
+  if (path.replace(/\/$/, '') === '/settings') {
+    renderSettingsPage();
+    document.title = 'Settings — Game Terminal';
+    showScreen('page');
+    return 'page';
+  }
   const info = INFO_PAGES[path.replace(/\/$/, '')];
   if (info) {
     els.screenPage.replaceChildren(info.render());
@@ -647,7 +701,8 @@ els.btnLeaveRoom.addEventListener('click', leaveRoom);
 // Bootstrap: restore a prior session (nickname/room) from this tab if present, so a
 // reconnect after a Render free-tier cold start can silently rejoin.
 (async function init() {
-  document.getElementById('footer-links').replaceChildren(...footerLinks());
+  initPrefs();
+  document.getElementById('footer-links').replaceChildren(...footerLinks(), ' · ', h('a', { href: '/settings', 'data-link': true }, 'Settings'));
   const saved = loadSession();
   if (saved && saved.nickname) {
     state.nickname = saved.nickname;

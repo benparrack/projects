@@ -104,7 +104,7 @@ test('results: pvp updates stats, history and head-to-head; guests are not store
   const g = room('chess', [['A', 'Alice', 'u1'], ['G', 'Guest', null]]);
   await results.record(g, { placements: [['G'], ['A']] });
   assert.strictEqual((await db.get('stats/chess_u1')).losses, 2);
-  assert.ok(!Object.keys(db._docs).some((k) => k.includes('undefined') || k.includes('null')), 'no guest docs');
+  assert.ok(![...db._docs.keys()].some((k) => k.includes('undefined') || k.includes('null')), 'no guest docs');
 });
 
 test('results: bot wins by level, solo best score, bot-only and stats.none are skipped', async () => {
@@ -127,6 +127,35 @@ test('results: bot wins by level, solo best score, bot-only and stats.none are s
 
   assert.strictEqual(await results.record(room('connect4', []), { placements: [['BOT'], ['BOT']] }), null);
   assert.strictEqual(await results.record(room('drawing', [['A', 'Alice', 'u1']]), { placements: [['A']] }), null);
+});
+
+test('export + delete: data export scrubs other uids; deletion anonymises shared matches', async () => {
+  const db = createMemoryDb();
+  const acc = createAccounts(db);
+  await acc.claimUsername('u1', { username: 'Alice', acceptTerms: true });
+  await acc.claimUsername('u2', { username: 'Bob', acceptTerms: true });
+  const registry = { ...require('../server/games'), chess: { stats: { rated: true } } };
+  const results = createResults({ db, registry });
+  const r2 = room('chess', [['A', 'Alice', 'u1'], ['B', 'Bob', 'u2']]);
+  await results.record(r2, { placements: [['A'], ['B']] });
+  const c4 = await results.record(room('connect4', [['A', 'Alice', 'u1'], ['B', 'Bob', 'u2']]), { placements: [['B'], ['A']], replay: [0, 3, 3, 4, 4, 5, 5, 6] });
+
+  const ex = await acc.exportData('u1');
+  assert.strictEqual(ex.account.username, 'Alice');
+  assert.strictEqual(ex.matches.length, 2);
+  assert.ok(!JSON.stringify(ex).includes('u2'), 'export hides other uids');
+  assert.ok(ex.matches[0].players.some((p) => p.you));
+
+  assert.strictEqual(await acc.deleteAccount('u1'), true);
+  assert.strictEqual(await acc.getUser('u1'), null);
+  assert.strictEqual(await acc.uidForUsername('alice'), null, 'name released');
+  assert.ok(![...db._docs].some(([k, v]) => k.includes('u1') || JSON.stringify(v).includes('"u1"') || JSON.stringify(v).includes('Alice')), 'no trace of u1 left');
+  const bobs = await db.list('users/u2/matches');
+  assert.strictEqual(bobs.length, 2, 'Bob keeps his history');
+  assert.ok(bobs.every((m) => m.players.some((p) => p.name === 'deleted player')));
+  assert.ok((await db.get(`matches/${c4.summary.id}`)).players.some((p) => p.name === 'deleted player'), 'replay anonymised');
+  assert.strictEqual((await db.get('stats/chess_u2')).played, 1, 'Bob keeps his stats');
+  assert.strictEqual(await acc.deleteAccount('u1'), false);
 });
 
 test('avatars: client list matches server AVATAR_IDS', () => {
