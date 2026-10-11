@@ -197,8 +197,8 @@ Ben should read them and fill in his contact address and governing law.
 1. Create a Firebase project (console.firebase.google.com) and enable Authentication
    with the **Google** and **Email/Password** providers.
 2. Create a **Firestore** database (production mode, region `europe-west`).
-3. Project settings → add a **Web app** and paste its `firebaseConfig` into the chat. It's public
-   by design, so it goes in `public/firebase-config.js`.
+3. Project settings → add a **Web app**; put its `firebaseConfig` (as JSON, quoted keys) in Render
+   as the env var `FIREBASE_WEB_CONFIG`. It's public by design (served from `/api/config`).
 4. Project settings → Service accounts → **Generate new private key**. Put the JSON
    in Render as the env var `FIREBASE_SERVICE_ACCOUNT`. **Never commit it.**
 5. Firebase Auth → Authorized domains: add `gameterminal.onrender.com`.
