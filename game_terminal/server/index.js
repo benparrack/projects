@@ -11,6 +11,8 @@ const { createAuth, webConfig } = require('./auth');
 const { createAccounts, publicUser, TERMS_VERSION } = require('./accounts');
 const { createResults } = require('./results');
 const { createApi } = require('./api');
+const { createSocial } = require('./social');
+const { Parties } = require('./party');
 
 const PORT = process.env.PORT || 3000;
 const MAX_PAYLOAD = 64 * 1024;
@@ -19,6 +21,8 @@ const db = createDb();
 const auth = createAuth();
 const accounts = createAccounts(db);
 const results = createResults({ db, registry: gameRegistry });
+const social = createSocial(db, accounts);
+const parties = new Parties();
 const handleApi = createApi({ db, accounts, authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
 console.log(`accounts: auth=${auth.mode} db=${db.backend}`);
 
@@ -33,6 +37,8 @@ const roomManager = new RoomManager(gameRegistry, {
         if (p.bot) continue;
         room.sendTo(p.clientId, makeEnvelope(ServerMessage.RESULT_RECORDED, { gameType: rec.summary.gameType, kind: rec.summary.kind, saved: !!p.uid, place: p.place, draw, players }));
       }
+      const uids = rec.people.map((p) => p.uid).filter(Boolean);
+      if (uids.length > 1) social.noteRecent(uids, rec.summary.gameType).then(() => pushMany(uids)).catch((err) => console.error('social: recent failed', err));
     }).catch((err) => console.error('results: record failed', err));
   },
 });
@@ -66,6 +72,79 @@ function leaveCurrentRoom(session, clientId) {
   roomManager.leaveRoom(room, clientId);
   session.roomCode = null;
   room.broadcast(makeEnvelope(ServerMessage.ROOM_PRESENCE, { roster: room.roster(), left: clientId }));
+  if (session.uid) presenceChanged(session.uid);
+}
+
+// ---- Presence, friends and parties (accounts only) ----
+const online = new Map(); // uid -> Set<ws>
+const PARTY_GRACE_MS = 30 * 1000; // a dropped connection keeps its party seat this long
+
+const socketsOf = (uid) => [...(online.get(uid) || [])];
+const report = (err) => console.error('social:', err);
+
+function presence(uid) {
+  const list = socketsOf(uid);
+  if (!list.length) return { online: false };
+  for (const w of list) {
+    const room = currentRoom(sessions.get(w) || {});
+    if (room) return { online: true, playing: { gameType: room.gameType, code: room.code, isPublic: room.isPublic } };
+  }
+  return { online: true };
+}
+
+async function partyView(uid) {
+  const party = parties.get(uid);
+  if (!party) return null;
+  const members = await Promise.all(party.members.map(async (u) => {
+    const p = publicUser(await accounts.getUser(u));
+    return p && { username: p.username, avatar: p.avatar, leader: u === party.leader, online: online.has(u) };
+  }));
+  return { id: party.id, leader: party.leader === uid, members: members.filter(Boolean) };
+}
+
+async function pushSocial(uid) {
+  const list = socketsOf(uid);
+  if (!list.length) return;
+  const [view, party] = await Promise.all([social.view(uid, presence), partyView(uid)]);
+  for (const w of list) send(w, ServerMessage.SOCIAL_STATE, { ...view, party });
+}
+function pushMany(uids) { for (const u of new Set(uids)) pushSocial(u).catch(report); }
+function presenceChanged(uid) {
+  const party = parties.get(uid);
+  social.friendUids(uid).then((fr) => pushMany([uid, ...fr, ...(party ? party.members : [])])).catch(report);
+}
+function notice(uid, payload) { for (const w of socketsOf(uid)) send(w, ServerMessage.SOCIAL_NOTICE, payload); }
+const me = (session) => ({ username: session.user.username, avatar: session.user.avatar });
+
+function goOnline(ws, uid) {
+  if (!online.has(uid)) online.set(uid, new Set());
+  online.get(uid).add(ws);
+  presenceChanged(uid);
+}
+function goOffline(ws, uid) {
+  const set = online.get(uid);
+  if (!set) return;
+  set.delete(ws);
+  if (set.size) return;
+  online.delete(uid);
+  presenceChanged(uid);
+  setTimeout(() => {
+    if (online.has(uid) || !parties.get(uid)) return;
+    const r = parties.leave(uid);
+    if (r) pushMany(r.before);
+  }, PARTY_GRACE_MS).unref();
+}
+
+// The party follows its leader: move every online member into the room the leader just joined.
+function bringParty(session, room) {
+  for (const uid of parties.followers(session.uid)) {
+    const ws2 = socketsOf(uid).find((w) => (sessions.get(w) || {}).roomCode !== room.code);
+    if (!ws2) continue;
+    const s2 = sessions.get(ws2);
+    leaveCurrentRoom(s2, s2.clientId);
+    joinAndAck(ws2, s2, room);
+    send(ws2, ServerMessage.SOCIAL_NOTICE, { kind: 'follow', from: me(session), gameType: room.gameType });
+  }
 }
 
 // The signed-in user's own view of their account (includes settings; never sent to others).
@@ -88,6 +167,7 @@ function greetAccount(ws, session) {
   session.nickname = session.user.username;
   send(ws, ServerMessage.WELCOME, { clientId: session.clientId, nickname: session.nickname });
   sendAccountState(ws, session);
+  goOnline(ws, session.uid);
 }
 
 function joinAndAck(ws, session, room) {
@@ -105,6 +185,10 @@ function joinAndAck(ws, session, room) {
     makeEnvelope(ServerMessage.ROOM_PRESENCE, { roster: room.roster(), joined: session.clientId }),
     session.clientId
   );
+  if (session.uid && session.user) {
+    presenceChanged(session.uid);
+    bringParty(session, room);
+  }
 }
 
 wss.on('connection', (ws) => {
@@ -130,6 +214,7 @@ wss.on('connection', (ws) => {
 
     switch (type) {
       case ClientMessage.HELLO: {
+        if (session.uid) goOffline(ws, session.uid);
         const token = payload && payload.token;
         if (token) {
           const who = await auth.verify(token);
@@ -164,8 +249,9 @@ wss.on('connection', (ws) => {
         if (res.error) { send(ws, ServerMessage.ACCOUNT_ERROR, { for: 'claim', message: res.error }); return; }
         const firstTime = !session.nickname;
         session.user = res.user;
+        social.forgetProfile(session.uid);
         if (firstTime) greetAccount(ws, session);
-        else { session.nickname = res.user.username; sendAccountState(ws, session); }
+        else { session.nickname = res.user.username; sendAccountState(ws, session); presenceChanged(session.uid); }
         break;
       }
 
@@ -174,6 +260,7 @@ wss.on('connection', (ws) => {
         const res = await accounts.updateProfile(session.uid, payload || {});
         if (res.error) { send(ws, ServerMessage.ACCOUNT_ERROR, { for: 'update', message: res.error }); return; }
         session.user = res.user;
+        social.forgetProfile(session.uid);
         sendAccountState(ws, session);
         break;
       }
@@ -199,11 +286,86 @@ wss.on('connection', (ws) => {
           return;
         }
         const uid = session.uid;
+        const r = parties.leave(uid);
+        if (r) pushMany(r.before);
+        for (const w of socketsOf(uid)) if (w !== ws) w.close(4001, 'account deleted');
+        goOffline(ws, uid);
+        pushMany(await social.forget(uid));
         await accounts.deleteAccount(uid);
         await auth.removeUser(uid).catch((err) => console.error('auth: removeUser failed', uid, err));
         session.uid = null;
         session.user = null;
         send(ws, ServerMessage.ACCOUNT_DELETED, {});
+        break;
+      }
+
+      case ClientMessage.FRIEND_REQUEST:
+      case ClientMessage.FRIEND_ACCEPT:
+      case ClientMessage.FRIEND_REMOVE:
+      case ClientMessage.USER_BLOCK: {
+        if (!session.uid || !session.user) return;
+        const name = payload && payload.username;
+        const res = type === ClientMessage.FRIEND_REQUEST ? await social.request(session.uid, name)
+          : type === ClientMessage.FRIEND_ACCEPT ? await social.accept(session.uid, name)
+            : type === ClientMessage.FRIEND_REMOVE ? await social.remove(session.uid, name)
+              : await social.block(session.uid, name, !(payload && payload.on === false));
+        if (res.error) { notice(session.uid, { kind: 'error', message: res.error }); return; }
+        if (res.ok) send(ws, ServerMessage.SOCIAL_NOTICE, { kind: 'ok', message: res.ok });
+        if (res.notify) notice(res.notify, { kind: res.ok === 'Friend added.' ? 'accepted' : 'request', from: me(session) });
+        pushMany(res.changed);
+        break;
+      }
+
+      case ClientMessage.ROOM_INVITE:
+      case ClientMessage.PARTY_INVITE: {
+        if (!session.uid || !session.user) return;
+        const isRoom = type === ClientMessage.ROOM_INVITE;
+        const room = currentRoom(session);
+        if (isRoom && !room) return;
+        const to = await accounts.uidForUsername(String((payload && payload.username) || ''));
+        const fail = (message) => send(ws, ServerMessage.SOCIAL_NOTICE, { kind: 'error', message });
+        if (!to || !(await social.areFriends(session.uid, to))) return fail('You can only invite friends.');
+        if (await social.isBlocked(session.uid, to)) return fail('You can\'t invite this player.');
+        if (!online.has(to)) return fail('They\'re offline right now.');
+        session.invited = session.invited || new Map();
+        if (Date.now() - (session.invited.get(to + type) || 0) < 5000) return fail('Give them a moment before inviting again.');
+        session.invited.set(to + type, Date.now());
+        if (isRoom) {
+          notice(to, { kind: 'invite', from: me(session), gameType: room.gameType, code: room.code });
+        } else {
+          const r = parties.invite(session.uid, to);
+          if (r.error) return fail(r.error);
+          notice(to, { kind: 'party', from: me(session), id: r.party.id });
+          pushSocial(session.uid).catch(report);
+        }
+        send(ws, ServerMessage.SOCIAL_NOTICE, { kind: 'ok', message: `Invite sent to ${payload.username}.` });
+        break;
+      }
+
+      case ClientMessage.PARTY_ACCEPT: {
+        if (!session.uid || !session.user) return;
+        const r = parties.accept(session.uid, String((payload && payload.id) || ''));
+        if (r.error) { send(ws, ServerMessage.SOCIAL_NOTICE, { kind: 'error', message: r.error }); return; }
+        pushMany([...r.party.members, ...(r.left ? r.left.before : [])]);
+        // Joining mid-session: hop straight into the leader's current room.
+        const lead = socketsOf(r.party.leader).map((w) => sessions.get(w)).find((s2) => s2 && s2.roomCode);
+        const room = lead && roomManager.getRoom(lead.roomCode);
+        if (room && session.roomCode !== room.code) { leaveCurrentRoom(session, session.clientId); joinAndAck(ws, session, room); }
+        break;
+      }
+
+      case ClientMessage.PARTY_LEAVE:
+      case ClientMessage.PARTY_KICK: {
+        if (!session.uid || !session.user) return;
+        let r;
+        if (type === ClientMessage.PARTY_LEAVE) r = parties.leave(session.uid);
+        else {
+          const target = await accounts.uidForUsername(String((payload && payload.username) || ''));
+          r = parties.kick(session.uid, target);
+          if (r && r.error) { send(ws, ServerMessage.SOCIAL_NOTICE, { kind: 'error', message: r.error }); return; }
+          if (r) notice(target, { kind: 'ok', message: 'You were removed from the party.' });
+        }
+        if (r) pushMany(r.before);
         break;
       }
 
@@ -268,6 +430,7 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     leaveCurrentRoom(session, session.clientId);
+    if (session.uid) goOffline(ws, session.uid);
   });
 });
 

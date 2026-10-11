@@ -44,6 +44,15 @@ function call(api, url) {
   assert.ok(!vsGuest.players.find((p) => p.name === 'guest').account, 'guests are not linkable');
   assert.strictEqual(vsGuest.me.won, false);
 
+  const hh = await call(api, '/api/h2h/alice/bob');
+  assert.strictEqual(hh.status, 200);
+  assert.deepStrictEqual(hh.body.games, [{ gameType: 'chess', played: 1, draws: 0, a: 1, b: 0 }]);
+  assert.strictEqual(hh.body.matches.length, 1);
+  assert.strictEqual(hh.body.matches[0].winner, 'a');
+  assert.ok(!JSON.stringify(hh.body).includes('u1'), 'no uids in h2h');
+  assert.deepStrictEqual((await call(api, '/api/h2h/bob/alice')).body.games[0], { gameType: 'chess', played: 1, draws: 0, a: 0, b: 1 });
+  assert.strictEqual((await call(api, '/api/h2h/alice/alice')).status, 400);
+  assert.strictEqual((await call(api, '/api/h2h/alice/nobody')).status, 404);
   assert.strictEqual((await call(api, '/api/user/nobody')).status, 404);
   assert.strictEqual((await call(api, '/api/nope')).status, 404);
   assert.strictEqual((await call(api, '/api/config')).body.authMode, 'dev');

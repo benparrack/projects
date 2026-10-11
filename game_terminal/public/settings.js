@@ -4,6 +4,7 @@ import { h, modal, toast } from './ui.js';
 import { avatarEl } from './avatars.js';
 import { sfx } from './games/sfx.js';
 import { LEVELS, preferredLevel } from './games/botLevel.js';
+import { blockedList, onSocialChange } from './friends.js';
 
 const BOT_KEY = 'gt-bot-level';
 const MOTION_KEY = 'gt.motion';
@@ -114,7 +115,19 @@ export function renderSettings(mount, ctx) {
         : `You can rename again in ${Math.ceil(left / 86400000)} days.`,
       h('form.set-inline', { onsubmit: (e) => { e.preventDefault(); if (nameInput.value.trim() !== account.username) ctx.rename(nameInput.value.trim()); } }, nameInput, renameBtn), 'set-name')));
 
+    const blocked = h('div.set-blocked');
+    const drawBlocked = () => {
+      if (!blocked.isConnected && blocked.dataset.drawn) { off(); return; }
+      blocked.dataset.drawn = '1';
+      blocked.replaceChildren(blockedList() || h('p.set-hint', 'Loading…'));
+    };
+    const off = onSocialChange(drawBlocked);
+    drawBlocked();
     sections.push(h('section.set-section',
+      h('h2.panel-title', '> BLOCKED PLAYERS'),
+      h('p.set-hint.set-intro', 'Blocked players can\'t send you friend requests, invites or messages, and their chat is hidden from you.'),
+      blocked),
+    h('section.set-section',
       h('h2.panel-title', '> YOUR DATA'),
       row('Download my data', 'A JSON file with your account, stats and match history.',
         h('button', { type: 'button', onclick: ctx.exportData }, 'DOWNLOAD'), null),

@@ -7,6 +7,7 @@ import { h, toast } from './ui.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
 import { renderReplay } from './replay.js';
+import { initFriends, setSignedIn, handleSocialState, handleSocialNotice } from './friends.js';
 import { renderSettings, applyPrefs, currentPrefs, initPrefs, downloadJson } from './settings.js';
 import { openSignIn, openUsernameSetup, openTermsUpdate, renderAccountChip, openAvatarChange } from './account-ui.js';
 
@@ -306,6 +307,7 @@ function handleAccountState(p) {
   const prev = state.account;
   state.account = p.user;
   renderChip();
+  setSignedIn(!!p.user);
   if (p.user && (!prev || prev.username !== p.user.username) && !state.renaming) {
     // Signed in: the account's saved preferences win; a fresh account adopts this device's.
     if (Object.keys(p.user.settings || {}).length) applyPrefs(p.user.settings);
@@ -314,6 +316,8 @@ function handleAccountState(p) {
   if (state.renaming && p.user && prev && prev.username !== p.user.username) toast(`You're now ${p.user.username}.`, { kind: 'ok' });
   state.renaming = false;
   if (location.pathname === '/settings' && state.settingsKey !== settingsKey()) renderSettingsPage();
+  // Profiles show friend buttons and head-to-head only for a signed-in viewer.
+  if (location.pathname.startsWith('/u/') && (prev && prev.username) !== (p.user && p.user.username)) onRoute();
   if (p.user && state.setup) {
     state.setup.close();
     state.setup = null;
@@ -397,6 +401,16 @@ function handleServerMessage(type, payload) {
 
     case ServerMessage.ACCOUNT_STATE: {
       handleAccountState(payload);
+      break;
+    }
+
+    case ServerMessage.SOCIAL_STATE: {
+      handleSocialState(payload);
+      break;
+    }
+
+    case ServerMessage.SOCIAL_NOTICE: {
+      handleSocialNotice(payload);
       break;
     }
 
@@ -628,7 +642,6 @@ function route() {
   if (path === '/' || path === '/index.html') return 'app';
   const rep = /^\/replay\/([a-z0-9]{8,40})\/?$/.exec(path);
   if (rep) {
-    const gameLabel = (t) => (GAMES.find((g) => g.type === t) || {}).label || t;
     renderReplay(els.screenPage, rep[1], { gameLabel }).then((r) => {
       if (location.pathname !== path) return r.cleanup();
       state.pageCleanup = r.cleanup;
@@ -639,7 +652,6 @@ function route() {
   }
   const prof = /^\/u\/([A-Za-z0-9_]{1,24})\/?$/.exec(path);
   if (prof) {
-    const gameLabel = (t) => (GAMES.find((g) => g.type === t) || {}).label || t;
     renderProfile(els.screenPage, prof[1], { gameLabel, me: state.account })
       .then((title) => { if (location.pathname === path) document.title = `${title} — Game Terminal`; });
     showScreen('page');
@@ -661,6 +673,8 @@ function route() {
   renderNotFound();
   return 'page';
 }
+
+function gameLabel(t) { return (GAMES.find((g) => g.type === t) || {}).label || t; }
 
 function renderNotFound() {
   els.screenPage.replaceChildren(h('div.notfound',
@@ -716,6 +730,16 @@ els.btnLeaveRoom.addEventListener('click', leaveRoom);
       state.pendingJoin = { kind: 'code', code: saved.roomCode };
     }
   }
+  initFriends({
+    send,
+    gameLabel,
+    currentRoom: () => state.currentRoom,
+    navigate,
+    join(code) {
+      if (location.pathname !== '/') history.pushState(null, '', '/');
+      send(ClientMessage.ROOM_JOIN, { code });
+    },
+  });
   state.auth = await initAuth();
   await state.auth.ready;
   state.auth.onChange(reconnectAs);

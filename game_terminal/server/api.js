@@ -29,6 +29,26 @@ function createApi({ db, accounts, authMode, firebaseWebConfig, registry }) {
       }];
     }],
 
+    // Head-to-head between two accounts: per-game record plus their latest shared matches.
+    [/^\/api\/h2h\/([A-Za-z0-9_]{1,24})\/([A-Za-z0-9_]{1,24})$/, async ([, an, bn]) => {
+      const [a, b] = await Promise.all([accounts.getUserByName(an), accounts.getUserByName(bn)]);
+      if (!a || !a.user || !b || !b.user) return [404, { error: 'No such user.' }];
+      if (a.uid === b.uid) return [400, { error: 'Pick two different players.' }];
+      const key = [a.uid, b.uid].sort().join('_');
+      const [pair, matches] = await Promise.all([
+        db.get(`pairs/${key}`),
+        db.list(`pairs/${key}/matches`, { orderBy: ['endedAt', 'desc'], limit: 20 }),
+      ]);
+      const games = Object.entries((pair && pair.games) || {}).map(([gameType, g]) => ({
+        gameType, played: g.played, draws: g.draws, a: g.wins[a.uid] || 0, b: g.wins[b.uid] || 0,
+      })).sort((x, y) => y.played - x.played);
+      return [200, {
+        a: publicUser(a.user), b: publicUser(b.user), games,
+        lastPlayed: (pair && pair.lastPlayed) || null,
+        matches: matches.map((m) => ({ ...stripUids(m), winner: winnerOf(m, a.uid) })),
+      }];
+    }],
+
     [/^\/api\/match\/([a-z0-9]{8,40})\/frames$/, async ([, id]) => {
       const m = await db.get(`matches/${id}`);
       const plugin = m && registry[m.gameType];
@@ -60,6 +80,12 @@ function createApi({ db, accounts, authMode, firebaseWebConfig, registry }) {
 
 // uids never leave the server; profiles are addressed by username.
 const stripUid = ({ uid, ...p }) => (uid ? { ...p, account: true } : p);
+// 'a' / 'b' from the first player's point of view, null for a draw.
+function winnerOf(m, aUid) {
+  const top = m.players.filter((p) => p.place === 0);
+  if (top.length === m.players.length) return null;
+  return top.some((p) => p.uid === aUid) ? 'a' : 'b';
+}
 const stripUids = (m) => ({ ...m, players: (m.players || []).map(stripUid) });
 
 module.exports = { createApi };

@@ -116,19 +116,19 @@ call with the right placements. This is the long, careful part of the project.
       anonymizes the name in old match docs) + "download my data" (a JSON export, for the GDPR right of access)
 
 ### Phase 3 — Friends & social
-- [ ] Friend requests (send/accept/decline/remove), friends list with online status and
+- [x] Friend requests (send/accept/decline/remove), friends list with online status and
       "currently playing X"
-- [ ] Invite a friend into your current room (a toast with a JOIN button), so there's no code-sharing
-- [ ] Party system: a leader + up to 7 members; when the leader joins a room, the
+- [x] Invite a friend into your current room (a toast with a JOIN button), so there's no code-sharing
+- [x] Party system: a leader + up to 7 members; when the leader joins a room, the
       party follows. Party chat
-- [ ] Recent players list (last 20 people you shared a room with) → add friend / view profile
-- [ ] Head-to-head page vs. any user: record per game + recent shared matches (`pairKey` query)
-- [ ] Block user (hides their chat, blocks friend requests and invites)
+- [x] Recent players list (last 20 people you shared a room with) → add friend / view profile
+- [x] Head-to-head page vs. any user: record per game + recent shared matches (`pairKey` query)
+- [x] Block user (hides their chat, blocks friend requests and invites)
 
 ### Phase 4 — Chat & moderation
 - [ ] **Global chat** dock (collapsible side panel on the menu, CoC style): accounts only,
       the last 100 messages, avatar + name + level badge, click a name → profile
-- [ ] In-room chat (all players in a room) and friend DMs
+- [ ] In-room chat (all players in a room), party chat and friend DMs
 - [ ] Rate limit (e.g. 5 messages / 10s, slow mode when busy), max length, profanity
       mask, link blocking, a new-account delay (must play 1 game before global chat)
 - [ ] Report message / report user → `reports/`
@@ -235,3 +235,4 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 - 2026-10-11 — Phase 2: profile page `/u/<name>` (KPIs, per-game stats table, recent matches with linked opponents), API adds score meta + `account` flag; dev auth refused on Render.
 - 2026-10-11 — Phase 2: replay viewer `/replay/<id>` (mounts the game's own client read-only; step/scrub/autoplay/speed, keyboard). Known gap: frames carry no seat names, so boards show "(empty)" seats.
 - 2026-10-11 — Phase 2 done: `/settings` (sound/volume/reduce-motion/bot level, synced to the account; guests keep them locally; a reduce-motion setting also flips the games' `matchMedia` checks), rename, download-my-data JSON, and account deletion (typed-name confirm; removes user/stats/pairs/name claim + the Firebase Auth user, and turns the name into "deleted player" in other people's history and replays).
+- 2026-10-11 — Phase 3 done: `social/{uid}` friends/requests/blocks/recent players (server only, no uids sent to clients), live presence ("Playing X" with a JOIN button), room invites as JOIN toasts (rate-limited), in-memory parties (leader + up to 7; members follow the leader into rooms, 30s reconnect grace), friends drawer in the header, friend/block buttons and a "You vs them" head-to-head on profiles (`/api/h2h/:a/:b`), blocked list in Settings. Party chat was moved into Phase 4.

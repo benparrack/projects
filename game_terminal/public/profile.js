@@ -1,6 +1,7 @@
 // Public profile page: /u/<username>. Data comes from GET /api/user/<name>.
 import { h, timeAgo, fmtDate } from './ui.js';
 import { avatarEl } from './avatars.js';
+import { relationButtons } from './friends.js';
 
 const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 >> 3 ^ 1) && n % 10] || 'th'}`;
 
@@ -97,13 +98,15 @@ export async function renderProfile(mount, name, { gameLabel, me }) {
       h('div.profile-id',
         h('h1.profile-name', user.username),
         h('p.muted', `LEVEL ${user.level} · joined ${fmtDate(user.createdAt)}`),
-        isMe ? h('p.profile-you', 'This is you. Other players see this page too.') : null)),
+        isMe ? h('p.profile-you', 'This is you. Other players see this page too.') : null,
+        me && !isMe ? relationButtons(user.username) : null)),
     h('dl.profile-kpis',
       kpi('MATCHES', t.total),
       kpi('VS PEOPLE', t.pvp),
       kpi('WIN RATE', pct(t.wins, t.pvp)),
       kpi('BEST STREAK', t.best || '—'),
       kpi('FAVOURITE', t.fav ? gameLabel(t.fav.gameType) : '—')),
+    me && !isMe ? headToHead(me.username, user.username, gameLabel) : null,
     h('section.profile-section',
       h('h2.panel-title', '> STATS BY GAME'),
       stats.length ? statsTable(stats, gameLabel) : h('p.muted.empty', isMe ? 'Finish a game and your stats show up here.' : 'No games played yet.')),
@@ -113,6 +116,28 @@ export async function renderProfile(mount, name, { gameLabel, me }) {
         ? h('ol.match-list', matches.map((m) => matchRow(m, user.username, gameLabel)))
         : h('p.muted.empty', 'No matches yet.'))));
   return user.username;
+}
+
+// "You vs them": filled in after the profile renders; hidden when you've never played each other.
+function headToHead(mine, theirs, gameLabel) {
+  const box = h('section.profile-section.h2h', { hidden: true });
+  fetch(`/api/h2h/${encodeURIComponent(mine)}/${encodeURIComponent(theirs)}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+    if (!d || !d.games.length) return;
+    const tot = d.games.reduce((t, g) => ({ a: t.a + g.a, b: t.b + g.b, d: t.d + g.draws }), { a: 0, b: 0, d: 0 });
+    const lead = tot.a > tot.b ? 'You lead' : tot.b > tot.a ? `${theirs} leads` : 'All square';
+    box.append(
+      h('h2.panel-title', `> YOU VS ${theirs.toUpperCase()}`),
+      h('div.h2h-score', { 'aria-label': `You ${tot.a}, ${theirs} ${tot.b}, ${tot.d} draws` },
+        h('span.h2h-n.h2h-me', String(tot.a)), h('span.h2h-sep', '–'), h('span.h2h-n', String(tot.b)),
+        h('span.muted.h2h-lead', `${lead}${tot.d ? ` · ${tot.d} draw${tot.d > 1 ? 's' : ''}` : ''}`)),
+      h('div.table-wrap', h('table.stats-table',
+        h('thead', h('tr', h('th', { scope: 'col' }, 'GAME'), h('th.num', { scope: 'col' }, 'PLAYED'), h('th.num', { scope: 'col' }, 'YOU'), h('th.num', { scope: 'col' }, 'THEM'), h('th.num', { scope: 'col' }, 'DRAWS'))),
+        h('tbody', d.games.map((g) => h('tr', h('th', { scope: 'row' }, gameLabel(g.gameType)), h('td.num', g.played),
+          h(`td.num${g.a > g.b ? '.h2h-win' : ''}`, String(g.a)), h(`td.num${g.b > g.a ? '.h2h-loss' : ''}`, String(g.b)), h('td.num', g.draws || '—')))))),
+      d.matches.length ? h('ol.match-list', d.matches.slice(0, 8).map((m) => matchRow({ ...m, me: { won: m.winner === 'a', draw: m.winner === null, place: m.winner === 'a' ? 0 : 1 } }, mine, gameLabel))) : null);
+    box.hidden = false;
+  }).catch(() => {});
+  return box;
 }
 
 function kpi(label, value) {

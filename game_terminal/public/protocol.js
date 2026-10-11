@@ -14,6 +14,15 @@ export const ClientMessage = {
   ACCOUNT_ACCEPT_TERMS: 'account.acceptTerms',
   ACCOUNT_EXPORT: 'account.export', // {} -> account.exportData
   ACCOUNT_DELETE: 'account.delete', // { confirm: <username> } -> account.deleted
+  FRIEND_REQUEST: 'friend.request', // { username }
+  FRIEND_ACCEPT: 'friend.accept', // { username }
+  FRIEND_REMOVE: 'friend.remove', // { username } — unfriend, decline, or cancel a request
+  USER_BLOCK: 'user.block', // { username, on }
+  ROOM_INVITE: 'room.invite', // { username } — invite a friend into your current room
+  PARTY_INVITE: 'party.invite', // { username }
+  PARTY_ACCEPT: 'party.accept', // { id }
+  PARTY_LEAVE: 'party.leave',
+  PARTY_KICK: 'party.kick', // { username }
 };
 
 export const ServerMessage = {
@@ -27,6 +36,8 @@ export const ServerMessage = {
   ACCOUNT_ERROR: 'account.error', // { message, for }
   ACCOUNT_EXPORT_DATA: 'account.exportData', // { data } — everything stored about the account
   ACCOUNT_DELETED: 'account.deleted', // {} — the account is gone; client signs out
+  SOCIAL_STATE: 'social.state', // { friends, incoming, outgoing, blocked, recent, party } — accounts only
+  SOCIAL_NOTICE: 'social.notice', // { kind: 'request'|'accepted'|'invite'|'party'|'follow'|'ok'|'error', from?, message?, gameType?, code?, id? }
   RESULT_RECORDED: 'result.recorded', // { summary, saved } — sent to each human in a finished match
 };
 
