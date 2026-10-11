@@ -4,6 +4,8 @@
 // `results.update(opts | null)` from every render (null = not game over) and `destroy()` on unmount.
 // It pops in once per game over; if dismissed, a small "RESULTS" pill brings it back.
 
+import { avatarEl, nameColor, roomAccount } from '../avatars.js';
+
 const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const CSS = `
@@ -196,7 +198,9 @@ export function createResults(container) {
         const name = document.createElement('span');
         name.className = 'gt-res-name';
         name.textContent = r.name;
-        row.append(place, name);
+        const acct = roomAccount(r.name);
+        if (acct && nameColor(acct.cosmetics)) name.classList.add(nameColor(acct.cosmetics));
+        row.append(place, ...(acct ? [avatarEl(acct.avatar, 20, acct.cosmetics)] : []), name);
         if (r.value != null) {
           const val = document.createElement('span');
           val.className = 'gt-res-val';

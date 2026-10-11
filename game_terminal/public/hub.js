@@ -2,7 +2,7 @@ import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode, dailyRoomCo
 import { sfx } from './games/sfx.js';
 import { HOWTO } from './games/howto.js';
 import { initAuth } from './auth.js';
-import { avatarEl, nameColor } from './avatars.js';
+import { avatarEl, nameColor, setRoomRoster } from './avatars.js';
 import { h, toast } from './ui.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
@@ -591,6 +591,7 @@ function renderGameList() {
 }
 
 function renderRoster(roster) {
+  setRoomRoster(roster);
   els.rosterList.innerHTML = '';
   for (const entry of roster) {
     const li = document.createElement('li');

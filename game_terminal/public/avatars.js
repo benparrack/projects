@@ -56,6 +56,11 @@ function svgMarkup(id) {
 
 // An <span class="avatar"> element holding the avatar at the given CSS pixel size.
 // Equipped cosmetics (from publicUser().cosmetics) as CSS classes; null when nothing is equipped.
+// The current room's signed-in players by nickname, so shared game UI (results) can show cosmetics.
+let roomAccounts = new Map();
+export const setRoomRoster = (roster) => { roomAccounts = new Map(roster.filter((e) => e.account).map((e) => [e.nickname, e.account])); };
+export const roomAccount = (nickname) => roomAccounts.get(nickname) || null;
+
 export const nameColor = (c) => (c && c.nameColor ? `nc-${c.nameColor}` : null);
 
 export function avatarEl(id, size = 32, cosmetics = null) {
