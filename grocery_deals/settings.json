@@ -1,0 +1,41 @@
+{
+  "stores": [
+    {
+      "chain": "ica",
+      "id": "ica-kvantum-kungsholmen-1004599",
+      "name": "ICA Kvantum Kungsholmen"
+    },
+    {
+      "chain": "hemkop",
+      "id": "4297",
+      "name": "Hemköp City"
+    },
+    {
+      "chain": "hemkop",
+      "id": "4658",
+      "name": "Hemköp Wasahallen"
+    },
+    {
+      "chain": "willys",
+      "id": "2258",
+      "name": "Willys Fridhemsplan"
+    }
+  ],
+  "member": true,
+  "extras": 6,
+  "items": [
+    "standardmjölk|helmjölk|mjölk -kokos -choklad -havre -mandel -soja -fil",
+    "kyckling -pålägg",
+    "nötfärs|blandfärs|köttfärs|högrev|entrecôte|ryggbiff|oxfilé|nötkött|rostbiff|biff -soja -vegansk",
+    "pålägg|skinka|salami|kalkon|kycklingpålägg|medwurst -vegansk",
+    "flingor|müsli|granola|havrefras|cornflakes|special k|cheerios|frosties|crunchy",
+    "banan|äpple|äpplen|druv|hallon|blåbär|jordgubb|clementin|mandarin|päron|kiwi|mango|nektarin",
+    "chips -taco -tortilla -nacho",
+    "jordnöt|nötter|nötmix|cashew|mandlar",
+    "bröd|surdeg|baguette|fralla|frallor|limpa|grova -knäcke -tunnbröd -tortilla -pita -pizza"
+  ],
+  "skip": [
+    "kattfoder|hundfoder|kattmat|hundmat|kattsand|blöjor|libero|pampers|tvättmedel|sköljmedel|diskmedel|tamponger|bindor",
+    "barnmat|välling|ersättning"
+  ]
+}

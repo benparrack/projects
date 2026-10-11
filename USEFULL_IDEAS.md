@@ -11,7 +11,7 @@ Grouped by what they save: money, time, or stalled work in this repo.
 
 ## U1. Grocery Deal Matcher
 
-**Status:** v1 built 2026-10-11 in `grocery_deals/`: Willys + Hemköp, Monday 08:00 push. ICA/Coop/Lidl not yet (see its README).
+**Status:** Built 2026-10-11 in `grocery_deals/`: ICA (Kvantum Kungsholmen) + Willys + Hemköp, a desktop app with live deals and an in-app list editor, and a Monday 08:00 push. Coop/Lidl not yet. Ben wants to develop this one the most.
 **Pitch:** Scrapes the weekly offers from nearby Willys, ICA, Coop and Lidl stores and matches them against a standing shopping list. Every Monday it sends a push like "Willys has your chicken and oat milk on sale, ~140 kr saved."
 
 **Why this one:** You'd use it every week, and the savings are small but real on a student budget.
@@ -204,7 +204,7 @@ Grouped by what they save: money, time, or stalled work in this repo.
 
 ## U14. Universal "Notify Me When" Tool
 
-**Status:** Built 2026-10-11 in `notify_when/`, timer running every 10 min.
+**Status:** Built 2026-10-11 in `notify_when/`, timer running every 10 min. Pinned (paused) by Ben the same day.
 **Pitch:** Watch any page or API and push to ntfy when a condition is true: "when this item is back in stock," "when this price < X," "when this page changes."
 
 **Why this one:** One generic tool covers several narrow ideas (U3 price drops, restocks, ticket releases, course seats opening).

@@ -1,5 +1,6 @@
 """Run: python3 tests/test_grocery.py"""
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -27,7 +28,8 @@ assert grocery.num("Spara 15,00-17,32 kr") == 15.0 and grocery.num(None) is None
 # dedupe, member filter, sort by savings, best store
 offers = {"1": [o("Kaffe", save=7), o("Kaffe", save=7), o("Hushållsost", save=39, member=True), o("Lakrits")],
           "2": [o("Kaffe", save=20)]}
-grocery.offers = lambda chain, sid: offers[sid]
+grocery.CACHE, grocery.CACHE_TTL = Path(tempfile.mkdtemp()), 0  # always refetch from the fake below
+grocery.fetch_offers = lambda chain, sid: offers[sid]
 cfg = {"items": ["kaffe", "ost"], "stores": [{"chain": "willys", "id": "1", "name": "A"},
                                              {"chain": "hemkop", "id": "2", "name": "B"}]}
 res = grocery.find_deals(cfg)
@@ -52,3 +54,25 @@ assert "(same as A, plus:)" in c and "Kaffebröd" in c and "Hushållsost" not in
 assert not m("pålägg|skinka -vegansk", o("Veganskt pålägg"))
 assert m("pålägg|skinka -vegansk", o("Rökt skinka"))
 print("ok 2")
+
+# ICA: offers parsed out of the page's embedded JS data, saving computed from the regular price
+page = """<script>window.__INITIAL_DATA__={"x":undefined,"weeklyOffers":[
+ {"details":{"name":"Kycklingfilé","brand":"Kronfågel","packageInformation":"900 g","mechanicInfo":"2 för 40 kr"},
+  "parsedMechanics":{"quantity":2,"value2":"40"},"stores":[{"regularPrice":"23,50-24","referencePriceText":"Ord.pris 23:50 kr"}],
+  "traits":["Stammis"],"validTo":"2026-10-18T00:00:00","picture":undefined,"category":{"articleGroupName":"Kött"}}
+],"more":1}</script>"""
+grocery.get = lambda url: type("R", (), {"text": page})()
+(ica,) = grocery.ica_offers("ica-x-1")
+assert ica["save"] == 7.0 and abs(ica["pct"] - 7 / 47) < 1e-9 and ica["member"] and ica["image"] == "", ica
+assert ica["until"] == "2026-10-18" and ica["was"] == "23:50 kr" and m("kyckling", ica)
+
+# settings: validated and written atomically
+grocery.SETTINGS = Path(tempfile.mkdtemp()) / "settings.json"
+saved = grocery.save_settings({"stores": [{"chain": "ica", "id": 5, "name": "K"}], "items": [" mjölk ", ""]})
+assert saved["items"] == ["mjölk"] and saved["stores"][0]["id"] == "5" and grocery.load_settings() == saved
+try:
+    grocery.save_settings({"stores": [{"chain": "evil", "id": 1, "name": "x"}], "items": []})
+    raise AssertionError("bad chain accepted")
+except ValueError:
+    pass
+print("ok 3")

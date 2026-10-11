@@ -1,15 +1,33 @@
 # grocery-deals
 
-Matches this week's offers at your Willys and Hemköp stores against a standing shopping list, and pushes the
-matches to your phone every Monday morning, with the best store to go to. (`USEFULL_IDEAS.md` U1.)
+This week's offers at your ICA, Willys and Hemköp stores, matched against a standing shopping list. A desktop
+app shows the live deals at any time, and a weekly push to your phone every Monday morning names the best
+store to go to. (`USEFULL_IDEAS.md` U1.)
 
-## Set up
+## The app
 
-1. Find your stores: `python3 grocery.py stores södermalm` (any part of a name, street or town). Paste the
-   printed lines into `stores` in `list.toml`, replacing the two placeholders.
-2. Edit `items` in `list.toml` to what you actually buy (the matching rules are explained there).
-3. Check it: `python3 grocery.py deals`. To see everything on offer: `python3 grocery.py browse [word]`.
-   This is also how you find good words for your list.
+**Grocery Deals** in the app menu (or run `./grocery-deals-app`). It starts a local server on
+`127.0.0.1:5077` if one isn't already running, then opens it in a Chrome app window. The server exits on its
+own after 2 h without use.
+
+- **My list**: per list item, every matching offer across your stores, biggest saving first. The cards at the
+  top show each store's total saving on your list; the best store is highlighted.
+- **All deals**: every offer, searchable. Sort by kr or % off, filter by category or store, member prices
+  on or off. Offers that are identical at two stores of one chain are shown once.
+- **Edit**: shopping list, skip list and stores (search any ICA/Willys/Hemköp by name or area). Saves
+  automatically to `settings.json`, which the weekly push reads too. Each line shows how many offers it
+  matches as you type.
+- **↻ Refresh** refetches from the stores. Otherwise offers are cached for 3 h in `cache/`.
+
+Install the menu entry (`.desktop` files don't expand `~`):
+
+    sed "s|%h|$HOME|g" grocery-deals.desktop > ~/.local/share/applications/grocery-deals.desktop
+
+## Command line
+
+    python3 grocery.py deals          # the text report the push sends
+    python3 grocery.py browse [word]  # every offer at your stores
+    python3 grocery.py stores kvantum # find store ids
 
 Pushes go to `NTFY_ALERT_TOPIC` from `./.env`, else `../money/flip-bot/.env`.
 
@@ -18,14 +36,23 @@ Pushes go to `NTFY_ALERT_TOPIC` from `./.env`, else `../money/flip-bot/.env`.
     ln -sf ~/projects/grocery_deals/grocery-deals.{service,timer} ~/.config/systemd/user/
     systemctl --user daemon-reload && systemctl --user enable --now grocery-deals.timer
 
-## Notes
+## Matching
 
-- "Other good deals": the biggest "Spara X kr" offers not on your list (`extras` per store, minus `skip`).
-- A second store of the same chain only lists offers the first one did not.
-- Data: Willys/Hemköp's own public site API (`/search/campaigns/offline?q=<storeId>`), no key needed.
-  Both are Axfood, so one code path serves both.
-- `*` marks member prices (Willys Plus / Hemköp Klubb, free to join). Set `member = false` to hide them.
-- "save" comes from the store's own "Spara X kr" label; offers without one are listed but count 0.
-- Not yet supported: ICA, Coop, Lidl. Coop has an offers API (`external.api.coop.se/dke/offers/`) but it
-  returned empty lists for store ids tried 2026-10-11; ICA and Lidl need reverse engineering.
-- Tests: `python3 tests/test_grocery.py`.
+A list line matches when any `|`-alternative starts or ends a word in the offer's name or brand (this suits
+Swedish compounds: `kyckling` finds Kycklingbröstfilé, `bröd` finds Lantbröd, `ris` does not find Krispiga).
+`-word` excludes when it appears anywhere; put exclusions at the end of the line.
+
+## Data sources
+
+- **Willys / Hemköp** (both Axfood): the sites' public API, `/search/campaigns/offline?q=<storeId>`. The saving
+  comes from the store's "Spara X kr" label; offers without one count 0.
+- **ICA**: no API. Each store's page `ica.se/erbjudanden/<slug>/` embeds its offers as JS data
+  (`weeklyOffers`); the store id *is* that slug (the URL needs the name part). The saving is computed:
+  quantity × regular price − deal price. Store list: the JSON embedded in `ica.se/butiker/`.
+- Member prices (ICA Stammis / Willys Plus / Hemköp Klubb, free to join) are tagged; untick "member prices"
+  to hide them.
+- Not supported: Coop (its offers API `external.api.coop.se/dke/offers/` returned empty lists 2026-10-11),
+  Lidl.
+- If a site changes its layout, that store's card shows the error and the others keep working.
+
+Tests: `python3 tests/test_grocery.py`.

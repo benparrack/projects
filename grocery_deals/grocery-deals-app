@@ -1,0 +1,12 @@
+#!/bin/sh
+# Opens the Grocery Deals app: starts the local server if it isn't up, then a Chrome app window (no tabs/address bar).
+DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+PORT=5077
+URL="http://127.0.0.1:$PORT/"
+if ! curl -fs -o /dev/null "$URL"; then
+  mkdir -p "$DIR/cache"
+  # setsid + </dev/null: detach fully so the server outlives this launcher and never reads a closed terminal
+  PORT=$PORT setsid /usr/bin/python3 "$DIR/server.py" </dev/null >"$DIR/cache/server.log" 2>&1 &
+  for _ in $(seq 50); do curl -fs -o /dev/null "$URL" && break; sleep 0.1; done
+fi
+exec google-chrome --app="$URL" --class=GroceryDeals --user-data-dir="$HOME/.config/grocery-deals-chrome" >/dev/null 2>&1

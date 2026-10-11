@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grocery Deals</title>
+<link rel="icon" href="icon.svg">
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #fff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e4e2dc; --accent: #1f7a4d;
+  --accent-soft: #e3f2ea; --save: #b3261e; --save-soft: #fde8e6; --member: #6a3fb5; --member-soft: #efe8fb;
+  --ica: #e3000b; --willys: #e86a10; --hemkop: #0f7c86; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151514; --panel: #1f1f1d; --ink: #ecebe6; --muted: #a09e97; --line: #33322f; --accent: #5cc48f;
+    --accent-soft: #1d3328; --save: #ff8a80; --save-soft: #3a1f1d; --member: #b79cf0; --member-soft: #2b2340;
+    --shadow: none; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, input, select { font: inherit; color: inherit; }
+header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+.bar { display: flex; align-items: center; gap: 16px; padding: 12px 20px; max-width: 1400px; margin: 0 auto; }
+h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 8px; }
+h1 img { width: 24px; height: 24px; }
+.sub { color: var(--muted); font-size: 12px; }
+.tabs { display: flex; gap: 4px; margin-left: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 7px; cursor: pointer; color: var(--muted); }
+.tabs button[aria-selected=true] { background: var(--accent); color: #fff; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+main { max-width: 1400px; margin: 0 auto; padding: 16px 20px 60px; }
+.summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.scard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow); }
+.scard.best { border-color: var(--accent); background: var(--accent-soft); }
+.scard b { display: block; font-size: 14px; }
+.scard .big { font-size: 20px; font-weight: 700; }
+.scard .err { color: var(--save); font-size: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.ica { --c: var(--ica); } .willys { --c: var(--willys); } .hemkop { --c: var(--hemkop); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.toolbar input[type=search] { flex: 1 1 220px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.toolbar select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; user-select: none; }
+.sfilter { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.sfilter[aria-pressed=false] { opacity: .45; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+.card.onlist { border-color: var(--accent); }
+.pic { height: 120px; background: #fff; display: flex; align-items: center; justify-content: center; position: relative; }
+.pic img { max-width: 100%; max-height: 110px; object-fit: contain; }
+.pic .badge { position: absolute; top: 8px; left: 8px; }
+.badge { background: var(--save-soft); color: var(--save); font-weight: 700; border-radius: 6px; padding: 2px 7px; font-size: 12px; }
+.body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.name { font-weight: 600; }
+.meta { color: var(--muted); font-size: 12px; }
+.deal { font-size: 17px; font-weight: 800; margin-top: 2px; }
+.was { color: var(--muted); font-size: 12px; }
+.foot { margin-top: auto; padding-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tag { font-size: 11px; border-radius: 5px; padding: 1px 6px; }
+.tag.member { background: var(--member-soft); color: var(--member); }
+.tag.list { background: var(--accent-soft); color: var(--accent); }
+.listrow { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.listrow h3 { margin: 0; padding: 10px 14px; font-size: 15px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--line); }
+.listrow h3 span { color: var(--muted); font-weight: 400; font-size: 12px; }
+.strip { display: flex; gap: 10px; overflow-x: auto; padding: 12px 14px; }
+.strip .card { flex: 0 0 190px; box-shadow: none; }
+.none { color: var(--muted); padding: 12px 14px; }
+.cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; }
+@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } .bar { flex-wrap: wrap; } .tabs { margin-left: 0; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
+.panel h2 { font-size: 15px; margin: 0 0 4px; }
+.panel p { color: var(--muted); margin: 0 0 10px; font-size: 12px; }
+.erow { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.erow input { flex: 1; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.erow .count { width: 70px; text-align: right; color: var(--muted); font-size: 12px; }
+.x { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 2px 6px; }
+.x:hover { color: var(--save); }
+.saved { color: var(--accent); font-size: 12px; margin-left: 8px; }
+.empty { text-align: center; color: var(--muted); padding: 40px; }
+.stores-found { max-height: 260px; overflow: auto; margin-top: 8px; }
+code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <h1><img src="icon.svg" alt="">Grocery Deals</h1>
+  <span class="sub" id="status">Loading…</span>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="list" aria-selected="true">My list</button>
+    <button role="tab" data-view="all" aria-selected="false">All deals</button>
+    <button role="tab" data-view="edit" aria-selected="false">Edit</button>
+  </nav>
+  <button class="btn" id="refresh" title="Fetch fresh offers from the stores">↻ Refresh</button>
+</div></header>
+<main>
+  <section class="summary" id="summary"></section>
+  <section id="view"></section>
+</main>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const kr = n => n == null ? "" : (Math.round(n * 10) / 10).toLocaleString("sv-SE") + " kr";
+let data = null, view = location.hash.slice(1) || localStorage.getItem("view") || "list";
+const ui = { q: "", sort: "save", cat: "", member: true, hideSkip: true, onlyList: false, off: new Set() };
+
+// Same rule as grocery.matches (start or end of a word, -word excludes), for the live counts in Edit.
+function matches(item, o) {
+  const hay = (o.name + " " + o.brand).toLowerCase(), words = item.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.some(w => w.length > 1 && w[0] === "-" && hay.includes(w.slice(1)))) return false;
+  const alts = words.filter(w => w[0] !== "-").join(" ").split("|").map(a => a.trim()).filter(Boolean);
+  const re = a => a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return alts.some(a => new RegExp(`(?<![\\p{L}\\p{N}])${re(a)}|${re(a)}(?![\\p{L}\\p{N}])`, "u").test(hay));
+}
+const label = item => { const a = item.split(/\s+-/)[0].split("|")[0].trim(); return a[0].toUpperCase() + a.slice(1); };
+
+async function load(refresh = false) {
+  $("#status").textContent = refresh ? "Fetching fresh offers…" : "Loading…";
+  try {
+    const r = await fetch("/api/deals" + (refresh ? "?refresh=1" : ""));
+    data = await r.json();
+    ui.member = data.settings.member;
+    $("#status").textContent = `${allOffers().length} offers · ${data.stores.length} stores · updated ${new Date(data.fetched * 1000).toLocaleTimeString("sv-SE", {hour: "2-digit", minute: "2-digit"})}`;
+  } catch (e) { $("#status").textContent = "Couldn't load offers: " + e.message; return; }
+  render();
+}
+
+// One entry per offer; the same offer at two stores of one chain merges into one card listing both.
+function allOffers() {
+  const map = new Map();
+  for (const {store, offers} of data.stores) for (const o of offers) {
+    const k = [store.chain, o.name, o.brand, o.size, o.deal].join("|");
+    if (map.has(k)) map.get(k).stores.push(store); else map.set(k, {...o, chain: store.chain, stores: [store]});
+  }
+  return [...map.values()];
+}
+const visible = o => (ui.member || !o.member);
+
+function card(o) {
+  const pct = o.pct ? ` · ${Math.round(o.pct * 100)}%` : "";
+  const until = o.until ? new Date(o.until + "T12:00").toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"}) : "";
+  return `<article class="card ${o.item ? "onlist" : ""}">
+    <div class="pic">${o.image ? `<img loading="lazy" src="${esc(o.image)}" alt="">` : ""}${o.save ? `<span class="badge">−${kr(o.save)}${pct}</span>` : ""}</div>
+    <div class="body">
+      <span class="chip ${o.chain}">${esc(o.stores.map(s => s.name).join(" · "))}</span>
+      <span class="name">${esc(o.name)}</span>
+      <span class="meta">${esc([o.brand, o.size].filter(Boolean).join(" · "))}</span>
+      <span class="deal">${esc(o.deal)}</span>
+      ${o.was ? `<span class="was">Regular ${esc(o.was)}</span>` : ""}
+      <div class="foot">
+        ${o.member ? `<span class="tag member">${esc(data.member_names[o.chain])}</span>` : ""}
+        ${o.item ? `<span class="tag list">${esc(label(o.item))}</span>` : ""}
+        ${until ? `<span class="meta">until ${until}</span>` : ""}
+      </div>
+    </div></article>`;
+}
+
+function renderSummary() {
+  const rows = data.stores.map(({store, offers, error}) => {
+    const mine = offers.filter(o => o.item && visible(o));
+    return {store, error, n: mine.length, save: mine.reduce((t, o) => t + (o.save || 0), 0)};
+  });
+  const best = Math.max(...rows.map(r => r.save));
+  $("#summary").innerHTML = rows.map(r => `<div class="scard ${r.save && r.save === best ? "best" : ""}">
+    <span class="chip ${r.store.chain}">${esc(r.store.chain)}</span><b>${esc(r.store.name)}</b>
+    ${r.error ? `<div class="err">Couldn't fetch: ${esc(r.error)}</div>` :
+      `<span class="big">~${kr(r.save)}</span> <span class="sub">off your list · ${r.n} items${r.save && r.save === best ? " · best" : ""}</span>`}
+  </div>`).join("");
+}
+
+function renderList() {
+  const offers = allOffers().filter(visible);
+  const rows = data.settings.items.map(item => {
+    const hits = offers.filter(o => o.item === item).sort((a, b) => (b.save || 0) - (a.save || 0));
+    return `<div class="listrow"><h3>${esc(label(item))} <span>${hits.length ? hits.length + " deals" : ""}</span></h3>
+      ${hits.length ? `<div class="strip">${hits.map(card).join("")}</div>` : `<div class="none">No deals this week.</div>`}</div>`;
+  });
+  return rows.join("") || `<div class="empty">Your list is empty. Add items under <b>Edit</b>.</div>`;
+}
+
+function renderAll() {
+  const cats = [...new Set(allOffers().map(o => o.category).filter(Boolean))].sort();
+  const q = ui.q.toLowerCase();
+  let os = allOffers().filter(o => visible(o)
+    && (!ui.hideSkip || !o.skipped)
+    && (!ui.onlyList || o.item)
+    && (!ui.cat || o.category === ui.cat)
+    && o.stores.some(s => !ui.off.has(s.chain + s.id))
+    && (!q || `${o.name} ${o.brand} ${o.category}`.toLowerCase().includes(q)));
+  const by = {save: (a, b) => (b.save || 0) - (a.save || 0), pct: (a, b) => (b.pct || 0) - (a.pct || 0),
+              name: (a, b) => a.name.localeCompare(b.name, "sv")}[ui.sort];
+  os.sort(by);
+  const storeBtns = data.stores.map(({store}) => `<button class="sfilter chip ${store.chain}" data-store="${esc(store.chain + store.id)}" aria-pressed="${!ui.off.has(store.chain + store.id)}">${esc(store.name)}</button>`).join("");
+  return `<div class="toolbar">
+      <input type="search" id="q" placeholder="Search offers… (e.g. kaffe, ost, chips)" value="${esc(ui.q)}">
+      <select id="sort"><option value="save">Biggest saving (kr)</option><option value="pct">Biggest % off</option><option value="name">Name</option></select>
+      <select id="cat"><option value="">All categories</option>${cats.map(c => `<option ${c === ui.cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
+      <label class="toggle"><input type="checkbox" id="onlyList" ${ui.onlyList ? "checked" : ""}> Only my list</label>
+      <label class="toggle"><input type="checkbox" id="member" ${ui.member ? "checked" : ""}> Member prices</label>
+      <label class="toggle"><input type="checkbox" id="hideSkip" ${ui.hideSkip ? "checked" : ""}> Hide skipped</label>
+    </div>
+    <div class="toolbar">${storeBtns}<span class="sub">${os.length} offers</span></div>
+    ${os.length ? `<div class="grid">${os.map(card).join("")}</div>` : `<div class="empty">Nothing matches.</div>`}`;
+}
+
+function renderEdit() {
+  const s = data.settings, offers = allOffers();
+  const rows = (key) => s[key].map((it, i) => `<div class="erow">
+      <input data-key="${key}" data-i="${i}" value="${esc(it)}" aria-label="${key} entry">
+      <span class="count">${offers.filter(o => matches(it, o)).length} offers</span>
+      <button class="x" data-del="${key}" data-i="${i}" title="Remove" aria-label="Remove">×</button></div>`).join("");
+  return `<div class="cols"><div>
+    <div class="panel"><h2>Shopping list <span class="saved" id="saved"></span></h2>
+      <p>One line per thing you buy. Words match the start or end of a word in the offer (Swedish compounds:
+      <code>kyckling</code> finds Kycklingbröstfilé, <code>bröd</code> finds Lantbröd). <code>|</code> = alternatives,
+      <code>-word</code> at the end excludes (<code>ägg -lägg</code> skips pålägg). Saves automatically.</p>
+      ${rows("items")}
+      <div class="erow"><input id="newItem" placeholder="Add an item, e.g. yoghurt|kvarg"><button class="btn primary" id="addItem">Add</button></div>
+    </div></div><div>
+    <div class="panel"><h2>Stores</h2><p>Offers come from these stores, in this order.</p>
+      ${s.stores.map((st, i) => `<div class="erow"><span class="chip ${st.chain}" style="flex:1">${esc(st.name)}</span>
+        <button class="x" data-delstore="${i}" title="Remove store" aria-label="Remove store">×</button></div>`).join("")}
+      <div class="erow"><input id="storeQ" placeholder="Find a store: kvantum, fridhemsplan, södermalm…"><button class="btn" id="storeGo">Search</button></div>
+      <div class="stores-found" id="storesFound"></div>
+    </div>
+    <div class="panel"><h2>Never show in "other deals"</h2><p>Hidden from the weekly push's extras and from All deals (unless you untick "Hide skipped").</p>
+      ${rows("skip")}
+      <div class="erow"><input id="newSkip" placeholder="e.g. kattmat|hundmat"><button class="btn" id="addSkip">Add</button></div>
+    </div>
+    <div class="panel"><label class="toggle"><input type="checkbox" id="memberSet" ${s.member ? "checked" : ""}> Include member prices (ICA Stammis, Willys Plus, Hemköp Klubb)</label></div>
+  </div></div>`;
+}
+
+function render() {
+  if (!data) return;
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === view));
+  renderSummary();
+  $("#view").innerHTML = {list: renderList, all: renderAll, edit: renderEdit}[view]();
+  if (view === "all") $("#sort").value = ui.sort;
+}
+
+let saveTimer;
+async function save(rerender = true) {
+  clearTimeout(saveTimer);
+  const r = await fetch("/api/settings", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data.settings)});
+  const out = await r.json();
+  if (!r.ok) { alert(out.error); return; }
+  data.settings = out;
+  const changedStores = data.stores.map(s => s.store.chain + s.store.id).join() !== out.stores.map(s => s.chain + s.id).join();
+  if (changedStores) return load();  // new store: fetch its offers
+  // re-tag offers locally so the views update without a round trip
+  for (const {offers} of data.stores) for (const o of offers) {
+    o.item = out.items.find(i => matches(i, o)) || null;
+    o.skipped = out.skip.some(x => matches(x, o));
+  }
+  if (rerender) render(); else renderSummary();
+  const el = $("#saved"); if (el) { el.textContent = "Saved"; setTimeout(() => el.textContent = "", 1200); }
+}
+
+document.addEventListener("click", async e => {
+  const t = e.target;
+  if (t.closest(".tabs button")) { view = t.closest("button").dataset.view; localStorage.setItem("view", view); render(); }
+  else if (t.id === "refresh") load(true);
+  else if (t.dataset.store) { const k = t.dataset.store; ui.off.has(k) ? ui.off.delete(k) : ui.off.add(k); render(); }
+  else if (t.dataset.del) { data.settings[t.dataset.del].splice(+t.dataset.i, 1); save(); }
+  else if (t.dataset.delstore) { data.settings.stores.splice(+t.dataset.delstore, 1); save(); }
+  else if (t.id === "addItem" || t.id === "addSkip") {
+    const inp = $(t.id === "addItem" ? "#newItem" : "#newSkip"), v = inp.value.trim();
+    if (v) { data.settings[t.id === "addItem" ? "items" : "skip"].push(v); save(); }
+  }
+  else if (t.id === "storeGo") searchStores();
+  else if (t.dataset.addstore) {
+    const st = JSON.parse(t.dataset.addstore);
+    if (!data.settings.stores.some(s => s.chain === st.chain && s.id === st.id)) { data.settings.stores.push(st); save(); }
+  }
+});
+document.addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  if (e.target.id === "newItem") $("#addItem").click();
+  if (e.target.id === "newSkip") $("#addSkip").click();
+  if (e.target.id === "storeQ") searchStores();
+});
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.id === "q") { ui.q = t.value; const pos = t.selectionStart; render(); const q = $("#q"); q.focus(); q.setSelectionRange(pos, pos); }
+  else if (t.dataset.key) {
+    data.settings[t.dataset.key][+t.dataset.i] = t.value;
+    t.nextElementSibling.textContent = allOffers().filter(o => t.value.trim() && matches(t.value, o)).length + " offers";
+    clearTimeout(saveTimer); saveTimer = setTimeout(() => save(false), 700);
+  }
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.id === "sort") ui.sort = t.value;
+  else if (t.id === "cat") ui.cat = t.value;
+  else if (["onlyList", "member", "hideSkip"].includes(t.id)) ui[t.id] = t.checked;
+  else if (t.id === "memberSet") { data.settings.member = t.checked; ui.member = t.checked; return save(); }
+  else if (t.dataset.key) return save();
+  else return;
+  render();
+});
+
+async function searchStores() {
+  const q = $("#storeQ").value.trim(), box = $("#storesFound");
+  if (q.length < 2) return;
+  box.innerHTML = `<div class="sub">Searching…</div>`;
+  const r = await fetch("/api/stores?q=" + encodeURIComponent(q)), res = await r.json();
+  if (!r.ok) { box.innerHTML = `<div class="sub">${esc(res.error)}</div>`; return; }
+  box.innerHTML = res.length ? res.map(s => `<div class="erow"><span class="chip ${s.chain}" style="flex:1">${esc(s.name)} <span class="sub" style="text-transform:none;font-weight:400">${esc(s.where)}</span></span>
+      <button class="btn" data-addstore="${esc(JSON.stringify({chain: s.chain, id: String(s.id), name: s.name}))}">Add</button></div>`).join("")
+    : `<div class="sub">No stores found.</div>`;
+}
+
+load();
+</script>
+</body>
+</html>
