@@ -694,6 +694,10 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 @media (max-width: 640px) {
   /* The vertical edge tab sits on top of page content on phones; float it bottom-left instead. */
   .dock-tab { top: auto; bottom: 14px; left: 14px; transform: none; writing-mode: horizontal-tb; letter-spacing: 1px; padding: 8px 12px; border-left: 1px solid var(--border); }
+  /* keep the floating CHAT tab off the footer text; separators would dangle at wrap points */
+  .sitefooter { padding-bottom: 56px; }
+  .live-sep { display: none; }
+  .live-strip { column-gap: 16px; }
 }
 @media (max-width: 420px) {
   .brand-name { display: none; }
