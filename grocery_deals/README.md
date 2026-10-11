@@ -17,6 +17,8 @@ own after 2 h without use.
 - **Trip**: press **+** on any deal to put it on this week's trip, grouped by store, with what you'll save.
   Add anything else (toilet paper, …) as free text. Tick things off as they go in the basket, then
   "Clear ticked". Saved in `trip.json`; entries whose offer has ended are flagged.
+  **📱 Send to phone** pushes the not-yet-ticked list to your phone via ntfy, so you have it in the store
+  without the laptop. (The app itself is laptop-only: it binds to 127.0.0.1.)
 - **Edit**: shopping list, skip list and stores (search any ICA/Willys/Hemköp by name or area). Saves
   automatically to `settings.json`, which the weekly push reads too. Each line shows how many offers it
   matches as you type.

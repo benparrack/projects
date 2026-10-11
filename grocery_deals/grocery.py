@@ -313,10 +313,32 @@ def push(title, message):
                           if l.startswith("NTFY_ALERT_TOPIC=")), None)
     if not topic:
         print("NTFY (no topic set), not sent")
-        return
+        return False
     msg = message.encode()[:4000].decode(errors="ignore")  # ntfy turns >4 KB into an attachment
     requests.post("https://ntfy.sh", data=json.dumps({"topic": topic, "title": title, "message": msg,
                                                      "tags": ["shopping_cart"]}).encode(), timeout=15).raise_for_status()
+    return True
+
+
+def trip_text(trip):
+    """The trip as a phone-readable list, grouped by store; things already in the basket are left out."""
+    groups = {}
+    for e in trip:
+        if not e.get("done"):
+            groups.setdefault(e.get("store") or "Anywhere", []).append(e)
+    lines = []
+    for store, es in groups.items():
+        lines.append(f"\n{store}")
+        for e in es:
+            what = " ".join(x for x in (e["name"], e.get("brand"), e.get("size")) if x)
+            deal = f": {e['deal']}" if e.get("deal") else ""
+            lines.append(f"☐ {what}{deal}" + (f" (-{e['save']:.0f} kr)" if e.get("save") else ""))
+    save = sum(e.get("save") or 0 for es in groups.values() for e in es)
+    return ("\n".join(lines).strip() + (f"\n\nSaving ~{save:.0f} kr" if save else "")) or "Trip is empty."
+
+
+def send_trip(_body=None):
+    return {"sent": push("Shopping trip", trip_text(load_trip()))}
 
 
 def main(argv):

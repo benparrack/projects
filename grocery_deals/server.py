@@ -4,6 +4,7 @@
   GET  /api/deals[?refresh=1]   settings + every offer at every store, tagged with the matching list item
   POST /api/settings            replace settings.json (validated in grocery.save_settings)
   POST /api/trip                replace trip.json (validated in grocery.save_trip)
+  POST /api/trip/send           push the trip to your phone via ntfy
   GET  /api/stores?q=WORD       store search across ICA, Willys, Hemköp
 
 Binds to 127.0.0.1 only. Exits after IDLE_EXIT seconds without requests so it doesn't sit around draining battery;
@@ -19,6 +20,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import grocery
+import requests
 
 PORT = int(os.environ.get("PORT", 5077))
 WEB = Path(__file__).resolve().parent / "web"
@@ -65,7 +67,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         global last_hit
         last_hit = time.time()
-        save = {"/api/settings": grocery.save_settings, "/api/trip": grocery.save_trip}.get(urlparse(self.path).path)
+        save = {"/api/settings": grocery.save_settings, "/api/trip": grocery.save_trip,
+                "/api/trip/send": grocery.send_trip}.get(urlparse(self.path).path)
         if not save:
             return self.send_json({"error": "not found"}, 404)
         # only the app's own page may write settings (blocks other sites POSTing to localhost)
@@ -78,6 +81,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(save(json.loads(self.rfile.read(n))))
         except (ValueError, KeyError, TypeError) as e:
             return self.send_json({"error": f"bad data: {e}"}, 400)
+        except requests.RequestException as e:
+            return self.send_json({"error": f"couldn't reach ntfy: {e}"}, 502)
 
 
 def idle_watch(server):

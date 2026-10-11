@@ -273,6 +273,7 @@ function renderTrip() {
       <button class="x" data-unpick="${esc(e.key)}" title="Remove" aria-label="Remove">×</button></label>`;
   return `<div class="toolbar"><span class="sub">${trip.length} things · ${trip.filter(e => e.done).length} in the basket${save ? ` · saving ~${kr(save)} on the rest` : ""}</span>
       <span style="flex:1"></span>
+      <button class="btn primary" id="sendTrip" title="Push the list to your phone via ntfy">📱 Send to phone</button>
       <button class="btn" id="clearDone">Clear ticked</button><button class="btn" id="clearAll">Clear all</button></div>
     ${[...groups].map(([g, es]) => `<div class="listrow"><h3>${esc(g)} <span>${es.length}</span></h3>${es.map(row).join("")}</div>`).join("")
       || `<div class="empty">Nothing picked yet. Press <b>+</b> on any deal, or add something below.</div>`}
@@ -335,6 +336,13 @@ document.addEventListener("click", async e => {
   else if (t.dataset.pick) pick(t.dataset.pick);
   else if (t.dataset.unpick) { e.preventDefault(); data.trip = data.trip.filter(x => x.key !== t.dataset.unpick); saveTrip(); render(); }
   else if (t.id === "clearDone" || t.id === "clearAll") { data.trip = t.id === "clearAll" ? [] : data.trip.filter(x => !x.done); saveTrip(); render(); }
+  else if (t.id === "sendTrip") {
+    t.disabled = true; t.textContent = "Sending…";
+    const r = await fetch("/api/trip/send", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+    const out = await r.json();
+    t.textContent = !r.ok ? "Failed: " + out.error : out.sent ? "✓ Sent" : "No ntfy topic set";
+    setTimeout(() => { t.disabled = false; t.textContent = "📱 Send to phone"; }, 2500);
+  }
   else if (t.id === "addTrip") {
     const v = $("#newTrip").value.trim();
     if (v) { data.trip.push({key: "free|" + Date.now(), name: v, done: false}); saveTrip(); render(); $("#newTrip").focus(); }

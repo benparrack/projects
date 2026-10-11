@@ -110,3 +110,10 @@ assert now[1]["hist"]["weeks"] == 2 and now[2]["hist"]["weeks"] == 1
 grocery.annotate("ica", "2", now)  # another store: no history of its own
 assert now[0]["hist"]["of"] == 0
 print("ok 5")
+
+# trip as phone text
+txt = grocery.trip_text([{"name": "Kaffe", "brand": "Zoégas", "store": "K", "deal": "45 kr", "save": 10},
+                         {"name": "Mjölk"}, {"name": "Ost", "store": "K", "done": True}])
+assert txt == "K\n☐ Kaffe Zoégas: 45 kr (-10 kr)\n\nAnywhere\n☐ Mjölk\n\nSaving ~10 kr", txt
+assert grocery.trip_text([]) == "Trip is empty."
+print("ok 6")
