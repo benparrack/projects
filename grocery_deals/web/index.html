@@ -210,7 +210,7 @@ function matches(item, o) {
   const re = a => a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return alts.some(a => new RegExp(`(?<![\\p{L}\\p{N}])${re(a)}|${re(a)}(?![\\p{L}\\p{N}])`, "u").test(hay));
 }
-const label = item => { const a = item.split(/\s+-/)[0].split("|")[0].trim(); return a[0].toUpperCase() + a.slice(1); };
+const label = item => { const a = item.replace(/\s*<\d+([,.]\d+)?/g, "").split(/\s+-/)[0].split("|")[0].trim(); return a[0].toUpperCase() + a.slice(1); };
 
 // ISO week number, since Swedish offers run by vecka
 function isoWeek(d = new Date()) {
