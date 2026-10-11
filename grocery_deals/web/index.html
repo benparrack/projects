@@ -5,118 +5,186 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Grocery Deals</title>
 <link rel="icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Familjen+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* Looks like a shop flyer on paper: rules instead of boxes, prices as yellow shelf labels, the trip as a receipt. */
 :root {
-  --bg: #f6f5f2; --panel: #fff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e4e2dc; --accent: #1f7a4d;
-  --accent-soft: #e3f2ea; --save: #b3261e; --save-soft: #fde8e6; --member: #6a3fb5; --member-soft: #efe8fb;
-  --ica: #e3000b; --willys: #e86a10; --hemkop: #0f7c86; --lidl: #0050aa; --coop: #00a142; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04);
+  --paper: #f3efe6; --card: #fffdf8; --ink: #1b1a17; --soft: #5f5b52; --faint: #8c877c; --rule: #d8d1c2; --rule-strong: #1b1a17;
+  --tag: #ffd83a; --tag-ink: #1b1a17; --red: #c4161c; --green: #1e5e3e; --green-soft: #e2ecdf; --purple: #5b3a9a;
+  --pick: #fff4c2;
+  --ica: #e3000b; --willys: #e86a10; --hemkop: #0f7c86; --lidl: #0050aa; --coop: #00a142;
+  --sans: "Familjen Grotesk", system-ui, sans-serif; --narrow: "Archivo Narrow", "Arial Narrow", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #151514; --panel: #1f1f1d; --ink: #ecebe6; --muted: #a09e97; --line: #33322f; --accent: #5cc48f;
-    --accent-soft: #1d3328; --save: #ff8a80; --save-soft: #3a1f1d; --member: #b79cf0; --member-soft: #2b2340;
-    --shadow: none; }
+  :root { --paper: #191815; --card: #22211d; --ink: #ece7dc; --soft: #b3ad9f; --faint: #8a8577; --rule: #38352e; --rule-strong: #ece7dc;
+    --red: #ff6b5e; --green: #7fc79b; --green-soft: #22342a; --purple: #b9a0ee; --pick: #3a3420; }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.45 var(--sans); -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; color: inherit; }
-header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
-.bar { display: flex; align-items: center; gap: 16px; padding: 12px 20px; max-width: 1400px; margin: 0 auto; }
-h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 8px; }
-h1 img { width: 24px; height: 24px; }
-.sub { color: var(--muted); font-size: 12px; }
-.tabs { display: flex; gap: 4px; margin-left: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
-.tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 7px; cursor: pointer; color: var(--muted); }
-.tabs button[aria-selected=true] { background: var(--accent); color: #fff; }
-.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
-.btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-main { max-width: 1400px; margin: 0 auto; padding: 16px 20px 60px; }
-.summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 18px; }
-.scard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow); }
-.scard.best { border-color: var(--accent); background: var(--accent-soft); }
-.scard b { display: block; font-size: 14px; }
-.scard .big { font-size: 20px; font-weight: 700; }
-.scard .err { color: var(--save); font-size: 12px; }
-.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
-.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+a { color: inherit; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 0 24px; }
+
+/* masthead */
+header { position: sticky; top: 0; z-index: 5; background: var(--paper); border-bottom: 2px solid var(--rule-strong); }
+.bar { display: flex; align-items: flex-end; gap: 28px; padding-top: 14px; }
+.brand { padding-bottom: 10px; }
+h1 { font: 700 26px/1 var(--sans); letter-spacing: -.02em; margin: 0; display: flex; align-items: center; gap: 10px; }
+h1 img { width: 26px; height: 26px; }
+.sub { color: var(--soft); font-size: 13px; }
+#status { display: block; margin-top: 5px; }
+.tabs { display: flex; gap: 22px; margin-left: auto; }
+.tabs button { border: 0; background: none; padding: 0 0 11px; cursor: pointer; color: var(--soft); font-weight: 600;
+  border-bottom: 4px solid transparent; margin-bottom: -2px; }
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected=true] { color: var(--ink); border-color: var(--tag); }
+#tripN:not(:empty) { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 3px; border-radius: 10px;
+  background: var(--ink); color: var(--paper); font-size: 12px; text-align: center; }
+.linkbtn { border: 0; background: none; padding: 0 0 13px; cursor: pointer; color: var(--soft); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.linkbtn:hover { color: var(--ink); }
+.btn { border: 1.5px solid var(--ink); background: transparent; border-radius: 3px; padding: 6px 14px; cursor: pointer; font-weight: 600; }
+.btn:hover { background: var(--ink); color: var(--paper); }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn.primary:hover { background: transparent; color: var(--ink); }
+.btn:disabled { opacity: .6; cursor: default; }
+main.wrap { padding-top: 26px; padding-bottom: 80px; }
+
+/* which store wins this week: a ranked list with bars */
+.board { margin: 0 0 30px; }
+.board h2, .sect { font: 600 12px/1 var(--sans); text-transform: uppercase; letter-spacing: .09em; color: var(--soft); margin: 0 0 8px; }
+.board ol { list-style: none; margin: 0; padding: 0; columns: 2 440px; column-gap: 44px; border-top: 1px solid var(--rule); }
+.board li { break-inside: avoid; display: grid; grid-template-columns: 22px minmax(0, 1fr) 110px 88px; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--rule); }
+.board .rank { font: 700 15px var(--narrow); color: var(--faint); }
+.board li.best .rank { color: var(--ink); }
+.board .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board .who b { font-weight: 600; }
+.board .who small { color: var(--faint); margin-left: 6px; }
+.board .meter { height: 8px; background: var(--rule); }
+.board .meter i { display: block; height: 100%; background: var(--ink); }
+.board li.best .meter i { background: var(--green); }
+.board .amt { text-align: right; font: 700 18px var(--narrow); }
+.board .amt.dim { font: 400 13px var(--sans); color: var(--faint); }
+.board .err { color: var(--red); font-size: 13px; }
+.sq { display: inline-block; width: 9px; height: 9px; margin-right: 7px; background: var(--c); vertical-align: 1px; }
 .ica { --c: var(--ica); } .willys { --c: var(--willys); } .hemkop { --c: var(--hemkop); } .lidl { --c: var(--lidl); } .coop { --c: var(--coop); }
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
-.toolbar input[type=search] { flex: 1 1 220px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-.toolbar select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; user-select: none; }
-.sfilter { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
-.sfilter[aria-pressed=false] { opacity: .45; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
-.card.onlist { border-color: var(--accent); }
-.pic { height: 120px; background: #fff; display: flex; align-items: center; justify-content: center; position: relative; }
-.pic img { max-width: 100%; max-height: 110px; object-fit: contain; }
-.pic .badge { position: absolute; top: 8px; left: 8px; }
-.badge { background: var(--save-soft); color: var(--save); font-weight: 700; border-radius: 6px; padding: 2px 7px; font-size: 12px; }
-.body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; flex: 1; }
-.name { font-weight: 600; }
-.meta { color: var(--muted); font-size: 12px; }
-.deal { font-size: 17px; font-weight: 800; margin-top: 2px; }
-.was { color: var(--muted); font-size: 12px; }
-.foot { margin-top: auto; padding-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.tag { font-size: 11px; border-radius: 5px; padding: 1px 6px; }
-.tag.member { background: var(--member-soft); color: var(--member); }
-.tag.list { background: var(--accent-soft); color: var(--accent); }
-.listrow { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; box-shadow: var(--shadow); }
-.listrow h3 { margin: 0; padding: 10px 14px; font-size: 15px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--line); }
-.listrow h3 span { color: var(--muted); font-weight: 400; font-size: 12px; }
-.strip { display: flex; gap: 10px; overflow-x: auto; padding: 12px 14px; }
-.strip .card { flex: 0 0 190px; box-shadow: none; }
-.none { color: var(--muted); padding: 12px 14px; }
-.cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; }
-@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } .bar { flex-wrap: wrap; } .tabs { margin-left: 0; } }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
-.panel h2 { font-size: 15px; margin: 0 0 4px; }
-.panel p { color: var(--muted); margin: 0 0 10px; font-size: 12px; }
-.erow { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
-.erow input { flex: 1; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
-.erow .count { width: 70px; text-align: right; color: var(--muted); font-size: 12px; }
-.x { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 2px 6px; }
-.x:hover { color: var(--save); }
-.saved { color: var(--accent); font-size: 12px; margin-left: 8px; }
-.empty { text-align: center; color: var(--muted); padding: 40px; }
-.stores-found { max-height: 260px; overflow: auto; margin-top: 8px; }
-.add { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line);
-  background: var(--panel); color: var(--accent); font-size: 18px; line-height: 1; cursor: pointer; }
-.add[aria-pressed=true] { background: var(--accent); color: #fff; border-color: var(--accent); }
-.card.picked { outline: 2px solid var(--accent); }
-.trow { display: flex; gap: 10px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--line); }
-.trow:first-of-type { border-top: 0; }
-.trow img { width: 40px; height: 40px; object-fit: contain; background: #fff; border-radius: 6px; }
+
+/* my list: one section per thing you buy */
+.item { margin-bottom: 30px; }
+.item h3 { margin: 0 0 12px; font: 700 21px/1.1 var(--sans); letter-spacing: -.01em; display: flex; align-items: baseline; gap: 10px;
+  border-bottom: 1px solid var(--rule); padding-bottom: 7px; }
+.item h3 span { font: 400 13px var(--sans); color: var(--faint); }
+.item.empty-item { display: flex; align-items: baseline; gap: 10px; margin-bottom: 0; padding: 7px 0; border-bottom: 1px dashed var(--rule); }
+.item.empty-item b { font-weight: 600; } .item.empty-item span { color: var(--faint); font-size: 13px; }
+.quiet { margin: 4px 0 30px; }
+.strip { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.strip .card { flex: 0 0 200px; }
+
+/* deal card */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 22px 16px; }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 2px; display: flex; flex-direction: column; position: relative; }
+.card.picked { background: var(--pick); border-color: var(--ink); }
+.pic { height: 132px; background: #fff; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--rule); }
+.pic img { max-width: 88%; max-height: 116px; object-fit: contain; }
+.body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.store { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+.name { font-weight: 600; line-height: 1.25; margin-top: 3px; }
+.meta { color: var(--faint); font-size: 13px; }
+.price { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; flex-wrap: wrap; }
+.label { background: var(--tag); color: var(--tag-ink); font: 600 14px/1 var(--narrow); padding: 5px 8px 4px; transform: rotate(-1.2deg);
+  box-shadow: 1px 1px 0 rgba(0,0,0,.18); white-space: nowrap; }
+.label b { font-size: 25px; font-weight: 700; letter-spacing: -.01em; }
+.save { color: var(--red); font: 700 14px/1.15 var(--narrow); }
+.save small { display: block; font: 500 12px var(--sans); }
+.was { color: var(--faint); font-size: 12px; }
+.hist { font-size: 12px; color: var(--soft); font-style: italic; }
+.hist.good { color: var(--green); font-style: normal; font-weight: 600; }
+.foot { margin-top: auto; padding-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--faint); }
+.foot .member { color: var(--purple); font-weight: 600; }
+.foot .list { color: var(--green); font-weight: 600; }
+.add { position: absolute; top: 8px; right: 8px; height: 26px; padding: 0 9px; border-radius: 13px; border: 1.5px solid var(--ink);
+  background: var(--card); color: var(--ink); font-size: 12px; font-weight: 700; cursor: pointer; }
+.add:hover { background: var(--ink); color: var(--card); }
+.add[aria-pressed=true] { background: var(--ink); color: var(--card); }
+
+/* all deals */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 14px; }
+.toolbar input[type=search] { flex: 1 1 260px; padding: 9px 2px; border: 0; border-bottom: 2px solid var(--ink); background: transparent; font-size: 17px; outline: none; }
+.toolbar select { padding: 6px 4px; border: 0; border-bottom: 1px solid var(--rule); background: transparent; cursor: pointer; }
+.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--soft); cursor: pointer; user-select: none; font-size: 14px; }
+input[type=checkbox] { accent-color: var(--ink); }
+.stores { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 20px; }
+.sfilter { border: 1px solid var(--rule); background: var(--card); border-radius: 2px; padding: 3px 10px; cursor: pointer; font-size: 13px; }
+.sfilter[aria-pressed=false] { opacity: .4; text-decoration: line-through; }
+.count-line { margin-left: auto; color: var(--faint); font-size: 13px; }
+
+/* trip: a receipt */
+.receipt { max-width: 520px; margin: 0 auto; background: var(--card); padding: 26px 26px 20px; font-family: var(--mono); font-size: 14px;
+  box-shadow: 0 1px 0 var(--rule), 0 8px 24px rgba(0,0,0,.06); position: relative; }
+.receipt::after { content: ""; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px;
+  background: linear-gradient(-45deg, transparent 6px, var(--card) 0) 0 0 / 12px 12px, linear-gradient(45deg, transparent 6px, var(--card) 0) 0 0 / 12px 12px; }
+.receipt .top { text-align: center; margin-bottom: 14px; }
+.receipt .top b { display: block; font-size: 16px; letter-spacing: .12em; }
+.receipt .top span { color: var(--faint); font-size: 12px; }
+.receipt h4 { margin: 16px 0 4px; font-size: 12px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px dashed var(--faint); padding-bottom: 4px; }
+.trow { display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; cursor: pointer; }
+.trow input { margin-top: 3px; width: 16px; height: 16px; }
 .trow .grow { flex: 1; min-width: 0; }
-.trow.done .grow { text-decoration: line-through; opacity: .5; }
-.trow input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
-.hist { font-size: 12px; color: var(--muted); }
-.hist.good { color: var(--accent); font-weight: 600; }
-.ended { color: var(--save); font-size: 12px; }
-code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+.trow .what { display: flex; justify-content: space-between; gap: 10px; }
+.trow .what span:last-child { white-space: nowrap; }
+.trow .small { color: var(--faint); font-size: 12px; }
+.trow.done .grow { text-decoration: line-through; opacity: .45; }
+.ended { color: var(--red); }
+.total { display: flex; justify-content: space-between; border-top: 1px dashed var(--faint); margin-top: 14px; padding-top: 8px; font-weight: 500; }
+.receipt .addrow { display: flex; gap: 8px; margin-top: 16px; }
+.receipt .addrow input { flex: 1; border: 0; border-bottom: 1px solid var(--faint); background: transparent; padding: 5px 0; font: inherit; outline: none; }
+.receipt-actions { max-width: 520px; margin: 26px auto 0; display: flex; gap: 10px; flex-wrap: wrap; }
+.receipt-actions .spacer { flex: 1; }
+
+/* edit */
+.cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 48px; }
+@media (max-width: 900px) { .cols { grid-template-columns: 1fr; } .bar { flex-wrap: wrap; } .tabs { margin-left: 0; } }
+@media (max-width: 560px) { .wrap { padding: 0 16px; } .board li { grid-template-columns: 18px minmax(0, 1fr) 80px; } .board .meter { display: none; } }
+.panel { margin-bottom: 36px; }
+.panel h2 { font: 700 19px var(--sans); margin: 0 0 4px; display: flex; align-items: baseline; gap: 10px; }
+.panel p { color: var(--soft); margin: 0 0 12px; font-size: 13px; max-width: 60ch; }
+.erow { display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--rule); }
+.erow input { flex: 1; padding: 8px 0; border: 0; background: transparent; outline: none; }
+.erow input:focus { box-shadow: inset 0 -2px 0 var(--ink); }
+.erow .count { width: 76px; text-align: right; color: var(--faint); font-size: 12px; }
+.erow.new { border-bottom: 0; margin-top: 10px; gap: 10px; }
+.erow.new input { border-bottom: 1px solid var(--ink); }
+.erow .storename { flex: 1; padding: 8px 0; }
+.erow .storename small { color: var(--faint); margin-left: 6px; }
+.x { border: 0; background: none; cursor: pointer; color: var(--faint); font-size: 19px; line-height: 1; padding: 2px 4px; }
+.x:hover { color: var(--red); }
+.saved { color: var(--green); font: 500 12px var(--sans); }
+.empty { text-align: center; color: var(--soft); padding: 50px 20px; }
+.stores-found { max-height: 280px; overflow: auto; margin-top: 8px; }
+code { font-family: var(--mono); font-size: 12px; background: var(--card); border: 1px solid var(--rule); padding: 0 4px; }
 </style>
 </head>
 <body>
-<header><div class="bar">
-  <h1><img src="icon.svg" alt="">Grocery Deals</h1>
-  <span class="sub" id="status">Loading…</span>
+<header><div class="wrap bar">
+  <div class="brand"><h1><img src="icon.svg" alt="">Grocery Deals</h1><span class="sub" id="status">Loading…</span></div>
   <nav class="tabs" role="tablist">
     <button role="tab" data-view="list" aria-selected="true">My list</button>
     <button role="tab" data-view="all" aria-selected="false">All deals</button>
-    <button role="tab" data-view="trip" aria-selected="false">Trip <span id="tripN"></span></button>
+    <button role="tab" data-view="trip" aria-selected="false">Trip<span id="tripN"></span></button>
     <button role="tab" data-view="edit" aria-selected="false">Edit</button>
   </nav>
-  <button class="btn" id="refresh" title="Fetch fresh offers from the stores">↻ Refresh</button>
+  <button class="linkbtn" id="refresh" title="Fetch fresh offers from the stores">Refresh</button>
 </div></header>
-<main>
-  <section class="summary" id="summary"></section>
+<main class="wrap">
+  <section class="board" id="summary"></section>
   <section id="view"></section>
 </main>
 <script>
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-const kr = n => n == null ? "" : (Math.round(n * 10) / 10).toLocaleString("sv-SE") + " kr";
+const kr = n => n == null ? "" : Math.round(n).toLocaleString("sv-SE") + " kr";  // savings: whole kronor
 let data = null, view = location.hash.slice(1) || localStorage.getItem("view") || "list";
 const ui = { q: "", sort: "save", cat: "", member: true, hideSkip: true, onlyList: false, off: new Set() };
 
@@ -130,13 +198,21 @@ function matches(item, o) {
 }
 const label = item => { const a = item.split(/\s+-/)[0].split("|")[0].trim(); return a[0].toUpperCase() + a.slice(1); };
 
+// ISO week number, since Swedish offers run by vecka
+function isoWeek(d = new Date()) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+}
+
 async function load(refresh = false) {
-  $("#status").textContent = refresh ? "Fetching fresh offers…" : "Loading…";
+  $("#status").textContent = refresh ? "Asking the stores for fresh offers…" : "Loading…";
   try {
     const r = await fetch("/api/deals" + (refresh ? "?refresh=1" : ""));
     data = await r.json();
     ui.member = data.settings.member;
-    $("#status").textContent = `${allOffers().length} offers · ${data.stores.length} stores · updated ${new Date(data.fetched * 1000).toLocaleTimeString("sv-SE", {hour: "2-digit", minute: "2-digit"})}`;
+    const at = new Date(data.fetched * 1000).toLocaleTimeString("sv-SE", {hour: "2-digit", minute: "2-digit"});
+    $("#status").textContent = `Week ${isoWeek()} · ${allOffers().length} offers from ${data.stores.length} stores · checked ${at}`;
   } catch (e) { $("#status").textContent = "Couldn't load offers: " + e.message; return; }
   render();
 }
@@ -157,28 +233,32 @@ const visible = o => (ui.member || !o.member);
 function histNote(h) {
   if (!h || h.of < 2 || h.now == null) return "";
   const often = `on offer ${h.weeks} of ${h.of} wks`;
-  if (h.weeks <= 1) return `<span class="hist good">New: first time on offer in ${h.of} wks</span>`;
+  if (h.weeks <= 1) return `<span class="hist good">First time on offer in ${h.of} wks</span>`;
   if (h.low == null || h.now <= h.low) return `<span class="hist good">Best price in ${h.of} wks · ${often}</span>`;
-  return `<span class="hist">Was ${kr(h.low)}/${esc(h.unit)} in ${esc(h.low_week.split("-")[1])} · ${often}</span>`;
+  return `<span class="hist">Was ${h.low.toLocaleString("sv-SE")} kr/${esc(h.unit)} in ${esc(h.low_week.split("-")[1])} · ${often}</span>`;
 }
 
+// Shelf-label style: the last number (the price) big, "2 för" and "kr/kg" small.
+const labelPrice = d => esc(d).replace(/(\d+(?:[,:.]\d+)?)(?!.*\d)/, "<b>$1</b>");
+const dayFmt = iso => new Date(iso + "T12:00").toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"});
+
 function card(o) {
-  const pct = o.pct ? ` · ${Math.round(o.pct * 100)}%` : "";
-  const until = o.until ? new Date(o.until + "T12:00").toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"}) : "";
   const k = keyOf(o), picked = data.trip.some(e => e.key === k);
-  return `<article class="card ${o.item ? "onlist" : ""} ${picked ? "picked" : ""}">
-    <div class="pic"><button class="add" data-pick="${esc(k)}" aria-pressed="${picked}" title="Add to this week's trip" aria-label="Add to trip">${picked ? "✓" : "+"}</button>${o.image ? `<img loading="lazy" src="${esc(o.image)}" alt="">` : ""}${o.save ? `<span class="badge">−${kr(o.save)}${pct}</span>` : ""}</div>
+  return `<article class="card ${picked ? "picked" : ""}">
+    <button class="add" data-pick="${esc(k)}" aria-pressed="${picked}" title="Add to this week's trip">${picked ? "On trip" : "+ Trip"}</button>
+    <div class="pic">${o.image ? `<img loading="lazy" src="${esc(o.image)}" alt="">` : ""}</div>
     <div class="body">
-      <span class="chip ${o.chain}">${esc(o.stores.map(s => s.name).join(" · "))}</span>
+      <span class="store"><span class="sq ${o.chain}"></span>${esc(o.stores.map(s => s.name).join(", "))}</span>
       <span class="name">${esc(o.name)}</span>
       <span class="meta">${esc([o.brand, o.size].filter(Boolean).join(" · "))}</span>
-      <span class="deal">${esc(o.deal)}</span>
-      ${o.was ? `<span class="was">Regular ${esc(o.was)}</span>` : ""}
+      <div class="price"><span class="label">${labelPrice(o.deal)}</span>
+        ${o.save ? `<span class="save">save ${kr(o.save)}${o.pct ? `<small>${Math.round(o.pct * 100)}% off</small>` : ""}</span>` : ""}</div>
+      ${o.was ? `<span class="was">usually ${esc(o.was)}</span>` : ""}
       ${histNote(o.hist)}
       <div class="foot">
-        ${o.member ? `<span class="tag member">${esc(data.member_names[o.chain])}</span>` : ""}
-        ${o.item ? `<span class="tag list">${esc(label(o.item))}</span>` : ""}
-        ${until ? `<span class="meta">until ${until}</span>` : ""}
+        ${o.member ? `<span class="member">${esc(data.member_names[o.chain])}</span>` : ""}
+        ${o.item && view !== "list" ? `<span class="list">${esc(label(o.item))}</span>` : ""}
+        ${o.until ? `<span>until ${dayFmt(o.until)}</span>` : ""}
       </div>
     </div></article>`;
 }
@@ -187,24 +267,28 @@ function renderSummary() {
   const rows = data.stores.map(({store, offers, error}) => {
     const mine = offers.filter(o => o.item && visible(o));
     return {store, error, n: mine.length, save: mine.reduce((t, o) => t + (o.save || 0), 0)};
-  });
-  const best = Math.max(...rows.map(r => r.save));
-  $("#summary").innerHTML = rows.map(r => `<div class="scard ${r.save && r.save === best ? "best" : ""}">
-    <span class="chip ${r.store.chain}">${esc(r.store.chain)}</span><b>${esc(r.store.name)}</b>
-    ${r.error ? `<div class="err">Couldn't fetch: ${esc(r.error)}</div>` :
-      r.n && !r.save ? `<span class="big">${r.n} items</span> <span class="sub">on your list · savings not listed</span>` :
-      `<span class="big">~${kr(r.save)}</span> <span class="sub">off your list · ${r.n} items${r.save && r.save === best ? " · best" : ""}</span>`}
-  </div>`).join("");
+  }).sort((a, b) => !!a.error - !!b.error || b.save - a.save || b.n - a.n);
+  const max = Math.max(1, ...rows.map(r => r.save));
+  $("#summary").innerHTML = `<h2>Where to shop this week</h2><ol>${rows.map((r, i) => `<li class="${i === 0 && r.save ? "best" : ""}">
+    <span class="rank">${i + 1}</span>
+    <span class="who"><span class="sq ${r.store.chain}"></span><b>${esc(r.store.name)}</b>${r.error ? "" : `<small>${r.n} from your list</small>`}</span>
+    ${r.error ? `<span class="err" title="${esc(r.error)}">couldn't fetch offers</span><span></span>` :
+      r.n && !r.save ? `<span class="meter"></span><span class="amt dim">no savings given</span>` :
+      `<span class="meter"><i style="width:${(r.save / max * 100).toFixed(1)}%"></i></span><span class="amt">${r.save ? "−" + Math.round(r.save) + " kr" : "–"}</span>`}
+  </li>`).join("")}</ol>`;
 }
 
 function renderList() {
-  const offers = allOffers().filter(visible);
+  const offers = allOffers().filter(visible), quiet = [];
   const rows = data.settings.items.map(item => {
     const hits = offers.filter(o => o.item === item).sort((a, b) => (b.save || 0) - (a.save || 0));
-    return `<div class="listrow"><h3>${esc(label(item))} <span>${hits.length ? hits.length + " deals" : ""}</span></h3>
-      ${hits.length ? `<div class="strip">${hits.map(card).join("")}</div>` : `<div class="none">No deals this week.</div>`}</div>`;
-  });
-  return rows.join("") || `<div class="empty">Your list is empty. Add items under <b>Edit</b>.</div>`;
+    if (!hits.length) { quiet.push(label(item)); return ""; }
+    const best = hits[0].save ? ` · up to ${kr(hits[0].save)} off` : "";
+    return `<section class="item"><h3>${esc(label(item))} <span>${hits.length} ${hits.length === 1 ? "deal" : "deals"}${best}</span></h3>
+      <div class="strip">${hits.map(card).join("")}</div></section>`;
+  }).join("");
+  if (!data.settings.items.length) return `<div class="empty">Your list is empty. Add what you usually buy under <b>Edit</b>.</div>`;
+  return rows + (quiet.length ? `<p class="quiet sub">Not on offer this week: ${quiet.map(esc).join(", ")}.</p>` : "");
 }
 
 function renderAll() {
@@ -219,17 +303,17 @@ function renderAll() {
   const by = {save: (a, b) => (b.save || 0) - (a.save || 0), pct: (a, b) => (b.pct || 0) - (a.pct || 0),
               name: (a, b) => a.name.localeCompare(b.name, "sv")}[ui.sort];
   os.sort(by);
-  const storeBtns = data.stores.map(({store}) => `<button class="sfilter chip ${store.chain}" data-store="${esc(store.chain + store.id)}" aria-pressed="${!ui.off.has(store.chain + store.id)}">${esc(store.name)}</button>`).join("");
+  const storeBtns = data.stores.map(({store}) => `<button class="sfilter" data-store="${esc(store.chain + store.id)}" aria-pressed="${!ui.off.has(store.chain + store.id)}"><span class="sq ${store.chain}"></span>${esc(store.name)}</button>`).join("");
   return `<div class="toolbar">
-      <input type="search" id="q" placeholder="Search offers… (e.g. kaffe, ost, chips)" value="${esc(ui.q)}">
-      <select id="sort"><option value="save">Biggest saving (kr)</option><option value="pct">Biggest % off</option><option value="name">Name</option></select>
-      <select id="cat"><option value="">All categories</option>${cats.map(c => `<option ${c === ui.cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
+      <input type="search" id="q" placeholder="Search: kaffe, ost, chips…" value="${esc(ui.q)}">
+      <select id="sort"><option value="save">Biggest saving</option><option value="pct">Most % off</option><option value="name">A–Ö</option></select>
+      <select id="cat"><option value="">Every category</option>${cats.map(c => `<option ${c === ui.cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
       <label class="toggle"><input type="checkbox" id="onlyList" ${ui.onlyList ? "checked" : ""}> Only my list</label>
       <label class="toggle"><input type="checkbox" id="member" ${ui.member ? "checked" : ""}> Member prices</label>
       <label class="toggle"><input type="checkbox" id="hideSkip" ${ui.hideSkip ? "checked" : ""}> Hide skipped</label>
     </div>
-    <div class="toolbar">${storeBtns}<span class="sub">${os.length} offers</span></div>
-    ${os.length ? `<div class="grid">${os.map(card).join("")}</div>` : `<div class="empty">Nothing matches.</div>`}`;
+    <div class="stores">${storeBtns}<span class="count-line">${os.length} offers</span></div>
+    ${os.length ? `<div class="grid">${os.map(card).join("")}</div>` : `<div class="empty">Nothing matches that.</div>`}`;
 }
 
 function renderEdit() {
@@ -240,23 +324,23 @@ function renderEdit() {
       <button class="x" data-del="${key}" data-i="${i}" title="Remove" aria-label="Remove">×</button></div>`).join("");
   return `<div class="cols"><div>
     <div class="panel"><h2>Shopping list <span class="saved" id="saved"></span></h2>
-      <p>One line per thing you buy. Words match the start or end of a word in the offer (Swedish compounds:
-      <code>kyckling</code> finds Kycklingbröstfilé, <code>bröd</code> finds Lantbröd). <code>|</code> = alternatives,
-      <code>-word</code> at the end excludes (<code>ägg -lägg</code> skips pålägg). Saves automatically.</p>
+      <p>One line per thing you buy. A word matches the start or end of a word in the offer, which suits Swedish
+      compounds: <code>kyckling</code> finds Kycklingbröstfilé, <code>bröd</code> finds Lantbröd. Use <code>|</code> for
+      alternatives and put <code>-word</code> at the end to exclude (<code>ägg -lägg</code> skips pålägg). Changes save as you type.</p>
       ${rows("items")}
-      <div class="erow"><input id="newItem" placeholder="Add an item, e.g. yoghurt|kvarg"><button class="btn primary" id="addItem">Add</button></div>
+      <div class="erow new"><input id="newItem" placeholder="Add something, e.g. yoghurt|kvarg"><button class="btn primary" id="addItem">Add</button></div>
     </div></div><div>
-    <div class="panel"><h2>Stores</h2><p>Offers come from these stores, in this order.</p>
-      ${s.stores.map((st, i) => `<div class="erow"><span class="chip ${st.chain}" style="flex:1">${esc(st.name)}</span>
+    <div class="panel"><h2>Stores</h2><p>Where offers come from.</p>
+      ${s.stores.map((st, i) => `<div class="erow"><span class="storename"><span class="sq ${st.chain}"></span>${esc(st.name)}</span>
         <button class="x" data-delstore="${i}" title="Remove store" aria-label="Remove store">×</button></div>`).join("")}
-      <div class="erow"><input id="storeQ" placeholder="Find a store: kvantum, fridhemsplan, södermalm, lidl…"><button class="btn" id="storeGo">Search</button></div>
+      <div class="erow new"><input id="storeQ" placeholder="Find a store: kvantum, fridhemsplan, lidl…"><button class="btn" id="storeGo">Search</button></div>
       <div class="stores-found" id="storesFound"></div>
     </div>
-    <div class="panel"><h2>Never show in "other deals"</h2><p>Hidden from the weekly push's extras and from All deals (unless you untick "Hide skipped").</p>
+    <div class="panel"><h2>Never show</h2><p>Left out of the Monday push's extra deals and out of All deals (unless you untick "Hide skipped").</p>
       ${rows("skip")}
-      <div class="erow"><input id="newSkip" placeholder="e.g. kattmat|hundmat"><button class="btn" id="addSkip">Add</button></div>
+      <div class="erow new"><input id="newSkip" placeholder="e.g. kattmat|hundmat"><button class="btn" id="addSkip">Add</button></div>
     </div>
-    <div class="panel"><label class="toggle"><input type="checkbox" id="memberSet" ${s.member ? "checked" : ""}> Include member prices (ICA Stammis, Willys Plus, Hemköp Klubb, Coop medlem, Lidl Plus)</label></div>
+    <div class="panel"><label class="toggle"><input type="checkbox" id="memberSet" ${s.member ? "checked" : ""}> Count member prices (${Object.values(data.member_names).join(", ")})</label></div>
   </div></div>`;
 }
 
@@ -264,27 +348,29 @@ function renderTrip() {
   const today = new Date().toISOString().slice(0, 10), trip = data.trip;
   const groups = new Map();
   for (const e of trip) { const g = e.store || "Anywhere"; groups.set(g, [...(groups.get(g) || []), e]); }
-  const save = trip.filter(e => !e.done).reduce((t, e) => t + (e.save || 0), 0);
+  const left = trip.filter(e => !e.done), save = left.reduce((t, e) => t + (e.save || 0), 0);
   const row = e => `<label class="trow ${e.done ? "done" : ""}">
       <input type="checkbox" data-done="${esc(e.key)}" ${e.done ? "checked" : ""}>
-      ${e.image ? `<img src="${esc(e.image)}" alt="">` : ""}
-      <span class="grow"><b>${esc(e.name)}</b> <span class="meta">${esc([e.brand, e.size].filter(Boolean).join(" · "))}</span><br>
-        ${esc(e.deal)}${e.save ? ` <span class="badge">−${kr(e.save)}</span>` : ""}
-        ${e.until && e.until < today ? `<span class="ended">offer ended ${esc(e.until)}</span>` : ""}</span>
+      <span class="grow"><span class="what"><span>${esc(e.name)}</span><span>${esc(e.deal || "")}</span></span>
+        <span class="small">${esc([e.brand, e.size].filter(Boolean).join(" · "))}${e.save ? ` · save ${kr(e.save)}` : ""}
+        ${e.until && e.until < today ? `<span class="ended"> · offer ended ${esc(e.until)}</span>` : ""}</span></span>
       <button class="x" data-unpick="${esc(e.key)}" title="Remove" aria-label="Remove">×</button></label>`;
-  return `<div class="toolbar"><span class="sub">${trip.length} things · ${trip.filter(e => e.done).length} in the basket${save ? ` · saving ~${kr(save)} on the rest` : ""}</span>
-      <span style="flex:1"></span>
-      <button class="btn primary" id="sendTrip" title="Push the list to your phone via ntfy">📱 Send to phone</button>
-      <button class="btn" id="clearDone">Clear ticked</button><button class="btn" id="clearAll">Clear all</button></div>
-    ${[...groups].map(([g, es]) => `<div class="listrow"><h3>${esc(g)} <span>${es.length}</span></h3>${es.map(row).join("")}</div>`).join("")
-      || `<div class="empty">Nothing picked yet. Press <b>+</b> on any deal, or add something below.</div>`}
-    <div class="erow"><input id="newTrip" placeholder="Add anything else, e.g. toalettpapper"><button class="btn primary" id="addTrip">Add</button></div>`;
+  return `<div class="receipt">
+      <div class="top"><b>SHOPPING TRIP</b><span>week ${isoWeek()} · ${new Date().toLocaleDateString("en-GB", {weekday: "long", day: "numeric", month: "long"})}</span></div>
+      ${[...groups].map(([g, es]) => `<h4>${esc(g)}</h4>${es.map(row).join("")}`).join("")
+        || `<p class="empty">Nothing yet. Press <b>+ Trip</b> on a deal, or write something below.</p>`}
+      ${trip.length ? `<div class="total"><span>${left.length} to get</span><span>${save ? `SAVING ${kr(save)}` : ""}</span></div>` : ""}
+      <div class="addrow"><input id="newTrip" placeholder="add something else, e.g. toalettpapper"><button class="btn" id="addTrip">Add</button></div>
+    </div>
+    <div class="receipt-actions"><button class="btn primary" id="sendTrip" title="Push the list to your phone via ntfy">Send to phone</button>
+      <span class="spacer"></span><button class="btn" id="clearDone">Clear ticked</button><button class="btn" id="clearAll">Clear all</button></div>`;
 }
 
 function render() {
   if (!data) return;
   document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === view));
   renderSummary();
+  $("#summary").hidden = view === "trip" || view === "edit";
   $("#tripN").textContent = data.trip.filter(e => !e.done).length || "";
   $("#view").innerHTML = {list: renderList, all: renderAll, trip: renderTrip, edit: renderEdit}[view]();
   if (view === "all") $("#sort").value = ui.sort;
@@ -307,7 +393,7 @@ function pick(k) {
   saveTrip();
   // update in place instead of re-rendering, so the scroll position in long lists stays put
   document.querySelectorAll(`[data-pick="${CSS.escape(k)}"]`).forEach(b => {
-    b.setAttribute("aria-pressed", i < 0); b.textContent = i < 0 ? "✓" : "+"; b.closest(".card").classList.toggle("picked", i < 0);
+    b.setAttribute("aria-pressed", i < 0); b.textContent = i < 0 ? "On trip" : "+ Trip"; b.closest(".card").classList.toggle("picked", i < 0);
   });
   $("#tripN").textContent = data.trip.filter(e => !e.done).length || "";
 }
@@ -341,8 +427,8 @@ document.addEventListener("click", async e => {
     t.disabled = true; t.textContent = "Sending…";
     const r = await fetch("/api/trip/send", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
     const out = await r.json();
-    t.textContent = !r.ok ? "Failed: " + out.error : out.sent ? "✓ Sent" : "No ntfy topic set";
-    setTimeout(() => { t.disabled = false; t.textContent = "📱 Send to phone"; }, 2500);
+    t.textContent = !r.ok ? "Failed: " + out.error : out.sent ? "Sent" : "No ntfy topic set";
+    setTimeout(() => { t.disabled = false; t.textContent = "Send to phone"; }, 2500);
   }
   else if (t.id === "addTrip") {
     const v = $("#newTrip").value.trim();
@@ -395,7 +481,7 @@ async function searchStores() {
   box.innerHTML = `<div class="sub">Searching…</div>`;
   const r = await fetch("/api/stores?q=" + encodeURIComponent(q)), res = await r.json();
   if (!r.ok) { box.innerHTML = `<div class="sub">${esc(res.error)}</div>`; return; }
-  box.innerHTML = res.length ? res.map(s => `<div class="erow"><span class="chip ${s.chain}" style="flex:1">${esc(s.name)} <span class="sub" style="text-transform:none;font-weight:400">${esc(s.where)}</span></span>
+  box.innerHTML = res.length ? res.map(s => `<div class="erow"><span class="storename"><span class="sq ${s.chain}"></span>${esc(s.name)}<small>${esc(s.where)}</small></span>
       <button class="btn" data-addstore="${esc(JSON.stringify({chain: s.chain, id: String(s.id), name: s.name}))}">Add</button></div>`).join("")
     : `<div class="sub">No stores found.</div>`;
 }
