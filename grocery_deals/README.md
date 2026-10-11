@@ -12,7 +12,7 @@ own after 2 h without use.
 
 - **My list**: per list item, every matching offer across your stores, biggest saving first. The cards at the
   top show each store's total saving on your list; the best store is highlighted.
-- **All deals**: every offer, searchable. Sort by kr or % off, filter by category or store, member prices
+- **All deals**: every offer, searchable. Sort by kr off, % off or price per kg/l (worked out from the pack size when the deal is per piece), filter by category or store, member prices
   on or off. Offers that are identical at two stores of one chain are shown once.
 - **Trip**: press **+** on any deal to put it on this week's trip, grouped by store, with what you'll save.
   Add anything else (toilet paper, …) as free text. Tick things off as they go in the basket, then

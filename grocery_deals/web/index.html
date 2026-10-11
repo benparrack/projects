@@ -238,6 +238,21 @@ function histNote(h) {
   return `<span class="hist">Was ${h.low.toLocaleString("sv-SE")} kr/${esc(h.unit)} in ${esc(h.low_week.split("-")[1])} · ${often}</span>`;
 }
 
+// kr per kg (or litre) from the deal and the pack size, so a 2 kg pack and a 900 g pack compare fairly.
+// null when the deal is per piece and the size isn't a weight/volume.
+function perKg(o) {
+  const d = String(o.deal).toLowerCase().replace(/(\d),(\d)/g, "$1.$2");
+  const stated = d.match(/(\d+(?:\.\d+)?)\s*(?:kr)?\s*\/\s*(kg|l)\b/);
+  if (stated) return +stated[1];
+  const n = d.match(/(\d+)\s*för\s*(\d+(?:\.\d+)?)/), first = d.match(/\d+(?:\.\d+)?/);
+  const price = n ? n[2] / n[1] : first && +first[0];
+  const m = String(o.size).toLowerCase().replace(/(\d),(\d)/g, "$1.$2").match(/(?:(\d+)\s*x\s*)?(\d+(?:\.\d+)?)\s*(kg|g|l|cl|ml)\b/);
+  if (!price || !m) return null;
+  const grams = (+m[1] || 1) * m[2] * {kg: 1000, g: 1, l: 1000, cl: 10, ml: 1}[m[3]];
+  return grams >= 20 ? price / grams * 1000 : null;  // tiny sizes are usually parse noise
+}
+const perKgText = o => { const v = perKg(o); return v == null || /\/\s*(kg|l)\b/i.test(o.deal) ? "" : `${v.toLocaleString("sv-SE", {maximumFractionDigits: 0})} kr/${/l\b/i.test(o.size) ? "l" : "kg"}`; };
+
 // Shelf-label style: the last number (the price) big, "2 för" and "kr/kg" small.
 const labelPrice = d => esc(d).replace(/(\d+(?:[,:.]\d+)?)(?!.*\d)/, "<b>$1</b>");
 const dayFmt = iso => new Date(iso + "T12:00").toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"});
@@ -253,7 +268,7 @@ function card(o) {
       <span class="meta">${esc([o.brand, o.size].filter(Boolean).join(" · "))}</span>
       <div class="price"><span class="label">${labelPrice(o.deal)}</span>
         ${o.save ? `<span class="save">save ${kr(o.save)}${o.pct ? `<small>${Math.round(o.pct * 100)}% off</small>` : ""}</span>` : ""}</div>
-      ${o.was ? `<span class="was">usually ${esc(o.was)}</span>` : ""}
+      ${o.was || perKgText(o) ? `<span class="was">${[o.was && "usually " + esc(o.was), perKgText(o)].filter(Boolean).join(" · ")}</span>` : ""}
       ${histNote(o.hist)}
       <div class="foot">
         ${o.member ? `<span class="member">${esc(data.member_names[o.chain])}</span>` : ""}
@@ -301,12 +316,13 @@ function renderAll() {
     && o.stores.some(s => !ui.off.has(s.chain + s.id))
     && (!q || `${o.name} ${o.brand} ${o.category}`.toLowerCase().includes(q)));
   const by = {save: (a, b) => (b.save || 0) - (a.save || 0), pct: (a, b) => (b.pct || 0) - (a.pct || 0),
-              name: (a, b) => a.name.localeCompare(b.name, "sv")}[ui.sort];
+              name: (a, b) => a.name.localeCompare(b.name, "sv"),
+              kg: (a, b) => (perKg(a) ?? Infinity) - (perKg(b) ?? Infinity)}[ui.sort];
   os.sort(by);
   const storeBtns = data.stores.map(({store}) => `<button class="sfilter" data-store="${esc(store.chain + store.id)}" aria-pressed="${!ui.off.has(store.chain + store.id)}"><span class="sq ${store.chain}"></span>${esc(store.name)}</button>`).join("");
   return `<div class="toolbar">
       <input type="search" id="q" placeholder="Search: kaffe, ost, chips…" value="${esc(ui.q)}">
-      <select id="sort"><option value="save">Biggest saving</option><option value="pct">Most % off</option><option value="name">A–Ö</option></select>
+      <select id="sort"><option value="save">Biggest saving</option><option value="pct">Most % off</option><option value="kg">Cheapest per kg/l</option><option value="name">A–Ö</option></select>
       <select id="cat"><option value="">Every category</option>${cats.map(c => `<option ${c === ui.cat ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
       <label class="toggle"><input type="checkbox" id="onlyList" ${ui.onlyList ? "checked" : ""}> Only my list</label>
       <label class="toggle"><input type="checkbox" id="member" ${ui.member ? "checked" : ""}> Member prices</label>
