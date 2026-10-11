@@ -1,4 +1,4 @@
-import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode } from './protocol.js';
+import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode, dailyRoomCode, RoomErrorReason } from './protocol.js';
 import { sfx } from './games/sfx.js';
 import { HOWTO } from './games/howto.js';
 import { initAuth } from './auth.js';
@@ -8,6 +8,7 @@ import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
 import { renderReplay } from './replay.js';
 import { renderLeaderboards } from './leaderboards.js';
+import { renderDailyCard, renderDaily } from './daily.js';
 import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, openConversation, getSocial } from './friends.js';
 import { initChat, initGlobalDock, setDockAvailable, chatBox, reopenChats, handleChatHistory, handleChatMessage, handleChatDeleted, handleChatError } from './chat.js';
 import { renderAdmin, handleAdminData } from './admin.js';
@@ -189,6 +190,7 @@ function setStatus(text, cls) {
 function showScreen(name) {
   els.screenNickname.hidden = name !== 'nickname';
   els.screenMenu.hidden = name !== 'menu';
+  if (name === 'menu') renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
   els.screenRoom.hidden = name !== 'room';
   els.screenPage.hidden = name !== 'page';
   // Global chat lives on the menu and pages; rooms have their own chat. Accounts-off deploys have none.
@@ -326,6 +328,9 @@ function handleAccountState(p) {
   if (location.pathname.startsWith('/u/') && (prev && prev.username) !== (p.user && p.user.username)) onRoute();
   // Leaderboards highlight your row and offer a FRIENDS tab only when signed in.
   if (location.pathname.startsWith('/leaderboards') && (prev && prev.username) !== (p.user && p.user.username)) onRoute();
+  // The daily card shows your runs and streak; refresh it whenever the account changes.
+  if (!els.screenMenu.hidden) renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
+  if (location.pathname === '/daily' && JSON.stringify(prev && prev.daily) !== JSON.stringify(p.user && p.user.daily)) onRoute();
   if (location.pathname === '/admin' && !!(prev && prev.admin) !== !!(p.user && p.user.admin)) onRoute();
   if (p.user && state.setup) {
     state.setup.close();
@@ -350,7 +355,15 @@ function ordinal(n) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
+const playDaily = (type) => send(ClientMessage.ROOM_JOIN, { code: dailyRoomCode(type) });
+const dailyOpts = () => ({ account: state.account, auth: state.auth, play: playDaily, signIn: () => openSignIn(state.auth) });
+
 function handleResultRecorded(p) {
+  if (p.daily) {
+    const d = p.daily;
+    toast(d.rank ? `◆ DAILY: #${d.rank} of ${d.of} today. 🔥 ${d.streak}-day streak.` : `◆ DAILY: no score today, but your streak is ${d.streak}.`,
+      { kind: 'ok', ms: 8000, action: { label: 'BOARD', run: () => navigate('/daily') } });
+  }
   const outcome = p.kind === 'solo' ? 'Run complete'
     : p.draw ? 'It\'s a draw' : p.place === 0 ? 'You won' : `You placed ${ordinal(p.place + 1)}`; // place is 0-based
   if (p.rating) {
@@ -384,8 +397,8 @@ function handleServerMessage(type, payload) {
       state.currentRoom = { code: payload.code, gameType: payload.gameType, isPublic: payload.isPublic, ranked: !!payload.ranked };
       state.pendingJoin = null;
       saveSession();
-      els.roomCodeLabel.textContent = payload.ranked ? `${payload.code} (ranked ★)` : payload.isPublic ? `${payload.code} (public)` : payload.code;
-      els.btnCopyLink.hidden = payload.isPublic;
+      els.roomCodeLabel.textContent = payload.daily ? `◆ DAILY ${payload.daily}` : payload.ranked ? `${payload.code} (ranked ★)` : payload.isPublic ? `${payload.code} (public)` : payload.code;
+      els.btnCopyLink.hidden = payload.isPublic || !!payload.daily;
       renderRoster(payload.roster);
       // Chat needs accounts (to post, report and moderate), so accounts-off deploys have none.
       document.getElementById('room-chat').replaceChildren(...(state.auth && state.auth.mode !== 'off'
@@ -396,7 +409,7 @@ function handleServerMessage(type, payload) {
     }
 
     case ServerMessage.ROOM_ERROR: {
-      if (payload.soft) { toast(payload.detail || payload.reason, { kind: 'error' }); break; }
+      if (payload.soft || payload.reason === RoomErrorReason.DAILY) { if (!payload.soft) state.pendingJoin = null; toast(payload.detail || payload.reason, { kind: 'error' }); break; }
       state.pendingJoin = null;
       els.menuError.hidden = false;
       els.menuError.textContent = `ERROR: ${payload.reason}${payload.detail ? ' — ' + payload.detail : ''}`;
@@ -716,6 +729,12 @@ function route() {
     showScreen('page');
     return 'page';
   }
+  if (path.replace(/\/$/, '') === '/daily') {
+    renderDaily(els.screenPage, dailyOpts());
+    document.title = 'Daily challenge — Game Terminal';
+    showScreen('page');
+    return 'page';
+  }
   const info = INFO_PAGES[path.replace(/\/$/, '')];
   if (info) {
     els.screenPage.replaceChildren(info.render());
@@ -775,7 +794,7 @@ els.btnLeaveRoom.addEventListener('click', leaveRoom);
 // reconnect after a Render free-tier cold start can silently rejoin.
 (async function init() {
   initPrefs();
-  document.getElementById('footer-links').replaceChildren(h('a', { href: '/leaderboards', 'data-link': true }, 'Leaderboards'), ' · ', ...footerLinks(), ' · ', h('a', { href: '/settings', 'data-link': true }, 'Settings'));
+  document.getElementById('footer-links').replaceChildren(h('a', { href: '/leaderboards', 'data-link': true }, 'Leaderboards'), ' · ', h('a', { href: '/daily', 'data-link': true }, 'Daily'), ' · ', ...footerLinks(), ' · ', h('a', { href: '/settings', 'data-link': true }, 'Settings'));
   const saved = loadSession();
   if (saved && saved.nickname) {
     state.nickname = saved.nickname;

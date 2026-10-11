@@ -59,6 +59,7 @@ export const RoomErrorReason = {
   GAME_MISMATCH: 'GAME_MISMATCH',
   INVALID_CODE: 'INVALID_CODE',
   RANKED: 'RANKED',
+  DAILY: 'DAILY',
 };
 
 export function makeEnvelope(type, payload) {
@@ -67,4 +68,9 @@ export function makeEnvelope(type, payload) {
 
 export function publicRoomCode(gameType, ranked = false) {
   return `${ranked ? 'RANKED' : 'PUBLIC'}-${gameType.toUpperCase()}`;
+}
+
+// Joining this starts your own solo room on today's shared daily board.
+export function dailyRoomCode(gameType) {
+  return `DAILY-${gameType.toUpperCase()}`;
 }

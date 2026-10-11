@@ -4,6 +4,7 @@
 const { publicUser } = require('./accounts');
 const { tierOf, seasonOf } = require('./ratings');
 const { levelFor, ACHIEVEMENT_LIST, cosmeticsFor } = require('./progression');
+const { DAILY_GAMES } = require('./daily');
 
 const BOARD_TTL_MS = 5 * 60 * 1000;
 const BOARD_SIZE = 50;
@@ -16,7 +17,7 @@ function json(res, status, body, maxAge = 0) {
   res.end(JSON.stringify(body));
 }
 
-function createApi({ db, accounts, authMode, firebaseWebConfig, registry, now = () => Date.now() }) {
+function createApi({ db, accounts, daily = null, authMode, firebaseWebConfig, registry, now = () => Date.now() }) {
   // What the client needs to know per game: does it have a ladder, and what's its score.
   const games = Object.fromEntries(Object.entries(registry).filter(([, p]) => !(p.stats || {}).none)
     .map(([type, p]) => [type, { rated: !!(p.stats || {}).rated, score: (p.stats || {}).score || null }]));
@@ -51,6 +52,21 @@ function createApi({ db, accounts, authMode, firebaseWebConfig, registry, now = 
   }
 
   const routes = [
+    // Today's daily-challenge boards (top 50 per game, profiles joined, no uids).
+    [/^\/api\/daily$/, async () => {
+      if (!daily) return [404, { error: 'Not found.' }];
+      const date = daily.today();
+      const games = {};
+      for (const [type, g] of Object.entries(DAILY_GAMES)) {
+        const rows = await daily.board(type, date);
+        const users = await Promise.all(rows.slice(0, BOARD_SIZE).map((r) => db.get(`users/${r.uid}`)));
+        games[type] = {
+          label: g.label, better: g.better, score: ((registry[type] || {}).stats || {}).score || null, total: rows.length,
+          rows: rows.slice(0, BOARD_SIZE).map((r, i) => (users[i] ? { rank: r.rank, score: r.score, ...publicUser(users[i]) } : null)).filter(Boolean),
+        };
+      }
+      return [200, { date, nextAt: Date.parse(`${date}T00:00:00Z`) + 86400000, games }, 30];
+    }],
     [/^\/api\/config$/, async () => [200, { authMode, firebase: firebaseWebConfig, games, season: seasonOf(now()) }]],
 
     // ?scope=all|season &by=rating|wins|best &names=a,b (friends view: only these usernames)

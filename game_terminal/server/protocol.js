@@ -59,6 +59,7 @@ const RoomErrorReason = {
   GAME_MISMATCH: 'GAME_MISMATCH',
   INVALID_CODE: 'INVALID_CODE',
   RANKED: 'RANKED',
+  DAILY: 'DAILY',
 };
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I ambiguity
@@ -76,6 +77,11 @@ function publicRoomCode(gameType, ranked = false) {
   return `${ranked ? 'RANKED' : 'PUBLIC'}-${gameType.toUpperCase()}`;
 }
 
+// Joining this starts your own solo room on today's shared daily board.
+function dailyRoomCode(gameType) {
+  return `DAILY-${gameType.toUpperCase()}`;
+}
+
 function makeEnvelope(type, payload) {
   return { v: PROTOCOL_VERSION, type, payload: payload || {} };
 }
@@ -87,5 +93,6 @@ module.exports = {
   RoomErrorReason,
   generateRoomCode,
   publicRoomCode,
+  dailyRoomCode,
   makeEnvelope,
 };

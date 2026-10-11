@@ -3,13 +3,14 @@ const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 
 const { handleStaticRequest } = require('./static');
-const { ClientMessage, ServerMessage, RoomErrorReason, makeEnvelope, publicRoomCode } = require('./protocol');
+const { ClientMessage, ServerMessage, RoomErrorReason, makeEnvelope, publicRoomCode, dailyRoomCode } = require('./protocol');
 const { RoomManager } = require('./roomManager');
 const gameRegistry = require('./games');
 const { createDb } = require('./db');
 const { createAuth, webConfig } = require('./auth');
 const { createAccounts, publicUser, TERMS_VERSION } = require('./accounts');
 const { createResults } = require('./results');
+const { createDaily, DAILY_GAMES, seedOf } = require('./daily');
 const { createApi } = require('./api');
 const { createSocial } = require('./social');
 const { Parties } = require('./party');
@@ -22,12 +23,13 @@ const MAX_PAYLOAD = 64 * 1024;
 const db = createDb();
 const auth = createAuth();
 const accounts = createAccounts(db);
-const results = createResults({ db, registry: gameRegistry });
+const daily = createDaily(db);
+const results = createResults({ db, registry: gameRegistry, daily });
 const social = createSocial(db, accounts);
 const parties = new Parties();
 const chat = createChat(db);
 const moderation = createModeration(db, accounts, { chat });
-const handleApi = createApi({ db, accounts, authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
+const handleApi = createApi({ db, accounts, daily, authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
 console.log(`accounts: auth=${auth.mode} db=${db.backend}`);
 
 const roomManager = new RoomManager(gameRegistry, {
@@ -39,20 +41,10 @@ const roomManager = new RoomManager(gameRegistry, {
       const draw = players.length > 1 && players.every((q) => q.place === 0);
       for (const p of rec.people) {
         if (p.bot) continue;
-        room.sendTo(p.clientId, makeEnvelope(ServerMessage.RESULT_RECORDED, { gameType: rec.summary.gameType, kind: rec.summary.kind, saved: !!p.uid, place: p.place, draw, players, ranked: rec.summary.ranked, rating: (p.uid && rec.ratings && rec.ratings[p.uid]) || null, progress: (p.uid && rec.progress && rec.progress[p.uid]) || null }));
+        room.sendTo(p.clientId, makeEnvelope(ServerMessage.RESULT_RECORDED, { gameType: rec.summary.gameType, kind: rec.summary.kind, saved: !!p.uid, place: p.place, draw, players, ranked: rec.summary.ranked, rating: (p.uid && rec.ratings && rec.ratings[p.uid]) || null, progress: (p.uid && rec.progress && rec.progress[p.uid]) || null, daily: (p.uid && rec.daily && rec.daily[p.uid]) || null }));
       }
       // XP/level/achievements changed: refresh every open tab of that account (header level, profile).
-      for (const [uid, pr] of Object.entries(rec.progress || {})) {
-        if (!pr) continue;
-        for (const w of online.get(uid) || []) {
-          const s = sessions.get(w);
-          if (!s || !s.user) continue;
-          const achievements = { ...(s.user.achievements || {}) };
-          for (const id of pr.unlocked) achievements[id] = rec.summary.endedAt;
-          s.user = { ...s.user, xp: pr.xp, level: pr.level, achievements };
-          sendAccountState(w, s);
-        }
-      }
+      for (const uid of Object.keys(rec.progress || {})) refreshAccount(uid).catch((err) => console.error('account refresh failed', err));
       const uids = rec.people.map((p) => p.uid).filter(Boolean);
       if (uids.length > 1) social.noteRecent(uids, rec.summary.gameType).then(() => pushMany(uids)).catch((err) => console.error('social: recent failed', err));
     }).catch((err) => console.error('results: record failed', err));
@@ -222,7 +214,21 @@ function bringParty(session, room) {
 
 // The signed-in user's own view of their account (includes settings; never sent to others).
 function ownAccount(user) {
-  return { ...publicUser(user), settings: user.settings || {}, achievements: user.achievements || {}, renamedAt: user.renamedAt || null };
+  const games = user.dailyToday && user.dailyToday.date === daily.today() ? user.dailyToday.games : {};
+  return { ...publicUser(user), settings: user.settings || {}, achievements: user.achievements || {}, renamedAt: user.renamedAt || null,
+    daily: { date: daily.today(), games, streak: daily.liveStreak(user), best: user.dailyBest || 0 } };
+}
+
+// XP, achievements or the daily run changed server-side: re-read the user and update every open tab.
+async function refreshAccount(uid) {
+  const sockets = online.get(uid);
+  if (!sockets || !sockets.size) return;
+  const user = await accounts.getUser(uid);
+  if (!user) return;
+  for (const w of sockets) {
+    const s = sessions.get(w);
+    if (s && s.uid === uid) { s.user = user; sendAccountState(w, s); }
+  }
 }
 
 function sendAccountState(ws, session) {
@@ -252,6 +258,7 @@ function joinAndAck(ws, session, room) {
     gameType: room.gameType,
     isPublic: room.isPublic,
     ranked: !!room.ranked,
+    daily: room.daily ? room.daily.date : null,
     roster: room.roster(),
     stateSnapshot: room.plugin.serializeSnapshot(room, { clientId: session.clientId, nickname: session.nickname }),
   });
@@ -542,6 +549,19 @@ wss.on('connection', (ws) => {
         const rankedGameType = Object.keys(gameRegistry).find((gt) => publicRoomCode(gt, true) === code);
         const exact = !matchGameType && !rankedGameType && roomManager.getRoom(code);
         const rankedType = rankedGameType || (exact && exact.ranked && exact.gameType);
+        const dailyGameType = Object.keys(DAILY_GAMES).find((gt) => dailyRoomCode(gt) === code);
+        if (dailyGameType) {
+          // Your own solo room on today's board. One attempt a day, claimed when the run starts.
+          if (!(session.uid && session.user && session.user.username)) { send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.DAILY, detail: 'Sign in to play the daily challenge.' }); return; }
+          if (await daily.attempted(session.uid, dailyGameType)) { send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.DAILY, detail: `You've played today's ${DAILY_GAMES[dailyGameType].label}. A new one unlocks at 00:00 UTC.` }); return; }
+          leaveCurrentRoom(session, session.clientId);
+          const room = roomManager.createPrivateRoom(dailyGameType);
+          const date = daily.today();
+          room.daily = { date, seed: seedOf(date, dailyGameType), uid: session.uid };
+          joinAndAck(ws, session, room);
+          return;
+        }
+        if (exact && exact.daily && exact.daily.uid !== session.uid) { send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.DAILY, detail: 'Daily challenge runs are solo.' }); return; }
         if (rankedType) {
           // Ranked moves Elo, so only signed-in players can sit down; rated games only.
           const meta = gameRegistry[rankedType].stats || {};
@@ -577,6 +597,19 @@ wss.on('connection', (ws) => {
         if (room.ranked && d && (d.kind === 'addBot' || d.bot)) {
           send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.RANKED, detail: 'Bots can\'t join ranked games.', soft: true });
           return;
+        }
+        if (room.daily && d && d.kind === 'addBot') {
+          send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.DAILY, detail: 'The daily challenge is solo.', soft: true });
+          return;
+        }
+        // The run that starts here is today's one attempt (claimed atomically; a second start is refused).
+        if (room.daily && d && d.kind === DAILY_GAMES[room.gameType].start) {
+          if (room.daily.started || !session.user || session.uid !== room.daily.uid || !(await daily.start(session.uid, session.user.username, room.gameType, room.daily.date))) {
+            send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.DAILY, detail: 'That was today\'s run. Come back tomorrow!', soft: true });
+            return;
+          }
+          room.daily.started = true;
+          refreshAccount(session.uid).catch((err) => console.error('account refresh failed', err));
         }
         room.plugin.onMessage(room, { clientId: session.clientId, nickname: session.nickname }, payload.data, {
           broadcast: (env, excludeId) => room.broadcast(env, excludeId),

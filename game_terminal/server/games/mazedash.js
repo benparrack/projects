@@ -191,7 +191,7 @@ function applyMove(room, p, d) {
 }
 
 function startRace(st, room, ctx) {
-  st.seed = randomSeed();
+  st.seed = room.daily ? room.daily.seed : randomSeed(); // daily challenge: everyone gets the same maze
   st.maze = generateMaze(st.seed, ROWS, COLS);
   st.distFromStart = bfsDistances(st.maze, ROWS, COLS, 0, 0);
   st.distToExit = bfsDistances(st.maze, ROWS, COLS, EXIT_R, EXIT_C);

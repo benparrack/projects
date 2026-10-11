@@ -19,7 +19,7 @@ const { matchXp, grantXp, levelFor, newAchievements, ACHIEVEMENT_LIST } = requir
 const newId = () => `${Date.now().toString(36)}${crypto.randomBytes(5).toString('hex')}`;
 const pairKey = (a, b) => [a, b].sort().join('_');
 
-function createResults({ db, registry, now = () => Date.now(), onRecorded = () => {} }) {
+function createResults({ db, registry, daily = null, now = () => Date.now(), onRecorded = () => {} }) {
   // Serialises read-modify-write per stats doc. Single Render instance, so this is enough.
   const queues = new Map();
   function serial(key, fn) {
@@ -64,6 +64,7 @@ function createResults({ db, registry, now = () => Date.now(), onRecorded = () =
       endedAt,
       botLevel: result.botLevel || null,
       ranked: !!room.ranked,
+      ...(room.daily ? { daily: room.daily.date } : {}),
       players: people.map((p) => ({ name: p.name, bot: !!p.bot, place: p.place, ...(p.score != null ? { score: p.score } : {}), ...(p.uid ? { uid: p.uid } : {}) })),
       replay: !!(result.replay && typeof plugin.replayFrames === 'function'),
     };
@@ -142,17 +143,24 @@ function createResults({ db, registry, now = () => Date.now(), onRecorded = () =
     if (summary.replay) writes.push(db.set(`matches/${id}`, { gameType: room.gameType, endedAt, players: summary.players, replay: result.replay }));
     const settled = await Promise.allSettled(writes);
     for (const r of settled) if (r.status === 'rejected') console.error('results: write failed', r.reason);
+    // Daily challenge run: score the claimed attempt (once) before XP so the streak counts.
+    const dailyOut = {};
+    if (daily && room.daily && kind === 'solo') {
+      for (const p of accounts) {
+        try { dailyOut[p.uid] = await daily.finish(p.uid, room.gameType, room.daily.date, typeof p.score === 'number' ? p.score : null); } catch (err) { console.error('results: daily failed', err); }
+      }
+    }
     const progress = {};
     await Promise.all(accounts.map(async (p, i) => {
       const st = settled[i]; // the first accounts.length writes are the stats docs, in order
       if (st.status !== 'fulfilled') return;
-      try { progress[p.uid] = await progressFor(p, st.value, summary, drawAll, ratings[p.uid], accounts); } catch (err) { console.error('results: progression failed', err); }
+      try { progress[p.uid] = await progressFor(p, st.value, summary, drawAll, ratings[p.uid], accounts, dailyOut[p.uid]); } catch (err) { console.error('results: progression failed', err); }
     }));
-    return { summary, people, progress, ratings: Object.fromEntries(Object.entries(ratings).map(([uid, r]) => [uid, { rating: r.rating, delta: r.delta, tier: tierOf(r.rating) }])) };
+    return { summary, people, progress, daily: dailyOut, ratings: Object.fromEntries(Object.entries(ratings).map(([uid, r]) => [uid, { rating: r.rating, delta: r.delta, tier: tierOf(r.rating) }])) };
   }
 
   // XP (daily-capped) and achievement unlocks for one account after its stats doc is written.
-  function progressFor(p, stat, summary, drawAll, rating, accounts) {
+  function progressFor(p, stat, summary, drawAll, rating, accounts, dailyRun) {
     return serial(`users/${p.uid}`, async () => {
       const user = await db.get(`users/${p.uid}`);
       if (!user) return null;
@@ -169,7 +177,7 @@ function createResults({ db, registry, now = () => Date.now(), onRecorded = () =
       }
       const allStats = await db.list('stats', { where: [['uid', '==', p.uid]] });
       const have = user.achievements || {};
-      const unlocked = newAchievements({ summary, me, stat, allStats, have, extra: { vsFriend, rating: rating && rating.rating, level: lv.level } });
+      const unlocked = newAchievements({ summary, me, stat, allStats, have, extra: { vsFriend, rating: rating && rating.rating, level: lv.level, dailyStreak: dailyRun ? dailyRun.streak : 0 } });
       const achievements = { ...have };
       for (const id of unlocked) achievements[id] = summary.endedAt;
       await db.merge(`users/${p.uid}`, { xp, level: lv.level, xpDay: day, xpToday: today + gained, achievements });

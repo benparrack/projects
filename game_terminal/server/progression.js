@@ -12,7 +12,7 @@ const DAILY_CAP = 500;
 const BOT_WIN_XP = { easy: 5, medium: 10, hard: 15, expert: 25 };
 
 function matchXp(summary, me) {
-  if (summary.kind === 'solo') return 10;
+  if (summary.kind === 'solo') return summary.daily ? 40 : 10; // the daily run is worth showing up for
   if (summary.kind === 'bot') return me.won ? (BOT_WIN_XP[summary.botLevel] || 5) : 3;
   return (me.won ? 50 : me.draw ? 30 : 20) + (summary.ranked ? 10 : 0);
 }

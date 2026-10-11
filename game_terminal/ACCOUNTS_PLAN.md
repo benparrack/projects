@@ -157,9 +157,10 @@ call with the right placements. This is the long, careful part of the project.
 - [x] Cosmetic unlocks from levels and achievements: name colors, avatar frames, slither
       skins, TRON trail colors, chess/checkers board themes. Equip from the profile; games read
       `cosmetics.equipped` from the roster
-- [ ] Daily challenge: a shared seed per day for Maze Dash, Word Hunt, Minesweeper (and
+- [x] Daily challenge: a shared seed per day for Maze Dash, Word Hunt, Minesweeper (and
       Crossword/Wordscapes if easy). One scored attempt per account, a daily leaderboard,
-      and a streak counter
+      and a streak counter. (Shipped for Maze Dash + Word Hunt; Minesweeper is a 2-seat race
+      with no solo mode, Crossword/Wordscapes have no score — left out.)
 - [ ] Activity feed on the home screen: friends' notable results, unlocks and streaks
 - [ ] Homepage live stats: online now, games played today, most popular game this week
 
@@ -242,3 +243,4 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 - 2026-10-11 — Phase 5 done: ★ RANKED button (separate `RANKED-<GAME>` pool; accounts only, rated games only, bot seats refused) moves pairwise Elo on the stats doc (rating/peak/ratedGames, delta in the result toast and on match rows); co-op and any guest/bot match stay unrated. Season counters (sPlayed/sWins/sBest) reset per quarter; hourly rollover archives `seasonResults` with final rank and soft-resets ratings. `/leaderboards[/game]` (all-time / this season / friends × rating / wins / best, 5-min server cache, your row highlighted), tier badges + RATING column + PAST SEASONS on profiles, nav + footer + account-menu links. Export/delete cover season results. `test/ranked.test.js`.
 - 2026-10-11 — Phase 6: XP + levels + achievements live. results.js grants daily-capped XP (500/UTC day) on `users/{uid}` and unlocks the 42-item catalog (beat-a-friend via social, rating/level extras); RESULT_RECORDED carries `progress` → +XP / LEVEL UP / ACHIEVEMENT UNLOCKED toasts, open tabs get a fresh account state. Profile: XP bar under the level, achievements grid (unlocked newest first, locked folded). `test/xp.test.js`.
 - 2026-10-11 — Phase 6: cosmetics. 6 name colors + 7 avatar frames unlocked by level or achievement (`COSMETICS` in progression.js; server re-checks on equip, null unequips), picker on your own profile, shown on profile/header chip/leaderboards/chat/room roster. Follow-up (not done): in-game skins (slither skins, TRON trail colors, chess/checkers board themes) need per-game color-conflict handling.
+- 2026-10-11 — Phase 6: daily challenge. `DAILY-<GAME>` joins open a private solo room seeded from sha256(date, game) (Maze Dash maze, Word Hunt grid); the run is claimed atomically at START (no rerolls, no bots, no spectators), the finish lands via results.record into `daily/{date}_{game}_{uid}` with +40 XP, rank and a UTC-day streak (Daily Grind/7-day achievements, daily frame). Menu card (today's games, your score, streak, reset countdown), `/daily` boards page + nav/footer links, `/api/daily`. `test/daily.test.js`.

@@ -13,6 +13,7 @@
 const { DICT_LIST, COMMON_SET, isWord } = require('./words');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
 const { reportRanked } = require('./wordResults');
+const { mulberry32 } = require('../daily');
 
 const TYPE = 'wordhunt';
 const N = 4;
@@ -202,7 +203,7 @@ function endRound(room) {
 
 function startRound(room) {
   const st = room.state;
-  const { grid, words } = generateGrid();
+  const { grid, words } = generateGrid(room.daily ? mulberry32(room.daily.seed) : undefined); // daily: same grid for everyone
   st.grid = grid;
   st.solutions = words;
   st.roundId += 1;
