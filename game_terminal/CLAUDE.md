@@ -16,7 +16,7 @@ fraction of the tokens.
   and `graphify path "<A>" "<B>"` for how two things connect.
 - Only fall back to Read/Grep once the graph has pointed you at specific files and
   lines. Then read just that range (`offset`/`limit`), not the whole file.
-- `graphify-out/` is gitignored. If it's missing, rebuild it with `graphify update .`
+- `graphify-out/` is gitignored (root `.gitignore`). If it's missing, rebuild it with `graphify update .`
   (from `game_terminal/`, ~15s). After you change code, run `graphify update .` so
   the graph stays current. That is also free.
 

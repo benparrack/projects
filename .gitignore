@@ -21,3 +21,6 @@ state.json
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# graphify knowledge graphs (per sub-project, rebuild with `graphify update .`)
+graphify-out/

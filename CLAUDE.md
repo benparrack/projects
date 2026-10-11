@@ -74,6 +74,14 @@ fixes that actually move this number:
   forward into the next task.
 - Keep `CLAUDE.md` files and always-loaded memory lean — every line in them gets
   replayed on every single turn of a session, not just paid for once.
+- **graphify (on request, per sub-project):** when Ben says to use graphify, build
+  a graph for *only the sub-project being worked on*, never the repo root. Run
+  `cd <subproject> && graphify update .` (code-only, local, free, takes seconds).
+  Then answer codebase questions with narrow `graphify query/explain/path` calls
+  before Read/Grep. `graphify-out/` is gitignored repo-wide. If a sub-project
+  already has a `graphify-out/`, use it unasked, and run `graphify update .` after
+  code changes. Avoid `/graphify` on docs and media, because the semantic pass costs
+  tokens.
 
 ## Working across sub-projects
 
