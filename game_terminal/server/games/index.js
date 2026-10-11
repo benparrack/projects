@@ -41,6 +41,7 @@ const pool = require('./pool');
 const darts = require('./darts');
 const cuppong = require('./cuppong');
 const basketball = require('./basketball');
+const twentyq = require('./twentyq');
 
 const registry = {
   [drawing.type]: drawing,
@@ -83,6 +84,7 @@ const registry = {
   [darts.type]: darts,
   [cuppong.type]: cuppong,
   [basketball.type]: basketball,
+  [twentyq.type]: twentyq,
 };
 
 // CPU players for the card games — patches those plugins' onMessage in place (see cardBots.js).

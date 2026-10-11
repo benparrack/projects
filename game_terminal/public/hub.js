@@ -59,6 +59,7 @@ const CATEGORIES = [
       { type: 'wordhunt', label: 'WORD HUNT' },
       { type: 'wordtrails', label: 'WORD TRAILS' },
       { type: 'crossword', label: 'CROSSWORD' },
+      { type: 'twentyq', label: '20 QUESTIONS' },
     ],
   },
   {
@@ -81,6 +82,7 @@ const CATEGORIES = [
       { type: 'darts', label: 'DARTS' },
       { type: 'cuppong', label: 'CUP PONG' },
       { type: 'basketball', label: 'BASKETBALL' },
+      { type: 'twentyq', label: '20 QUESTIONS' },
     ],
   },
   {

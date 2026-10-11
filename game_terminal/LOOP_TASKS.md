@@ -40,7 +40,7 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 ## GamePigeon tab (new types beyond the above)
 - [x] cuppong — Cup Pong
 - [x] darts — Darts (501/cricket-lite)
-- [ ] basketball — Basketball (shootout)
+- [x] basketball — Basketball (shootout)
 - [ ] archery — Archery
 - [ ] minigolf — Mini Golf
 - [ ] shuffleboard — Shuffleboard
@@ -53,7 +53,7 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 - [x] reversi — Reversi
 - [ ] paintball — Paintball (shooting gallery duel)
 - [x] filler — Filler (color flood)
-- [ ] twentyq — 20 Questions
+- [x] twentyq — 20 Questions
 - [ ] bowling — Bowling
 - [ ] skeeball — Skee-Ball
 - (reused existing: chess, checkers, connect4 as "Four in a Row", crazyeights as "Crazy 8", pool, gomoku, dotsboxes, mancala)
