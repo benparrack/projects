@@ -76,6 +76,7 @@ test('dev auth: only outside production; tokens map to dev_ uids', async () => {
   const prod = createAuth({ NODE_ENV: 'production' });
   assert.strictEqual(prod.mode, 'off');
   assert.strictEqual(await prod.verify('dev:alice'), null);
+  assert.strictEqual(createAuth({ RENDER: 'true' }).mode, 'off', 'Render without NODE_ENV stays safe');
 });
 
 function room(gameType, people) {

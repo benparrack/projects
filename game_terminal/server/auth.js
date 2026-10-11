@@ -21,7 +21,7 @@ function createAuth(env = process.env) {
       },
     };
   }
-  if (env.NODE_ENV !== 'production') {
+  if (env.NODE_ENV !== 'production' && !env.RENDER) { // RENDER is set on every Render service: never dev-auth there
     return {
       mode: 'dev',
       async verify(token) {
