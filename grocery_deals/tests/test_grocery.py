@@ -157,3 +157,29 @@ txt = grocery.trip_text([{"name": "Kaffe", "brand": "Zoégas", "store": "K", "de
 assert txt == "K\n☐ Kaffe Zoégas: 45 kr (-10 kr)\n\nAnywhere\n☐ Mjölk\n\nSaving ~10 kr", txt
 assert grocery.trip_text([]) == "Trip is empty."
 print("ok 6")
+
+# alerts: first run only remembers; later runs push just what's new (one line per offer across a chain's stores);
+# the Monday push marks its matches as sent; ended offers are forgotten
+from datetime import date, timedelta
+grocery.ALERTED = Path(tempfile.mkdtemp()) / "alerted.json"
+soon, gone = (date.today() + timedelta(3)).isoformat(), (date.today() - timedelta(1)).isoformat()
+h1, h2, lidl_s = {"chain": "hemkop", "id": 1, "name": "H1"}, {"chain": "hemkop", "id": 2, "name": "H2"}, {"chain": "lidl", "id": "sverige", "name": "Lidl"}
+mjolk, ost, old = (dict(o(n, save=5), until=u) for n, u in (("Mjölk", soon), ("Ost", soon), ("Gammal", gone)))
+week = [(h1, [("mjölk", mjolk), ("x", old)], []), (h2, [("mjölk", mjolk)], [])]
+sent, results = [], iter([week, week, week + [(lidl_s, [("ost", ost)], [])], [(h1, [("mjölk", mjolk)], [])]])
+grocery.find_deals = lambda cfg, refresh=False: next(results)
+grocery.push = lambda title, msg: sent.append(msg) or True
+grocery.load_settings = lambda: {"stores": [h1], "items": []}
+run = lambda cmd: grocery.main(["grocery.py", cmd])
+run("alert")
+assert sent == [] and len(json.loads(grocery.ALERTED.read_text())) == 2, "first run must only remember"
+run("alert")
+assert sent == [], "nothing new"
+run("alert")
+assert sent == ["- Ost: 10/st, -5 kr @ Lidl"], sent
+assert all("Gammal" not in k for k in json.loads(grocery.ALERTED.read_text())), "ended offers are pruned"
+assert grocery.alert_text(grocery.new_matches(week, {})).startswith("- Mjölk: 10/st, -5 kr @ H1, H2")
+grocery.ALERTED.unlink()
+run("push")  # the Monday report marks what it sent
+assert len(sent) == 2 and list(json.loads(grocery.ALERTED.read_text())) == [grocery.alert_key(h1, mjolk)]
+print("ok 7")

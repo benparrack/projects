@@ -1,0 +1,9 @@
+[Unit]
+Description=grocery-deals alert daily (Lidl adds deals Thursdays, stores add some mid-week)
+
+[Timer]
+OnCalendar=*-*-* 09:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

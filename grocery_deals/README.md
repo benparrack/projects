@@ -35,6 +35,7 @@ Install the menu entry (`.desktop` files don't expand `~`):
 ## Command line
 
     python3 grocery.py deals          # the text report the push sends
+    python3 grocery.py alert          # push list matches no earlier push mentioned
     python3 grocery.py browse [word]  # every offer at your stores
     python3 grocery.py stores kvantum # find store ids
 
@@ -44,6 +45,16 @@ Pushes go to `NTFY_ALERT_TOPIC` from `./.env`, else `../money/flip-bot/.env`.
 
     ln -sf ~/projects/grocery_deals/grocery-deals.{service,timer} ~/.config/systemd/user/
     systemctl --user daemon-reload && systemctl --user enable --now grocery-deals.timer
+
+## Deal alerts (daily 09:00)
+
+Offers don't only change on Mondays: Lidl starts a second batch on Thursdays, and stores add some mid-week.
+`grocery.py alert` refetches and pushes only list matches that neither the Monday push nor an earlier alert
+already sent (one line per offer, with every store it's at). Already-sent offers are remembered in
+`alerted.json` until they end. The first run only remembers what's on offer, without pushing.
+
+    ln -sf ~/projects/grocery_deals/grocery-deals-alert.{service,timer} ~/.config/systemd/user/
+    systemctl --user daemon-reload && systemctl --user enable --now grocery-deals-alert.timer
 
 ## Matching
 

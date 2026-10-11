@@ -4,6 +4,7 @@
   grocery.py stores QUERY   find stores (ICA, Willys, Hemköp, Coop, Lidl) by name/street/town, e.g. `stores kungsholmen`
   grocery.py deals          print matches for your list at your stores (no push)
   grocery.py push           same, and send it to your phone via ntfy (the weekly timer runs this)
+  grocery.py alert          push only list matches no earlier push/alert mentioned (the daily timer runs this)
   grocery.py browse [WORD]  every offer at your stores, optionally filtered by WORD
 
 The desktop app (server.py + web/) uses the same functions; settings live in settings.json.
@@ -23,6 +24,7 @@ HERE = Path(__file__).resolve().parent
 SETTINGS = HERE / "settings.json"
 TRIP = HERE / "trip.json"  # this week's picked deals + free-text items, shared by the app and `grocery.py trip`
 CACHE = HERE / "cache"
+ALERTED = HERE / "alerted.json"  # offers already pushed (Monday report or an alert) -> their end date
 HISTORY = HERE / "history.db"  # every offer seen, per ISO week: answers "is this deal actually good?"
 CACHE_TTL = 3 * 3600  # offers change weekly; 3 h keeps the app snappy without going stale
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0"}
@@ -384,7 +386,7 @@ def report(result):
     best = max(totals)
     head = f"Best for your list: {best[1]} (~{best[0]:.0f} kr off)" if best[0] else "No offers match your list this week."
     if any(o["member"] for _, f, e in result for _, o in f + e):
-        lines.append("\n* member price (ICA Stammis / Willys Plus / Hemköp Klubb)")
+        lines.append(f"\n* member price ({' / '.join(MEMBER.values())})")
     return head + "\n" + "\n".join(lines)
 
 
@@ -402,6 +404,32 @@ def push(title, message):
     requests.post("https://ntfy.sh", data=json.dumps({"topic": topic, "title": title, "message": msg,
                                                      "tags": ["shopping_cart"]}).encode(), timeout=15).raise_for_status()
     return True
+
+
+def alert_key(store, o):
+    return "|".join((store["chain"], str(store["id"]), o["name"], o["brand"], o["size"], o["deal"], o["until"]))
+
+
+def new_matches(result, alerted):
+    """List matches in a find_deals result that aren't in alerted and haven't ended -> {key: (store, offer)}.
+    (Ended offers a store still lists must be skipped: remember() forgets them, so they'd re-alert daily.)"""
+    today = date.today().isoformat()
+    return {alert_key(s, o): (s, o) for s, found, _ in result for _, o in found
+            if alert_key(s, o) not in alerted and (not o["until"] or o["until"] >= today)}
+
+
+def remember(alerted, new):
+    """alerted + new, minus offers that have ended, written to ALERTED."""
+    today = date.today().isoformat()
+    alerted = {k: u for k, u in {**alerted, **{k: o["until"] for k, (_, o) in new.items()}}.items() if not u or u >= today}
+    write_json(ALERTED, alerted)
+
+
+def alert_text(new):
+    where = {}  # identical offer at several stores of one chain -> one line
+    for s, o in new.values():
+        where.setdefault(line(o), []).append(s["name"])
+    return "\n".join(f"{l} @ {', '.join(names)}" for l, names in where.items())
 
 
 def trip_text(trip):
@@ -435,10 +463,21 @@ def main(argv):
     if not cfg.get("stores"):
         raise SystemExit("No stores yet. Add them in the app, or find ids with: grocery.py stores <area>")
     if cmd in ("deals", "push"):
-        text = report(find_deals(cfg, refresh=cmd == "push"))
+        result = find_deals(cfg, refresh=cmd == "push")
+        text = report(result)
         print(text)
-        if cmd == "push":
-            push("Grocery deals this week", text)
+        if cmd == "push" and push("Grocery deals this week", text):
+            alerted = json.loads(ALERTED.read_text()) if ALERTED.exists() else {}
+            remember(alerted, new_matches(result, alerted))
+    elif cmd == "alert":
+        result = find_deals(cfg, refresh=True)
+        first_run = not ALERTED.exists()
+        alerted = {} if first_run else json.loads(ALERTED.read_text())
+        new = new_matches(result, alerted)
+        print(alert_text(new) or "nothing new")
+        # first run only remembers what's on offer now, so it doesn't re-send this week's Monday push
+        if new and (first_run or push("New deals on your list", alert_text(new))):
+            remember(alerted, new)
     elif cmd == "browse":
         word = " ".join(argv[2:]).lower()
         for s, os_, err in tag(cfg):

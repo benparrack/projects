@@ -2,3 +2,4 @@ cache/
 *.tmp
 trip.json
 history.db
+alerted.json
