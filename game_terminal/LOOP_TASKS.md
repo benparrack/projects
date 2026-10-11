@@ -41,25 +41,25 @@ Status legend: [ ] todo · [b] built by fork, awaiting wiring/verify · [x] wire
 - [x] cuppong — Cup Pong
 - [x] darts — Darts (501/cricket-lite)
 - [x] basketball — Basketball (shootout)
-- [ ] archery — Archery
-- [ ] minigolf — Mini Golf
-- [ ] shuffleboard — Shuffleboard
-- [ ] knockout — Knockout (push opponents off the ice)
+- [x] archery — Archery
+- [x] minigolf — Mini Golf
+- [x] shuffleboard — Shuffleboard
+- [x] knockout — Knockout (push opponents off the ice)
 - [x] seabattle — Sea Battle (Battleship)
-- [ ] tanks — Tanks (artillery)
+- [x] tanks — Tanks (artillery)
 - [x] wordhunt — Word Hunt (Boggle-style grid swipe)
 - [x] anagrams — Anagrams
 - [x] wordbites — Word Bites
 - [x] reversi — Reversi
-- [ ] paintball — Paintball (shooting gallery duel)
+- [x] paintball — Paintball (shooting gallery duel)
 - [x] filler — Filler (color flood)
 - [x] twentyq — 20 Questions
-- [ ] bowling — Bowling
-- [ ] skeeball — Skee-Ball
+- [x] bowling — Bowling
+- [x] skeeball — Skee-Ball
 - (reused existing: chess, checkers, connect4 as "Four in a Row", crazyeights as "Crazy 8", pool, gomoku, dotsboxes, mancala)
 
 ## Final
-- [ ] Full regression pass: every game type mounts without console errors, server loads all plugins, all tests pass
+- [x] Full regression pass: every game type mounts without console errors, server loads all plugins, all tests pass
 - [ ] README / TODO_FIRST / memory updated
 
 ## Notes (sudo-needing or deferred items)
