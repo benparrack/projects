@@ -450,6 +450,14 @@ export function mount(container, api) {
       wordsSub.textContent = `you found ${mine.size}/${all.length} · tap to trace`;
       for (const x of all) wordsEl.appendChild(chip(x.word, `${mine.has(x.word) ? '' : 'missed'} ${shown && shown.word === x.word ? 'sel' : ''}`, traced(x.word)));
     }
+    if (shown) {
+      const def = el('a', null, `📖 What does ${shown.word.toUpperCase()} mean?`);
+      Object.assign(def, { href: `https://en.wiktionary.org/wiki/${encodeURIComponent(shown.word)}`, target: '_blank', rel: 'noopener' });
+      const li = el('li', 'wh-empty');
+      li.style.cssText = 'width:100%;opacity:1';
+      li.appendChild(def);
+      wordsEl.appendChild(li);
+    }
   }
 
   function renderScores() {
