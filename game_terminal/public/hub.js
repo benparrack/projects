@@ -2,7 +2,7 @@ import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode } from './pr
 import { sfx } from './games/sfx.js';
 import { HOWTO } from './games/howto.js';
 import { initAuth } from './auth.js';
-import { avatarEl } from './avatars.js';
+import { avatarEl, nameColor } from './avatars.js';
 import { h, toast } from './ui.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
@@ -543,7 +543,7 @@ function renderRoster(roster) {
     const li = document.createElement('li');
     const name = entry.clientId === state.clientId ? `${entry.nickname} (you)` : entry.nickname;
     if (entry.account) {
-      li.append(avatarEl(entry.account.avatar, 20), h('a', { href: `/u/${encodeURIComponent(entry.account.username)}`, 'data-link': true, target: '_blank' }, name));
+      li.append(avatarEl(entry.account.avatar, 20, entry.account.cosmetics), h('a', { href: `/u/${encodeURIComponent(entry.account.username)}`, 'data-link': true, target: '_blank', class: nameColor(entry.account.cosmetics) }, name));
     } else {
       li.append(h('span.avatar.avatar-guest', { 'aria-hidden': 'true' }, '?'), h('span.guest', name));
       li.title = 'Guest';
@@ -692,7 +692,7 @@ function route() {
   }
   const prof = /^\/u\/([A-Za-z0-9_]{1,24})\/?$/.exec(path);
   if (prof) {
-    renderProfile(els.screenPage, prof[1], { gameLabel, me: state.account })
+    renderProfile(els.screenPage, prof[1], { gameLabel, me: state.account, equip: (cosmetics) => send(ClientMessage.ACCOUNT_UPDATE, { cosmetics }) })
       .then((title) => { if (location.pathname === path) document.title = `${title} — Game Terminal`; });
     showScreen('page');
     return 'page';

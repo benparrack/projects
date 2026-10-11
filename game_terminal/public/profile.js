@@ -1,6 +1,6 @@
 // Public profile page: /u/<username>. Data comes from GET /api/user/<name>.
 import { h, timeAgo, fmtDate } from './ui.js';
-import { avatarEl } from './avatars.js';
+import { avatarEl, nameColor } from './avatars.js';
 import { relationButtons } from './friends.js';
 
 const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 >> 3 ^ 1) && n % 10] || 'th'}`;
@@ -87,7 +87,7 @@ function summaryCards(stats) {
   return { total, pvp: sum('played'), wins: sum('wins'), best: Math.max(0, ...stats.map((s) => s.bestStreak || 0)), fav };
 }
 
-export async function renderProfile(mount, name, { gameLabel, me }) {
+export async function renderProfile(mount, name, { gameLabel, me, equip }) {
   mount.replaceChildren(h('div.profile', h('p.muted.loading', 'Loading profile…')));
   let data;
   try {
@@ -106,14 +106,14 @@ export async function renderProfile(mount, name, { gameLabel, me }) {
     mount.replaceChildren(h('div.profile', h('p.error', 'Couldn\'t load this profile. Check your connection and try again.')));
     return 'Profile';
   }
-  const { user, stats, matches, seasons = [], progress, achievements = [] } = data;
+  const { user, stats, matches, seasons = [], progress, achievements = [], cosmetics = [] } = data;
   const t = summaryCards(stats);
   const isMe = me && me.username === user.username;
   mount.replaceChildren(h('article.profile',
     h('header.profile-head',
-      avatarEl(user.avatar, 88),
+      avatarEl(user.avatar, 88, user.cosmetics),
       h('div.profile-id',
-        h('h1.profile-name', user.username),
+        h('h1.profile-name', { class: nameColor(user.cosmetics) }, user.username),
         h('p.muted', `LEVEL ${user.level} · joined ${fmtDate(user.createdAt)}`),
         progress ? xpBar(progress) : null,
         isMe ? h('p.profile-you', 'This is you. Other players see this page too.') : null,
@@ -128,6 +128,7 @@ export async function renderProfile(mount, name, { gameLabel, me }) {
     h('section.profile-section',
       h('h2.panel-title', '> STATS BY GAME'),
       stats.length ? statsTable(stats, gameLabel) : h('p.muted.empty', isMe ? 'Finish a game and your stats show up here.' : 'No games played yet.')),
+    isMe && equip && cosmetics.length ? cosmeticsPicker(user, cosmetics, equip, mount) : null,
     achievements.length ? h('section.profile-section',
       h('h2.panel-title', '> ACHIEVEMENTS ', h('span.muted.ach-count', `${achievements.filter((a) => a.at).length} / ${achievements.length}`)),
       achievementGrid(achievements)) : null,
@@ -162,6 +163,40 @@ function headToHead(mine, theirs, gameLabel) {
     box.hidden = false;
   }).catch(() => {});
   return box;
+}
+
+// Own profile only: equip unlocked name colors / avatar frames. Updates the header in place;
+// the server re-checks the unlock and answers with a fresh account state (or an error toast).
+function cosmeticsPicker(user, list, equip, mount) {
+  const equipped = { nameColor: null, frame: null, ...(user.cosmetics || {}) };
+  const section = h('section.profile-section.cos');
+  const apply = () => {
+    const nameEl = mount.querySelector('.profile-name');
+    nameEl.className = ['profile-name', nameColor(equipped)].filter(Boolean).join(' ');
+    mount.querySelector('.profile-head > .avatar').replaceWith(avatarEl(user.avatar, 88, equipped));
+    draw();
+  };
+  const pick = (slot, id) => { equipped[slot] = id; equip({ [slot]: id }); apply(); };
+  const opt = (slot, c) => {
+    const on = equipped[slot] === (c ? c.id : null);
+    const locked = c && !c.unlocked;
+    const swatch = slot === 'frame'
+      ? avatarEl(user.avatar, 36, c ? { frame: c.id } : null)
+      : h(`span.cos-name${c ? `.nc-${c.id}` : ''}`, 'Aa');
+    return h(`button.cos-opt${on ? '.on' : ''}${locked ? '.locked' : ''}`, {
+      type: 'button', role: 'radio', 'aria-checked': String(on), disabled: locked,
+      title: locked ? `Locked: ${c.how}` : c ? c.name : 'None',
+      onclick: () => { if (!on) pick(slot, c ? c.id : null); },
+    }, swatch, h('span.cos-label', c ? c.name : 'None'), locked ? h('span.cos-how', c.how) : null);
+  };
+  const group = (slot, title) => h('div.cos-group',
+    h('h3.cos-title', { id: `cos-${slot}` }, title),
+    h('div.cos-row', { role: 'radiogroup', 'aria-labelledby': `cos-${slot}` }, opt(slot, null), list.filter((c) => c.slot === slot).map((c) => opt(slot, c))));
+  const draw = () => section.replaceChildren(
+    h('h2.panel-title', '> COSMETICS ', h('span.muted.ach-count', `${list.filter((c) => c.unlocked).length} / ${list.length} unlocked`)),
+    group('nameColor', 'NAME COLOR'), group('frame', 'AVATAR FRAME'));
+  draw();
+  return section;
 }
 
 function xpBar({ level, into, need }) {

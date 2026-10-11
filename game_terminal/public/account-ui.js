@@ -1,7 +1,7 @@
 // Account UI: sign-in dialog, first-time username setup, terms re-acceptance and the top-bar
 // account chip. hub.js owns the socket; everything here talks to it through callbacks.
 import { h, modal, toast } from './ui.js';
-import { AVATARS, avatarEl } from './avatars.js';
+import { AVATARS, avatarEl, nameColor } from './avatars.js';
 
 const USERNAME_RE = /^[A-Za-z0-9_]{3,16}$/; // mirrors server/accounts.js (the server re-validates)
 
@@ -213,7 +213,7 @@ export function renderAccountChip(slot, { mode, user, onSignIn, onSignOut, onCha
     user.admin ? h('a', { role: 'menuitem', href: '/admin', 'data-link': true }, 'Moderation') : null,
     h('button', { role: 'menuitem', type: 'button', onclick: () => { close(); onSignOut(); } }, 'Sign out'));
   const chip = h('button.chip', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
-    avatarEl(user.avatar, 24), h('span.chip-name', user.username), h('span.chip-level', `LV ${user.level || 1}`));
+    avatarEl(user.avatar, 24, user.cosmetics), h('span.chip-name', { class: nameColor(user.cosmetics) }, user.username), h('span.chip-level', `LV ${user.level || 1}`));
   const close = () => { menu.hidden = true; chip.setAttribute('aria-expanded', 'false'); };
   chip.addEventListener('click', (e) => {
     e.stopPropagation();

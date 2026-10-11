@@ -89,7 +89,7 @@ function createChat(db, { now = () => Date.now() } = {}) {
       id: crypto.randomUUID().slice(0, 12),
       at: now(),
       uid, // stripped before sending (see toClient)
-      from: { username: user.username, avatar: user.avatar, level: user.level || 1, ...(user.role === 'admin' ? { role: 'admin' } : {}) },
+      from: { username: user.username, avatar: user.avatar, level: user.level || 1, cosmetics: user.cosmetics || {}, ...(user.role === 'admin' ? { role: 'admin' } : {}) },
       text: maskText(text),
     };
     r.push(msg);

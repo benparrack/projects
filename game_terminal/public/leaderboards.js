@@ -1,7 +1,7 @@
 // /leaderboards[/<game>]?scope=all|season|friends&by=rating|wins|best — per-game ladders from
 // GET /api/leaderboard/<game>. Ranked games default to rating, score games to best, others to wins.
 import { h, timeAgo, fmtDate } from './ui.js';
-import { avatarEl } from './avatars.js';
+import { avatarEl, nameColor } from './avatars.js';
 import { fmtScore, tierBadge } from './profile.js';
 import { onSocialChange } from './friends.js';
 
@@ -109,7 +109,7 @@ export async function renderLeaderboards(mount, gameType, { gameLabel, auth, me,
       h('tbody', d.rows.map((r) => h(`tr${me && r.username === me.username ? '.lb-me' : ''}${r.rank <= 3 ? `.lb-top${r.rank}` : ''}`,
         h('td.num.lb-rank', r.rank <= 3 ? h('span.lb-medal', { 'aria-label': `Rank ${r.rank}` }, String(r.rank)) : String(r.rank)),
         h('th', { scope: 'row' }, h('a.lb-player', { href: `/u/${encodeURIComponent(r.username)}`, 'data-link': true },
-          avatarEl(r.avatar, 28), h('span.lb-name', r.username), h('span.muted.lb-lv', `LV ${r.level}`))),
+          avatarEl(r.avatar, 28, r.cosmetics), h('span.lb-name', { class: nameColor(r.cosmetics) }, r.username), h('span.muted.lb-lv', `LV ${r.level}`))),
         g.rated ? h('td', r.tier ? tierBadge(r.tier, r.rating) : h('span.muted', '—')) : null,
         h('td.num.lb-val', fmt(r.value)),
         view.by !== 'best' ? h('td.num.lb-wl', `${r.wins || 0} / ${r.played || 0}`) : null)))));

@@ -55,9 +55,12 @@ function svgMarkup(id) {
 }
 
 // An <span class="avatar"> element holding the avatar at the given CSS pixel size.
-export function avatarEl(id, size = 32) {
+// Equipped cosmetics (from publicUser().cosmetics) as CSS classes; null when nothing is equipped.
+export const nameColor = (c) => (c && c.nameColor ? `nc-${c.nameColor}` : null);
+
+export function avatarEl(id, size = 32, cosmetics = null) {
   const span = document.createElement('span');
-  span.className = 'avatar';
+  span.className = cosmetics && cosmetics.frame ? `avatar af af-${cosmetics.frame}` : 'avatar';
   span.style.width = span.style.height = `${size}px`;
   span.innerHTML = svgMarkup(id);
   return span;

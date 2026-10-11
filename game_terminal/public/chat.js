@@ -3,7 +3,7 @@
 // from hub.js. Blocked players' messages are hidden client-side (the server never DMs them).
 import { ClientMessage } from './protocol.js';
 import { h, toast, modal, timeAgo } from './ui.js';
-import { avatarEl } from './avatars.js';
+import { avatarEl, nameColor } from './avatars.js';
 import { getSocial } from './friends.js';
 
 const MAX_LEN = 200;
@@ -122,10 +122,10 @@ export function chatBox(opts) {
     if (ctx.isAdmin() && !mine) actions.push(['Moderate…', () => ctx.navigate(`/admin?user=${encodeURIComponent(name)}`)]);
     const time = new Date(msg.at);
     return h(`li.chat-msg${grouped ? '.grouped' : ''}${mine ? '.mine' : ''}`, { 'data-id': msg.id },
-      grouped ? h('span.chat-gutter', { title: time.toLocaleString() }, time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : avatarEl(msg.from.avatar, 24),
+      grouped ? h('span.chat-gutter', { title: time.toLocaleString() }, time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : avatarEl(msg.from.avatar, 24, msg.from.cosmetics),
       h('div.chat-main',
         grouped ? null : h('div.chat-meta',
-          h('a.chat-name', { href: `/u/${encodeURIComponent(name)}`, 'data-link': true }, name),
+          h('a.chat-name', { href: `/u/${encodeURIComponent(name)}`, 'data-link': true, class: nameColor(msg.from.cosmetics) }, name),
           msg.from.role === 'admin' ? h('span.chat-mod', { title: 'Moderator' }, 'MOD') : h('span.chat-lv', `LV${msg.from.level || 1}`),
           h('time.chat-time', { dateTime: time.toISOString(), title: time.toLocaleString() }, timeAgo(msg.at))),
         h('p.chat-text', msg.text)),

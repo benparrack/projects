@@ -1,6 +1,7 @@
 // User accounts: the users/{uid} doc, unique usernames (usernames/{lower} -> uid), avatars, and
 // the public shape of a user that other players get to see.
 const { isOffensiveName } = require('./wordfilter');
+const { COSMETICS, hasCosmetic } = require('./progression');
 
 // Kept in sync by hand with public/avatars.js (test/accounts.test.js checks it).
 const AVATAR_IDS = [
@@ -99,8 +100,22 @@ function createAccounts(db) {
     return { user: await getUser(uid) };
   }
 
-  async function updateProfile(uid, { avatar, settings }) {
+  async function updateProfile(uid, { avatar, settings, cosmetics }) {
     const patch = {};
+    if (cosmetics && typeof cosmetics === 'object') {
+      const user = await getUser(uid);
+      const next = { ...((user && user.cosmetics) || {}) };
+      for (const slot of ['nameColor', 'frame']) {
+        if (!(slot in cosmetics)) continue;
+        const id = cosmetics[slot];
+        if (id == null) { next[slot] = null; continue; } // null, not delete: merge is deep
+        const c = COSMETICS.find((x) => x.slot === slot && x.id === id);
+        if (!c) return { error: 'Unknown cosmetic.' };
+        if (!hasCosmetic(c, user || {})) return { error: `Locked: ${c.how}.` };
+        next[slot] = id;
+      }
+      patch.cosmetics = next;
+    }
     if (avatar != null) {
       if (!AVATAR_IDS.includes(avatar)) return { error: 'Unknown avatar.' };
       patch.avatar = avatar;
