@@ -189,8 +189,21 @@ let data = null, view = location.hash.slice(1) || localStorage.getItem("view") |
 const ui = { q: "", sort: "save", cat: "", member: true, hideSkip: true, onlyList: false, off: new Set() };
 
 // Same rule as grocery.matches (start or end of a word, -word excludes), for the live counts in Edit.
+// mirrors grocery.unit_price: '2 för 40' -> 20, '179 kr/kg' -> 179
+function unitPrice(deal) {
+  const d = String(deal || "").toLowerCase().replace(/(\d),(\d)/g, "$1.$2");
+  const n = d.match(/(\d+)\s*för\s*(\d+(?:\.\d+)?)/);
+  if (n) return n[2] / n[1];
+  const f = d.match(/\d+(?:\.\d+)?/);
+  return f ? +f[0] : NaN;
+}
 function matches(item, o) {
-  const hay = (o.name + " " + o.brand).toLowerCase(), words = item.toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = (o.name + " " + o.brand).toLowerCase();
+  let words = item.toLowerCase().split(/\s+/).filter(Boolean);
+  // '<45' caps the price (same rule as grocery.matches)
+  const caps = words.filter(w => /^<\d+([,.]\d+)?$/.test(w));
+  words = words.filter(w => !caps.includes(w));
+  if (caps.some(c => !(unitPrice(o.deal) <= +c.slice(1).replace(",", ".")))) return false;
   if (words.some(w => w.length > 1 && w[0] === "-" && hay.includes(w.slice(1)))) return false;
   const alts = words.filter(w => w[0] !== "-").join(" ").split("|").map(a => a.trim()).filter(Boolean);
   const re = a => a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -342,7 +355,8 @@ function renderEdit() {
     <div class="panel"><h2>Shopping list <span class="saved" id="saved"></span></h2>
       <p>One line per thing you buy. A word matches the start or end of a word in the offer, which suits Swedish
       compounds: <code>kyckling</code> finds Kycklingbröstfilé, <code>bröd</code> finds Lantbröd. Use <code>|</code> for
-      alternatives and put <code>-word</code> at the end to exclude (<code>ägg -lägg</code> skips pålägg). Changes save as you type.</p>
+      alternatives and put <code>-word</code> at the end to exclude (<code>ägg -lägg</code> skips pålägg).
+      <code>&lt;45</code> sets a top price, so <code>zoégas &lt;45</code> only shows (and alerts) under 45 kr. Changes save as you type.</p>
       ${rows("items")}
       <div class="erow new"><input id="newItem" placeholder="Add something, e.g. yoghurt|kvarg"><button class="btn primary" id="addItem">Add</button></div>
     </div></div><div>

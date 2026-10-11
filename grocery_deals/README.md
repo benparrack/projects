@@ -61,6 +61,8 @@ already sent (one line per offer, with every store it's at). Already-sent offers
 A list line matches when any `|`-alternative starts or ends a word in the offer's name or brand (this suits
 Swedish compounds: `kyckling` finds Kycklingbröstfilé, `bröd` finds Lantbröd, `ris` does not find Krispiga).
 `-word` excludes when it appears anywhere; put exclusions at the end of the line.
+`<45` sets a top price (per st, or per kg/l when the deal is priced so): `zoégas <45` only matches, and so only
+alerts, when it is 45 kr or less. With the daily alert that makes it a price watch.
 
 ## Data sources
 

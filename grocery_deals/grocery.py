@@ -285,6 +285,12 @@ def matches(item, offer):
     'Kycklingbröstfilé', 'bröd' hits 'Lantbröd', but 'ris' doesn't hit 'Krispiga'."""
     hay = f"{offer['name']} {offer['brand']}".lower()
     words = item.lower().split()
+    # '<45' caps the price (per st, or per kg/l when the deal is priced that way): a price watch
+    for cap in [w for w in words if re.fullmatch(r"<\d+(?:[,.]\d+)?", w)]:
+        words.remove(cap)
+        up = unit_price(offer.get("deal"))
+        if not up or up[0] > float(cap[1:].replace(",", ".")):
+            return False
     if any(w[1:] in hay for w in words if w.startswith("-") and len(w) > 1):
         return False
     alts = " ".join(w for w in words if not w.startswith("-")).split("|")

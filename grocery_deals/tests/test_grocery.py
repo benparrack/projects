@@ -183,3 +183,9 @@ grocery.ALERTED.unlink()
 run("push")  # the Monday report marks what it sent
 assert len(sent) == 2 and list(json.loads(grocery.ALERTED.read_text())) == [grocery.alert_key(h1, mjolk)]
 print("ok 7")
+
+# price cap '<45' acts as a watch
+z = lambda d: {"name": "Zoégas Kaffe", "brand": "", "deal": d}
+assert grocery.matches("zoégas <45", z("2 för 80 kr")) and not grocery.matches("zoégas <45", z("49,90 kr"))
+assert grocery.matches("zoégas", z("49,90 kr")) and not grocery.matches("zoégas <45", z(""))
+print("ok 8")
