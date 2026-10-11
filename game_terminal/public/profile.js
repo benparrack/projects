@@ -39,7 +39,9 @@ function matchRow(m, self, gameLabel) {
     h('span.match-game', gameLabel(m.gameType)),
     h('span.match-vs', m.kind === 'solo' ? h('span.muted', 'solo') : ['vs ', ...vs],
       m.kind === 'bot' && m.botLevel ? h('span.muted', ` (${m.botLevel})`) : null),
-    h('span.match-score', score || ''),
+    h('span.match-score', m.replay
+      ? h('a.match-replay', { href: `/replay/${m.id}`, 'data-link': true, 'aria-label': `Watch replay: ${gameLabel(m.gameType)}` }, '▶ REPLAY')
+      : score || ''),
     h('time.match-when.muted', { dateTime: new Date(m.endedAt).toISOString(), title: new Date(m.endedAt).toLocaleString() }, timeAgo(m.endedAt)));
 }
 

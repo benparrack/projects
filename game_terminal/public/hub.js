@@ -6,6 +6,7 @@ import { avatarEl } from './avatars.js';
 import { h, toast } from './ui.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
+import { renderReplay } from './replay.js';
 import { openSignIn, openUsernameSetup, openTermsUpdate, renderAccountChip, openAvatarChange } from './account-ui.js';
 
 const muteBtn = document.getElementById('btn-mute');
@@ -577,6 +578,17 @@ function route() {
     return 'app';
   }
   if (path === '/' || path === '/index.html') return 'app';
+  const rep = /^\/replay\/([a-z0-9]{8,40})\/?$/.exec(path);
+  if (rep) {
+    const gameLabel = (t) => (GAMES.find((g) => g.type === t) || {}).label || t;
+    renderReplay(els.screenPage, rep[1], { gameLabel }).then((r) => {
+      if (location.pathname !== path) return r.cleanup();
+      state.pageCleanup = r.cleanup;
+      document.title = `${r.title} — Game Terminal`;
+    });
+    showScreen('page');
+    return 'page';
+  }
   const prof = /^\/u\/([A-Za-z0-9_]{1,24})\/?$/.exec(path);
   if (prof) {
     const gameLabel = (t) => (GAMES.find((g) => g.type === t) || {}).label || t;
@@ -612,6 +624,7 @@ function navigate(href) {
 }
 
 function onRoute() {
+  if (state.pageCleanup) { state.pageCleanup(); state.pageCleanup = null; }
   document.title = 'Game Terminal — free multiplayer games in your browser';
   state.onPage = route() === 'page';
   if (!state.onPage) {

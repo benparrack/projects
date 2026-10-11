@@ -47,5 +47,20 @@ function call(api, url) {
   assert.strictEqual((await call(api, '/api/user/nobody')).status, 404);
   assert.strictEqual((await call(api, '/api/nope')).status, 404);
   assert.strictEqual((await call(api, '/api/config')).body.authMode, 'dev');
+
+  // Replays: stored for plugins with replayFrames, served as frames, uids stripped.
+  const real = require('../server/games');
+  const rdb = createMemoryDb();
+  const racc = createAccounts(rdb);
+  await racc.claimUsername('u1', { username: 'Alice', acceptTerms: true });
+  const rres = createResults({ db: rdb, registry: real });
+  const rec = await rres.record(room('connect4', [people[0], people[2]]), { placements: [['A'], ['G']], replay: [0, 3, 3, 4, 4, 5, 5, 6] });
+  assert.strictEqual(rec.summary.replay, true);
+  const rapi = createApi({ db: rdb, accounts: racc, authMode: 'dev', firebaseWebConfig: null, registry: real });
+  const fr = await call(rapi, `/api/match/${rec.summary.id}/frames`);
+  assert.strictEqual(fr.status, 200);
+  assert.strictEqual(fr.body.frames.length, 8);
+  assert.ok(!JSON.stringify(fr.body).includes('"u1"'));
+  assert.strictEqual((await call(rapi, '/api/match/doesnotexist1/frames')).status, 404);
   console.log('all api tests passed');
 })().catch((err) => { console.error(err); process.exit(1); });

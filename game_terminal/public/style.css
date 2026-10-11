@@ -378,3 +378,32 @@ body.modal-open { overflow: hidden; }
   .stats-table th, .stats-table td { padding: 8px 8px; }
   .stats-table tbody th { white-space: normal; }
 }
+
+/* ---- Replay viewer ---- */
+.match-replay { color: var(--accent); text-decoration: none; font-size: 12px; letter-spacing: 1px; white-space: nowrap; }
+.match-replay:hover, .match-replay:focus-visible { text-decoration: underline; }
+.replay { display: flex; flex-direction: column; gap: 16px; padding: 20px 0 8px; }
+.replay .loading { text-align: center; padding: 48px 0; }
+.replay-head p { margin: 0; }
+.replay-kicker { color: var(--accent); font-size: 13px; letter-spacing: 2px; }
+.replay-title { font-family: var(--display); font-weight: normal; font-size: 46px; line-height: 1; margin: 4px 0 6px; letter-spacing: 2px; text-shadow: var(--glow); }
+.replay-players { font-size: 16px; }
+.replay-players a { color: var(--fg); }
+.replay-crown { color: var(--accent); }
+.replay-meta { font-size: 13px; margin-top: 4px !important; }
+.replay-board { pointer-events: none; user-select: none; min-height: 320px; }
+/* Viewer is read-only: drop the live game's seat/bot buttons and its end-of-game popup. */
+.replay-board :is(button, select, .gt-res-back, .gt-res-pill) { display: none !important; }
+.replay-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); background: var(--panel); position: sticky; bottom: 0; }
+.replay-btn { min-width: 40px; height: 36px; padding: 0 10px; font-size: 18px; line-height: 1; }
+.replay-play { min-width: 52px; color: var(--bg); background: var(--fg); border-color: var(--fg); }
+.replay-play:hover { box-shadow: var(--glow); }
+.replay-scrub { flex: 1 1 160px; accent-color: var(--fg); min-width: 120px; }
+.replay-count { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 7ch; text-align: right; }
+.replay-hint { font-size: 12px; margin: 0; }
+@media (max-width: 640px) {
+  .replay-title { font-size: 36px; }
+  .match-score:has(.match-replay) { display: block; grid-column: 3; grid-row: 2; text-align: right; }
+  .match-row:has(.match-replay) .match-vs { grid-column: 2 / 3; }
+  .replay-hint { display: none; }
+}
