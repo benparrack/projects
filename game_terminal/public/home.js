@@ -4,7 +4,8 @@ import { avatarEl, nameColor } from './avatars.js';
 
 let live = null; // { at, data }
 
-export async function renderLive(mount, { gameLabel, pick }) {
+// openOnline (signed in only) makes "N online now" open the drawer's ONLINE NOW list.
+export async function renderLive(mount, { gameLabel, pick, openOnline }) {
   if (!live || Date.now() - live.at > 30000) {
     try {
       const res = await fetch('/api/live');
@@ -15,7 +16,9 @@ export async function renderLive(mount, { gameLabel, pick }) {
   const d = live.data;
   const stat = (n, label) => h('span.live-stat', h('b', n.toLocaleString()), ` ${label}`);
   mount.replaceChildren(h('p.live-strip', { 'aria-label': 'Site activity' },
-    h('span.live-dot', { 'aria-hidden': 'true' }), stat(d.online, 'online now'),
+    h('span.live-dot', { 'aria-hidden': 'true' }), openOnline
+      ? h('button.live-hot.live-online', { type: 'button', title: 'See who\'s online', onclick: openOnline }, h('b', d.online.toLocaleString()), ' online now')
+      : stat(d.online, 'online now'),
     h('span.live-sep', { 'aria-hidden': 'true' }, '·'), stat(d.today, d.today === 1 ? 'game today' : 'games today'),
     d.topWeek ? [h('span.live-sep', { 'aria-hidden': 'true' }, '·'), h('span.live-stat', 'hot this week: ',
       h('button.live-hot', { type: 'button', title: `${d.topWeek.plays.toLocaleString()} games in 7 days`, onclick: () => pick(d.topWeek.gameType) }, gameLabel(d.topWeek.gameType).toUpperCase()))] : null));

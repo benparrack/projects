@@ -799,3 +799,10 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 /* Fullscreen room (hub.js): only the room header and the game. */
 body.gt-fullscreen .topbar, body.gt-fullscreen .sitefooter, body.gt-fullscreen .roster { display: none; }
 body.gt-fullscreen .crt { max-width: none; }
+.live-online { color: inherit; }
+.live-online:hover:not(:disabled) b { color: var(--accent); }
+.fr-section#fr-online { position: relative; scroll-margin-top: 8px; }
+.fr-refresh { position: absolute; top: 0; right: 0; }
+.fr-challenge label { display: grid; gap: 6px; font-size: 12px; letter-spacing: 1px; color: var(--muted); }
+.fr-challenge select { width: 100%; padding: 8px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); font: inherit; font-size: 15px; }
+.fr-challenge .btn-primary { width: 100%; margin-top: 8px; }

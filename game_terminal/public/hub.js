@@ -10,7 +10,7 @@ import { renderReplay } from './replay.js';
 import { renderLeaderboards } from './leaderboards.js';
 import { renderDailyCard, renderDaily } from './daily.js';
 import { renderLive, renderActivity } from './home.js';
-import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, openConversation, getSocial } from './friends.js';
+import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, handleOnline, openOnline, openConversation, getSocial } from './friends.js';
 import { initChat, initGlobalDock, setDockAvailable, chatBox, reopenChats, handleChatHistory, handleChatMessage, handleChatDeleted, handleChatError } from './chat.js';
 import { renderAdmin, handleAdminData } from './admin.js';
 import { renderSettings, applyPrefs, currentPrefs, initPrefs, downloadJson } from './settings.js';
@@ -367,7 +367,7 @@ function ordinal(n) {
 
 // Menu extras: live strip, daily card, friends' activity (fetched fresh each time the menu shows).
 function refreshHome() {
-  renderLive(document.getElementById('live-slot'), { gameLabel, pick: pickGame });
+  renderLive(document.getElementById('live-slot'), { gameLabel, pick: pickGame, openOnline: state.account ? openOnline : null });
   renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
   if (state.account) send(ClientMessage.ACTIVITY_GET, {});
   else document.getElementById('activity-slot').replaceChildren();
@@ -425,6 +425,8 @@ function handleServerMessage(type, payload) {
     case ServerMessage.ROOM_JOINED: {
       state.currentRoom = { code: payload.code, gameType: payload.gameType, isPublic: payload.isPublic, ranked: !!payload.ranked };
       state.pendingJoin = null;
+      if (state.inviteAfterJoin && !payload.isPublic) send(ClientMessage.ROOM_INVITE, { username: state.inviteAfterJoin });
+      state.inviteAfterJoin = null;
       saveSession();
       els.roomCodeLabel.textContent = payload.daily ? `◆ DAILY ${payload.daily}` : payload.ranked ? `${payload.code} (ranked ★)` : payload.isPublic ? `${payload.code} (public)` : payload.code;
       els.btnCopyLink.hidden = payload.isPublic || !!payload.daily;
@@ -465,6 +467,10 @@ function handleServerMessage(type, payload) {
       handleAccountState(payload);
       break;
     }
+
+    case ServerMessage.ONLINE:
+      handleOnline(payload);
+      break;
 
     case ServerMessage.ACTIVITY: {
       if (state.account) renderActivity(document.getElementById('activity-slot'), payload, { gameLabel, openFriends: () => document.getElementById('btn-friends').click() });
@@ -863,8 +869,16 @@ if (document.fullscreenEnabled) {
   initFriends({
     send,
     gameLabel,
+    games: CATEGORIES,
+    selectedGame: () => state.selectedGameType,
     currentRoom: () => state.currentRoom,
     navigate,
+    challenge(username, gameType) {
+      if (location.pathname !== '/') history.pushState(null, '', '/');
+      state.selectedGameType = gameType;
+      state.inviteAfterJoin = username;
+      send(ClientMessage.ROOM_CREATE, { gameType, isPublic: false });
+    },
     join(code) {
       if (location.pathname !== '/') history.pushState(null, '', '/');
       send(ClientMessage.ROOM_JOIN, { code });

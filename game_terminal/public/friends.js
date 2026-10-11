@@ -1,12 +1,14 @@
 // Friends drawer, social notices (requests, room invites, party invites) and the friend/block
 // buttons on profiles. State arrives as SOCIAL_STATE over the socket (accounts only).
 import { ClientMessage } from './protocol.js';
-import { h, toast, timeAgo } from './ui.js';
-import { avatarEl } from './avatars.js';
+import { h, toast, timeAgo, modal } from './ui.js';
+import { avatarEl, nameColor } from './avatars.js';
+import { sfx } from './games/sfx.js';
 import { chatBox, unreadCount, onUnread, refreshBlocked, openReport } from './chat.js';
 
 let social = null;
-let ctx = null; // { send, gameLabel, currentRoom(), join(code), navigate(href) }
+let ctx = null; // { send, gameLabel, games, currentRoom(), join(code), challenge(username, gameType), navigate(href) }
+let onlineNow = null; // last ONLINE payload: { players, guests }
 const subs = new Set();
 const els = {};
 let convo = null; // { kind: 'dm'|'party', name? } while a conversation is open in the drawer
@@ -36,7 +38,30 @@ export function initFriends(options) {
 function toggle(open = els.drawer.hidden) {
   els.drawer.hidden = !open;
   els.btn.setAttribute('aria-expanded', String(open));
-  if (open) { render(); els.drawer.focus(); } else convo = null;
+  if (open) { send(ClientMessage.ONLINE_GET); render(); els.drawer.focus(); } else convo = null;
+}
+
+// Open the drawer scrolled to ONLINE NOW (the home screen's "N online now" links here).
+export function openOnline() {
+  convo = null;
+  if (els.drawer.hidden) toggle(true); else render();
+  requestAnimationFrame(() => { const sec = document.getElementById('fr-online'); if (sec) sec.scrollIntoView({ block: 'start' }); });
+}
+
+export function handleOnline(p) {
+  onlineNow = p;
+  if (!els.drawer.hidden && !convo) render();
+}
+
+// An invite can land mid-game in a background tab: chime, and flash the tab title until it's seen.
+let titleFlash = null;
+function alertInvite(text) {
+  sfx.play('turn');
+  if (!document.hidden || titleFlash) return;
+  const base = document.title;
+  let on = false;
+  titleFlash = setInterval(() => { on = !on; document.title = on ? `★ ${text}` : base; }, 1000);
+  document.addEventListener('visibilitychange', () => { clearInterval(titleFlash); titleFlash = null; document.title = base; }, { once: true });
 }
 
 // Open the drawer on a DM (kind 'dm', name) or the party chat (kind 'party').
@@ -89,9 +114,11 @@ export function handleSocialNotice(p) {
       toast(`${who} accepted your friend request.`, { kind: 'ok' });
       break;
     case 'invite':
+      alertInvite(`${who} invited you`);
       toast(`${who} invited you to ${ctx.gameLabel(p.gameType)}.`, { ms: 20000, action: { label: 'JOIN', run: () => ctx.join(p.code) } });
       break;
     case 'party':
+      alertInvite(`${who} invited you`);
       toast(`${who} invited you to their party.`, { ms: 30000, action: { label: 'JOIN PARTY', run: () => send(ClientMessage.PARTY_ACCEPT, { id: p.id }) } });
       break;
     case 'follow':
@@ -137,6 +164,7 @@ function friendRow(f) {
   let primary = null;
   if (f.playing && (!room || room.code !== f.playing.code)) primary = h('button.btn-sm', { type: 'button', onclick: () => { toggle(false); ctx.join(f.playing.code); } }, 'JOIN');
   else if (room && f.online && !(f.playing && f.playing.code === room.code)) primary = h('button.btn-sm', { type: 'button', onclick: () => send(ClientMessage.ROOM_INVITE, { username: f.username }) }, 'INVITE');
+  else if (!room && f.online && !f.playing) primary = h('button.btn-sm', { type: 'button', title: 'Pick a game; we\'ll make a private room and invite them', onclick: () => openChallenge(f.username) }, 'CHALLENGE');
   const dms = unreadCount(`dm|${f.username.toLowerCase()}`);
   return h('li.fr-row',
     avatarEl(f.avatar, 36),
@@ -151,8 +179,43 @@ function friendRow(f) {
     ])));
 }
 
-function section(title, count, body) {
-  return h('section.fr-section', h('h3.fr-title', title, count != null ? h('span.muted', ` (${count})`) : null), body);
+function section(title, count, body, attrs = {}) {
+  return h('section.fr-section', attrs, h('h3.fr-title', title, count != null ? h('span.muted', ` (${count})`) : null), body);
+}
+
+// Pick a game, then the hub makes a private room and invites this friend once it's joined.
+function openChallenge(username) {
+  const m = modal(`CHALLENGE ${username.toUpperCase()}`);
+  const seen = new Set();
+  const select = h('select', { 'aria-label': 'Game' }, ctx.games.map((cat) => h('optgroup', { label: cat.name },
+    cat.games.filter((g) => !seen.has(g.type) && seen.add(g.type)).map((g) => h('option', { value: g.type }, g.label)))));
+  select.value = ctx.selectedGame();
+  m.body.append(h('form.fr-challenge', { onsubmit: (e) => {
+    e.preventDefault();
+    m.close();
+    toggle(false);
+    ctx.challenge(username, select.value);
+  } },
+  h('label', 'GAME', select),
+  h('p.fr-hint', 'We\'ll open a private room and send them an invite.'),
+  h('button.btn-primary', { type: 'submit' }, 'CREATE ROOM & INVITE')));
+}
+
+function onlineRow(p) {
+  const room = ctx.currentRoom();
+  const pending = social.outgoing.some((x) => sameName(x.username, p.username));
+  const incoming = social.incoming.some((x) => sameName(x.username, p.username));
+  let action;
+  if (p.playing && p.playing.code && (!room || room.code !== p.playing.code)) action = h('button.btn-sm', { type: 'button', 'aria-label': `Join ${p.username}'s ${ctx.gameLabel(p.playing.gameType)} room`, onclick: () => { toggle(false); ctx.join(p.playing.code); } }, 'JOIN');
+  else if (p.friend) action = h('span.fr-tag', 'FRIEND');
+  else if (pending) action = h('span.fr-tag', 'SENT');
+  else if (incoming) action = h('button.btn-sm', { type: 'button', onclick: () => send(ClientMessage.FRIEND_ACCEPT, { username: p.username }) }, 'ACCEPT');
+  else action = h('button.btn-sm', { type: 'button', 'aria-label': `Add ${p.username} as a friend`, onclick: () => send(ClientMessage.FRIEND_REQUEST, { username: p.username }) }, '+ ADD');
+  return h('li.fr-row', avatarEl(p.avatar, 28, p.cosmetics),
+    h('div.fr-id',
+      h('a.fr-name', { href: `/u/${encodeURIComponent(p.username)}`, 'data-link': true, class: nameColor(p.cosmetics), onclick: () => toggle(false) }, p.username),
+      h(`span.fr-status${p.playing ? '.on' : ''}`, `Lv ${p.level} · ${p.playing ? `Playing ${ctx.gameLabel(p.playing.gameType)}${p.playing.code ? '' : ' (private)'}` : 'In the lobby'}`)),
+    h('div.fr-actions', action));
 }
 
 function renderConvo() {
@@ -218,6 +281,13 @@ function render() {
   parts.push(section('FRIENDS', social.friends.length ? `${online} online` : null, social.friends.length
     ? h('ul.fr-list', social.friends.map(friendRow))
     : h('p.muted.fr-empty', 'No friends yet. Add someone by username above, or from your recent players below.')));
+  const others = onlineNow ? onlineNow.players : null;
+  parts.push(section('ONLINE NOW', others ? others.length : null, h('div',
+    h('button.btn-sm.btn-ghost.fr-refresh', { type: 'button', 'aria-label': 'Refresh online players', onclick: () => send(ClientMessage.ONLINE_GET) }, '↻ REFRESH'),
+    !others ? h('p.muted.fr-empty', 'Loading…')
+      : others.length ? h('ul.fr-list', others.map(onlineRow))
+        : h('p.muted.fr-empty', 'Nobody else is signed in right now.'),
+    onlineNow && onlineNow.guests ? h('p.fr-hint', `+ ${onlineNow.guests} guest${onlineNow.guests === 1 ? '' : 's'} playing without an account`) : null), { id: 'fr-online' }));
   const recent = social.recent;
   parts.push(section('RECENT PLAYERS', null, recent.length
     ? h('ul.fr-list', recent.map((r) => h('li.fr-row', avatarEl(r.avatar, 28),

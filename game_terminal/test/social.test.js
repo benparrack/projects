@@ -165,6 +165,24 @@ async function e2e() {
     guest.send(C.ROOM_CREATE, { gameType: 'connect4' });
     await guest.wait(S.ROOM_JOINED);
 
+    // ONLINE NOW: every signed-in player but you, friends first; only public rooms expose a code;
+    // blocks hide players both ways; guests are a count.
+    const carol = await signIn('carol');
+    const dave = await signIn('dave');
+    carol.send(C.ROOM_JOIN, { code: P.publicRoomCode('connect4') });
+    await carol.wait(S.ROOM_JOINED);
+    dave.send(C.USER_BLOCK, { username: 'alice', on: true });
+    await dave.wait(S.SOCIAL_STATE, (p) => p.blocked.length === 1);
+    alice.send(C.ONLINE_GET);
+    const on = await alice.wait(S.ONLINE);
+    assert.deepStrictEqual(on.players.map((x) => x.username), ['bob', 'carol']);
+    assert.ok(on.players[0].friend && on.players[0].playing.gameType === 'reversi' && !on.players[0].playing.code, 'private room: no code');
+    assert.strictEqual(on.players[1].playing.code, P.publicRoomCode('connect4'));
+    assert.strictEqual(on.guests, 1);
+    assert.ok(!JSON.stringify(on).includes('dev_'), 'no uids');
+    carol.ws.close();
+    dave.ws.close();
+
     // Bob goes offline: alice sees it.
     bob.ws.close();
     await alice.wait(S.SOCIAL_STATE, (p) => p.friends[0] && !p.friends[0].online);

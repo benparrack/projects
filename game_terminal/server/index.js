@@ -128,6 +128,31 @@ function presenceChanged(uid) {
   const party = parties.get(uid);
   social.friendUids(uid).then((fr) => pushMany([uid, ...fr, ...(party ? party.members : [])])).catch(report);
 }
+// Everyone signed in right now, for the friends drawer's ONLINE NOW list. Profiles come from the live
+// sessions (no reads); blocks in either direction hide a player. Only public rooms expose a code.
+const ONLINE_LIST_MAX = 60;
+async function onlinePlayers(uid) {
+  const friends = new Set(await social.friendUids(uid));
+  const players = [];
+  // shortcut: one social read per listed player for "they blocked me"; fine for dozens online, cache blocks in memory if it grows.
+  for (const [other, sockets] of online) {
+    if (other === uid || players.length >= ONLINE_LIST_MAX) continue;
+    const s = [...sockets].map((w) => sessions.get(w)).find((x) => x && x.user);
+    if (!s || await social.isBlocked(uid, other)) continue;
+    const p = publicUser(s.user);
+    const where = presence(other).playing;
+    players.push({
+      username: p.username, avatar: p.avatar, level: p.level, cosmetics: p.cosmetics,
+      friend: friends.has(other),
+      ...(where ? { playing: { gameType: where.gameType, ...(where.isPublic ? { code: where.code } : {}) } } : {}),
+    });
+  }
+  players.sort((a, b) => (b.friend - a.friend) || (!!b.playing - !!a.playing) || a.username.localeCompare(b.username));
+  let guests = 0;
+  for (const w of wss.clients) { const s = sessions.get(w); if (s && !s.uid) guests += 1; }
+  return { players, guests };
+}
+
 function notice(uid, payload) { for (const w of socketsOf(uid)) send(w, ServerMessage.SOCIAL_NOTICE, payload); }
 const me = (session) => ({ username: session.user.username, avatar: session.user.avatar });
 
@@ -417,6 +442,14 @@ wss.on('connection', (ws, req) => {
           friends: friends.length,
           items: items.filter((it) => users.get(it.uid)).map(({ uid, ...it }) => ({ ...it, user: users.get(uid) })),
         });
+        break;
+      }
+
+      case ClientMessage.ONLINE_GET: {
+        if (!session.uid || !session.user) return;
+        if (Date.now() - (session.onlineAt || 0) < 3000) return; // the drawer asks on open; ignore spam
+        session.onlineAt = Date.now();
+        send(ws, ServerMessage.ONLINE, await onlinePlayers(session.uid));
         break;
       }
 
