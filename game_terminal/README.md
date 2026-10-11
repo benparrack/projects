@@ -76,3 +76,35 @@ next request cold-starts it (can take 30-60 seconds). The client reconnects auto
 backoff and shows a "reconnecting" status during this window, and restores your nickname/room
 from the tab's session storage — so the first visit after idling just takes a little longer to
 connect, nothing breaks.
+
+### Environment variables
+
+| Variable | Required | What it is |
+|---|---|---|
+| `NODE_ENV` | **yes, set to `production`** | Turns on HSTS and **turns off the dev sign-in bypass**. Without it and without Firebase, the server accepts `dev:<name>` tokens, so anyone could sign in as anyone. |
+| `FIREBASE_SERVICE_ACCOUNT` | for accounts | The whole service-account JSON (one line). Enables Firebase token checks and the Firestore database. **Secret: never commit it.** |
+| `FIREBASE_WEB_CONFIG` | for accounts | The web app's `firebaseConfig` object as JSON. Not secret; served to browsers from `/api/config`. |
+| `PORT` | no | Set by Render automatically (local default is 3000). |
+
+Without the Firebase vars the site still runs: everyone plays as a guest, and nothing is
+persisted (an in-memory DB is used instead). Locally, leave them unset to get the dev sign-in
+bypass, which lets you test accounts without a Firebase project.
+
+### Firebase setup checklist
+
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com).
+2. **Authentication → Sign-in method:** enable **Google** and **Email/Password**.
+3. **Authentication → Settings → Authorized domains:** add `gameterminal.onrender.com` (and
+   any custom domain).
+4. **Firestore Database → Create database:** production mode, region `europe-west`.
+5. **Firestore → Rules:** paste in [`firestore.rules`](firestore.rules) and publish. It denies
+   every client read/write. Browsers never touch Firestore directly; the server uses
+   `firebase-admin`, which ignores rules. Or deploy it with
+   `npx firebase-tools deploy --only firestore:rules`.
+6. **Project settings → General → Your apps → Add web app:** copy the `firebaseConfig`
+   object into `FIREBASE_WEB_CONFIG` as JSON, for example
+   `{"apiKey":"…","authDomain":"…","projectId":"…","appId":"…"}`.
+7. **Project settings → Service accounts → Generate new private key:** paste the downloaded
+   JSON into `FIREBASE_SERVICE_ACCOUNT` on Render, then delete the local file.
+8. Render → your service → **Environment:** set the three variables above and redeploy. The
+   server logs `accounts: auth=<mode> db=<backend>` at startup; you want `auth=firebase`.
