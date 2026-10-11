@@ -11,7 +11,7 @@ Grouped by what they save: money, time, or stalled work in this repo.
 
 ## U1. Grocery Deal Matcher
 
-**Status:** Built 2026-10-11 in `grocery_deals/`: ICA (Kvantum Kungsholmen) + Willys + Hemköp, a desktop app with live deals and an in-app list editor, and a Monday 08:00 push. Coop/Lidl not yet. Ben wants to develop this one the most.
+**Status:** Built 2026-10-11 in `grocery_deals/`: ICA (Kvantum Kungsholmen) + Willys + Hemköp, a desktop app with live deals and an in-app list editor, and a Monday 08:00 push. Same day: Trip tab (shopping list from picked deals, send to phone via ntfy), price history (`history.db`, "best price in N wks"), Coop + Lidl sources, daily 09:00 alerts for new list matches. Ben wants to develop this one the most.
 **Pitch:** Scrapes the weekly offers from nearby Willys, ICA, Coop and Lidl stores and matches them against a standing shopping list. Every Monday it sends a push like "Willys has your chicken and oat milk on sale, ~140 kr saved."
 
 **Why this one:** You'd use it every week, and the savings are small but real on a student budget.
