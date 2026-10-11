@@ -6,9 +6,13 @@
 //   pairs/{pairKey}               head-to-head totals for two accounts, per game
 //   pairs/{pairKey}/matches/{id}  their shared matches
 //   matches/{id}                  only for games with replays (the move list)
+//   seasonResults/{season}_{gameType}_{uid}  final rating/rank, written by rollover()
+// Ranked rooms (room.ranked) of plugins with stats.rated move a pairwise-Elo `rating` on the
+// stats doc; season counters (sPlayed/sWins/sBest) reset when the stats doc's `season` is stale.
 // Guests' results are never written. Bot games and solo runs are counted separately from
 // human-vs-human games so nobody can farm wins against an Easy bot.
 const crypto = require('crypto');
+const { rateMatch, tierOf, seasonOf, softReset } = require('./ratings');
 
 const newId = () => `${Date.now().toString(36)}${crypto.randomBytes(5).toString('hex')}`;
 const pairKey = (a, b) => [a, b].sort().join('_');
@@ -65,6 +69,17 @@ function createResults({ db, registry, now = () => Date.now(), onRecorded = () =
     if (!accounts.length) return { summary, people };
 
     const drawAll = people.length > 1 && people.every((p) => p.place === 0);
+    const season = seasonOf(endedAt).id;
+    // shortcut: ratings are computed from stats read before the writes below; two ranked results for
+    // the same player landing in the same instant could each start from the same old rating. Fine at
+    // this scale (one result per room at a time); move into a transaction if that ever matters.
+    let ratings = {};
+    if (room.ranked && kind === 'pvp' && meta.rated && accounts.length === humans.length) {
+      const old = {};
+      await Promise.all(accounts.map(async (p) => { old[p.uid] = await db.get(`stats/${room.gameType}_${p.uid}`); }));
+      const uids = Object.fromEntries(accounts.map((p) => [p.clientId, p.uid]));
+      ratings = rateMatch(old, result.placements, uids, { coop: result.placements.length < 2 }); // one shared placement = co-op, nothing to rate
+    }
     const better = meta.score && meta.score.better;
     const writes = accounts.map((p) => serial(`stats/${room.gameType}_${p.uid}`, async () => {
       const path = `stats/${room.gameType}_${p.uid}`;
@@ -87,10 +102,21 @@ function createResults({ db, registry, now = () => Date.now(), onRecorded = () =
       if (better && typeof p.score === 'number' && Number.isFinite(p.score)) {
         if (s.best == null || (better === 'low' ? p.score < s.best : p.score > s.best)) { s.best = p.score; s.bestAt = endedAt; }
       }
+      if (s.season !== season) { s.season = season; s.sPlayed = 0; s.sWins = 0; s.sBest = null; }
+      if (kind === 'pvp') { s.sPlayed += 1; if (won) s.sWins += 1; }
+      if (better && typeof p.score === 'number' && Number.isFinite(p.score) && (s.sBest == null || (better === 'low' ? p.score < s.sBest : p.score > s.sBest))) s.sBest = p.score;
+      const r = ratings[p.uid];
+      if (r) {
+        s.rating = r.rating;
+        s.ratedGames = r.ratedGames;
+        s.peak = Math.max(s.peak || 0, r.rating);
+        s.ratedSeason = season;
+        s.sRated = (s.sRated || 0) + 1;
+      }
       s.lastPlayed = endedAt;
       s.username = p.name;
       await db.set(path, s);
-      await db.set(`users/${p.uid}/matches/${id}`, { ...summary, me: { place: p.place, won, draw: drawAll, score: p.score ?? null } });
+      await db.set(`users/${p.uid}/matches/${id}`, { ...summary, me: { place: p.place, won, draw: drawAll, score: p.score ?? null, ...(r ? { rating: r.rating, delta: r.delta } : {}) } });
       return s;
     }));
 
@@ -114,10 +140,40 @@ function createResults({ db, registry, now = () => Date.now(), onRecorded = () =
     if (summary.replay) writes.push(db.set(`matches/${id}`, { gameType: room.gameType, endedAt, players: summary.players, replay: result.replay }));
     const settled = await Promise.allSettled(writes);
     for (const r of settled) if (r.status === 'rejected') console.error('results: write failed', r.reason);
-    return { summary, people };
+    return { summary, people, ratings: Object.fromEntries(Object.entries(ratings).map(([uid, r]) => [uid, { rating: r.rating, delta: r.delta, tier: tierOf(r.rating) }])) };
   }
 
-  return { record, pairKey };
+  // Season rollover, run at startup and hourly. The first run just remembers the season. When the
+  // calendar quarter changes: rank everyone who played ranked last season (per game), archive
+  // their final rating/tier/rank, and soft-reset every rating halfway back to the start.
+  async function rollover() {
+    const cur = seasonOf(now()).id;
+    const metaDoc = await db.get('meta/season');
+    if (!metaDoc) { await db.set('meta/season', { id: cur }); return null; }
+    if (metaDoc.id === cur) return null;
+    const prev = metaDoc.id;
+    const rated = (await db.list('stats', { where: [['ratedSeason', '==', prev]] })).filter((s) => s.rating != null);
+    const byGame = new Map();
+    for (const s of rated) { if (!byGame.has(s.gameType)) byGame.set(s.gameType, []); byGame.get(s.gameType).push(s); }
+    const writes = [];
+    for (const [gameType, list] of byGame) {
+      list.sort((a, b) => b.rating - a.rating);
+      list.forEach((s, i) => writes.push(db.set(`seasonResults/${prev}_${gameType}_${s.uid}`, {
+        season: prev, gameType, uid: s.uid, rating: s.rating, tier: tierOf(s.rating), rank: i + 1, of: list.length, games: s.sRated || 0,
+      })));
+    }
+    await Promise.all(writes);
+    // Everyone with a rating (not just last season's players) drifts back toward the start.
+    const all = (await db.list('stats', {})).filter((s) => s.rating != null);
+    await Promise.all(all.map((s) => serial(`stats/${s.gameType}_${s.uid}`, async () => {
+      const fresh = await db.get(`stats/${s.gameType}_${s.uid}`);
+      if (fresh && fresh.rating != null) await db.merge(`stats/${s.gameType}_${s.uid}`, { rating: softReset(fresh.rating), sRated: 0 });
+    })));
+    await db.set('meta/season', { id: cur, previous: prev, rolledAt: now() });
+    return { from: prev, to: cur, archived: rated.length, reset: all.length };
+  }
+
+  return { record, rollover, pairKey };
 }
 
 module.exports = { createResults, pairKey };

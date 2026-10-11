@@ -7,7 +7,8 @@ import { h, toast } from './ui.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
 import { renderReplay } from './replay.js';
-import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, openConversation } from './friends.js';
+import { renderLeaderboards } from './leaderboards.js';
+import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, openConversation, getSocial } from './friends.js';
 import { initChat, initGlobalDock, setDockAvailable, chatBox, reopenChats, handleChatHistory, handleChatMessage, handleChatDeleted, handleChatError } from './chat.js';
 import { renderAdmin, handleAdminData } from './admin.js';
 import { renderSettings, applyPrefs, currentPrefs, initPrefs, downloadJson } from './settings.js';
@@ -141,6 +142,7 @@ const els = {
   menuNickname: document.getElementById('menu-nickname'),
   gameList: document.getElementById('game-list'),
   btnJoinPublic: document.getElementById('btn-join-public'),
+  btnJoinRanked: document.getElementById('btn-join-ranked'),
   btnCreatePrivate: document.getElementById('btn-create-private'),
   btnJoinCode: document.getElementById('btn-join-code'),
   joinCodeInput: document.getElementById('join-code-input'),
@@ -322,6 +324,8 @@ function handleAccountState(p) {
   if (location.pathname === '/settings' && state.settingsKey !== settingsKey()) renderSettingsPage();
   // Profiles show friend buttons and head-to-head only for a signed-in viewer.
   if (location.pathname.startsWith('/u/') && (prev && prev.username) !== (p.user && p.user.username)) onRoute();
+  // Leaderboards highlight your row and offer a FRIENDS tab only when signed in.
+  if (location.pathname.startsWith('/leaderboards') && (prev && prev.username) !== (p.user && p.user.username)) onRoute();
   if (location.pathname === '/admin' && !!(prev && prev.admin) !== !!(p.user && p.user.admin)) onRoute();
   if (p.user && state.setup) {
     state.setup.close();
@@ -349,7 +353,10 @@ function ordinal(n) {
 function handleResultRecorded(p) {
   const outcome = p.kind === 'solo' ? 'Run complete'
     : p.draw ? 'It\'s a draw' : p.place === 0 ? 'You won' : `You placed ${ordinal(p.place + 1)}`; // place is 0-based
-  if (p.saved) toast(`${outcome}. Result saved to your profile.`, { kind: 'ok' });
+  if (p.rating) {
+    const d = p.rating.delta;
+    toast(`${outcome}. Rating ${p.rating.rating} (${d >= 0 ? '+' : '−'}${Math.abs(d)}) · ${p.rating.tier}.`, { kind: d >= 0 ? 'ok' : undefined, ms: 7000 });
+  } else if (p.saved) toast(`${outcome}. ${p.ranked && p.kind === 'pvp' ? 'Unrated: everyone needs an account. ' : ''}Result saved to your profile.`, { kind: 'ok' });
   else if (state.auth && state.auth.mode !== 'off') {
     toast(`${outcome}. Guests' results aren't saved.`, { action: { label: 'SIGN IN', run: () => openSignIn(state.auth) } });
   }
@@ -371,10 +378,10 @@ function handleServerMessage(type, payload) {
     }
 
     case ServerMessage.ROOM_JOINED: {
-      state.currentRoom = { code: payload.code, gameType: payload.gameType, isPublic: payload.isPublic };
+      state.currentRoom = { code: payload.code, gameType: payload.gameType, isPublic: payload.isPublic, ranked: !!payload.ranked };
       state.pendingJoin = null;
       saveSession();
-      els.roomCodeLabel.textContent = payload.isPublic ? `${payload.code} (public)` : payload.code;
+      els.roomCodeLabel.textContent = payload.ranked ? `${payload.code} (ranked ★)` : payload.isPublic ? `${payload.code} (public)` : payload.code;
       els.btnCopyLink.hidden = payload.isPublic;
       renderRoster(payload.roster);
       // Chat needs accounts (to post, report and moderate), so accounts-off deploys have none.
@@ -386,6 +393,7 @@ function handleServerMessage(type, payload) {
     }
 
     case ServerMessage.ROOM_ERROR: {
+      if (payload.soft) { toast(payload.detail || payload.reason, { kind: 'error' }); break; }
       state.pendingJoin = null;
       els.menuError.hidden = false;
       els.menuError.textContent = `ERROR: ${payload.reason}${payload.detail ? ' — ' + payload.detail : ''}`;
@@ -468,8 +476,8 @@ function handleServerMessage(type, payload) {
 function replayPendingJoin() {
   const job = state.pendingJoin;
   if (!job) return;
-  if (job.kind === 'public') {
-    send(ClientMessage.ROOM_JOIN, { code: publicRoomCode(state.selectedGameType) });
+  if (job.kind === 'public' || job.kind === 'ranked') {
+    send(ClientMessage.ROOM_JOIN, { code: publicRoomCode(state.selectedGameType, job.kind === 'ranked') });
   } else if (job.kind === 'code') {
     send(ClientMessage.ROOM_JOIN, { code: job.code });
   } else if (job.kind === 'private') {
@@ -478,6 +486,7 @@ function replayPendingJoin() {
 }
 
 function renderGameList() {
+  updateRankedButton();
   els.gameList.innerHTML = '';
   for (const cat of CATEGORIES) {
     const expanded = state.expandedCategories.has(cat.name);
@@ -610,6 +619,18 @@ els.btnJoinPublic.addEventListener('click', () => {
   send(ClientMessage.ROOM_JOIN, { code: publicRoomCode(state.selectedGameType) });
 });
 
+els.btnJoinRanked.addEventListener('click', () => {
+  els.menuError.hidden = true;
+  if (!state.account) { openSignIn(state.auth); return; }
+  send(ClientMessage.ROOM_JOIN, { code: publicRoomCode(state.selectedGameType, true) });
+});
+
+// RANKED only for games with a ladder, and only where accounts exist.
+function updateRankedButton() {
+  const g = state.auth && state.auth.games && state.auth.games[state.selectedGameType];
+  els.btnJoinRanked.hidden = !(g && g.rated && state.auth.mode !== 'off');
+}
+
 els.btnCreatePrivate.addEventListener('click', () => {
   els.menuError.hidden = true;
   send(ClientMessage.ROOM_CREATE, { gameType: state.selectedGameType, isPublic: false });
@@ -685,6 +706,13 @@ function route() {
     showScreen('page');
     return 'page';
   }
+  const lb = /^\/leaderboards(?:\/([a-z0-9]{1,24}))?\/?$/.exec(path);
+  if (lb) {
+    renderLeaderboards(els.screenPage, lb[1] || null, { gameLabel, games: GAMES, auth: state.auth, me: state.account, friends: friendNames });
+    document.title = 'Leaderboards — Game Terminal';
+    showScreen('page');
+    return 'page';
+  }
   const info = INFO_PAGES[path.replace(/\/$/, '')];
   if (info) {
     els.screenPage.replaceChildren(info.render());
@@ -695,6 +723,8 @@ function route() {
   renderNotFound();
   return 'page';
 }
+
+const friendNames = () => { const s = getSocial(); return s ? s.friends.map((f) => f.username) : []; };
 
 function gameLabel(t) { return (GAMES.find((g) => g.type === t) || {}).label || t; }
 
@@ -717,6 +747,10 @@ function onRoute() {
   if (state.pageCleanup) { state.pageCleanup(); state.pageCleanup = null; }
   document.title = 'Game Terminal — free multiplayer games in your browser';
   state.onPage = route() === 'page';
+  for (const a of document.querySelectorAll('.mainnav a')) {
+    const on = a.dataset.nav === 'play' ? !state.onPage : location.pathname.startsWith(a.getAttribute('href'));
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  }
   if (!state.onPage) {
     if (state.currentRoom) showScreen('room');
     else if (state.clientId) showScreen('menu');
@@ -738,7 +772,7 @@ els.btnLeaveRoom.addEventListener('click', leaveRoom);
 // reconnect after a Render free-tier cold start can silently rejoin.
 (async function init() {
   initPrefs();
-  document.getElementById('footer-links').replaceChildren(...footerLinks(), ' · ', h('a', { href: '/settings', 'data-link': true }, 'Settings'));
+  document.getElementById('footer-links').replaceChildren(h('a', { href: '/leaderboards', 'data-link': true }, 'Leaderboards'), ' · ', ...footerLinks(), ' · ', h('a', { href: '/settings', 'data-link': true }, 'Settings'));
   const saved = loadSession();
   if (saved && saved.nickname) {
     state.nickname = saved.nickname;
@@ -773,6 +807,7 @@ els.btnLeaveRoom.addEventListener('click', leaveRoom);
   });
   initGlobalDock();
   state.auth = await initAuth();
+  updateRankedButton();
   await state.auth.ready;
   state.auth.onChange(reconnectAs);
   renderChip();

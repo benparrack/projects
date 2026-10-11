@@ -87,14 +87,19 @@ class RoomManager {
   // lobby waiting for another person"). A plugin without `isRoomFull` (drawing/hangman — no seat
   // cap, everyone actually participates) always matches the very first instance, unchanged from
   // before this existed.
-  getOrCreatePublicRoom(gameType) {
+  // Ranked rooms are a separate pool (RANKED-<TYPE>) whose results move Elo; see results.js.
+  getOrCreatePublicRoom(gameType, ranked = false) {
     const plugin = this.getPlugin(gameType);
     if (!plugin) return null;
     const isFull = typeof plugin.isRoomFull === 'function' ? (r) => plugin.isRoomFull(r) : () => false;
     for (let n = 1; ; n++) {
-      const code = n === 1 ? publicRoomCode(gameType) : `${publicRoomCode(gameType)}-${n}`;
+      const code = n === 1 ? publicRoomCode(gameType, ranked) : `${publicRoomCode(gameType, ranked)}-${n}`;
       let room = this.rooms.get(code);
-      if (!room) return this.makeRoom(code, gameType, true, plugin);
+      if (!room) {
+        room = this.makeRoom(code, gameType, true, plugin);
+        room.ranked = ranked;
+        return room;
+      }
       if (!isFull(room)) return room;
     }
   }

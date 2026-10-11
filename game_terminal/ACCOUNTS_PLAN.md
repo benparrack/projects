@@ -136,17 +136,17 @@ call with the right placements. This is the long, careful part of the project.
       duration, delete message, reset stats, rename an offensive username
 
 ### Phase 5 — Competitive
-- [ ] Elo rating per 2-player game (start 1000, K=32 for the first 20 games, then K=16);
+- [x] Elo rating per 2-player game (start 1000, K=32 for the first 20 games, then K=16);
       multi-player games use pairwise Elo from placements
-- [ ] Ranked vs. casual: a RANKED button next to JOIN PUBLIC for rated games (accounts
+- [x] Ranked vs. casual: a RANKED button next to JOIN PUBLIC for rated games (accounts
       only, humans only). Only ranked games move rating. Casual and private games still count
       in played/wins
-- [ ] Rank tiers from rating (Bronze → Silver → Gold → Platinum → Diamond → Master), shown on the profile
-- [ ] Leaderboards page: per game, by rating (ranked games) or by wins / best time /
+- [x] Rank tiers from rating (Bronze → Silver → Gold → Platinum → Diamond → Master), shown on the profile
+- [x] Leaderboards page: per game, by rating (ranked games) or by wins / best time /
       best score, with all-time, this season and friends-only tabs. Cached and refreshed every 5 min
-- [ ] Seasons: calendar quarters (S1 = 2026 Q4). On rollover, archive the final season
+- [x] Seasons: calendar quarters (S1 = 2026 Q4). On rollover, archive the final season
       standings and soft-reset ratings toward 1000. Past seasons appear on the profile with final rank
-- [ ] Bot games stay in `botPlayed/botWins` only and never touch rating or leaderboards
+- [x] Bot games stay in `botPlayed/botWins` only and never touch rating or leaderboards
 
 ### Phase 6 — Progression & daily
 - [ ] XP for every finished match (more for wins, a small amount for bot games, capped
@@ -239,3 +239,4 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 - 2026-10-11 — Phase 2 done: `/settings` (sound/volume/reduce-motion/bot level, synced to the account; guests keep them locally; a reduce-motion setting also flips the games' `matchMedia` checks), rename, download-my-data JSON, and account deletion (typed-name confirm; removes user/stats/pairs/name claim + the Firebase Auth user, and turns the name into "deleted player" in other people's history and replays).
 - 2026-10-11 — Phase 3 done: `social/{uid}` friends/requests/blocks/recent players (server only, no uids sent to clients), live presence ("Playing X" with a JOIN button), room invites as JOIN toasts (rate-limited), in-memory parties (leader + up to 7; members follow the leader into rooms, 30s reconnect grace), friends drawer in the header, friend/block buttons and a "You vs them" head-to-head on profiles (`/api/h2h/:a/:b`), blocked list in Settings. Party chat was moved into Phase 4.
 - 2026-10-11 — Phase 4 done: global chat dock (left-edge tab; accounts post after 1 finished game, guests can read; persisted last 100), room chat under the roster (accounts-on only), party chat + friend DMs inside the friends drawer with unread badges and REPLY toasts. Server: 200-char limit, 5 msgs/10s, slow mode when busy, profanity mask, link blocking, mute/ban checks. Reports with chat context → `/admin` queue (delete message, mute, ban with socket kick, force rename, reset stats, dismiss/resolve, modlog). `test/chat.test.js`.
+- 2026-10-11 — Phase 5 done: ★ RANKED button (separate `RANKED-<GAME>` pool; accounts only, rated games only, bot seats refused) moves pairwise Elo on the stats doc (rating/peak/ratedGames, delta in the result toast and on match rows); co-op and any guest/bot match stay unrated. Season counters (sPlayed/sWins/sBest) reset per quarter; hourly rollover archives `seasonResults` with final rank and soft-resets ratings. `/leaderboards[/game]` (all-time / this season / friends × rating / wins / best, 5-min server cache, your row highlighted), tier badges + RATING column + PAST SEASONS on profiles, nav + footer + account-menu links. Export/delete cover season results. `test/ranked.test.js`.

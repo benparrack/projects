@@ -95,6 +95,8 @@ function initDev() {
 export async function initAuth() {
   try {
     const cfg = await (await fetch('/api/config')).json();
+    auth.games = cfg.games || {};
+    auth.season = cfg.season || null;
     auth.mode = cfg.authMode === 'firebase' && cfg.firebase ? 'firebase' : cfg.authMode === 'dev' ? 'dev' : 'off';
     if (auth.mode === 'firebase') await initFirebase(cfg.firebase);
     else if (auth.mode === 'dev') initDev();

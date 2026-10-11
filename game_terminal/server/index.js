@@ -39,7 +39,7 @@ const roomManager = new RoomManager(gameRegistry, {
       const draw = players.length > 1 && players.every((q) => q.place === 0);
       for (const p of rec.people) {
         if (p.bot) continue;
-        room.sendTo(p.clientId, makeEnvelope(ServerMessage.RESULT_RECORDED, { gameType: rec.summary.gameType, kind: rec.summary.kind, saved: !!p.uid, place: p.place, draw, players }));
+        room.sendTo(p.clientId, makeEnvelope(ServerMessage.RESULT_RECORDED, { gameType: rec.summary.gameType, kind: rec.summary.kind, saved: !!p.uid, place: p.place, draw, players, ranked: rec.summary.ranked, rating: (p.uid && rec.ratings && rec.ratings[p.uid]) || null }));
       }
       const uids = rec.people.map((p) => p.uid).filter(Boolean);
       if (uids.length > 1) social.noteRecent(uids, rec.summary.gameType).then(() => pushMany(uids)).catch((err) => console.error('social: recent failed', err));
@@ -239,6 +239,7 @@ function joinAndAck(ws, session, room) {
     code: room.code,
     gameType: room.gameType,
     isPublic: room.isPublic,
+    ranked: !!room.ranked,
     roster: room.roster(),
     stateSnapshot: room.plugin.serializeSnapshot(room, { clientId: session.clientId, nickname: session.nickname }),
   });
@@ -526,7 +527,17 @@ wss.on('connection', (ws) => {
         // that a full existing public instance routes the joiner into a fresh one instead of
         // handing them the same already-full room every time — see RoomManager.getOrCreatePublicRoom.
         const matchGameType = Object.keys(gameRegistry).find((gt) => publicRoomCode(gt) === code);
-        const room = matchGameType ? roomManager.getOrCreatePublicRoom(matchGameType) : roomManager.getRoom(code);
+        const rankedGameType = Object.keys(gameRegistry).find((gt) => publicRoomCode(gt, true) === code);
+        const exact = !matchGameType && !rankedGameType && roomManager.getRoom(code);
+        const rankedType = rankedGameType || (exact && exact.ranked && exact.gameType);
+        if (rankedType) {
+          // Ranked moves Elo, so only signed-in players can sit down; rated games only.
+          const meta = gameRegistry[rankedType].stats || {};
+          const reason = !meta.rated ? 'This game isn\'t ranked.' : !(session.uid && session.user && session.user.username) ? 'Sign in to play ranked.' : null;
+          if (reason) { send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.RANKED, detail: reason }); return; }
+        }
+        const room = matchGameType ? roomManager.getOrCreatePublicRoom(matchGameType)
+          : rankedGameType ? roomManager.getOrCreatePublicRoom(rankedGameType, true) : exact;
         if (!room) {
           send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.NOT_FOUND });
           return;
@@ -547,6 +558,12 @@ wss.on('connection', (ws) => {
         const gameType = payload && payload.gameType;
         if (gameType !== room.gameType) {
           send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.GAME_MISMATCH });
+          return;
+        }
+        const d = payload.data;
+        // Ranked is people only: no bot seats (a bot in the match would make it unrated anyway).
+        if (room.ranked && d && (d.kind === 'addBot' || d.bot)) {
+          send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.RANKED, detail: 'Bots can\'t join ranked games.', soft: true });
           return;
         }
         room.plugin.onMessage(room, { clientId: session.clientId, nickname: session.nickname }, payload.data, {
@@ -572,3 +589,11 @@ wss.on('connection', (ws) => {
 server.listen(PORT, () => {
   console.log(`game_terminal listening on http://localhost:${PORT}`);
 });
+
+// Season rollover: archive standings and soft-reset ratings when the quarter changes.
+function checkSeason() {
+  results.rollover().then((r) => { if (r) console.log(`season: ${r.from} -> ${r.to}, archived ${r.archived}, reset ${r.reset}`); })
+    .catch((err) => console.error('season: rollover failed', err));
+}
+checkSeason();
+setInterval(checkSeason, 60 * 60 * 1000).unref();

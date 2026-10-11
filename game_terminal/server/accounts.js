@@ -118,12 +118,13 @@ function createAccounts(db) {
   async function exportData(uid) {
     const user = await getUser(uid);
     if (!user) return null;
-    const [stats, matches] = await Promise.all([
+    const [stats, matches, seasons] = await Promise.all([
       db.list('stats', { where: [['uid', '==', uid]] }),
       db.list(`users/${uid}/matches`, { orderBy: ['endedAt', 'desc'] }),
+      db.list('seasonResults', { where: [['uid', '==', uid]] }),
     ]);
     const scrub = (m) => ({ ...m, players: (m.players || []).map(({ uid: u, ...p }) => ({ ...p, ...(u === uid ? { you: true } : {}) })) });
-    return { exportedAt: new Date().toISOString(), account: user, stats: stats.map(({ uid: u, ...st }) => st), matches: matches.map(scrub) };
+    return { exportedAt: new Date().toISOString(), account: user, stats: stats.map(({ uid: u, ...st }) => st), seasons: seasons.map(({ uid: u, ...st }) => st), matches: matches.map(scrub) };
   }
 
   // Right to erasure: drop the account's own docs and anonymise it in every match it shared.
@@ -142,12 +143,14 @@ function createAccounts(db) {
       if (m.replay && (await db.get(`matches/${m.id}`))) await db.merge(`matches/${m.id}`, { players });
       await db.del(`users/${uid}/matches/${m.id}`);
     }
-    const [stats, pairs] = await Promise.all([
+    const [stats, pairs, seasons] = await Promise.all([
       db.list('stats', { where: [['uid', '==', uid]] }),
       db.list('pairs', { where: [['uids', 'array-contains', uid]] }),
+      db.list('seasonResults', { where: [['uid', '==', uid]] }),
     ]);
     await Promise.all([
       ...stats.map((st) => db.del(`stats/${st.id}`)),
+      ...seasons.map((st) => db.del(`seasonResults/${st.id}`)),
       ...pairs.map((pr) => db.del(`pairs/${pr.id}`)),
       db.del(`usernames/${user.usernameLower}`),
     ]);

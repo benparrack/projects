@@ -58,12 +58,13 @@ export const RoomErrorReason = {
   NOT_FOUND: 'NOT_FOUND',
   GAME_MISMATCH: 'GAME_MISMATCH',
   INVALID_CODE: 'INVALID_CODE',
+  RANKED: 'RANKED',
 };
 
 export function makeEnvelope(type, payload) {
   return { v: PROTOCOL_VERSION, type, payload: payload || {} };
 }
 
-export function publicRoomCode(gameType) {
-  return `PUBLIC-${gameType.toUpperCase()}`;
+export function publicRoomCode(gameType, ranked = false) {
+  return `${ranked ? 'RANKED' : 'PUBLIC'}-${gameType.toUpperCase()}`;
 }

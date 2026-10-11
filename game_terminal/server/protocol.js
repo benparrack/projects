@@ -58,6 +58,7 @@ const RoomErrorReason = {
   NOT_FOUND: 'NOT_FOUND',
   GAME_MISMATCH: 'GAME_MISMATCH',
   INVALID_CODE: 'INVALID_CODE',
+  RANKED: 'RANKED',
 };
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I ambiguity
@@ -71,8 +72,8 @@ function generateRoomCode() {
   return code;
 }
 
-function publicRoomCode(gameType) {
-  return `PUBLIC-${gameType.toUpperCase()}`;
+function publicRoomCode(gameType, ranked = false) {
+  return `${ranked ? 'RANKED' : 'PUBLIC'}-${gameType.toUpperCase()}`;
 }
 
 function makeEnvelope(type, payload) {

@@ -5,12 +5,15 @@ import { relationButtons } from './friends.js';
 
 const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 >> 3 ^ 1) && n % 10] || 'th'}`;
 
-function fmtScore(v, score) {
+export function fmtScore(v, score) {
   if (v == null) return '—';
   if (score && score.format === 'ms') return `${(v / 1000).toFixed(2)}s`;
   if (score && score.format === 'pts') return `${v.toLocaleString()} pts`;
   return v.toLocaleString();
 }
+
+// Rank badge for a rating tier (Bronze…Master); colors live in style.css.
+export const tierBadge = (tier, rating) => h(`span.tier.tier-${tier.toLowerCase()}`, { title: rating != null ? `${tier} · ${rating}` : tier }, tier.toUpperCase());
 
 const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '—');
 
@@ -39,7 +42,8 @@ function matchRow(m, self, gameLabel) {
     h(`span.match-result.res-${r.cls}`, r.text),
     h('span.match-game', gameLabel(m.gameType)),
     h('span.match-vs', m.kind === 'solo' ? h('span.muted', 'solo') : ['vs ', ...vs],
-      m.kind === 'bot' && m.botLevel ? h('span.muted', ` (${m.botLevel})`) : null),
+      m.kind === 'bot' && m.botLevel ? h('span.muted', ` (${m.botLevel})`) : null,
+      m.me && m.me.delta != null ? h(`span.match-delta${m.me.delta < 0 ? '.neg' : ''}`, { title: `Ranked · rating ${m.me.rating}` }, ` ★ ${m.me.delta >= 0 ? '+' : '−'}${Math.abs(m.me.delta)}`) : null),
     h('span.match-score', m.replay
       ? h('a.match-replay', { href: `/replay/${m.id}`, 'data-link': true, 'aria-label': `Watch replay: ${gameLabel(m.gameType)}` }, '▶ REPLAY')
       : score || ''),
@@ -52,7 +56,8 @@ function statsTable(stats, gameLabel) {
     h('thead', h('tr',
       h('th', { scope: 'col' }, 'GAME'), h('th.num', { scope: 'col' }, 'PLAYED'), h('th.num', { scope: 'col' }, 'W-L-D'),
       h('th.num', { scope: 'col' }, 'WIN %'), h('th.num', { scope: 'col', title: 'Best win streak vs. people' }, 'STREAK'),
-      h('th.num', { scope: 'col' }, 'VS BOTS'), h('th.num', { scope: 'col' }, 'BEST'))),
+      h('th.num', { scope: 'col' }, 'VS BOTS'), h('th.num', { scope: 'col' }, 'BEST'),
+      h('th.num', { scope: 'col', title: 'Ranked rating (peak in tooltip)' }, 'RATING'))),
     h('tbody', rows.map((s) => h('tr',
       h('th', { scope: 'row' }, gameLabel(s.gameType)),
       h('td.num', s.played + s.botPlayed + s.soloPlayed),
@@ -60,7 +65,19 @@ function statsTable(stats, gameLabel) {
       h('td.num', pct(s.wins, s.played)),
       h('td.num', s.bestStreak || '—'),
       h('td.num', s.botPlayed ? `${s.botWins}/${s.botPlayed}` : '—'),
-      h('td.num', s.best != null ? h('span', { title: s.score ? s.score.label : '' }, fmtScore(s.best, s.score)) : '—'))))));
+      h('td.num', s.best != null ? h('span', { title: s.score ? s.score.label : '' }, fmtScore(s.best, s.score)) : '—'),
+      h('td.num', s.rating != null
+        ? h('span.stat-rating', { title: `Peak ${s.peak || s.rating} · ${s.ratedGames || 0} ranked game${s.ratedGames === 1 ? '' : 's'}` }, tierBadge(s.tier, s.rating), ` ${s.rating}`)
+        : '—'))))));
+}
+
+// Final standings from past seasons (archived by the server at each rollover).
+function seasonsList(seasons, gameLabel) {
+  return h('ol.season-list', seasons.map((s) => h('li.season-row',
+    h('span.season-id', `SEASON ${s.season.slice(1)}`),
+    h('a.season-game', { href: `/leaderboards/${s.gameType}`, 'data-link': true }, gameLabel(s.gameType)),
+    h('span.season-rank', `#${s.rank}`, h('span.muted', ` of ${s.of}`)),
+    h('span.season-tier', tierBadge(s.tier, s.rating), h('span.muted', ` ${s.rating}`)))));
 }
 
 function summaryCards(stats) {
@@ -89,7 +106,7 @@ export async function renderProfile(mount, name, { gameLabel, me }) {
     mount.replaceChildren(h('div.profile', h('p.error', 'Couldn\'t load this profile. Check your connection and try again.')));
     return 'Profile';
   }
-  const { user, stats, matches } = data;
+  const { user, stats, matches, seasons = [] } = data;
   const t = summaryCards(stats);
   const isMe = me && me.username === user.username;
   mount.replaceChildren(h('article.profile',
@@ -110,6 +127,9 @@ export async function renderProfile(mount, name, { gameLabel, me }) {
     h('section.profile-section',
       h('h2.panel-title', '> STATS BY GAME'),
       stats.length ? statsTable(stats, gameLabel) : h('p.muted.empty', isMe ? 'Finish a game and your stats show up here.' : 'No games played yet.')),
+    seasons.length ? h('section.profile-section',
+      h('h2.panel-title', '> PAST SEASONS'),
+      seasonsList(seasons, gameLabel)) : null,
     h('section.profile-section',
       h('h2.panel-title', '> RECENT MATCHES'),
       matches.length

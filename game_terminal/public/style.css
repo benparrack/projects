@@ -634,3 +634,65 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 .adm-reason { margin: 0; font-size: 14px; }
 .adm-report .report-quote { margin: 0; }
 .adm-empty { padding: 24px; text-align: center; color: var(--muted); border: 1px dashed var(--border); }
+
+/* ---- Ranked: tiers, leaderboards, seasons ---- */
+.btn-ranked { color: var(--accent); border-color: var(--accent); }
+.btn-ranked:hover:not(:disabled) { background: var(--accent); color: #000; }
+.room-row > #btn-join-public { flex: 1; }
+.tier { display: inline-block; font-size: 10px; letter-spacing: 1px; padding: 1px 6px; border: 1px solid currentColor; line-height: 1.5; vertical-align: 1px; white-space: nowrap; }
+.tier-bronze { color: #c8865a; }
+.tier-silver { color: #c9d1d9; }
+.tier-gold { color: #ffd23f; }
+.tier-platinum { color: #5ff2e0; }
+.tier-diamond { color: #7fb8ff; text-shadow: 0 0 6px rgba(127, 184, 255, .6); }
+.tier-master { color: #ff6bf1; text-shadow: 0 0 8px rgba(255, 107, 241, .7); }
+.stat-rating { white-space: nowrap; }
+.match-delta { color: var(--fg); font-size: 12px; }
+.match-delta.neg { color: var(--error); }
+
+.lb { gap: 18px; }
+.lb-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.lb-season { margin: 6px 0 0; font-size: 13px; }
+.lb-pick { display: flex; flex-direction: column; gap: 4px; font-size: 11px; letter-spacing: 1px; }
+.lb-pick select { min-width: 200px; font-size: 15px; }
+.lb-controls { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.lb-table td, .lb-table th { vertical-align: middle; }
+.lb-table .lb-rank { width: 3.5em; color: var(--muted); }
+.lb-player { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+.lb-player:hover .lb-name { text-decoration: underline; }
+.lb-player .avatar { flex: none; }
+.lb-lv { font-size: 11px; }
+.lb-val { font-family: var(--display); font-size: 22px; line-height: 1; }
+.lb-medal { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid currentColor; font-weight: bold; }
+.lb-top1 .lb-medal { color: #ffd23f; box-shadow: 0 0 10px rgba(255, 210, 63, .45); }
+.lb-top2 .lb-medal { color: #c9d1d9; }
+.lb-top3 .lb-medal { color: #c8865a; }
+.lb-top1 .lb-val { color: #ffd23f; text-shadow: 0 0 8px rgba(255, 210, 63, .5); }
+.stats-table tbody tr.lb-me { background: rgba(57, 255, 20, .1); box-shadow: inset 3px 0 0 var(--fg); }
+.lb-empty { border: 1px dashed var(--border); padding: 36px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.lb-empty p { margin: 0; }
+.lb-empty .btn-primary { margin-top: 14px; }
+.lb-note { margin: 0; font-size: 12px; }
+.lb .loading { text-align: center; padding: 36px 0; }
+
+.season-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); }
+.season-row { display: grid; grid-template-columns: 7em minmax(0, 1fr) 7em 9em; gap: 12px; align-items: center; padding: 8px 12px; font-size: 14px; }
+.season-row + .season-row { border-top: 1px solid rgba(31, 143, 12, .35); }
+.season-id { color: var(--muted); font-size: 12px; letter-spacing: 1px; }
+.season-game { color: var(--fg); }
+.season-rank { font-family: var(--display); font-size: 20px; }
+.season-tier { text-align: right; }
+
+@media (max-width: 640px) {
+  .lb-pick, .lb-pick select { width: 100%; }
+  .lb-table .lb-wl, .lb-table .lb-lv { display: none; }
+  .season-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .season-id { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  /* The vertical edge tab sits on top of page content on phones; float it bottom-left instead. */
+  .dock-tab { top: auto; bottom: 14px; left: 14px; transform: none; writing-mode: horizontal-tb; letter-spacing: 1px; padding: 8px 12px; border-left: 1px solid var(--border); }
+}
+@media (max-width: 420px) {
+  .brand-name { display: none; }
+}
