@@ -287,7 +287,8 @@ module.exports = {
       }
       // Board size: any time outside a game, or mid-game when your opponent is a bot (restarts).
       case 'setSize': {
-        if (!mine || typeof data.size !== 'string' || !Object.prototype.hasOwnProperty.call(SIZES, data.size)) return;
+        // Anyone may pick the size before the race; once it's running only the racers can.
+        if ((!mine && st.phase !== 'waiting') || typeof data.size !== 'string' || !Object.prototype.hasOwnProperty.call(SIZES, data.size)) return;
         const other = mine === 'p1' ? 'p2' : 'p1';
         if (st.phase === 'playing' && st.players[other] !== BOT) return reject('in_progress');
         st.size = data.size;

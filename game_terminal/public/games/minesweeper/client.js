@@ -171,11 +171,11 @@ export function mount(container, api) {
       seats.appendChild(leave);
     }
     chrome.appendChild(seats);
-    if (seat) {
+    if (seat || view.phase === 'waiting') {
       const row = document.createElement('div');
       row.className = 'ms-row';
       const other = seat === 'p1' ? 'p2' : 'p1';
-      const canSize = view.phase !== 'playing' || view.players[other] === 'BOT';
+      const canSize = view.phase === 'waiting' || (seat && (view.phase !== 'playing' || view.players[other] === 'BOT'));
       for (const [id, label] of SIZES) {
         const b = document.createElement('button');
         b.className = `ms-size${view.size === id ? ' on' : ''}`;
@@ -185,14 +185,14 @@ export function mount(container, api) {
         b.addEventListener('click', () => api.sendAction({ kind: 'setSize', size: id }));
         row.appendChild(b);
       }
-      if (view.phase === 'playing') {
+      if (seat && view.phase === 'playing') {
         const fb = document.createElement('button');
         fb.className = `ms-flagbtn${flagMode ? ' on' : ''}`;
         fb.textContent = flagMode ? '⚑ FLAG MODE: ON' : '⚑ FLAG MODE: OFF';
         fb.addEventListener('click', () => { flagMode = !flagMode; renderChrome(); });
         row.appendChild(fb);
       }
-      if (view.phase === 'game_over') {
+      if (seat && view.phase === 'game_over') {
         const again = document.createElement('button');
         again.textContent = 'NEW RACE';
         again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));

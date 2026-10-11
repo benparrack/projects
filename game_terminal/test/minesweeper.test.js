@@ -82,6 +82,17 @@ test('seating starts a game with the same opening on both boards, no mines leake
   assert.ok(!JSON.stringify(room.sent).includes('"mine"'), 'raw layout never sent');
 });
 
+test('size is a pregame option anyone can pick before sitting', () => {
+  const room = makeRoom();
+  act(room, 'C', { kind: 'setSize', size: 'small' });
+  assert.strictEqual(room.state.size, 'small');
+  act(room, 'A', { kind: 'sit', seat: 'p1' });
+  act(room, 'B', { kind: 'sit', seat: 'p2' });
+  assert.strictEqual(room.state.phase, 'playing');
+  act(room, 'C', { kind: 'setSize', size: 'large' });
+  assert.strictEqual(room.state.size, 'small', 'spectators cannot resize a running race');
+});
+
 test('garbage input is rejected without throwing', () => {
   const room = seated();
   for (const i of [-1, 1e9, 1.5, '3', null, undefined, {}, NaN]) {
