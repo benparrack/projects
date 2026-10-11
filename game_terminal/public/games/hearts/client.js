@@ -2,7 +2,7 @@
 // it's a "no pass" hand) pick 3 cards to pass; then play by clicking a legal card on your turn.
 // Server plugin: ../../../server/games/hearts.js
 
-import { renderCard, SUIT_GLYPH, isBot, botName, addBotButton, removeBotButton, markBotSeat } from '../cardCommon.js';
+import { renderCard, SUIT_GLYPH, isBot, botName, addBotButton, removeBotButton, markBotSeat, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
@@ -84,7 +84,10 @@ export function mount(container, api) {
       status.textContent = `Passing ${view.passDirection.toUpperCase()} — pick 3 cards to pass.`;
     } else if (view.phase === 'playing') {
       const turnName = nicknameFor(view.seats[view.turnSeat]);
-      status.textContent = `${view.currentTrick.length === 0 ? 'Leading' : 'Turn'}: ${turnName}${view.turnSeat === mySeat ? ' (you)' : ''}`;
+      if (view.turnSeat === mySeat) {
+        status.textContent = view.currentTrick.length === 0 ? 'YOUR TURN — lead a card' : 'YOUR TURN — play a card';
+        status.className = 'gt-your-turn';
+      } else status.textContent = `${view.currentTrick.length === 0 ? 'Leading' : 'Turn'}: ${turnName}`;
     } else if (view.phase === 'hand_over') {
       status.textContent = view.moonShooterSeat != null
         ? `${nicknameFor(view.seats[view.moonShooterSeat])} SHOT THE MOON!`
@@ -109,7 +112,7 @@ export function mount(container, api) {
       box.style.textAlign = 'center';
       box.dataset.seat = String(i);
       const isTurn = view.phase === 'playing' && i === view.turnSeat;
-      box.style.outline = isTurn ? '2px solid #39ff14' : 'none';
+      if (isTurn) box.classList.add('gt-turn');
 
       const label = document.createElement('div');
       label.style.fontSize = '0.7em';
@@ -151,6 +154,7 @@ export function mount(container, api) {
         markBotSeat(box, view.seats[i], i);
         if (view.phase === 'waiting' || view.phase === 'game_over') box.appendChild(removeBotButton(api, i));
       }
+      if (i > 0) seatRow.appendChild(orderArrow());
       seatRow.appendChild(box);
     });
     root.appendChild(seatRow);
@@ -252,9 +256,10 @@ export function mount(container, api) {
       hand.style.gap = '4px';
       hand.style.flexWrap = 'wrap';
       hand.style.justifyContent = 'center';
+      hand.className = 'gt-hand';
 
       const isMyTurn = view.phase === 'playing' && view.turnSeat === mySeat;
-      view.myHand.forEach((card, i) => {
+      handOrder(view.myHand).forEach(({ card, i }) => {
         const wrap = document.createElement('div');
         wrap.style.display = 'flex';
         wrap.style.flexDirection = 'column';
@@ -276,6 +281,7 @@ export function mount(container, api) {
         hand.appendChild(wrap);
       });
       root.appendChild(hand);
+      root.appendChild(handToolbar(render));
 
       if (view.phase === 'passing' && !view.myPassSubmitted) {
         const passBtn = document.createElement('button');

@@ -2,7 +2,7 @@
 // DRAW if you have nothing playable, then PLAY the drawn card or PASS.
 // Server plugin: ../../../server/games/crazyeights.js
 
-import { renderCard, SUIT_GLYPH, isBot, botName, botSeatControls } from '../cardCommon.js';
+import { renderCard, SUIT_GLYPH, isBot, botName, botSeatControls, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
@@ -59,7 +59,8 @@ export function mount(container, api) {
       status.textContent = `Waiting for players (${view.seats.length}/6 seated, need 2+ to start).`;
     } else if (view.phase === 'playing') {
       const turnName = nicknameFor(view.seats[view.turnIdx]);
-      status.textContent = `Turn: ${turnName}${view.turnIdx === mySeat ? ' (you)' : ''} — current suit: ${SUIT_GLYPH[view.currentSuit]}`;
+      status.textContent = `${view.turnIdx === mySeat ? 'YOUR TURN' : `Turn: ${turnName}`} — current suit: ${SUIT_GLYPH[view.currentSuit]}`;
+      if (view.turnIdx === mySeat) status.className = 'gt-your-turn';
     } else if (view.phase === 'game_over') {
       status.textContent = `${nicknameFor(view.seats[view.winnerSeat])} WINS — hand emptied!`;
     }
@@ -95,12 +96,17 @@ export function mount(container, api) {
     players.style.display = 'flex';
     players.style.gap = '14px';
     players.style.fontSize = '0.85em';
+    players.style.flexWrap = 'wrap';
     view.seats.forEach((clientId, i) => {
       const tag = document.createElement('div');
       const isTurn = view.phase === 'playing' && i === view.turnIdx;
       tag.textContent = `${nicknameFor(clientId)}${clientId === api.getClientId() ? ' (you)' : ''}: ${view.handCounts[i]}${isTurn ? ' ← turn' : ''}`;
       tag.style.opacity = isTurn ? '1' : '0.7';
       tag.style.fontWeight = isTurn ? 'bold' : 'normal';
+      tag.style.padding = '2px 8px';
+      tag.style.borderRadius = '4px';
+      if (isTurn) tag.classList.add('gt-turn');
+      if (i > 0) players.appendChild(orderArrow());
       players.appendChild(tag);
     });
     root.appendChild(players);
@@ -163,7 +169,8 @@ export function mount(container, api) {
       hand.style.gap = '4px';
       hand.style.flexWrap = 'wrap';
       hand.style.justifyContent = 'center';
-      view.myHand.forEach((card, i) => {
+      hand.className = 'gt-hand';
+      handOrder(view.myHand).forEach(({ card, i }) => {
         const wrap = document.createElement('div');
         wrap.style.display = 'flex';
         wrap.style.flexDirection = 'column';
@@ -185,6 +192,7 @@ export function mount(container, api) {
         hand.appendChild(wrap);
       });
       root.appendChild(hand);
+      root.appendChild(handToolbar(render));
 
       if (pendingEightIndex !== null) {
         const picker = document.createElement('div');

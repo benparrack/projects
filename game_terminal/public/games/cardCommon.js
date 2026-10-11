@@ -80,8 +80,18 @@ const CSS = `
 @keyframes gt-bot-glow { 50% { box-shadow: 0 0 10px rgba(58,215,255,.45); } }
 .gt-bot-new { animation: gt-bot-pop .45s cubic-bezier(.3,1.6,.5,1); }
 @keyframes gt-bot-pop { from { transform: scale(.4); opacity: 0; } }
+.gt-hand-bar { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; font-size: .75em; }
+.gt-hand-bar button { font-size: 1em; padding: 2px 8px; }
+.gt-hand-bar button.on { background: #39ff14; color: #041004; }
+body.gt-hand-large .gt-hand .gt-card:not(.small) { zoom: 1.5; }
+.gt-turn { outline: 2px solid #39ff14 !important; box-shadow: 0 0 14px rgba(57,255,20,.55); animation: gt-turn-pulse 1.2s ease-in-out infinite; }
+@keyframes gt-turn-pulse { 50% { box-shadow: 0 0 4px rgba(57,255,20,.2); } }
+.gt-order-arrow { align-self: center; opacity: .5; }
+.gt-your-turn { color: #041004; background: #39ff14; padding: 4px 14px; border-radius: 6px; font-size: 1.15em;
+  animation: gt-turn-pulse 1.2s ease-in-out infinite; box-shadow: 0 0 16px rgba(57,255,20,.6); }
 @media (prefers-reduced-motion: reduce) {
   .gt-card, .gt-card.gt-card-in, .gt-bot-add, .gt-bot-new { animation: none; transition: none; }
+  .gt-turn, .gt-your-turn { animation: none; }
 }
 `;
 
@@ -89,9 +99,62 @@ let styled = false;
 function ensureStyles() {
   if (styled) return;
   styled = true;
+  document.body.classList.toggle('gt-hand-large', handPrefs.large);
   const tag = document.createElement('style');
   tag.textContent = CSS;
   document.head.appendChild(tag);
+}
+
+// --- Your hand: sort order and size, shared by every hand-of-cards game, remembered per browser. ---
+const HAND_KEY = 'gt-hand-prefs';
+const handPrefs = { sort: 'suit', large: false };
+try { Object.assign(handPrefs, JSON.parse(localStorage.getItem(HAND_KEY))); } catch { /* private mode */ }
+const RANK_ORDER = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const SUIT_ORDER = ['C', 'D', 'S', 'H']; // alternates colours
+
+// [{ card, i }] in the player's chosen order; `i` stays the index into the server's hand.
+export function handOrder(cards) {
+  const list = cards.map((card, i) => ({ card, i }));
+  const r = (x) => RANK_ORDER.indexOf(x.card.rank);
+  const su = (x) => SUIT_ORDER.indexOf(x.card.suit);
+  if (handPrefs.sort === 'suit') list.sort((a, b) => su(a) - su(b) || r(a) - r(b));
+  else if (handPrefs.sort === 'rank') list.sort((a, b) => r(a) - r(b) || su(a) - su(b));
+  return list;
+}
+
+// SORT: DEALT / SUIT / RANK and a LARGE CARDS toggle. Mark the hand row with class 'gt-hand'.
+export function handToolbar(rerender) {
+  ensureStyles();
+  const bar = document.createElement('div');
+  bar.className = 'gt-hand-bar';
+  const save = () => {
+    try { localStorage.setItem(HAND_KEY, JSON.stringify(handPrefs)); } catch { /* private mode */ }
+    document.body.classList.toggle('gt-hand-large', handPrefs.large);
+    rerender();
+  };
+  bar.append('SORT:');
+  for (const [id, label] of [['none', 'AS DEALT'], ['suit', 'SUIT'], ['rank', 'NUMBER']]) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.className = handPrefs.sort === id ? 'on' : '';
+    b.addEventListener('click', () => { handPrefs.sort = id; save(); });
+    bar.appendChild(b);
+  }
+  const big = document.createElement('button');
+  big.textContent = handPrefs.large ? '🔍 LARGE CARDS: ON' : '🔍 LARGE CARDS: OFF';
+  big.className = handPrefs.large ? 'on' : '';
+  big.addEventListener('click', () => { handPrefs.large = !handPrefs.large; save(); });
+  bar.appendChild(big);
+  return bar;
+}
+
+// Turn order: seat elements in play order with arrows between them; the current one pulses.
+export function orderArrow() {
+  ensureStyles();
+  const a = document.createElement('span');
+  a.className = 'gt-order-arrow';
+  a.textContent = '→';
+  return a;
 }
 
 // --- CPU players (see server/games/cardBots.js): a bot's seat id is 'bot-<Name>~<level>'. ---

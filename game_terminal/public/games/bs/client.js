@@ -2,7 +2,7 @@
 // they're the required rank. Anyone else can CALL BS; the next player in turn order can instead
 // let the play ride. Server plugin: ../../../server/games/bs.js
 
-import { renderCard, SUIT_GLYPH, isBot, botName, botSeatControls } from '../cardCommon.js';
+import { renderCard, SUIT_GLYPH, isBot, botName, botSeatControls, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
@@ -50,7 +50,8 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       status.textContent = `Waiting for players (${view.seats.length}/6 seated, need 2+ to start).`;
     } else if (view.phase === 'playing') {
-      status.textContent = `${nameAt(view.turnIdx)}${view.turnIdx === mySeat ? ' (you)' : ''} must play claiming: ${view.requiredRank}`;
+      status.textContent = `${view.turnIdx === mySeat ? 'YOUR TURN — play' : `${nameAt(view.turnIdx)} must play`} claiming: ${view.requiredRank}`;
+      if (view.turnIdx === mySeat) status.className = 'gt-your-turn';
     } else if (view.phase === 'challenge') {
       status.textContent = `${nameAt(view.lastPlay.playerIdx)} played ${view.lastPlay.count} card(s) claiming ${view.lastPlay.claimedRank} — call BS or let it ride!`;
     } else if (view.phase === 'game_over') {
@@ -87,11 +88,16 @@ export function mount(container, api) {
     players.style.display = 'flex';
     players.style.gap = '14px';
     players.style.fontSize = '0.85em';
+    players.style.flexWrap = 'wrap';
     view.seats.forEach((clientId, i) => {
       const tag = document.createElement('div');
       const isTurn = view.phase === 'playing' && i === view.turnIdx;
       tag.textContent = `${nicknameFor(clientId)}${clientId === api.getClientId() ? ' (you)' : ''}: ${view.handCounts[i]}${isTurn ? ' ← turn' : ''}`;
       tag.style.fontWeight = isTurn ? 'bold' : 'normal';
+      tag.style.padding = '2px 8px';
+      tag.style.borderRadius = '4px';
+      if (isTurn) tag.classList.add('gt-turn');
+      if (i > 0) players.appendChild(orderArrow());
       players.appendChild(tag);
     });
     root.appendChild(players);
@@ -157,7 +163,8 @@ export function mount(container, api) {
       hand.style.gap = '4px';
       hand.style.flexWrap = 'wrap';
       hand.style.justifyContent = 'center';
-      view.myHand.forEach((card, i) => {
+      hand.className = 'gt-hand';
+      handOrder(view.myHand).forEach(({ card, i }) => {
         const wrap = document.createElement('div');
         wrap.style.display = 'flex';
         wrap.style.flexDirection = 'column';
@@ -179,6 +186,7 @@ export function mount(container, api) {
         hand.appendChild(wrap);
       });
       root.appendChild(hand);
+      root.appendChild(handToolbar(render));
 
       if (isMyTurn) {
         const playBtn = document.createElement('button');

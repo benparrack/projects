@@ -4,18 +4,11 @@
 // Legal-card highlighting below mirrors the server's `legalCardIndices` by hand (no shared
 // module in this repo — same pattern as e.g. slither's client-side `computeZoom`).
 
-import { renderCard, SUIT_GLYPH, isBot, botName, addBotButton, removeBotButton, markBotSeat } from '../cardCommon.js';
+import { renderCard, SUIT_GLYPH, isBot, botName, addBotButton, removeBotButton, markBotSeat, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 
 const SEAT_LABELS = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
-const RANK_ORDER = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-const SUIT_ORDER = ['S', 'H', 'D', 'C'];
-
-function rankValue(rank) {
-  return RANK_ORDER.indexOf(rank);
-}
-
 function legalCardIndices(hand, currentTrick, spadesBroken) {
   if (currentTrick.length === 0) {
     if (spadesBroken) return hand.map((_, i) => i);
@@ -69,10 +62,12 @@ export function mount(container, api) {
       status.textContent = `Waiting for players (${seated}/4 seated).`;
     } else if (view.phase === 'bidding') {
       const name = nicknameFor(view.seats[view.biddingTurnIdx]);
-      status.textContent = `Bidding — ${name}${view.biddingTurnIdx === mySeat ? ' (you)' : ''} to bid.`;
+      status.textContent = view.biddingTurnIdx === mySeat ? 'YOUR TURN — make your bid' : `Bidding — ${name} to bid.`;
+      if (view.biddingTurnIdx === mySeat) status.className = 'gt-your-turn';
     } else if (view.phase === 'playing') {
       const name = nicknameFor(view.seats[view.turnIdx]);
-      status.textContent = `Hand ${view.handNumber} — ${name}${view.turnIdx === mySeat ? ' (you)' : ''} to play${view.spadesBroken ? ' (spades broken)' : ''}.`;
+      status.textContent = `Hand ${view.handNumber} — ${view.turnIdx === mySeat ? 'YOUR TURN' : `${name} to play`}${view.spadesBroken ? ' (spades broken)' : ''}`;
+      if (view.turnIdx === mySeat) status.className = 'gt-your-turn';
     } else if (view.phase === 'hand_over') {
       status.textContent = `Hand ${view.handNumber} over — see scores below.`;
     } else if (view.phase === 'game_over') {
@@ -119,9 +114,7 @@ export function mount(container, api) {
           tricksEl.textContent = `tricks: ${tricks}`;
           box.appendChild(tricksEl);
         }
-        if (view.phase === 'playing' && i === view.turnIdx) {
-          box.style.outline = '2px solid #39ff14';
-        }
+        if ((view.phase === 'playing' && i === view.turnIdx) || (view.phase === 'bidding' && i === view.biddingTurnIdx)) box.classList.add('gt-turn');
       } else if (view.phase === 'waiting') {
         if (mySeat === -1) {
           const btn = document.createElement('button');
@@ -139,6 +132,7 @@ export function mount(container, api) {
         markBotSeat(box, view.seats[i], i);
         if (view.phase === 'waiting' || view.phase === 'game_over') box.appendChild(removeBotButton(api, i));
       }
+      if (i > 0) seatRow.appendChild(orderArrow());
       seatRow.appendChild(box);
     });
     root.appendChild(seatRow);
@@ -241,16 +235,14 @@ export function mount(container, api) {
     }
 
     // My hand
-    if (mySeat !== -1 && view.phase === 'playing') {
-      const isMyTurn = mySeat === view.turnIdx;
+    if (mySeat !== -1 && (view.phase === 'playing' || view.phase === 'bidding')) {
+      const isMyTurn = view.phase === 'playing' && mySeat === view.turnIdx;
       const handLabel = document.createElement('div');
       handLabel.style.fontSize = '0.8em';
       handLabel.textContent = 'Your hand:';
       root.appendChild(handLabel);
 
-      const sortedHand = view.myHand
-        .map((card, i) => ({ card, i }))
-        .sort((a, b) => SUIT_ORDER.indexOf(a.card.suit) - SUIT_ORDER.indexOf(b.card.suit) || rankValue(b.card.rank) - rankValue(a.card.rank));
+      const sortedHand = handOrder(view.myHand);
 
       const legal = legalCardIndices(view.myHand, view.currentTrick, view.spadesBroken);
 
@@ -259,6 +251,7 @@ export function mount(container, api) {
       hand.style.gap = '4px';
       hand.style.flexWrap = 'wrap';
       hand.style.justifyContent = 'center';
+      hand.className = 'gt-hand';
       sortedHand.forEach(({ card, i }) => {
         const cardEl = renderCard(card);
         const playable = isMyTurn && legal.includes(i);
@@ -274,6 +267,7 @@ export function mount(container, api) {
         hand.appendChild(cardEl);
       });
       root.appendChild(hand);
+      root.appendChild(handToolbar(render));
     }
 
     if (view.phase === 'hand_over') {
