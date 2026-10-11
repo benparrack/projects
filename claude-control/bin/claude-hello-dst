@@ -1,0 +1,6 @@
+#!/bin/sh
+# Keep the cloud "morning hello" routine at 08:00 Stockholm: cloud cron is UTC-only.
+if [ "$(date +%z)" = "+0200" ]; then cron="0 6 * * *"; else cron="0 7 * * *"; fi
+state="$HOME/.cache/claude-hello-cron"
+[ "$(cat "$state" 2>/dev/null)" = "$cron" ] && exit 0
+"$HOME/.local/bin/claude" -p "Use the RemoteTrigger tool (load it via ToolSearch first) with action \"update\", trigger_id \"trig_011uNvaikxjTu1qf73qfMA63\", body {\"cron_expression\": \"$cron\"}. Then use action \"get\" on it and reply with only its cron_expression." --allowedTools "ToolSearch RemoteTrigger" | grep -qxF "$cron" && echo "$cron" > "$state"

@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily 08:00 hello to Claude (catches up on boot/wake if missed)
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

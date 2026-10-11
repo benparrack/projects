@@ -1,0 +1,6 @@
+[Unit]
+Description=Shift cloud morning-hello cron for daylight saving
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/claude-hello-dst

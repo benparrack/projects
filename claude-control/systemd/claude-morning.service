@@ -1,0 +1,11 @@
+[Unit]
+Description=Say good morning to Claude
+After=network-online.target
+
+[Service]
+Type=oneshot
+# wait for network after boot/resume (up to ~2 min)
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 24); do getent hosts api.anthropic.com >/dev/null && exit 0; sleep 5; done; exit 0'
+ExecStart=%h/.local/bin/claude -p "hello"
+StandardOutput=append:%h/claude-morning.log
+StandardError=append:%h/claude-morning.log
