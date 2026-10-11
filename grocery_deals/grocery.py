@@ -411,6 +411,8 @@ def report(result):
     head = f"Best for your list: {best[1]} (~{best[0]:.0f} kr off)" if best[0] else "No offers match your list this week."
     if any(o["member"] for _, f, e in result for _, o in f + e):
         lines.append(f"\n* member price ({' / '.join(MEMBER.values())})")
+    if saved := saved_this_month():
+        lines.append(f"Saved so far this month: ~{saved:.0f} kr")
     return head + "\n" + "\n".join(lines)
 
 
