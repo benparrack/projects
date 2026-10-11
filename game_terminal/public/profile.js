@@ -106,7 +106,7 @@ export async function renderProfile(mount, name, { gameLabel, me }) {
     mount.replaceChildren(h('div.profile', h('p.error', 'Couldn\'t load this profile. Check your connection and try again.')));
     return 'Profile';
   }
-  const { user, stats, matches, seasons = [] } = data;
+  const { user, stats, matches, seasons = [], progress, achievements = [] } = data;
   const t = summaryCards(stats);
   const isMe = me && me.username === user.username;
   mount.replaceChildren(h('article.profile',
@@ -115,6 +115,7 @@ export async function renderProfile(mount, name, { gameLabel, me }) {
       h('div.profile-id',
         h('h1.profile-name', user.username),
         h('p.muted', `LEVEL ${user.level} · joined ${fmtDate(user.createdAt)}`),
+        progress ? xpBar(progress) : null,
         isMe ? h('p.profile-you', 'This is you. Other players see this page too.') : null,
         me && !isMe ? relationButtons(user.username) : null)),
     h('dl.profile-kpis',
@@ -127,6 +128,9 @@ export async function renderProfile(mount, name, { gameLabel, me }) {
     h('section.profile-section',
       h('h2.panel-title', '> STATS BY GAME'),
       stats.length ? statsTable(stats, gameLabel) : h('p.muted.empty', isMe ? 'Finish a game and your stats show up here.' : 'No games played yet.')),
+    achievements.length ? h('section.profile-section',
+      h('h2.panel-title', '> ACHIEVEMENTS ', h('span.muted.ach-count', `${achievements.filter((a) => a.at).length} / ${achievements.length}`)),
+      achievementGrid(achievements)) : null,
     seasons.length ? h('section.profile-section',
       h('h2.panel-title', '> PAST SEASONS'),
       seasonsList(seasons, gameLabel)) : null,
@@ -158,6 +162,28 @@ function headToHead(mine, theirs, gameLabel) {
     box.hidden = false;
   }).catch(() => {});
   return box;
+}
+
+function xpBar({ level, into, need }) {
+  return h('div.xp', { role: 'progressbar', 'aria-label': `Level ${level} progress`, 'aria-valuemin': '0', 'aria-valuemax': String(need), 'aria-valuenow': String(into) },
+    h('div.xp-track', h('div.xp-fill', { style: `width:${Math.min(100, (into / need) * 100).toFixed(1)}%` })),
+    h('span.xp-label', `${into} / ${need} XP to level ${level + 1}`));
+}
+
+// Unlocked newest first; locked ones fold away under a toggle so the profile stays short.
+function achievementGrid(list) {
+  const got = list.filter((a) => a.at).sort((a, b) => b.at - a.at);
+  const locked = list.filter((a) => !a.at);
+  return h('div',
+    got.length ? achTiles(got) : h('p.muted.empty', 'None unlocked yet. Finish a game to earn the first one.'),
+    locked.length ? h('details.ach-locked', h('summary', `Show ${locked.length} locked`), achTiles(locked)) : null);
+}
+
+function achTiles(list) {
+  return h('ul.ach-grid', list.map((a) => h(`li.ach${a.at ? '.got' : ''}`, { title: a.at ? `Unlocked ${fmtDate(a.at)}` : 'Locked' },
+    h('span.ach-icon', { 'aria-hidden': 'true' }, a.at ? '★' : '☆'),
+    h('div', h('b.ach-name', a.name), h('span.ach-desc', a.desc)),
+    h('span.sr-only', a.at ? ' (unlocked)' : ' (locked)'))));
 }
 
 function kpi(label, value) {

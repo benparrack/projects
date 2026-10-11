@@ -39,7 +39,19 @@ const roomManager = new RoomManager(gameRegistry, {
       const draw = players.length > 1 && players.every((q) => q.place === 0);
       for (const p of rec.people) {
         if (p.bot) continue;
-        room.sendTo(p.clientId, makeEnvelope(ServerMessage.RESULT_RECORDED, { gameType: rec.summary.gameType, kind: rec.summary.kind, saved: !!p.uid, place: p.place, draw, players, ranked: rec.summary.ranked, rating: (p.uid && rec.ratings && rec.ratings[p.uid]) || null }));
+        room.sendTo(p.clientId, makeEnvelope(ServerMessage.RESULT_RECORDED, { gameType: rec.summary.gameType, kind: rec.summary.kind, saved: !!p.uid, place: p.place, draw, players, ranked: rec.summary.ranked, rating: (p.uid && rec.ratings && rec.ratings[p.uid]) || null, progress: (p.uid && rec.progress && rec.progress[p.uid]) || null }));
+      }
+      // XP/level/achievements changed: refresh every open tab of that account (header level, profile).
+      for (const [uid, pr] of Object.entries(rec.progress || {})) {
+        if (!pr) continue;
+        for (const w of online.get(uid) || []) {
+          const s = sessions.get(w);
+          if (!s || !s.user) continue;
+          const achievements = { ...(s.user.achievements || {}) };
+          for (const id of pr.unlocked) achievements[id] = rec.summary.endedAt;
+          s.user = { ...s.user, xp: pr.xp, level: pr.level, achievements };
+          sendAccountState(w, s);
+        }
       }
       const uids = rec.people.map((p) => p.uid).filter(Boolean);
       if (uids.length > 1) social.noteRecent(uids, rec.summary.gameType).then(() => pushMany(uids)).catch((err) => console.error('social: recent failed', err));

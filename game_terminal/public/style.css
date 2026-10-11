@@ -696,3 +696,21 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 @media (max-width: 420px) {
   .brand-name { display: none; }
 }
+
+/* ---- Progression: XP bar, achievements ---- */
+.xp { display: flex; align-items: center; gap: 10px; margin-top: 8px !important; max-width: 360px; }
+.xp-track { flex: 1; height: 8px; border: 1px solid var(--border); background: #000; }
+.xp-fill { height: 100%; background: var(--accent); box-shadow: 0 0 6px rgba(255, 176, 0, .5); }
+.xp-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ach-count { font-size: 18px; }
+.ach-grid { list-style: none; padding: 0; margin: 10px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.ach { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px dashed rgba(31, 143, 12, .45); opacity: .5; }
+.ach.got { border: 1px solid var(--accent); background: rgba(255, 176, 0, .06); opacity: 1; }
+.ach-icon { font-size: 20px; line-height: 1; color: var(--fg-dim); }
+.ach.got .ach-icon { color: var(--accent); text-shadow: 0 0 8px rgba(255, 176, 0, .6); }
+.ach-name { display: block; font-weight: normal; color: var(--fg); font-size: 14px; }
+.ach.got .ach-name { color: var(--accent); }
+.ach-desc { display: block; font-size: 12px; color: var(--muted); }
+.ach-locked { margin-top: 10px; }
+.ach-locked summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.ach-locked summary:hover { color: var(--fg); }

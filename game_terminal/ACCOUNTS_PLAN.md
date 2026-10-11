@@ -149,9 +149,9 @@ call with the right placements. This is the long, careful part of the project.
 - [x] Bot games stay in `botPlayed/botWins` only and never touch rating or leaderboards
 
 ### Phase 6 — Progression & daily
-- [ ] XP for every finished match (more for wins, a small amount for bot games, capped
+- [x] XP for every finished match (more for wins, a small amount for bot games, capped
       per day) → account level shown next to the name everywhere
-- [ ] Achievements: ~40 to start (per-game firsts and milestones, plus cross-game ones
+- [x] Achievements: ~40 to start (per-game firsts and milestones, plus cross-game ones
       like "played 20 different games", "beat a friend", "10-win streak", "Expert bot slayer").
       Toast on unlock, grid on the profile
 - [ ] Cosmetic unlocks from levels and achievements: name colors, avatar frames, slither
@@ -240,3 +240,4 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 - 2026-10-11 — Phase 3 done: `social/{uid}` friends/requests/blocks/recent players (server only, no uids sent to clients), live presence ("Playing X" with a JOIN button), room invites as JOIN toasts (rate-limited), in-memory parties (leader + up to 7; members follow the leader into rooms, 30s reconnect grace), friends drawer in the header, friend/block buttons and a "You vs them" head-to-head on profiles (`/api/h2h/:a/:b`), blocked list in Settings. Party chat was moved into Phase 4.
 - 2026-10-11 — Phase 4 done: global chat dock (left-edge tab; accounts post after 1 finished game, guests can read; persisted last 100), room chat under the roster (accounts-on only), party chat + friend DMs inside the friends drawer with unread badges and REPLY toasts. Server: 200-char limit, 5 msgs/10s, slow mode when busy, profanity mask, link blocking, mute/ban checks. Reports with chat context → `/admin` queue (delete message, mute, ban with socket kick, force rename, reset stats, dismiss/resolve, modlog). `test/chat.test.js`.
 - 2026-10-11 — Phase 5 done: ★ RANKED button (separate `RANKED-<GAME>` pool; accounts only, rated games only, bot seats refused) moves pairwise Elo on the stats doc (rating/peak/ratedGames, delta in the result toast and on match rows); co-op and any guest/bot match stay unrated. Season counters (sPlayed/sWins/sBest) reset per quarter; hourly rollover archives `seasonResults` with final rank and soft-resets ratings. `/leaderboards[/game]` (all-time / this season / friends × rating / wins / best, 5-min server cache, your row highlighted), tier badges + RATING column + PAST SEASONS on profiles, nav + footer + account-menu links. Export/delete cover season results. `test/ranked.test.js`.
+- 2026-10-11 — Phase 6: XP + levels + achievements live. results.js grants daily-capped XP (500/UTC day) on `users/{uid}` and unlocks the 42-item catalog (beat-a-friend via social, rating/level extras); RESULT_RECORDED carries `progress` → +XP / LEVEL UP / ACHIEVEMENT UNLOCKED toasts, open tabs get a fresh account state. Profile: XP bar under the level, achievements grid (unlocked newest first, locked folded). `test/xp.test.js`.

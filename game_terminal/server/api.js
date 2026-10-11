@@ -3,6 +3,7 @@
 // authenticated WebSocket.
 const { publicUser } = require('./accounts');
 const { tierOf, seasonOf } = require('./ratings');
+const { levelFor, ACHIEVEMENT_LIST } = require('./progression');
 
 const BOARD_TTL_MS = 5 * 60 * 1000;
 const BOARD_SIZE = 50;
@@ -80,6 +81,8 @@ function createApi({ db, accounts, authMode, firebaseWebConfig, registry, now = 
       ]);
       return [200, {
         user: publicUser(found.user),
+        progress: levelFor(found.user.xp || 0),
+        achievements: ACHIEVEMENT_LIST.map((a) => ({ ...a, at: (found.user.achievements || {})[a.id] || null })),
         stats: stats.map(({ id, uid, ...s }) => ({ ...s, ...(s.rating != null ? { tier: tierOf(s.rating) } : {}), score: ((registry[s.gameType] || {}).stats || {}).score || null })),
         matches: matches.map(stripUids),
         seasons: seasons.map(({ id, uid, ...s }) => s).sort((a, b) => b.season.localeCompare(a.season, 'en', { numeric: true }) || a.rank - b.rank),

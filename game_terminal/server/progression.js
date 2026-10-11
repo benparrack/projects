@@ -43,7 +43,7 @@ function totals(allStats) {
 
 // [id, name, description, test(c)] where c = { t (totals), stat, summary, me, x (extra) }.
 const pvpWin = (c) => c.summary.kind === 'pvp' && c.me.won;
-const gameWins = (game, n, name) => [`${game}_wins_${n}`, name, `Win ${n} ${game} game${n > 1 ? 's' : ''} against people`, (c) => c.summary.gameType === game && c.stat.wins >= n];
+const gameWins = (game, n, name, label) => [`${game}_wins_${n}`, name, `Win ${n} ${label} game${n > 1 ? 's' : ''} against people`, (c) => c.summary.gameType === game && c.stat.wins >= n];
 const ACHIEVEMENTS = [
   ['first_game', 'Insert Coin', 'Finish your first game', () => true],
   ['first_win', 'Winner Winner', 'Win a game against another person', (c) => c.t.wins >= 1],
@@ -79,14 +79,14 @@ const ACHIEVEMENTS = [
   ['daily_first', 'Daily Grind', 'Finish a daily challenge', (c) => (c.x.dailyStreak || 0) >= 1],
   ['daily_7', 'Week Streak', 'Do the daily challenge 7 days in a row', (c) => (c.x.dailyStreak || 0) >= 7],
   ['daily_30', 'Month Streak', 'Do the daily challenge 30 days in a row', (c) => (c.x.dailyStreak || 0) >= 30],
-  gameWins('chess', 10, 'Checkmate Artist'),
-  gameWins('poker', 10, 'Card Shark'),
-  gameWins('slither', 10, 'Top Snake'),
-  gameWins('tron', 10, 'Light Cycle Ace'),
-  gameWins('connect4', 10, 'Four Sight'),
-  gameWins('scrabble', 10, 'Wordsmith'),
-  gameWins('pool', 10, 'Pool Shark'),
-  gameWins('minesweeper', 10, 'Sweeper'),
+  gameWins('chess', 10, 'Checkmate Artist', 'Chess'),
+  gameWins('poker', 10, 'Card Shark', 'Poker'),
+  gameWins('slither', 10, 'Top Snake', 'Slither'),
+  gameWins('tron', 10, 'Light Cycle Ace', 'TRON'),
+  gameWins('connect4', 10, 'Four Sight', 'Four in a Row'),
+  gameWins('scrabble', 10, 'Wordsmith', 'Scrabble'),
+  gameWins('pool', 10, 'Pool Shark', 'Pool'),
+  gameWins('minesweeper', 10, 'Sweeper', 'Minesweeper'),
 ].map(([id, name, desc, test]) => ({ id, name, desc, test }));
 
 // Ids unlocked by this match that the user doesn't have yet.

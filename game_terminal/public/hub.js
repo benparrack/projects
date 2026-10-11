@@ -355,9 +355,12 @@ function handleResultRecorded(p) {
     : p.draw ? 'It\'s a draw' : p.place === 0 ? 'You won' : `You placed ${ordinal(p.place + 1)}`; // place is 0-based
   if (p.rating) {
     const d = p.rating.delta;
-    toast(`${outcome}. Rating ${p.rating.rating} (${d >= 0 ? '+' : '−'}${Math.abs(d)}) · ${p.rating.tier}.`, { kind: d >= 0 ? 'ok' : undefined, ms: 7000 });
-  } else if (p.saved) toast(`${outcome}. ${p.ranked && p.kind === 'pvp' ? 'Unrated: everyone needs an account. ' : ''}Result saved to your profile.`, { kind: 'ok' });
-  else if (state.auth && state.auth.mode !== 'off') {
+    toast(`${outcome}. Rating ${p.rating.rating} (${d >= 0 ? '+' : '−'}${Math.abs(d)}) · ${p.rating.tier}.${p.progress && p.progress.gained ? ` +${p.progress.gained} XP.` : ''}`, { kind: d >= 0 ? 'ok' : undefined, ms: 7000 });
+  } else if (p.saved) toast(`${outcome}. ${p.ranked && p.kind === 'pvp' ? 'Unrated: everyone needs an account. ' : ''}${p.progress && p.progress.gained ? `+${p.progress.gained} XP.` : 'Result saved to your profile.'}`, { kind: 'ok' });
+  const pr = p.progress;
+  if (pr && pr.levelUp) toast(`▲ LEVEL UP! You're now level ${pr.level}.`, { kind: 'ok', ms: 7000 });
+  if (pr) for (const b of pr.badges || []) toast(`★ ACHIEVEMENT UNLOCKED: ${b.name}. ${b.desc}.`, { kind: 'ok', ms: 8000, action: state.account ? { label: 'VIEW', run: () => window.open(`/u/${encodeURIComponent(state.account.username)}`, '_blank', 'noopener') } : undefined });
+  if (!p.saved && state.auth && state.auth.mode !== 'off') {
     toast(`${outcome}. Guests' results aren't saved.`, { action: { label: 'SIGN IN', run: () => openSignIn(state.auth) } });
   }
 }

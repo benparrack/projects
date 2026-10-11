@@ -7,12 +7,14 @@
 //   pairs/{pairKey}/matches/{id}  their shared matches
 //   matches/{id}                  only for games with replays (the move list)
 //   seasonResults/{season}_{gameType}_{uid}  final rating/rank, written by rollover()
+//   users/{uid}                   xp/level (daily-capped), xpDay/xpToday, achievements {id: ts}
 // Ranked rooms (room.ranked) of plugins with stats.rated move a pairwise-Elo `rating` on the
 // stats doc; season counters (sPlayed/sWins/sBest) reset when the stats doc's `season` is stale.
 // Guests' results are never written. Bot games and solo runs are counted separately from
 // human-vs-human games so nobody can farm wins against an Easy bot.
 const crypto = require('crypto');
 const { rateMatch, tierOf, seasonOf, softReset } = require('./ratings');
+const { matchXp, grantXp, levelFor, newAchievements, ACHIEVEMENT_LIST } = require('./progression');
 
 const newId = () => `${Date.now().toString(36)}${crypto.randomBytes(5).toString('hex')}`;
 const pairKey = (a, b) => [a, b].sort().join('_');
@@ -140,7 +142,39 @@ function createResults({ db, registry, now = () => Date.now(), onRecorded = () =
     if (summary.replay) writes.push(db.set(`matches/${id}`, { gameType: room.gameType, endedAt, players: summary.players, replay: result.replay }));
     const settled = await Promise.allSettled(writes);
     for (const r of settled) if (r.status === 'rejected') console.error('results: write failed', r.reason);
-    return { summary, people, ratings: Object.fromEntries(Object.entries(ratings).map(([uid, r]) => [uid, { rating: r.rating, delta: r.delta, tier: tierOf(r.rating) }])) };
+    const progress = {};
+    await Promise.all(accounts.map(async (p, i) => {
+      const st = settled[i]; // the first accounts.length writes are the stats docs, in order
+      if (st.status !== 'fulfilled') return;
+      try { progress[p.uid] = await progressFor(p, st.value, summary, drawAll, ratings[p.uid], accounts); } catch (err) { console.error('results: progression failed', err); }
+    }));
+    return { summary, people, progress, ratings: Object.fromEntries(Object.entries(ratings).map(([uid, r]) => [uid, { rating: r.rating, delta: r.delta, tier: tierOf(r.rating) }])) };
+  }
+
+  // XP (daily-capped) and achievement unlocks for one account after its stats doc is written.
+  function progressFor(p, stat, summary, drawAll, rating, accounts) {
+    return serial(`users/${p.uid}`, async () => {
+      const user = await db.get(`users/${p.uid}`);
+      if (!user) return null;
+      const me = { place: p.place, won: !drawAll && p.place === 0, draw: drawAll };
+      const day = new Date(summary.endedAt).toISOString().slice(0, 10);
+      const today = user.xpDay === day ? user.xpToday || 0 : 0;
+      const gained = grantXp(matchXp(summary, me), today);
+      const xp = (user.xp || 0) + gained;
+      const lv = levelFor(xp);
+      let vsFriend = false;
+      if (me.won && summary.kind === 'pvp') {
+        const social = await db.get(`social/${p.uid}`);
+        vsFriend = !!social && accounts.some((o) => o.uid !== p.uid && social.friends && social.friends[o.uid]);
+      }
+      const allStats = await db.list('stats', { where: [['uid', '==', p.uid]] });
+      const have = user.achievements || {};
+      const unlocked = newAchievements({ summary, me, stat, allStats, have, extra: { vsFriend, rating: rating && rating.rating, level: lv.level } });
+      const achievements = { ...have };
+      for (const id of unlocked) achievements[id] = summary.endedAt;
+      await db.merge(`users/${p.uid}`, { xp, level: lv.level, xpDay: day, xpToday: today + gained, achievements });
+      return { gained, xp, level: lv.level, into: lv.into, need: lv.need, levelUp: lv.level > (user.level || 1), unlocked, badges: ACHIEVEMENT_LIST.filter((a) => unlocked.includes(a.id)), capped: gained < matchXp(summary, me) };
+    });
   }
 
   // Season rollover, run at startup and hourly. The first run just remembers the season. When the
