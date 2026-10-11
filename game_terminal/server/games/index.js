@@ -51,6 +51,7 @@ const knockout = require('./knockout');
 const paintball = require('./paintball');
 const skeeball = require('./skeeball');
 const minesweeper = require('./minesweeper');
+const blockade = require('./blockade');
 
 const registry = {
   [drawing.type]: drawing,
@@ -103,6 +104,7 @@ const registry = {
   [paintball.type]: paintball,
   [skeeball.type]: skeeball,
   [minesweeper.type]: minesweeper,
+  [blockade.type]: blockade,
 };
 
 // CPU players for the card games — patches those plugins' onMessage in place (see cardBots.js).

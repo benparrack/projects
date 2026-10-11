@@ -37,6 +37,7 @@ const CATEGORIES = [
       { type: 'dotsboxes', label: 'DOTS AND BOXES' },
       { type: 'codemaster', label: 'CODEMASTER (MASTERMIND)' },
       { type: 'minesweeper', label: 'MINESWEEPER (RACE)' },
+      { type: 'blockade', label: 'BLOCKADE (BARRICADE)' },
     ],
   },
   {

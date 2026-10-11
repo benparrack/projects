@@ -651,4 +651,18 @@ export const HOWTO = {
       'Right-click (or long-press on touch, or turn on FLAG MODE) to place or remove a flag.',
     ],
   },
+  blockade: {
+    about: 'Blockade, the 1975 board game: race your pawns into the enemy base while walling off theirs.',
+    rules: [
+      'Each player has two pawns starting on their two home squares (★). Your goal is to reach EITHER of the opponent\'s home squares with either pawn.',
+      'On your turn, move one pawn 1 or 2 squares up/down/left/right (it can turn a corner and pass over pawns, but not cross walls or stop on a pawn).',
+      'Then place one wall (2 squares long) in the grooves between squares. You have 9 horizontal and 9 vertical walls. Once you run out, you just move.',
+      'Walls can\'t overlap or cross, and can never completely cut any pawn off from its goals. Detours are fine; dead ends aren\'t.',
+    ],
+    controls: [
+      'Click one of your pawns, then a highlighted square (or just click a square only one pawn can reach).',
+      'Wall step: hover a groove to preview; the wall follows the groove under the pointer. Right-click or R rotates it; click to place.',
+      'Touch: tap a groove to preview, then tap again or press PLACE WALL (ROTATE flips it).',
+    ],
+  },
 };
