@@ -7,6 +7,7 @@
 //   pairs/{pairKey}/matches/{id}  their shared matches
 //   matches/{id}                  only for games with replays (the move list)
 //   seasonResults/{season}_{gameType}_{uid}  final rating/rank, written by rollover()
+//   weekly/{week}_{uid}           game-of-the-week points (via weekly.js)
 //   users/{uid}                   xp/level (daily-capped), xpDay/xpToday, achievements {id: ts}
 // Ranked rooms (room.ranked) of plugins with stats.rated move a pairwise-Elo `rating` on the
 // stats doc; season counters (sPlayed/sWins/sBest) reset when the stats doc's `season` is stale.
@@ -19,7 +20,7 @@ const { matchXp, grantXp, levelFor, newAchievements, ACHIEVEMENT_LIST } = requir
 const newId = () => `${Date.now().toString(36)}${crypto.randomBytes(5).toString('hex')}`;
 const pairKey = (a, b) => [a, b].sort().join('_');
 
-function createResults({ db, registry, daily = null, now = () => Date.now(), onRecorded = () => {} }) {
+function createResults({ db, registry, daily = null, weekly = null, now = () => Date.now(), onRecorded = () => {} }) {
   // Serialises read-modify-write per stats doc. Single Render instance, so this is enough.
   const queues = new Map();
   function serial(key, fn) {
@@ -167,7 +168,10 @@ function createResults({ db, registry, daily = null, now = () => Date.now(), onR
       const me = { place: p.place, won: !drawAll && p.place === 0, draw: drawAll };
       const day = new Date(summary.endedAt).toISOString().slice(0, 10);
       const today = user.xpDay === day ? user.xpToday || 0 : 0;
-      const gained = grantXp(matchXp(summary, me), today);
+      const week = weekly && weekly.current();
+      const featured = !!week && week.gameType === summary.gameType; // game of the week: double XP
+      const raw = matchXp(summary, me) * (featured ? 2 : 1);
+      const gained = grantXp(raw, today);
       const xp = (user.xp || 0) + gained;
       const lv = levelFor(xp);
       let vsFriend = false;
@@ -181,7 +185,8 @@ function createResults({ db, registry, daily = null, now = () => Date.now(), onR
       const achievements = { ...have };
       for (const id of unlocked) achievements[id] = summary.endedAt;
       await db.merge(`users/${p.uid}`, { xp, level: lv.level, xpDay: day, xpToday: today + gained, achievements });
-      return { gained, xp, level: lv.level, into: lv.into, need: lv.need, levelUp: lv.level > (user.level || 1), unlocked, badges: ACHIEVEMENT_LIST.filter((a) => unlocked.includes(a.id)), capped: gained < matchXp(summary, me) };
+      if (featured) await weekly.add(week, p.uid, user.username, summary, me);
+      return { gained, xp, level: lv.level, into: lv.into, need: lv.need, levelUp: lv.level > (user.level || 1), unlocked, badges: ACHIEVEMENT_LIST.filter((a) => unlocked.includes(a.id)), capped: gained < raw, ...(featured ? { double: true } : {}) };
     });
   }
 

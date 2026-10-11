@@ -9,6 +9,7 @@ import { renderProfile } from './profile.js';
 import { renderReplay } from './replay.js';
 import { renderLeaderboards } from './leaderboards.js';
 import { renderDailyCard, renderDaily } from './daily.js';
+import { renderWeeklyCard } from './weekly.js';
 import { renderLive, renderActivity } from './home.js';
 import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, handleOnline, openOnline, openConversation, getSocial } from './friends.js';
 import { initChat, initGlobalDock, setDockAvailable, chatBox, reopenChats, handleChatHistory, handleChatMessage, handleChatDeleted, handleChatError } from './chat.js';
@@ -369,6 +370,7 @@ function ordinal(n) {
 function refreshHome() {
   renderLive(document.getElementById('live-slot'), { gameLabel, pick: pickGame, openOnline: state.account ? openOnline : null });
   renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
+  renderWeeklyCard(document.getElementById('weekly-slot'), { auth: state.auth, account: state.account, gameLabel, play: (type) => { pickGame(type); els.btnJoinPublic.click(); } });
   if (state.account) send(ClientMessage.ACTIVITY_GET, {});
   else document.getElementById('activity-slot').replaceChildren();
 }
@@ -397,8 +399,8 @@ function handleResultRecorded(p) {
     : p.draw ? 'It\'s a draw' : p.place === 0 ? 'You won' : `You placed ${ordinal(p.place + 1)}`; // place is 0-based
   if (p.rating) {
     const d = p.rating.delta;
-    toast(`${outcome}. Rating ${p.rating.rating} (${d >= 0 ? '+' : '−'}${Math.abs(d)}) · ${p.rating.tier}.${p.progress && p.progress.gained ? ` +${p.progress.gained} XP.` : ''}`, { kind: d >= 0 ? 'ok' : undefined, ms: 7000 });
-  } else if (p.saved) toast(`${outcome}. ${p.ranked && p.kind === 'pvp' ? 'Unrated: everyone needs an account. ' : ''}${p.progress && p.progress.gained ? `+${p.progress.gained} XP.` : 'Result saved to your profile.'}`, { kind: 'ok' });
+    toast(`${outcome}. Rating ${p.rating.rating} (${d >= 0 ? '+' : '−'}${Math.abs(d)}) · ${p.rating.tier}.${p.progress && p.progress.gained ? ` +${p.progress.gained} XP${p.progress.double ? ' (2× game of the week)' : ''}.` : ''}`, { kind: d >= 0 ? 'ok' : undefined, ms: 7000 });
+  } else if (p.saved) toast(`${outcome}. ${p.ranked && p.kind === 'pvp' ? 'Unrated: everyone needs an account. ' : ''}${p.progress && p.progress.gained ? `+${p.progress.gained} XP${p.progress.double ? ' (2× game of the week)' : ''}.` : 'Result saved to your profile.'}`, { kind: 'ok' });
   const pr = p.progress;
   if (pr && pr.levelUp) toast(`▲ LEVEL UP! You're now level ${pr.level}.`, { kind: 'ok', ms: 7000 });
   if (pr) for (const b of pr.badges || []) toast(`★ ACHIEVEMENT UNLOCKED: ${b.name}. ${b.desc}.`, { kind: 'ok', ms: 8000, action: state.account ? { label: 'VIEW', run: () => window.open(`/u/${encodeURIComponent(state.account.username)}`, '_blank', 'noopener') } : undefined });

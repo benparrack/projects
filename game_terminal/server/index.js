@@ -17,6 +17,7 @@ const { createSocial } = require('./social');
 const { Parties } = require('./party');
 const { createChat, toClient } = require('./chat');
 const { createModeration, isAdmin } = require('./moderation');
+const { createWeekly } = require('./weekly');
 
 const PORT = process.env.PORT || 3000;
 const MAX_PAYLOAD = 64 * 1024;
@@ -26,12 +27,13 @@ const auth = createAuth();
 const accounts = createAccounts(db);
 const daily = createDaily(db);
 const activity = createActivity(db);
-const results = createResults({ db, registry: gameRegistry, daily, onRecorded: (summary) => activity.counted(summary.gameType).catch((err) => console.error('activity: count failed', err)) });
+const weekly = createWeekly(db);
+const results = createResults({ db, registry: gameRegistry, daily, weekly, onRecorded: (summary) => activity.counted(summary.gameType).catch((err) => console.error('activity: count failed', err)) });
 const social = createSocial(db, accounts);
 const parties = new Parties();
 const chat = createChat(db);
 const moderation = createModeration(db, accounts, { chat });
-const handleApi = createApi({ db, accounts, daily, live: async () => ({ online: wss.clients.size, ...(await activity.stats()) }), authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
+const handleApi = createApi({ db, accounts, daily, weekly, live: async () => ({ online: wss.clients.size, ...(await activity.stats()) }), authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
 console.log(`accounts: auth=${auth.mode} db=${db.backend}`);
 
 const roomManager = new RoomManager(gameRegistry, {

@@ -224,6 +224,13 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 
 - First moderator: once Firebase is live, sign in, then add your uid (Firebase console → Authentication) to a Render env var `ADMIN_UIDS` (comma-separated). That unlocks `/admin`; you can later set `role: 'admin'` on other users' docs.
 
+## Parked options (Ben's call, not blocked)
+
+- **Keep the free Render instance awake** (no ~30s cold start). Parked 2026-10-12: Ben may prefer the site
+  only spinning up when people use it. If wanted later: a free UptimeRobot HTTP(s) monitor on
+  `https://gameterminal.onrender.com/api/live` every 5 min (one always-on service ≈ 730 of the free 750
+  instance-hours/month), or Render Starter ($7/mo) for no sleep at all.
+
 ## Progress log
 
 - 2026-10-11 — plan approved, /loop started on Phase 1.

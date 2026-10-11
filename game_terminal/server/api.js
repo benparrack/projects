@@ -20,7 +20,7 @@ function json(res, status, body, maxAge = 0) {
 
 const ERRORS_PER_MIN = 30;
 
-function createApi({ db, accounts, daily = null, live = null, authMode, firebaseWebConfig, registry, now = () => Date.now() }) {
+function createApi({ db, accounts, daily = null, weekly = null, live = null, authMode, firebaseWebConfig, registry, now = () => Date.now() }) {
   // What the client needs to know per game: does it have a ladder, and what's its score.
   const games = Object.fromEntries(Object.entries(registry).filter(([, p]) => !(p.stats || {}).none)
     .map(([type, p]) => [type, { rated: !!(p.stats || {}).rated, score: (p.stats || {}).score || null }]));
@@ -71,6 +71,16 @@ function createApi({ db, accounts, daily = null, live = null, authMode, firebase
         };
       }
       return [200, { date, nextAt: Date.parse(`${date}T00:00:00Z`) + 86400000, games }, 30];
+    }],
+    [/^\/api\/weekly$/, async () => {
+      if (!weekly) return [404, { error: 'Not found.' }];
+      const week = weekly.current();
+      const b = await weekly.board(week);
+      const users = await Promise.all(b.rows.map((r) => db.get(`users/${r.uid}`)));
+      return [200, {
+        week: week.id, gameType: week.gameType, endsAt: week.endsAt, total: b.total,
+        rows: b.rows.map((r, i) => (users[i] ? { rank: i + 1, points: r.points, wins: r.wins, played: r.played, ...publicUser(users[i]) } : null)).filter(Boolean),
+      }, 60];
     }],
     [/^\/api\/config$/, async () => [200, { authMode, firebase: firebaseWebConfig, games, season: seasonOf(now()) }]],
 
