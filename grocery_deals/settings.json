@@ -19,6 +19,16 @@
       "chain": "willys",
       "id": "2258",
       "name": "Willys Fridhemsplan"
+    },
+    {
+      "chain": "coop",
+      "id": "035000",
+      "name": "Coop Daglivs"
+    },
+    {
+      "chain": "lidl",
+      "id": "sverige",
+      "name": "Lidl"
     }
   ],
   "member": true,

@@ -67,6 +67,46 @@ grocery.get = lambda url: type("R", (), {"text": page})()
 assert ica["save"] == 7.0 and abs(ica["pct"] - 7 / 47) < 1e-9 and ica["member"] and ica["image"] == "", ica
 assert ica["until"] == "2026-10-18" and ica["was"] == "23:50 kr" and m("kyckling", ica)
 
+# Lidl: national offers from the weekly-deal pages' data-grid-data; theme pages, non-food and other weeks skipped
+import html, json, time as _t
+now = _t.time()
+def grid(d, title="X", cat="Food", start=now - 9, end=now + 9):
+    d = {"title": title, "keyfacts": {"analyticsCategory": cat, "wonCategoryPrimary": "V/Mat/Kött & fågel (Kött)/Fläsk"},
+         "storeStartDate": start, "storeEndDate": end, **d}
+    return f'<div data-grid-data="{html.escape(json.dumps(d))}">'
+lidl_pages = {
+    "https://www.lidl.se/": '<a href="/c/mandag-soendag/a1"><a href="/c/smaker-fran-italien/a2">',
+    "https://www.lidl.se/c/mandag-soendag/a1":
+        grid({"price": {"price": 25, "oldPrice": 38.7, "packaging": {"text": "300 g"}}}, "Hundmat")
+        + grid({"price": {}, "lidlPlus": [{"price": {"price": 14.9, "basePrice": {"text": "/kg"}}, "highlightText": "-20%"}]}, "Bananer")
+        + grid({"price": {}, "lidlPlus": [{"price": {"price": 70}, "highlightText": "Kupong 2 för:"}]}, "Smör")
+        + grid({"price": {"price": 5}}, "Stol", cat="NonFood") + grid({"price": {"price": 5}}, "Nästa vecka", start=now + 99, end=now + 999),
+}
+grocery.get = lambda url: type("R", (), {"text": lidl_pages[url]})()  # the theme page a2 must never be fetched
+hund, ban, smor = grocery.lidl_offers("sverige")
+assert hund["deal"] == "25 kr" and hund["save"] == 13.7 and hund["was"] == "38,70 kr" and not hund["member"], hund
+assert hund["category"] == "Kött & fågel" and hund["size"] == "300 g"
+assert ban["deal"] == "14,90 kr/kg" and ban["member"] and ban["pct"] == 0.2 and ban["save"] == 3.73, ban
+assert smor["deal"] == "2 för 70 kr" and smor["save"] is None and grocery.unit_price(smor["deal"]) == (35.0, "st")
+
+# Coop: key read from coop.se, offers without a price (buy 3 pay 2) skipped
+coop_pages = {
+    "https://www.coop.se/handla/aktuella-erbjudanden/": '{"dkeKey":"k123","other":1}',
+    "https://external.api.coop.se/dke/offers/035000?api-version=v3&clustered=true": json.dumps([
+        {"priceInformation": {"discountValue": 25, "quantity": 2, "unit": "st"}, "campaignEndDate": "2026-10-18T23:59:59",
+         "content": {"title": "Krossade tomater", "brand": "Cirio", "amountInformation": "390 g.", "imageUrl": "//x/1.png"},
+         "categoryTeam": {"name": "Kolonial"}},
+        {"priceInformation": {"discountValue": 89, "unit": "kg", "isMemberPrice": True}, "content": {"title": "Skinkstek"}},
+        {"priceInformation": {"buyAmount": 3, "payAmount": 2}, "content": {"title": "Underkläder"}}]),
+}
+def coop_get(url, headers=None):
+    assert "dke/offers" not in url or headers == {"Ocp-Apim-Subscription-Key": "k123"}, headers
+    return type("R", (), {"text": coop_pages[url], "json": lambda self: json.loads(coop_pages[url])})()
+grocery.get = coop_get
+tom, skinka = grocery.coop_offers("035000")
+assert tom["deal"] == "2 för 25 kr" and tom["size"] == "390 g" and tom["until"] == "2026-10-18" and tom["image"] == "https://x/1.png", tom
+assert skinka["deal"] == "89 kr/kg" and skinka["member"] and skinka["save"] is None, skinka
+
 # settings: validated and written atomically
 grocery.SETTINGS = Path(tempfile.mkdtemp()) / "settings.json"
 saved = grocery.save_settings({"stores": [{"chain": "ica", "id": 5, "name": "K"}], "items": [" mjölk ", ""]})

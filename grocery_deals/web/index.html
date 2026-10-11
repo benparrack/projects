@@ -9,7 +9,7 @@
 :root {
   --bg: #f6f5f2; --panel: #fff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e4e2dc; --accent: #1f7a4d;
   --accent-soft: #e3f2ea; --save: #b3261e; --save-soft: #fde8e6; --member: #6a3fb5; --member-soft: #efe8fb;
-  --ica: #e3000b; --willys: #e86a10; --hemkop: #0f7c86; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04);
+  --ica: #e3000b; --willys: #e86a10; --hemkop: #0f7c86; --lidl: #0050aa; --coop: #00a142; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04);
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #151514; --panel: #1f1f1d; --ink: #ecebe6; --muted: #a09e97; --line: #33322f; --accent: #5cc48f;
@@ -31,7 +31,7 @@ h1 img { width: 24px; height: 24px; }
 .btn:hover { border-color: var(--muted); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 main { max-width: 1400px; margin: 0 auto; padding: 16px 20px 60px; }
-.summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 18px; }
 .scard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow); }
 .scard.best { border-color: var(--accent); background: var(--accent-soft); }
 .scard b { display: block; font-size: 14px; }
@@ -39,7 +39,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 16px 20px 60px; }
 .scard .err { color: var(--save); font-size: 12px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
 .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-.ica { --c: var(--ica); } .willys { --c: var(--willys); } .hemkop { --c: var(--hemkop); }
+.ica { --c: var(--ica); } .willys { --c: var(--willys); } .hemkop { --c: var(--hemkop); } .lidl { --c: var(--lidl); } .coop { --c: var(--coop); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
 .toolbar input[type=search] { flex: 1 1 220px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
 .toolbar select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
@@ -192,6 +192,7 @@ function renderSummary() {
   $("#summary").innerHTML = rows.map(r => `<div class="scard ${r.save && r.save === best ? "best" : ""}">
     <span class="chip ${r.store.chain}">${esc(r.store.chain)}</span><b>${esc(r.store.name)}</b>
     ${r.error ? `<div class="err">Couldn't fetch: ${esc(r.error)}</div>` :
+      r.n && !r.save ? `<span class="big">${r.n} items</span> <span class="sub">on your list · savings not listed</span>` :
       `<span class="big">~${kr(r.save)}</span> <span class="sub">off your list · ${r.n} items${r.save && r.save === best ? " · best" : ""}</span>`}
   </div>`).join("");
 }
@@ -248,14 +249,14 @@ function renderEdit() {
     <div class="panel"><h2>Stores</h2><p>Offers come from these stores, in this order.</p>
       ${s.stores.map((st, i) => `<div class="erow"><span class="chip ${st.chain}" style="flex:1">${esc(st.name)}</span>
         <button class="x" data-delstore="${i}" title="Remove store" aria-label="Remove store">×</button></div>`).join("")}
-      <div class="erow"><input id="storeQ" placeholder="Find a store: kvantum, fridhemsplan, södermalm…"><button class="btn" id="storeGo">Search</button></div>
+      <div class="erow"><input id="storeQ" placeholder="Find a store: kvantum, fridhemsplan, södermalm, lidl…"><button class="btn" id="storeGo">Search</button></div>
       <div class="stores-found" id="storesFound"></div>
     </div>
     <div class="panel"><h2>Never show in "other deals"</h2><p>Hidden from the weekly push's extras and from All deals (unless you untick "Hide skipped").</p>
       ${rows("skip")}
       <div class="erow"><input id="newSkip" placeholder="e.g. kattmat|hundmat"><button class="btn" id="addSkip">Add</button></div>
     </div>
-    <div class="panel"><label class="toggle"><input type="checkbox" id="memberSet" ${s.member ? "checked" : ""}> Include member prices (ICA Stammis, Willys Plus, Hemköp Klubb)</label></div>
+    <div class="panel"><label class="toggle"><input type="checkbox" id="memberSet" ${s.member ? "checked" : ""}> Include member prices (ICA Stammis, Willys Plus, Hemköp Klubb, Coop medlem, Lidl Plus)</label></div>
   </div></div>`;
 }
 

@@ -1,6 +1,6 @@
 # grocery-deals
 
-This week's offers at your ICA, Willys and Hemköp stores, matched against a standing shopping list. A desktop
+This week's offers at your ICA, Willys, Hemköp, Coop and Lidl stores, matched against a standing shopping list. A desktop
 app shows the live deals at any time, and a weekly push to your phone every Monday morning names the best
 store to go to. (`USEFULL_IDEAS.md` U1.)
 
@@ -19,7 +19,7 @@ own after 2 h without use.
   "Clear ticked". Saved in `trip.json`; entries whose offer has ended are flagged.
   **📱 Send to phone** pushes the not-yet-ticked list to your phone via ntfy, so you have it in the store
   without the laptop. (The app itself is laptop-only: it binds to 127.0.0.1.)
-- **Edit**: shopping list, skip list and stores (search any ICA/Willys/Hemköp by name or area). Saves
+- **Edit**: shopping list, skip list and stores (search any ICA/Willys/Hemköp/Coop by name or area, or "lidl"). Saves
   automatically to `settings.json`, which the weekly push reads too. Each line shows how many offers it
   matches as you type.
 - **Price history**: every fetch records the week's offers in `history.db`. From the second week on, cards
@@ -58,10 +58,16 @@ Swedish compounds: `kyckling` finds Kycklingbröstfilé, `bröd` finds Lantbröd
 - **ICA**: no API. Each store's page `ica.se/erbjudanden/<slug>/` embeds its offers as JS data
   (`weeklyOffers`); the store id *is* that slug (the URL needs the name part). The saving is computed:
   quantity × regular price − deal price. Store list: the JSON embedded in `ica.se/butiker/`.
-- Member prices (ICA Stammis / Willys Plus / Hemköp Klubb, free to join) are tagged; untick "member prices"
-  to hide them.
-- Not supported: Coop (its offers API `external.api.coop.se/dke/offers/` returned empty lists 2026-10-11),
-  Lidl.
+- **Coop**: the API its store pages use, `external.api.coop.se/dke/offers/<ledger no>?api-version=v3` (v1 returns
+  empty lists), with the subscription key coop.se embeds for browsers (`dkeKey`, read fresh each fetch). Store ids
+  are ledger account numbers. Coop gives no regular price, so its savings are unknown: matches show, but rank
+  after deals with a known saving and add 0 to the store total.
+- **Lidl**: food offers are national, so Lidl is one "store". The start page links the week's campaign pages;
+  only the deal pages (måndag–söndag, torsdag–söndag, Lidl Plus, superklipp, veckans frukt & grönt) are read,
+  since theme pages ("smaker från Italien") list plain products. Each product's data is JSON in
+  `data-grid-data`. Saving comes from the struck-out price or the "-20%" Lidl Plus badge.
+- Member prices (ICA Stammis / Willys Plus / Hemköp Klubb / Coop medlem / Lidl Plus, all free) are tagged;
+  untick "member prices" to hide them.
 - If a site changes its layout, that store's card shows the error and the others keep working.
 
 Tests: `python3 tests/test_grocery.py`.

@@ -5,7 +5,7 @@
   POST /api/settings            replace settings.json (validated in grocery.save_settings)
   POST /api/trip                replace trip.json (validated in grocery.save_trip)
   POST /api/trip/send           push the trip to your phone via ntfy
-  GET  /api/stores?q=WORD       store search across ICA, Willys, Hemköp
+  GET  /api/stores?q=WORD       store search across ICA, Willys, Hemköp, Coop, Lidl
 
 Binds to 127.0.0.1 only. Exits after IDLE_EXIT seconds without requests so it doesn't sit around draining battery;
 the launcher starts it again on demand.

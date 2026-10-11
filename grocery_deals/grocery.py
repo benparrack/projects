@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """grocery-deals: match this week's store offers against your shopping list.
 
-  grocery.py stores QUERY   find stores (ICA, Willys, Hemköp) by name/street/town, e.g. `stores kungsholmen`
+  grocery.py stores QUERY   find stores (ICA, Willys, Hemköp, Coop, Lidl) by name/street/town, e.g. `stores kungsholmen`
   grocery.py deals          print matches for your list at your stores (no push)
   grocery.py push           same, and send it to your phone via ntfy (the weekly timer runs this)
   grocery.py browse [WORD]  every offer at your stores, optionally filtered by WORD
@@ -14,6 +14,7 @@ import sqlite3
 import sys
 import time
 from datetime import date
+from html import unescape
 from pathlib import Path
 
 import requests
@@ -27,12 +28,13 @@ CACHE_TTL = 3 * 3600  # offers change weekly; 3 h keeps the app snappy without g
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0"}
 # Willys and Hemköp are both Axfood and share the same public site API.
 AXFOOD = {"willys": "https://www.willys.se", "hemkop": "https://www.hemkop.se"}
-CHAINS = [*AXFOOD, "ica"]
-MEMBER = {"willys": "Willys Plus", "hemkop": "Hemköp Klubb", "ica": "ICA Stammis"}
+CHAINS = [*AXFOOD, "ica", "coop", "lidl"]
+MEMBER = {"willys": "Willys Plus", "hemkop": "Hemköp Klubb", "ica": "ICA Stammis", "coop": "Coop medlem", "lidl": "Lidl Plus"}
+LIDL_STORE = {"chain": "lidl", "id": "sverige", "name": "Lidl", "where": "same offers in every Lidl"}
 
 
-def get(url):
-    r = requests.get(url, headers=UA, timeout=30)
+def get(url, headers=None):
+    r = requests.get(url, headers={**UA, **(headers or {})}, timeout=30)
     r.raise_for_status()
     return r
 
@@ -55,7 +57,19 @@ def ica_stores():
         yield {"chain": "ica", "id": slug, "name": name, "where": f"{street}, {city}"}
 
 
+def coop_key(name):
+    """Coop's API wants the subscription keys its own site hands every browser; read fresh in case they rotate."""
+    page = get("https://www.coop.se/handla/aktuella-erbjudanden/").text
+    return {"Ocp-Apim-Subscription-Key": re.search(rf'"{name}":"(\w+)"', page)[1]}
+
+
 def all_stores(chain):
+    if chain == "lidl":
+        return [LIDL_STORE]
+    if chain == "coop":
+        url = "https://proxy.api.coop.se/external/store/stores/map?conceptIds=12,6,95&invertFilter=true&api-version=v2"
+        return [{"chain": "coop", "id": s["ledgerAccountNumber"], "name": s["name"], "where": f"{s.get('address', '')}, {s.get('city', '')}"}
+                for s in get(url, coop_key("storeApiSubscriptionKey")).json()]
     if chain == "ica":
         return list(ica_stores())
     out = []
@@ -120,7 +134,77 @@ def ica_offers(slug):
     return out
 
 
+def coop_offers(store_id):
+    """Coop's offers API (the one its store pages use). It has no regular price, so savings are unknown (None)."""
+    url = f"https://external.api.coop.se/dke/offers/{store_id}?api-version=v3&clustered=true"
+    out = []
+    for o in get(url, coop_key("dkeKey")).json():
+        pi, c = o.get("priceInformation") or {}, o.get("content") or {}
+        price, qty = pi.get("discountValue"), pi.get("quantity") or 1
+        if price is None:  # "buy 3 pay for 2" on clothes etc.: no price to show or compare
+            continue
+        img = c.get("imageUrl") or ""
+        out.append({
+            "name": c.get("title") or "", "brand": c.get("brand") or "", "size": (c.get("amountInformation") or "").rstrip(". "),
+            "deal": f"{qty} för {kr(price)} kr" if qty > 1 else f"{kr(price)} kr/{pi.get('unit') or 'st'}",
+            "was": "", "save": None, "pct": None, "member": bool(pi.get("isMemberPrice")),
+            "until": (o.get("campaignEndDate") or "")[:10], "image": "https:" + img if img.startswith("//") else img,
+            "category": (o.get("categoryTeam") or {}).get("name") or "",
+        })
+    return out
+
+
+def kr(x):
+    return f"{x:.2f}".replace(".", ",").removesuffix(",00")
+
+
+def lidl_offers(_store_id):
+    """Lidl's food offers are national. The start page links the week's campaign pages (/c/<name>/a<id>); each
+    product on them carries its data as HTML-escaped JSON in data-grid-data."""
+    # shortcut: weekly-deal pages picked by slug (theme pages like "smaker-fran-italien" list plain products, not
+    # discounts); if Lidl renames them, offers drop to 0 and this list needs updating
+    deal_pages = r'href="(/c/(?:mandag|torsdag|lidl-plus-erbjudanden|superklipp|veckans-frukt)[^"]*/a\d+)"'
+    pages = sorted(set(re.findall(deal_pages, get("https://www.lidl.se/").text)))
+    now, out = time.time(), []
+    for page in pages:
+        for raw in re.findall(r'data-grid-data="([^"]*)"', get(f"https://www.lidl.se{page}").text):
+            d = json.loads(unescape(raw))
+            kf = d.get("keyfacts") or {}
+            # campaign pages also list next week's offers and non-food (clothes, tools)
+            if kf.get("analyticsCategory") not in ("Food", "F+V") or not d.get("storeStartDate", 0) <= now <= d.get("storeEndDate", 0):
+                continue
+            plus = (d.get("lidlPlus") or [{}])[0]
+            member = "price" not in (d.get("price") or {})  # Lidl Plus offers carry their price only in lidlPlus
+            pr = (plus.get("price") if member else d.get("price")) or {}
+            if pr.get("price") is None:
+                continue
+            price, was = pr["price"], pr.get("oldPrice") or (pr.get("discount") or {}).get("deletedPrice")
+            base = (pr.get("basePrice") or {}).get("text") or ""
+            hint = plus.get("highlightText") or ""  # "-20%" or "Kupong 2 för:"
+            qty = re.search(r"(\d+)\s*för", hint)
+            deal = f"{qty[1]} för {kr(price)} kr" if qty else f"{kr(price)} kr" + (base if base.startswith("/") else "")
+            if was and not qty and was > price:
+                save, pct = round(was - price, 2), (was - price) / was
+            elif m := re.fullmatch(r"-(\d+)%", hint.strip()):
+                pct = int(m[1]) / 100
+                save = round(price * pct / (1 - pct), 2)
+            else:
+                save = pct = None
+            out.append({
+                "name": d.get("title") or d.get("fullTitle") or "", "brand": (d.get("brand") or {}).get("name") or "",
+                "size": (pr.get("packaging") or {}).get("text") or "", "deal": deal,
+                "was": f"{kr(was)} kr" if was else "", "save": save, "pct": pct, "member": member,
+                "until": date.fromtimestamp(d["storeEndDate"]).isoformat(), "image": d.get("image") or "",
+                "category": re.sub(r" \(.*\)", "", ((kf.get("wonCategoryPrimary") or "").split("/") + ["", "", ""])[2]),  # ".../Mat/Kött & fågel/..."
+            })
+    return out
+
+
 def fetch_offers(chain, store_id):
+    if chain == "lidl":
+        return lidl_offers(store_id)
+    if chain == "coop":
+        return coop_offers(store_id)
     return ica_offers(store_id) if chain == "ica" else axfood_offers(chain, store_id)
 
 
@@ -285,7 +369,7 @@ def report(result):
     for s, found, extras in result:
         save = sum(o["save"] or 0 for _, o in found)
         totals.append((save, s["name"]))
-        lines.append(f"\n## {s['name']} (list: {len(found)}, ~{save:.0f} kr off)")
+        lines.append(f"\n## {s['name']} (list: {len(found)}" + (f", ~{save:.0f} kr off)" if save else ")"))
         # stores of one chain mostly share offers: later ones only list what the first didn't
         first, seen = shown.setdefault(s["chain"], (s["name"], set()))
         mine, other = [line(o) for _, o in found], [line(o) for _, o in extras]
