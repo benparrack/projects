@@ -17,6 +17,8 @@ function json(res, status, body, maxAge = 0) {
   res.end(JSON.stringify(body));
 }
 
+const ERRORS_PER_MIN = 30;
+
 function createApi({ db, accounts, daily = null, live = null, authMode, firebaseWebConfig, registry, now = () => Date.now() }) {
   // What the client needs to know per game: does it have a ladder, and what's its score.
   const games = Object.fromEntries(Object.entries(registry).filter(([, p]) => !(p.stats || {}).none)
@@ -136,9 +138,25 @@ function createApi({ db, accounts, daily = null, live = null, authMode, firebase
     }],
   ];
 
+  // Browser errors (public/errors.js) go to the server log so breakage on players' machines is visible.
+  // Untrusted input: size-capped, one line, rate-limited site-wide so it can't flood the log.
+  let errWindow = { at: 0, n: 0 };
+  async function clientError(req, res) {
+    let body = '';
+    for await (const chunk of req) { body += chunk; if (body.length > 4096) break; }
+    res.writeHead(204); res.end();
+    if (now() - errWindow.at > 60000) errWindow = { at: now(), n: 0 };
+    if (++errWindow.n > ERRORS_PER_MIN) return;
+    let e;
+    try { e = JSON.parse(body.slice(0, 4096)); } catch { return; }
+    const clean = (v, n) => String(v == null ? '' : v).replace(/[\x00-\x1f]+/g, ' ').slice(0, n);
+    console.error(`client error: ${clean(e.message, 300)} @ ${clean(e.source, 120)}:${clean(e.line, 8)} | page ${clean(e.page, 80)} | ${clean(e.ua, 120)}${e.stack ? ` | ${clean(e.stack, 600)}` : ''}`);
+  }
+
   return async function handleApi(req, res) {
     const pathname = req.url.split('?')[0];
     if (!pathname.startsWith('/api/')) return false;
+    if (pathname === '/api/client-error' && req.method === 'POST') { await clientError(req, res); return true; }
     if (req.method !== 'GET') { json(res, 405, { error: 'Method not allowed.' }); return true; }
     for (const [re, fn] of routes) {
       const m = re.exec(pathname);

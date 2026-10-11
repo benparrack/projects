@@ -71,5 +71,20 @@ function call(api, url) {
   assert.strictEqual(fr.body.frames.length, 8);
   assert.ok(!JSON.stringify(fr.body).includes('"u1"'));
   assert.strictEqual((await call(rapi, '/api/match/doesnotexist1/frames')).status, 404);
+  // Client error reports: 204, logged as one sanitized line, capped per minute.
+  const logged = [];
+  const origErr = console.error;
+  console.error = (m) => logged.push(m);
+  const post = (body) => new Promise((resolve) => {
+    const req = { url: '/api/client-error', method: 'POST', async *[Symbol.asyncIterator]() { yield body; } };
+    api(req, { writeHead(st) { this.status = st; }, end() { resolve(this.status); } });
+  });
+  assert.strictEqual(await post(JSON.stringify({ message: 'boom\nline2', source: '/hub.js', line: 12, page: '/' })), 204);
+  assert.strictEqual(await post('not json'), 204);
+  for (let i = 0; i < 40; i++) await post(JSON.stringify({ message: `e${i}` }));
+  await new Promise((r) => setTimeout(r, 10));
+  console.error = origErr;
+  assert.ok(logged[0].startsWith('client error: boom line2 @ /hub.js:12 | page /'), logged[0]);
+  assert.strictEqual(logged.length, 29, 'capped at 30 reports a minute (the bad-JSON one counts but logs nothing)');
   console.log('all api tests passed');
 })().catch((err) => { console.error(err); process.exit(1); });
