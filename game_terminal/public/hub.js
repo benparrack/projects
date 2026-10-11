@@ -80,6 +80,7 @@ const CATEGORIES = [
       { type: 'pool', label: '8 BALL POOL' },
       { type: 'darts', label: 'DARTS' },
       { type: 'cuppong', label: 'CUP PONG' },
+      { type: 'basketball', label: 'BASKETBALL' },
     ],
   },
   {
