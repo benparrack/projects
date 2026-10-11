@@ -1,0 +1,33 @@
+# One [[watch]] block per thing to watch. Fields:
+#   name   unique label (used in the push and in `watch.py check NAME`)
+#   url    page or API to fetch
+#   when   condition that triggers a push:
+#            "< 500" ">= 10" "== 0" "!= 3"   number pulled from the value ("1 299,90 kr" -> 1299.9)
+#            "contains I lager" / "!contains Slut"   case-insensitive text match
+#            "changed"   any change from the previous check (pushes on every change)
+#            "exists" / "missing"   whether the element/regex was found at all
+#   every  how often to check: 30m, 2h, 1d (default 1h; the timer ticks every 10 min)
+#   pick the value with at most one of json/css, optionally narrowed by regex:
+#     json   dotted path into a JSON response, list indexes as numbers: "data.items.0.price"
+#     css    CSS selector; the value is that element's text
+#     regex  regex over the css text (or the raw page if no css); group 1 if it has one
+#     (none) the whole page's text
+#   link     optional: URL the push opens when tapped (default: url)
+#   headers  optional: extra request headers, e.g. { Cookie = "..." }
+# Pushes only fire when a condition turns true, not on every check while it stays true.
+# Test a new watch with:  python3 watch.py check "NAME"
+
+[[watch]]
+name = "USD/SEK above 11"
+url = "https://api.frankfurter.app/latest?from=USD&to=SEK"
+json = "rates.SEK"
+when = "> 11"
+every = "6h"
+
+# Example HTML watch (product page; adjust selector after `check`):
+# [[watch]]
+# name = "Jacket under 1000 kr"
+# url = "https://www.example.se/product/123"
+# css = ".product-price"
+# when = "< 1000"
+# every = "2h"
