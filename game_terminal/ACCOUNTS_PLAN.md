@@ -126,13 +126,13 @@ call with the right placements. This is the long, careful part of the project.
 - [x] Block user (hides their chat, blocks friend requests and invites)
 
 ### Phase 4 — Chat & moderation
-- [ ] **Global chat** dock (collapsible side panel on the menu, CoC style): accounts only,
+- [x] **Global chat** dock (collapsible side panel on the menu, CoC style): accounts only,
       the last 100 messages, avatar + name + level badge, click a name → profile
-- [ ] In-room chat (all players in a room), party chat and friend DMs
-- [ ] Rate limit (e.g. 5 messages / 10s, slow mode when busy), max length, profanity
+- [x] In-room chat (all players in a room), party chat and friend DMs
+- [x] Rate limit (e.g. 5 messages / 10s, slow mode when busy), max length, profanity
       mask, link blocking, a new-account delay (must play 1 game before global chat)
-- [ ] Report message / report user → `reports/`
-- [ ] Admin view (`#/admin`, `role == 'admin'` only): the reports queue, mute/ban with a
+- [x] Report message / report user → `reports/`
+- [x] Admin view (`/admin`, `role == 'admin'` or `ADMIN_UIDS` only): the reports queue, mute/ban with a
       duration, delete message, reset stats, rename an offensive username
 
 ### Phase 5 — Competitive
@@ -223,6 +223,8 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 - Firebase project + credentials (see "What Ben has to do"). Until then the server runs on the
   in-memory backend + dev-auth locally; production keeps guest-only behaviour.
 
+- First moderator: once Firebase is live, sign in, then add your uid (Firebase console → Authentication) to a Render env var `ADMIN_UIDS` (comma-separated). That unlocks `/admin`; you can later set `role: 'admin'` on other users' docs.
+
 ## Progress log
 
 - 2026-10-11 — plan approved, /loop started on Phase 1.
@@ -236,3 +238,4 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 - 2026-10-11 — Phase 2: replay viewer `/replay/<id>` (mounts the game's own client read-only; step/scrub/autoplay/speed, keyboard). Known gap: frames carry no seat names, so boards show "(empty)" seats.
 - 2026-10-11 — Phase 2 done: `/settings` (sound/volume/reduce-motion/bot level, synced to the account; guests keep them locally; a reduce-motion setting also flips the games' `matchMedia` checks), rename, download-my-data JSON, and account deletion (typed-name confirm; removes user/stats/pairs/name claim + the Firebase Auth user, and turns the name into "deleted player" in other people's history and replays).
 - 2026-10-11 — Phase 3 done: `social/{uid}` friends/requests/blocks/recent players (server only, no uids sent to clients), live presence ("Playing X" with a JOIN button), room invites as JOIN toasts (rate-limited), in-memory parties (leader + up to 7; members follow the leader into rooms, 30s reconnect grace), friends drawer in the header, friend/block buttons and a "You vs them" head-to-head on profiles (`/api/h2h/:a/:b`), blocked list in Settings. Party chat was moved into Phase 4.
+- 2026-10-11 — Phase 4 done: global chat dock (left-edge tab; accounts post after 1 finished game, guests can read; persisted last 100), room chat under the roster (accounts-on only), party chat + friend DMs inside the friends drawer with unread badges and REPLY toasts. Server: 200-char limit, 5 msgs/10s, slow mode when busy, profanity mask, link blocking, mute/ban checks. Reports with chat context → `/admin` queue (delete message, mute, ban with socket kick, force rename, reset stats, dismiss/resolve, modlog). `test/chat.test.js`.

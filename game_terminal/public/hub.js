@@ -7,7 +7,9 @@ import { h, toast } from './ui.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
 import { renderReplay } from './replay.js';
-import { initFriends, setSignedIn, handleSocialState, handleSocialNotice } from './friends.js';
+import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, openConversation } from './friends.js';
+import { initChat, initGlobalDock, setDockAvailable, chatBox, reopenChats, handleChatHistory, handleChatMessage, handleChatDeleted, handleChatError } from './chat.js';
+import { renderAdmin, handleAdminData } from './admin.js';
 import { renderSettings, applyPrefs, currentPrefs, initPrefs, downloadJson } from './settings.js';
 import { openSignIn, openUsernameSetup, openTermsUpdate, renderAccountChip, openAvatarChange } from './account-ui.js';
 
@@ -187,6 +189,8 @@ function showScreen(name) {
   els.screenMenu.hidden = name !== 'menu';
   els.screenRoom.hidden = name !== 'room';
   els.screenPage.hidden = name !== 'page';
+  // Global chat lives on the menu and pages; rooms have their own chat. Accounts-off deploys have none.
+  setDockAvailable((name === 'menu' || name === 'page') && !!state.auth && state.auth.mode !== 'off');
 }
 
 function saveSession() {
@@ -318,6 +322,7 @@ function handleAccountState(p) {
   if (location.pathname === '/settings' && state.settingsKey !== settingsKey()) renderSettingsPage();
   // Profiles show friend buttons and head-to-head only for a signed-in viewer.
   if (location.pathname.startsWith('/u/') && (prev && prev.username) !== (p.user && p.user.username)) onRoute();
+  if (location.pathname === '/admin' && !!(prev && prev.admin) !== !!(p.user && p.user.admin)) onRoute();
   if (p.user && state.setup) {
     state.setup.close();
     state.setup = null;
@@ -356,6 +361,7 @@ function handleServerMessage(type, payload) {
       state.clientId = payload.clientId;
       els.menuNickname.textContent = payload.nickname;
       renderGameList();
+      reopenChats();
       if (state.pendingJoin) {
         replayPendingJoin();
       } else if (!state.currentRoom && !state.onPage) {
@@ -371,6 +377,9 @@ function handleServerMessage(type, payload) {
       els.roomCodeLabel.textContent = payload.isPublic ? `${payload.code} (public)` : payload.code;
       els.btnCopyLink.hidden = payload.isPublic;
       renderRoster(payload.roster);
+      // Chat needs accounts (to post, report and moderate), so accounts-off deploys have none.
+      document.getElementById('room-chat').replaceChildren(...(state.auth && state.auth.mode !== 'off'
+        ? [chatBox({ channel: 'room', title: 'Room chat', placeholder: 'Message the room', emptyText: 'Room chat. Say good luck!', className: 'chat-room' }).el] : []));
       showScreen('room');
       mountGame(payload.gameType, payload.stateSnapshot, payload.roster);
       break;
@@ -408,6 +417,12 @@ function handleServerMessage(type, payload) {
       handleSocialState(payload);
       break;
     }
+
+    case ServerMessage.CHAT_HISTORY: handleChatHistory(payload); break;
+    case ServerMessage.CHAT_MESSAGE: handleChatMessage(payload); break;
+    case ServerMessage.CHAT_DELETED: handleChatDeleted(payload); break;
+    case ServerMessage.CHAT_ERROR: handleChatError(payload); break;
+    case ServerMessage.ADMIN_DATA: handleAdminData(payload); break;
 
     case ServerMessage.SOCIAL_NOTICE: {
       handleSocialNotice(payload);
@@ -612,6 +627,7 @@ els.btnJoinCode.addEventListener('click', () => {
 function leaveRoom() {
   send(ClientMessage.ROOM_LEAVE, {});
   unmountGame();
+  document.getElementById('room-chat').replaceChildren();
   state.currentRoom = null;
   saveSession();
   if (location.pathname !== '/') history.replaceState(null, '', '/');
@@ -654,6 +670,12 @@ function route() {
   if (prof) {
     renderProfile(els.screenPage, prof[1], { gameLabel, me: state.account })
       .then((title) => { if (location.pathname === path) document.title = `${title} — Game Terminal`; });
+    showScreen('page');
+    return 'page';
+  }
+  if (path.replace(/\/$/, '') === '/admin') {
+    renderAdmin(els.screenPage, { send, account: state.account });
+    document.title = 'Moderation — Game Terminal';
     showScreen('page');
     return 'page';
   }
@@ -740,6 +762,16 @@ els.btnLeaveRoom.addEventListener('click', leaveRoom);
       send(ClientMessage.ROOM_JOIN, { code });
     },
   });
+  initChat({
+    send,
+    navigate,
+    openConversation,
+    signIn: () => openSignIn(state.auth),
+    signedIn: () => !!state.account,
+    isAdmin: () => !!(state.account && state.account.admin),
+    me: () => state.account && state.account.username,
+  });
+  initGlobalDock();
   state.auth = await initAuth();
   await state.auth.ready;
   state.auth.onChange(reconnectAs);

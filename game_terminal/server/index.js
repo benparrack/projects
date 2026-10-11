@@ -13,6 +13,8 @@ const { createResults } = require('./results');
 const { createApi } = require('./api');
 const { createSocial } = require('./social');
 const { Parties } = require('./party');
+const { createChat, toClient } = require('./chat');
+const { createModeration, isAdmin } = require('./moderation');
 
 const PORT = process.env.PORT || 3000;
 const MAX_PAYLOAD = 64 * 1024;
@@ -23,6 +25,8 @@ const accounts = createAccounts(db);
 const results = createResults({ db, registry: gameRegistry });
 const social = createSocial(db, accounts);
 const parties = new Parties();
+const chat = createChat(db);
+const moderation = createModeration(db, accounts, { chat });
 const handleApi = createApi({ db, accounts, authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
 console.log(`accounts: auth=${auth.mode} db=${db.backend}`);
 
@@ -71,6 +75,7 @@ function leaveCurrentRoom(session, clientId) {
   if (!room) return;
   roomManager.leaveRoom(room, clientId);
   session.roomCode = null;
+  if (!room.clients.size) chat.dropChannel(`room:${room.code}`);
   room.broadcast(makeEnvelope(ServerMessage.ROOM_PRESENCE, { roster: room.roster(), left: clientId }));
   if (session.uid) presenceChanged(session.uid);
 }
@@ -116,6 +121,62 @@ function presenceChanged(uid) {
 function notice(uid, payload) { for (const w of socketsOf(uid)) send(w, ServerMessage.SOCIAL_NOTICE, payload); }
 const me = (session) => ({ username: session.user.username, avatar: session.user.avatar });
 
+// ---- Chat (accounts post; anyone in a room reads its chat) ----
+const globalSubs = new Set(); // sockets with the global chat open
+
+// Resolve a client channel to its server key and a deliver(type, payloadFor(ws)) fan-out.
+async function chatTarget(session, channel, withName) {
+  if (channel === 'global') {
+    return { key: 'global', deliver: (type, p) => { for (const w of globalSubs) send(w, type, p(w)); } };
+  }
+  if (channel === 'room') {
+    const room = currentRoom(session);
+    if (!room) return { error: 'You\'re not in a room.' };
+    return { key: `room:${room.code}`, deliver: (type, p) => room.broadcast(makeEnvelope(type, p(null))) };
+  }
+  if (!session.uid || !session.user) return { error: 'Sign in to chat.' };
+  if (channel === 'party') {
+    const party = parties.get(session.uid);
+    if (!party) return { error: 'You\'re not in a party.' };
+    return { key: `party:${party.id}`, deliver: (type, p) => { for (const u of party.members) for (const w of socketsOf(u)) send(w, type, p(w)); } };
+  }
+  if (channel === 'dm') {
+    const other = await accounts.uidForUsername(String(withName || ''));
+    if (!other || !(await social.areFriends(session.uid, other))) return { error: 'You can only message friends.' };
+    if (await social.isBlocked(session.uid, other)) return { error: 'You can\'t message this player.' };
+    const otherName = (await accounts.getUser(other)).username;
+    const mine = session.uid;
+    return {
+      key: `dm:${results.pairKey(mine, other)}`,
+      // Each side sees the conversation filed under the other person's name.
+      deliver: (type, p) => {
+        for (const w of socketsOf(mine)) send(w, type, { ...p(w), with: otherName });
+        for (const w of socketsOf(other)) send(w, type, { ...p(w), with: session.user.username });
+      },
+      withName: otherName,
+    };
+  }
+  return { error: 'Unknown chat.' };
+}
+
+// Global chat needs one finished game first, so throwaway accounts can't spam it straight away.
+async function canPostGlobal(session) {
+  if (!session.uid || !session.user) return { ok: false, reason: 'signin' };
+  if (!session.playedOnce) session.playedOnce = (await db.list(`users/${session.uid}/matches`, { limit: 1 })).length > 0;
+  return session.playedOnce ? { ok: true } : { ok: false, reason: 'newAccount' };
+}
+
+// Refresh the cached user doc on every socket of uid (after a mute, rename, ...).
+function refreshSessions(uid, user) {
+  for (const w of socketsOf(uid)) {
+    const s2 = sessions.get(w);
+    if (!s2) continue;
+    s2.user = user;
+    if (s2.nickname !== user.username) s2.nickname = user.username;
+    sendAccountState(w, s2);
+  }
+}
+
 function goOnline(ws, uid) {
   if (!online.has(uid)) online.set(uid, new Set());
   online.get(uid).add(ws);
@@ -155,7 +216,7 @@ function ownAccount(user) {
 function sendAccountState(ws, session) {
   const user = session.user;
   send(ws, ServerMessage.ACCOUNT_STATE, {
-    user: user && user.username ? ownAccount(user) : null,
+    user: user && user.username ? { ...ownAccount(user), admin: isAdmin(session.uid, user) || undefined } : null,
     needsUsername: !!session.uid && !(user && user.username),
     needsTerms: !!(user && user.username && user.termsVersion !== TERMS_VERSION),
     suggested: session.suggestedName || null,
@@ -204,7 +265,7 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    const { type, payload } = envelope || {};
+    let { type, payload } = envelope || {};
 
     const preGreeting = type === ClientMessage.HELLO || (session.uid && type === ClientMessage.ACCOUNT_CLAIM);
     if (!preGreeting && !session.nickname) {
@@ -290,7 +351,9 @@ wss.on('connection', (ws) => {
         if (r) pushMany(r.before);
         for (const w of socketsOf(uid)) if (w !== ws) w.close(4001, 'account deleted');
         goOffline(ws, uid);
-        pushMany(await social.forget(uid));
+        const exFriends = await social.forget(uid);
+        pushMany(exFriends);
+        await chat.purgeUser(uid, exFriends.map((o) => `dm:${results.pairKey(uid, o)}`));
         await accounts.deleteAccount(uid);
         await auth.removeUser(uid).catch((err) => console.error('auth: removeUser failed', uid, err));
         session.uid = null;
@@ -369,6 +432,77 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case ClientMessage.CHAT_OPEN: {
+        payload = payload || {};
+        const channel = payload.channel;
+        const t = await chatTarget(session, channel, payload.with);
+        if (t.error) { send(ws, ServerMessage.CHAT_ERROR, { channel, with: payload.with, message: t.error }); return; }
+        if (channel === 'global') globalSubs.add(ws);
+        const gate = channel === 'global' ? await canPostGlobal(session) : { ok: !!(session.uid && session.user), reason: session.uid ? null : 'signin' };
+        const messages = (await chat.history(t.key)).map(toClient);
+        send(ws, ServerMessage.CHAT_HISTORY, { channel, with: t.withName, messages, canPost: gate.ok, reason: gate.reason || null });
+        break;
+      }
+
+      case ClientMessage.CHAT_CLOSE: {
+        globalSubs.delete(ws);
+        break;
+      }
+
+      case ClientMessage.CHAT_SEND: {
+        payload = payload || {};
+        const channel = payload.channel;
+        const fail = (message) => send(ws, ServerMessage.CHAT_ERROR, { channel, with: payload.with, message });
+        if (!session.uid || !session.user) return fail('Sign in to chat.');
+        if (channel === 'global' && !(await canPostGlobal(session)).ok) return fail('Finish one game to unlock global chat.');
+        const t = await chatTarget(session, channel, payload.with);
+        if (t.error) return fail(t.error);
+        const res = await chat.post(session.uid, isAdmin(session.uid, session.user) ? { ...session.user, role: 'admin' } : session.user, t.key, payload.text);
+        if (res.error) return fail(res.error);
+        if (!res.msg) return;
+        const msg = toClient(res.msg);
+        t.deliver(ServerMessage.CHAT_MESSAGE, () => ({ channel, msg }));
+        break;
+      }
+
+      case ClientMessage.CHAT_REPORT: {
+        if (!session.uid || !session.user) return;
+        const hit = await accounts.getUserByName(String((payload && payload.username) || ''));
+        const res = await chat.report({ uid: session.uid, username: session.user.username }, hit && { uid: hit.uid, username: hit.user.username }, payload || {});
+        send(ws, ServerMessage.SOCIAL_NOTICE, res.error ? { kind: 'error', message: res.error } : { kind: 'ok', message: res.ok });
+        break;
+      }
+
+      case ClientMessage.ADMIN_REPORTS:
+      case ClientMessage.ADMIN_LOOKUP:
+      case ClientMessage.ADMIN_ACTION: {
+        if (!isAdmin(session.uid, session.user)) { send(ws, ServerMessage.ADMIN_DATA, { error: 'Admins only.' }); return; }
+        const p = payload || {};
+        if (type === ClientMessage.ADMIN_REPORTS) {
+          send(ws, ServerMessage.ADMIN_DATA, { reports: await moderation.reports(p.status === 'closed' ? 'resolved' : 'open'), status: p.status || 'open' });
+          return;
+        }
+        if (type === ClientMessage.ADMIN_LOOKUP) {
+          const user = await moderation.lookup(String(p.username || ''));
+          send(ws, ServerMessage.ADMIN_DATA, user ? { user } : { error: 'No such user.' });
+          return;
+        }
+        const res = await moderation.act({ uid: session.uid, username: session.user.username }, p);
+        if (res.error) { send(ws, ServerMessage.ADMIN_DATA, { error: res.error }); return; }
+        if (res.deleted) for (const w of wss.clients) send(w, ServerMessage.CHAT_DELETED, { id: res.deleted });
+        if (res.uid && res.user) {
+          if (p.action === 'ban') {
+            for (const w of socketsOf(res.uid)) {
+              send(w, ServerMessage.ACCOUNT_ERROR, { for: 'auth', banned: true, message: `This account is suspended until ${new Date(res.user.bannedUntil).toUTCString()}.` });
+              w.close(4003, 'banned');
+            }
+          } else refreshSessions(res.uid, res.user);
+          if (res.renamed) { social.forgetProfile(res.uid); presenceChanged(res.uid); }
+        }
+        send(ws, ServerMessage.ADMIN_DATA, { message: res.ok, user: res.user ? await moderation.lookup(res.user.username) : undefined });
+        break;
+      }
+
       case ClientMessage.ROOM_CREATE: {
         const gameType = payload && payload.gameType;
         const plugin = roomManager.getPlugin(gameType);
@@ -429,6 +563,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    globalSubs.delete(ws);
     leaveCurrentRoom(session, session.clientId);
     if (session.uid) goOffline(ws, session.uid);
   });

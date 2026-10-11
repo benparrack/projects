@@ -3,11 +3,13 @@
 import { ClientMessage } from './protocol.js';
 import { h, toast, timeAgo } from './ui.js';
 import { avatarEl } from './avatars.js';
+import { chatBox, unreadCount, onUnread, refreshBlocked, openReport } from './chat.js';
 
 let social = null;
 let ctx = null; // { send, gameLabel, currentRoom(), join(code), navigate(href) }
 const subs = new Set();
 const els = {};
+let convo = null; // { kind: 'dm'|'party', name? } while a conversation is open in the drawer
 
 const send = (type, payload = {}) => ctx.send(type, payload);
 const sameName = (a, b) => a && b && a.toLowerCase() === b.toLowerCase();
@@ -24,6 +26,7 @@ export function initFriends(options) {
   document.body.append(els.drawer);
   els.btn.setAttribute('aria-controls', 'friends-drawer');
   els.btn.addEventListener('click', () => toggle());
+  onUnread(() => { updateBadge(); if (!els.drawer.hidden && !convo) render(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !els.drawer.hidden && !document.querySelector('.modal-backdrop')) { toggle(false); els.btn.focus(); } });
   document.addEventListener('mousedown', (e) => {
     if (!els.drawer.hidden && !els.drawer.contains(e.target) && !els.btn.contains(e.target) && !e.target.closest('#toast-root, .modal-backdrop')) toggle(false);
@@ -33,7 +36,25 @@ export function initFriends(options) {
 function toggle(open = els.drawer.hidden) {
   els.drawer.hidden = !open;
   els.btn.setAttribute('aria-expanded', String(open));
-  if (open) { render(); els.drawer.focus(); }
+  if (open) { render(); els.drawer.focus(); } else convo = null;
+}
+
+// Open the drawer on a DM (kind 'dm', name) or the party chat (kind 'party').
+export function openConversation(kind, name) {
+  convo = { kind, name };
+  if (els.drawer.hidden) toggle(true); else render();
+}
+
+function totalUnread() {
+  if (!social) return 0;
+  return unreadCount('party') + social.friends.reduce((n, f) => n + unreadCount(`dm|${f.username.toLowerCase()}`), 0);
+}
+
+function updateBadge() {
+  if (!social) return;
+  const n = social.incoming.length + totalUnread();
+  els.badge.hidden = !n;
+  els.badge.textContent = n > 99 ? '99+' : n;
 }
 export const openFriends = () => toggle(true);
 
@@ -46,10 +67,11 @@ export function setSignedIn(on) {
 export function getSocial() { return social; }
 
 export function handleSocialState(p) {
+  const blockedBefore = social ? social.blocked.map((b) => b.username).join() : '';
   social = p;
   const pending = p.incoming.length;
-  els.badge.hidden = !pending;
-  els.badge.textContent = pending;
+  updateBadge();
+  if (p.blocked.map((b) => b.username).join() !== blockedBefore) refreshBlocked();
   const online = p.friends.filter((f) => f.online).length;
   els.btn.querySelector('.btn-friends-count').textContent = online ? ` ${online}` : '';
   els.btn.setAttribute('aria-label', `Friends: ${online} online${pending ? `, ${pending} request${pending > 1 ? 's' : ''}` : ''}`);
@@ -115,10 +137,13 @@ function friendRow(f) {
   let primary = null;
   if (f.playing && (!room || room.code !== f.playing.code)) primary = h('button.btn-sm', { type: 'button', onclick: () => { toggle(false); ctx.join(f.playing.code); } }, 'JOIN');
   else if (room && f.online && !(f.playing && f.playing.code === room.code)) primary = h('button.btn-sm', { type: 'button', onclick: () => send(ClientMessage.ROOM_INVITE, { username: f.username }) }, 'INVITE');
+  const dms = unreadCount(`dm|${f.username.toLowerCase()}`);
   return h('li.fr-row',
     avatarEl(f.avatar, 36),
     h('div.fr-id', nameLink(f.username), statusOf(f)),
-    h('div.fr-actions', primary, menu([
+    h('div.fr-actions', primary,
+      h(`button.fr-msg${dms ? '.has-unread' : ''}`, { type: 'button', title: 'Message', 'aria-label': `Message ${f.username}${dms ? ` (${dms} unread)` : ''}`, onclick: () => openConversation('dm', f.username) }, '✉', dms ? h('span.fr-unread', dms) : null),
+      menu([
       ['View profile', () => { toggle(false); ctx.navigate(`/u/${encodeURIComponent(f.username)}`); }],
       ...(canParty ? [['Invite to party', () => send(ClientMessage.PARTY_INVITE, { username: f.username })]] : []),
       ['Remove friend', () => send(ClientMessage.FRIEND_REMOVE, { username: f.username }), '.danger'],
@@ -130,8 +155,34 @@ function section(title, count, body) {
   return h('section.fr-section', h('h3.fr-title', title, count != null ? h('span.muted', ` (${count})`) : null), body);
 }
 
+function renderConvo() {
+  const friend = convo.kind === 'dm' && social.friends.find((f) => sameName(f.username, convo.name));
+  if ((convo.kind === 'dm' && !friend) || (convo.kind === 'party' && !social.party)) { convo = null; render(); return; }
+  const key = convo.kind === 'dm' ? `dm|${friend.username.toLowerCase()}` : 'party';
+  const status = friend ? statusOf(friend) : h('span.fr-status', `${social.party.members.length} members`);
+  const head = h('div.convo-head',
+    h('button.btn-sm.btn-ghost', { type: 'button', 'aria-label': 'Back to friends', onclick: () => { convo = null; render(); } }, '←'),
+    friend ? avatarEl(friend.avatar, 28) : null,
+    h('div.fr-id', friend ? nameLink(friend.username) : h('span.fr-name', 'Party chat'), status));
+  // Keep the same box across SOCIAL_STATE refreshes so history and scroll survive; just update the head.
+  if (els.list.dataset.convo === key && els.convoBox && els.convoBox.el.isConnected) {
+    els.list.firstChild.replaceWith(head);
+    return;
+  }
+  els.convoBox = chatBox(friend
+    ? { channel: 'dm', with: friend.username, title: `Messages with ${friend.username}`, placeholder: `Message ${friend.username}`, emptyText: `This is the start of your messages with ${friend.username}.`, className: 'chat-convo' }
+    : { channel: 'party', title: 'Party chat', placeholder: 'Message your party', emptyText: 'Party chat: only your party sees this.', className: 'chat-convo' });
+  els.list.dataset.convo = key;
+  els.list.classList.add('is-convo');
+  els.list.replaceChildren(head, els.convoBox.el);
+  setTimeout(() => els.convoBox.focus(), 60);
+}
+
 function render() {
   if (!social) { els.list.replaceChildren(h('p.muted.fr-empty', 'Loading…')); return; }
+  if (convo) { renderConvo(); return; }
+  delete els.list.dataset.convo;
+  els.list.classList.remove('is-convo');
   const input = h('input', { type: 'text', placeholder: 'Username', maxLength: 16, autocomplete: 'off', spellcheck: false, 'aria-label': 'Username to add' });
   const add = h('form.fr-add', { onsubmit: (e) => {
     e.preventDefault();
@@ -150,7 +201,9 @@ function render() {
         h('div.fr-id', nameLink(m.username), h(`span.fr-status${m.online ? '.on' : ''}`, m.leader ? '★ Leader' : m.online ? '● Online' : 'Reconnecting…')),
         party.leader && !m.leader ? h('button.btn-sm.btn-ghost', { type: 'button', 'aria-label': `Remove ${m.username} from party`, onclick: () => send(ClientMessage.PARTY_KICK, { username: m.username }) }, 'KICK') : null))),
       h('p.fr-hint', party.leader ? 'Your party follows you into any room you join.' : 'You\'ll follow the leader into their rooms.'),
-      h('button.btn-sm.btn-ghost', { type: 'button', onclick: () => send(ClientMessage.PARTY_LEAVE) }, party.members.length > 1 ? 'LEAVE PARTY' : 'CANCEL PARTY'))));
+      h('div.fr-party-btns',
+        party.members.length > 1 ? h('button.btn-sm', { type: 'button', onclick: () => openConversation('party') }, 'PARTY CHAT', unreadCount('party') ? h('span.fr-unread', unreadCount('party')) : null) : null,
+        h('button.btn-sm.btn-ghost', { type: 'button', onclick: () => send(ClientMessage.PARTY_LEAVE) }, party.members.length > 1 ? 'LEAVE PARTY' : 'CANCEL PARTY')))));
   }
   if (social.incoming.length || social.outgoing.length) {
     parts.push(section('REQUESTS', social.incoming.length || null, h('ul.fr-list',
@@ -190,7 +243,10 @@ export function relationButtons(username) {
       : has(social.incoming) ? btn('ACCEPT FRIEND REQUEST', ClientMessage.FRIEND_ACCEPT)
         : has(social.outgoing) ? btn('CANCEL REQUEST', ClientMessage.FRIEND_REMOVE, {}, '.btn-ghost')
           : btn('+ ADD FRIEND', ClientMessage.FRIEND_REQUEST);
-    box.replaceChildren(main, btn('BLOCK', ClientMessage.USER_BLOCK, { on: true }, '.btn-ghost.danger'));
+    box.replaceChildren(main,
+      has(social.friends) ? h('button.btn-sm', { type: 'button', onclick: () => openConversation('dm', username) }, 'MESSAGE') : null,
+      btn('BLOCK', ClientMessage.USER_BLOCK, { on: true }, '.btn-ghost.danger'),
+      h('button.btn-sm.btn-ghost', { type: 'button', onclick: () => openReport(username) }, 'REPORT'));
   };
   subs.add(draw);
   draw();

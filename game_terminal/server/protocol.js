@@ -23,6 +23,14 @@ const ClientMessage = {
   PARTY_ACCEPT: 'party.accept', // { id }
   PARTY_LEAVE: 'party.leave',
   PARTY_KICK: 'party.kick', // { username }
+  // Chat. channel: 'global' | 'room' | 'party' | 'dm' (dm needs `with`: the friend's username).
+  CHAT_SEND: 'chat.send', // { channel, with?, text }
+  CHAT_OPEN: 'chat.open', // { channel, with? } -> CHAT_HISTORY; 'global' also subscribes to new messages
+  CHAT_CLOSE: 'chat.close', // { channel: 'global' } unsubscribe
+  CHAT_REPORT: 'chat.report', // { username, messageId?, reason? }
+  ADMIN_REPORTS: 'admin.reports', // { status? } admins only -> ADMIN_DATA
+  ADMIN_LOOKUP: 'admin.lookup', // { username } -> ADMIN_DATA { user }
+  ADMIN_ACTION: 'admin.action', // { action: 'mute'|'unmute'|'ban'|'unban'|'resetStats'|'rename'|'dismiss'|'resolve'|'deleteMessage', username?, minutes?, reportId?, messageId?, note? }
 };
 
 const ServerMessage = {
@@ -38,6 +46,11 @@ const ServerMessage = {
   ACCOUNT_DELETED: 'account.deleted', // {} — the account is gone; client signs out
   SOCIAL_STATE: 'social.state', // { friends, incoming, outgoing, blocked, recent, party } — accounts only
   SOCIAL_NOTICE: 'social.notice', // { kind: 'request'|'accepted'|'invite'|'party'|'follow'|'ok'|'error', from?, message?, gameType?, code?, id? }
+  CHAT_MESSAGE: 'chat.message', // { channel, with?, msg: { id, at, from: { username, avatar, level, role? }, text } }
+  CHAT_HISTORY: 'chat.history', // { channel, with?, messages, canPost, reason? }
+  CHAT_DELETED: 'chat.deleted', // { id }
+  CHAT_ERROR: 'chat.error', // { channel, with?, message }
+  ADMIN_DATA: 'admin.data', // { reports? , user?, message? , error? }
   RESULT_RECORDED: 'result.recorded', // { summary, saved } — sent to each human in a finished match
 };
 

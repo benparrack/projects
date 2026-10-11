@@ -57,7 +57,8 @@ function createAccounts(db) {
   }
 
   // First-time setup or a rename. Returns { user } or { error }.
-  async function claimUsername(uid, { username, avatar, acceptTerms }, now = Date.now()) {
+  // force: an admin rename (skips the cooldown and doesn't start a new one for the user).
+  async function claimUsername(uid, { username, avatar, acceptTerms, force }, now = Date.now()) {
     const err = validateUsername(username);
     if (err) return { error: err };
     const name = String(username).trim();
@@ -70,7 +71,7 @@ function createAccounts(db) {
       await db.merge(`users/${uid}`, { username: name, ...(avatar ? { avatar } : {}) });
       return { user: await getUser(uid) };
     }
-    if (existing && existing.renamedAt && now - existing.renamedAt < RENAME_COOLDOWN_MS) {
+    if (!force && existing && existing.renamedAt && now - existing.renamedAt < RENAME_COOLDOWN_MS) {
       const days = Math.ceil((RENAME_COOLDOWN_MS - (now - existing.renamedAt)) / 86400000);
       return { error: `You can change your username again in ${days} day${days === 1 ? '' : 's'}.` };
     }
@@ -78,7 +79,7 @@ function createAccounts(db) {
     if (!claimed) return { error: 'That username is taken.' };
     if (existing) {
       await db.del(`usernames/${existing.usernameLower}`);
-      await db.merge(`users/${uid}`, { username: name, usernameLower: lower, renamedAt: now, ...(avatar ? { avatar } : {}) });
+      await db.merge(`users/${uid}`, { username: name, usernameLower: lower, renamedAt: force ? null : now, ...(avatar ? { avatar } : {}) });
     } else {
       await db.set(`users/${uid}`, {
         username: name,
