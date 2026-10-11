@@ -115,13 +115,17 @@ function resetBoard(st) {
   st.mustContinueFrom = null;
   st.winner = null;
   st.lastMove = null;
+  st.moves = []; // replay: one [fr, fc, tr, tc] per leg (a multi-jump is several legs)
+  st.reported = false;
 }
 
 // Applies an already-validated move (from a human or a bot) — mutates st in place. Shared by both
 // paths so bot moves go through exactly the same rules (multi-jump chaining, kinging, win check)
 // as a human's, rather than a separately-maintained copy.
-function applyCheckersMove(st, seatColor, match) {
+function applyCheckersMove(room, seatColor, match) {
+  const st = room.state;
   const { from, to } = match;
+  st.moves.push([from.r, from.c, to.r, to.c]);
   const piece = st.board[from.r][from.c];
   st.board[from.r][from.c] = null;
   if (match.isCapture) st.board[match.capture.r][match.capture.c] = null;
@@ -157,6 +161,7 @@ function applyCheckersMove(st, seatColor, match) {
     if (oppMoves.length === 0) {
       st.phase = 'game_over';
       st.winner = seatColor;
+      reportDuel(room, ['red', 'black'], seatColor, { replay: st.moves });
     }
   }
   return continueTurn;
@@ -164,6 +169,7 @@ function applyCheckersMove(st, seatColor, match) {
 
 const { think } = require('./ai');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel, frameOf } = require('./boardResult');
 
 const BOT = 'BOT';
 const BOT_THINK_MS_MIN = 150;
@@ -197,7 +203,7 @@ function maybeScheduleBotMove(room, legDelay) {
       const [from, to] = path || [];
       let match = from && to && legs.find((m) => m.from.r === from.r && m.from.c === from.c && m.to.r === to.r && m.to.c === to.c);
       if (!match) { match = legs[Math.floor(Math.random() * legs.length)]; path = null; }
-      const cont = applyCheckersMove(st3, color, match);
+      const cont = applyCheckersMove(room, color, match);
       room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'checkers', data: { kind: 'state', ...buildPublicState(room) } } });
       if (cont && path && path.length > 2) setTimeout(() => playLegs(path.slice(1)), 450);
       else maybeScheduleBotMove(room, cont ? 450 : 0);
@@ -219,6 +225,8 @@ module.exports = {
       mustContinueFrom: null,
       winner: null,
       lastMove: null,
+      moves: [],
+      reported: false,
     };
   },
 
@@ -229,6 +237,24 @@ module.exports = {
 
   serializeSnapshot(room) {
     return buildPublicState(room);
+  },
+
+  stats: { rated: true },
+
+  // Re-plays the reported legs on a fresh board through applyCheckersMove; one spectator
+  // snapshot per position.
+  replayFrames(replay) {
+    const room = { state: module.exports.createInitialState() };
+    room.state.phase = 'playing';
+    const frames = [frameOf(buildPublicState(room))];
+    for (const [fr, fc, tr, tc] of replay) {
+      const st = room.state;
+      const match = legalLegs(st, st.turn).find((m) => m.from.r === fr && m.from.c === fc && m.to.r === tr && m.to.c === tc);
+      if (!match) break;
+      applyCheckersMove(room, st.turn, match);
+      frames.push(frameOf(buildPublicState(room)));
+    }
+    return frames;
   },
 
   onLeave(room, client) {
@@ -344,7 +370,7 @@ module.exports = {
       );
       if (!match) return reject();
 
-      applyCheckersMove(st, seatColor, match);
+      applyCheckersMove(room, seatColor, match);
       broadcastState(room, ctx);
       maybeScheduleBotMove(room);
     }

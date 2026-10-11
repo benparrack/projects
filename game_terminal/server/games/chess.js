@@ -399,6 +399,7 @@ function resetBoard(st) {
   st.winner = null;
   st.winReason = null;
   st.moveHistory = [];
+  st.reported = false;
   st.halfmove = 0;
   st.gameId = (st.gameId || 0) + 1;
   st.positions = [snapshotPosition(st)];
@@ -411,7 +412,8 @@ function resetBoard(st) {
 // Applies an already-validated move (from a human or a bot) — mutates st in place (board, turn,
 // move history, check/game-over detection). Shared by both paths so a bot's move goes through
 // exactly the same post-move bookkeeping as a human's.
-function applyChessMove(st, seatColor, match, promotionChoice) {
+function applyChessMove(room, seatColor, match, promotionChoice) {
+  const st = room.state;
   const { from, to } = match;
   const movingPiece = st.board[from.r][from.c];
   const capturedPiece = match.enPassant ? st.board[match.from.r][match.to.c] : st.board[to.r][to.c];
@@ -439,13 +441,14 @@ function applyChessMove(st, seatColor, match, promotionChoice) {
   st.inCheck = inCheck ? st.turn : null;
 
   if (nextLegal.length === 0) {
-    endGame(st, inCheck ? seatColor : 'draw', inCheck ? 'checkmate' : 'stalemate');
+    endGame(room, inCheck ? seatColor : 'draw', inCheck ? 'checkmate' : 'stalemate');
   }
 }
 
 // --- Game over + post-game review ---------------------------------------------------------------
 
-function endGame(st, winner, reason) {
+function endGame(room, winner, reason) {
+  const st = room.state;
   st.phase = 'game_over';
   st.winner = winner;
   st.winReason = reason;
@@ -462,6 +465,9 @@ function endGame(st, winner, reason) {
     running: false,
     subscribers: new Set(),
   };
+  // Replay = UCI strings ('e2e4', 'e7e8q'); every game starts from the standard position.
+  const replay = st.moveHistory.map((m) => sqName(m.from.r, m.from.c) + sqName(m.to.r, m.to.c) + (m.promotion ? FEN_LETTER[m.promotion] : ''));
+  reportDuel(room, ['white', 'black'], winner, { replay });
 }
 
 // A new game is starting: the previous game's review goes away (clients leave review mode when
@@ -537,6 +543,7 @@ async function runAnalysis(room, game) {
 
 const { think } = require('./ai');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel, frameOf } = require('./boardResult');
 
 const BOT = 'BOT';
 const BOT_THINK_MS_MIN = 100;
@@ -558,7 +565,7 @@ function maybeScheduleBotMove(room) {
     if (st2.clocks) {
       applyClockElapsed(st2);
       if (st2.clocks[color] <= 0) {
-        endGame(st2, opponent(color), 'timeout');
+        endGame(room, opponent(color), 'timeout');
         room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
         return;
       }
@@ -577,7 +584,7 @@ function maybeScheduleBotMove(room) {
       if (st3.clocks) {
         applyClockElapsed(st3);
         if (st3.clocks[color] <= 0) {
-          endGame(st3, opponent(color), 'timeout');
+          endGame(room, opponent(color), 'timeout');
           room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
           return;
         }
@@ -585,7 +592,7 @@ function maybeScheduleBotMove(room) {
       let match = best && legalMoves.find((m) => m.from.r === best.from.r && m.from.c === best.from.c && m.to.r === best.to.r && m.to.c === best.to.c);
       if (!match) match = legalMoves[Math.floor(Math.random() * legalMoves.length)];
       const promotionChoice = match.promotion ? (best && best.promotion) || 'queen' : null;
-      applyChessMove(st3, color, match, promotionChoice);
+      applyChessMove(room, color, match, promotionChoice);
       room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'chess', data: { kind: 'state', ...buildPublicState(room) } } });
       maybeScheduleBotMove(room);
     };
@@ -613,7 +620,7 @@ module.exports = {
     if (st.phase !== 'playing' || !st.clocks) return;
     applyClockElapsed(st);
     if (st.clocks[st.turn] <= 0) {
-      endGame(st, opponent(st.turn), 'timeout');
+      endGame(room, opponent(st.turn), 'timeout');
     }
     broadcastState(room, ctx);
   },
@@ -627,6 +634,29 @@ module.exports = {
 
   serializeSnapshot(room) {
     return buildPublicState(room);
+  },
+
+  stats: { rated: true },
+
+  // Re-plays a reported UCI move list on a fresh board through the real move path; one spectator
+  // snapshot per position (legalMoves dropped — spectators can't move, and it keeps frames small).
+  replayFrames(replay) {
+    const PROMO = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
+    const sqOf = (s) => ({ r: 8 - Number(s[1]), c: s.charCodeAt(0) - 97 });
+    const room = { state: module.exports.createInitialState() };
+    room.state.phase = 'playing';
+    const frame = () => frameOf({ ...buildPublicState(room), legalMoves: [] });
+    const frames = [frame()];
+    for (const uci of replay) {
+      const st = room.state;
+      const from = sqOf(uci.slice(0, 2));
+      const to = sqOf(uci.slice(2, 4));
+      const match = getLegalMoves(st.board, st.turn, st).find((m) => m.from.r === from.r && m.from.c === from.c && m.to.r === to.r && m.to.c === to.c);
+      if (!match) break;
+      applyChessMove(room, st.turn, match, match.promotion ? PROMO[uci[4]] || 'queen' : null);
+      frames.push(frame());
+    }
+    return frames;
   },
 
   onLeave(room, client) {
@@ -769,7 +799,7 @@ module.exports = {
       if (st.phase !== 'playing') return;
       const seatColor = st.players.white === ctx.senderId ? 'white' : st.players.black === ctx.senderId ? 'black' : null;
       if (!seatColor) return;
-      endGame(st, opponent(seatColor), 'resignation');
+      endGame(room, opponent(seatColor), 'resignation');
       broadcastState(room, ctx);
       return;
     }
@@ -782,7 +812,7 @@ module.exports = {
       if (st.clocks) {
         applyClockElapsed(st);
         if (st.clocks[seatColor] <= 0) {
-          endGame(st, opponent(seatColor), 'timeout');
+          endGame(room, opponent(seatColor), 'timeout');
           broadcastState(room, ctx);
           return;
         }
@@ -800,7 +830,7 @@ module.exports = {
         promotionChoice = PROMOTION_TYPES.includes(data.promotion) ? data.promotion : 'queen';
       }
 
-      applyChessMove(st, seatColor, match, promotionChoice);
+      applyChessMove(room, seatColor, match, promotionChoice);
       broadcastState(room, ctx);
       maybeScheduleBotMove(room);
     }

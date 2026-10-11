@@ -96,6 +96,8 @@ function spawnSnake(clientId, nickname, st) {
     targetAngle: angle,
     boosting: false,
     length: START_LENGTH,
+    peak: START_LENGTH,
+    bornAt: Date.now(),
     points,
     respawnAt: null,
   };
@@ -112,6 +114,8 @@ function respawn(snake, st) {
   // respawn, a player still holding boost across a death would have boost silently stop working
   // until they released and re-pressed it, since from the client's perspective nothing changed.
   snake.length = fresh.length;
+  snake.peak = fresh.peak;
+  snake.bornAt = fresh.bornAt;
   snake.points = fresh.points;
   snake.respawnAt = null;
 }
@@ -147,8 +151,17 @@ function stepSnake(snake) {
   trimToLength(snake);
 }
 
-function killSnake(st, snake) {
+// Open-ended arena, so one human life is a single-player "match" (score = peak length). Short or
+// tiny lives aren't worth a database write; bots never report.
+const REPORT_MIN_LIFE_MS = 30000;
+const REPORT_MIN_PEAK = START_LENGTH * 2;
+
+function killSnake(room, snake) {
+  const st = room.state;
   snake.alive = false;
+  if (!snake.bot && (Date.now() - snake.bornAt >= REPORT_MIN_LIFE_MS || snake.peak >= REPORT_MIN_PEAK)) {
+    report(room, { placements: [[snake.clientId]], scores: { [snake.clientId]: Math.round(snake.peak) } });
+  }
   snake.respawnAt = Date.now() + RESPAWN_MS;
   for (let i = 0; i < snake.points.length; i += DEATH_FOOD_STRIDE) {
     const p = snake.points[i];
@@ -167,6 +180,7 @@ function killSnake(st, snake) {
 // (snakes/food render at a several-unit radius) and shrinking the numbers cuts payload size,
 // which matters since this broadcasts to every client 20x/second.
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+const { report } = require('../report');
 
 // --- CPU snakes. Every tick a bot scores ~11 candidate headings around its current one: each is
 // simulated a short way ahead against walls and nearby bodies (deadly = huge penalty), then the
@@ -311,6 +325,7 @@ function broadcastTick(room, ctx) {
 
 module.exports = {
   type: 'slither',
+  stats: { rated: false, score: { label: 'LENGTH', better: 'high', format: 'int' } },
   tickIntervalMs: TICK_MS,
 
   createInitialState() {
@@ -383,7 +398,7 @@ module.exports = {
       stepSnake(snake);
       const head = snake.points[0];
       if (head.x < 0 || head.x > st.arenaSize || head.y < 0 || head.y > st.arenaSize) {
-        killSnake(st, snake);
+        killSnake(room, snake);
       }
     }
 
@@ -409,7 +424,7 @@ module.exports = {
         }
       }
 
-      if (died) killSnake(st, a);
+      if (died) killSnake(room, a);
     }
 
     for (const snake of st.snakes.values()) {
@@ -422,6 +437,7 @@ module.exports = {
         const dy = head.y - f.y;
         if (dx * dx + dy * dy < eatDistSq) {
           snake.length = Math.min(MAX_LENGTH, snake.length + f.value);
+          if (snake.length > snake.peak) snake.peak = snake.length;
           st.food.splice(i, 1);
           st.tickFoodRemoved.push(f.id);
         }

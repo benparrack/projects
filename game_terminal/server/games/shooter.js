@@ -146,6 +146,7 @@ function rayIntersectsSphere(ox, oy, oz, dx, dy, dz, cx, cy, cz, radius) {
 // once the enemy comes into view, turn speed, aim wobble, weapon choice and movement tricks.
 const { setBotLevel, botLevelOf } = require('./ai/levels');
 const BOT = 'BOT';
+const { report } = require('../report');
 const SHOOTER_BOT = {
   easy: { react: 750, turn: 2.6, err: 0.085, head: 0, weapons: false, strafe: 0.35, jump: 0, slide: 0 },
   medium: { react: 480, turn: 4.2, err: 0.05, head: 0, weapons: true, strafe: 0.7, jump: 0, slide: 0 },
@@ -333,6 +334,19 @@ function beginRound(st) {
   st.roundEndsAt = null;
 }
 
+// Match over (first to WINS_NEEDED rounds, or a forfeit): winner first. loserId is passed for a
+// forfeit since the leaver's seat is already cleared. Two bots dueling records nothing.
+function reportMatch(room, winSeat, loserId) {
+  const st = room.state;
+  const winner = st.seats[winSeat];
+  const loser = loserId || st.seats[otherSeat(winSeat)];
+  if (!winner || !loser || (winner === BOT && loser === BOT)) return;
+  const res = { placements: [[winner], [loser]] };
+  const botSeat = winner === BOT ? winSeat : loser === BOT ? otherSeat(winSeat) : null;
+  if (botSeat) res.botLevel = botLevelOf(st, botSeat);
+  report(room, res);
+}
+
 function resetMatch(st) {
   st.round = 1;
   st.wins = { a: 0, b: 0 };
@@ -344,6 +358,7 @@ function resetMatch(st) {
 
 module.exports = {
   type: 'shooter',
+  stats: { rated: true },
   tickIntervalMs: TICK_MS,
 
   createInitialState() {
@@ -377,6 +392,7 @@ module.exports = {
       st.phase = 'game_over';
       st.matchWinner = otherSeat(seat);
       st.matchWinReason = 'opponent_disconnected';
+      reportMatch(room, st.matchWinner, client.clientId);
     } else if (st.phase === 'game_over') {
       // Nothing to forfeit further; leave the finished result in place.
     } else {
@@ -751,6 +767,7 @@ function resolveFire(room, ctx, seat, shooter, originOverride) {
       st.phase = 'game_over';
       st.matchWinner = seat;
       st.matchWinReason = 'rounds';
+      reportMatch(room, seat);
     } else {
       st.round += 1;
       startRoundIntro(st);

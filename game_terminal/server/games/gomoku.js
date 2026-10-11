@@ -5,6 +5,7 @@
 const { think } = require('./ai');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
 const engine = require('./ai/gomokuEngine');
+const { reportDuel, frameOf } = require('./boardResult');
 
 const N = 15;
 const SEATS = ['black', 'white'];
@@ -59,6 +60,8 @@ function resetBoard(st) {
   st.winLine = null;
   st.lastMove = null;
   st.moveCount = 0;
+  st.moves = []; // replay: r * N + c per stone (black always opens)
+  st.reported = false;
 }
 
 // Black always moves first, so consecutive games swap who plays black instead of the colours.
@@ -98,6 +101,16 @@ function applyMove(st, color, r, c) {
   return true;
 }
 
+// The room-level move path (humans and bots): applyMove plus replay recording and the
+// end-of-match report.
+function playMove(room, color, r, c) {
+  const st = room.state;
+  if (!applyMove(st, color, r, c)) return false;
+  st.moves.push(r * N + c);
+  if (st.phase === 'game_over') reportDuel(room, SEATS, st.winner, { replay: st.moves });
+  return true;
+}
+
 function emptyCells(board) {
   const out = [];
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!board[r][c]) out.push({ r, c });
@@ -124,7 +137,7 @@ function maybeScheduleBotMove(room) {
         if (!open.length) return;
         mv = open[Math.floor(Math.random() * open.length)];
       }
-      applyMove(st3, color, mv.r, mv.c);
+      playMove(room, color, mv.r, mv.c);
       room.broadcast(stateMsg(room));
       maybeScheduleBotMove(room);
     };
@@ -169,6 +182,21 @@ module.exports = {
 
   serializeSnapshot(room) {
     return buildPublicState(room);
+  },
+
+  stats: { rated: true },
+
+  // Re-plays the reported stones on a fresh board; one spectator snapshot per position. (`score`
+  // in the frames is the replay's own 0-0 session tally, not the room's.)
+  replayFrames(replay) {
+    const room = { state: module.exports.createInitialState() };
+    room.state.phase = 'playing';
+    const frames = [frameOf(buildPublicState(room))];
+    for (const i of replay) {
+      if (!playMove(room, room.state.turn, Math.floor(i / N), i % N)) break;
+      frames.push(frameOf(buildPublicState(room)));
+    }
+    return frames;
   },
 
   onLeave(room, client) {
@@ -238,7 +266,7 @@ module.exports = {
       const r = Number(data.r);
       const c = Number(data.c);
       if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || r >= N || c < 0 || c >= N) return reject('invalid');
-      if (!applyMove(st, seat, r, c)) return reject('occupied');
+      if (!playMove(room, seat, r, c)) return reject('occupied');
       ctx.broadcast(stateMsg(room));
       maybeScheduleBotMove(room);
     }

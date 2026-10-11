@@ -120,7 +120,8 @@ function freshPlayer(clientId, nickname, colorIdx) {
 
 const COUNTDOWN_MS = 3000;
 
-const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+const { isBotId, newBot, dropBotsIfAlone, rankGroups, resultOf } = require('./tickBots');
+const { report } = require('../report');
 
 // --- CPU racers. Every bot explores depth-first (never stuck: backtracks out of dead ends); the
 // level decides how it picks among unexplored branches and how fast it moves:
@@ -156,7 +157,7 @@ function botStep(room, clientId, roundId) {
     dir = mem.stack.pop();
     if (!dir) return;
   }
-  applyMove(st, p, dir);
+  applyMove(room, p, dir);
   room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'mazedash', data: { kind: 'state', ...buildPublicState(room) } } });
   if (!p.finished) setTimeout(() => botStep(room, clientId, roundId), lv.ms[0] + Math.random() * (lv.ms[1] - lv.ms[0]));
 }
@@ -172,7 +173,8 @@ function startBots(room) {
 }
 
 // Shared by humans and bots. Returns false when a wall is in the way.
-function applyMove(st, p, d) {
+function applyMove(room, p, d) {
+  const st = room.state;
   const cell = st.maze[p.r][p.c];
   if (!cell[d.name]) return false;
   const nr = p.r + d.dr;
@@ -184,7 +186,7 @@ function applyMove(st, p, d) {
     p.finished = true;
     p.finishMs = Date.now() - st.roundStartedAt;
   }
-  if (allRacersFinished(st)) endRound(st);
+  if (allRacersFinished(st)) endRound(room);
   return true;
 }
 
@@ -211,14 +213,24 @@ function startRace(st, room, ctx) {
     // one that already ended naturally) must no-op instead of force-ending a *newer* round. Same
     // defensive re-check pattern this hub's bot-move scheduling already uses.
     if (st.roundId !== roundId || st.phase !== 'racing') return;
-    endRound(st);
+    endRound(room);
     broadcastState(room, ctx);
   }, ROUND_TIME_CAP_MS);
 }
 
-function endRound(st) {
+function endRound(room) {
+  const st = room.state;
+  if (st.phase !== 'racing') return;
   st.phase = 'results';
   st.roundEndedAt = Date.now();
+  // One race = one match, placed like the leaderboard: finishers by time, then the rest by how
+  // far along the path they got. Leavers are gone from st.players and drop out.
+  const order = buildLeaderboard(st).map((e) => st.players.get(e.clientId));
+  const res = resultOf(rankGroups(order, (p) => (p.finished ? `t${p.finishMs}` : `d${st.distFromStart[p.r][p.c]}`)));
+  if (!res) return;
+  res.scores = {};
+  for (const p of order) if (p.finished && !p.bot) res.scores[p.clientId] = p.finishMs;
+  report(room, res);
 }
 
 function allRacersFinished(st) {
@@ -278,6 +290,7 @@ function broadcastState(room, ctx) {
 
 module.exports = {
   type: 'mazedash',
+  stats: { rated: true, score: { label: 'TIME', better: 'low', format: 'ms' } },
 
   createInitialState() {
     return {
@@ -312,7 +325,7 @@ module.exports = {
     st.players.delete(client.clientId);
     dropBotsIfAlone(st.players);
     if (st.phase === 'racing' && allRacersFinished(st)) {
-      endRound(st);
+      endRound(room);
       // onLeave gets no ctx (unlike onMessage) — broadcast manually so remaining clients see the
       // round end immediately instead of being stuck on a stale 'racing' view until their next
       // own action, same pattern connect4.js/checkers.js use for a leave-triggered state change.
@@ -344,7 +357,7 @@ module.exports = {
     }
     if (data.kind === 'removeBot') {
       if (!isBotId(data.clientId) || !st.players.delete(data.clientId)) return;
-      if (st.phase === 'racing' && allRacersFinished(st)) endRound(st);
+      if (st.phase === 'racing' && allRacersFinished(st)) endRound(room);
       broadcastState(room, ctx);
       return;
     }
@@ -355,7 +368,7 @@ module.exports = {
       if (!p || !p.racingThisRound || p.finished) return;
       const d = DIR_BY_NAME[data.direction];
       if (!d) return;
-      if (!applyMove(st, p, d)) return; // wall blocks this direction — silent no-op
+      if (!applyMove(room, p, d)) return; // wall blocks this direction — silent no-op
       broadcastState(room, ctx);
       return;
     }

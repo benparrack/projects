@@ -8,6 +8,7 @@
 const E = require('./ai/mancalaEngine');
 const { think } = require('./ai');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel, frameOf } = require('./boardResult');
 
 const TYPE = 'mancala';
 const BOT = 'BOT';
@@ -57,6 +58,9 @@ function resetBoard(st, firstMover) {
   st.lastMove = null;
   st.moveCount = 0;
   st.gen = (st.gen || 0) + 1; // invalidates any bot timer from the previous board
+  // Replay: [mode, ...pits sown]. Pits are global indices, so each one also says who moved.
+  st.moves = [st.mode];
+  st.reported = false;
 }
 
 function startNewGame(st) {
@@ -87,6 +91,19 @@ function applyMove(st, seat, pit) {
   return true;
 }
 
+// The room-level move path (humans and bots): applyMove plus replay recording and the
+// end-of-match report (scores = final store counts).
+function playMove(room, seat, pit) {
+  const st = room.state;
+  if (!applyMove(st, seat, pit)) return false;
+  st.moves.push(pit);
+  if (st.phase === 'game_over') {
+    const scores = { gold: st.pits[E.storeOf(0)], jade: st.pits[E.storeOf(1)] };
+    reportDuel(room, SEATS, st.winner, { scores, replay: st.moves });
+  }
+  return true;
+}
+
 function maybeScheduleBotMove(room) {
   const st = room.state;
   if (st.phase !== 'playing' || st.players[st.turn] !== BOT) return;
@@ -106,7 +123,7 @@ function maybeScheduleBotMove(room) {
       const legal = E.legalMoves(st.pits, sideOf(seat));
       if (!legal.length) return;
       if (!legal.includes(pit)) pit = legal[Math.floor(Math.random() * legal.length)];
-      applyMove(st, seat, pit);
+      playMove(room, seat, pit);
       broadcastState(room);
       maybeScheduleBotMove(room);
     };
@@ -152,6 +169,25 @@ module.exports = {
 
   serializeSnapshot(room) {
     return buildPublicState(room);
+  },
+
+  stats: { rated: true },
+  score: { label: 'STONES', better: 'high', format: 'int' },
+
+  // Re-plays [mode, ...pits] on a fresh board; one spectator snapshot per position. The opener is
+  // whoever owns the first pit sown. (`score` in the frames is the replay's own session tally.)
+  replayFrames(replay) {
+    const room = { state: module.exports.createInitialState() };
+    const st = room.state;
+    st.mode = replay[0];
+    resetBoard(st, replay.length > 1 ? seatOf(E.sideOfPit(replay[1])) : 'gold');
+    st.phase = 'playing';
+    const frames = [frameOf(buildPublicState(room))];
+    for (const pit of replay.slice(1)) {
+      if (!playMove(room, st.turn, pit)) break;
+      frames.push(frameOf(buildPublicState(room)));
+    }
+    return frames;
   },
 
   onLeave(room, client) {
@@ -246,7 +282,7 @@ module.exports = {
         const pit = data.pit;
         if (typeof pit !== 'number' || !Number.isInteger(pit) || E.sideOfPit(pit) !== sideOf(seat)) return reject('not_your_pit');
         if (!(st.pits[pit] > 0)) return reject('empty_pit');
-        applyMove(st, seat, pit);
+        playMove(room, seat, pit);
         broadcastState(room);
         maybeScheduleBotMove(room);
         return;

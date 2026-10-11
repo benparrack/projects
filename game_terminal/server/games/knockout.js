@@ -14,6 +14,7 @@
 
 const Sim = require('../../public/games/knockout/sim.js');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel } = require('./duelResult');
 
 const TYPE = 'knockout';
 const BOT = 'BOT';
@@ -75,6 +76,7 @@ function buildPublicState(room) {
 }
 
 function broadcastState(room) {
+  reportDuel(room); // no-op unless a game just ended
   room.broadcast({ v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'state', ...buildPublicState(room) } } });
 }
 
@@ -200,6 +202,7 @@ function vacate(st, seat) {
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true },
   tickIntervalMs: 200,
 
   createInitialState() {

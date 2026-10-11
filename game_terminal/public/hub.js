@@ -1,6 +1,11 @@
 import { ClientMessage, ServerMessage, makeEnvelope, publicRoomCode } from './protocol.js';
 import { sfx } from './games/sfx.js';
 import { HOWTO } from './games/howto.js';
+import { initAuth } from './auth.js';
+import { avatarEl } from './avatars.js';
+import { h, toast } from './ui.js';
+import { INFO_PAGES, footerLinks } from './pages.js';
+import { openSignIn, openUsernameSetup, openTermsUpdate, renderAccountChip, openAvatarChange } from './account-ui.js';
 
 const muteBtn = document.getElementById('btn-mute');
 const renderMute = (m) => { muteBtn.textContent = m ? 'SFX: OFF' : 'SFX: ON'; };
@@ -141,6 +146,10 @@ const els = {
   btnInfo: document.getElementById('btn-info'),
   infoPop: document.getElementById('info-pop'),
   rosterList: document.getElementById('roster-list'),
+  screenPage: document.getElementById('screen-page'),
+  accountSlot: document.getElementById('account-slot'),
+  btnLandingSignin: document.getElementById('btn-landing-signin'),
+  btnCopyLink: document.getElementById('btn-copy-link'),
 };
 
 function categoryOf(gameType) {
@@ -159,6 +168,9 @@ const state = {
   // Which category tabs are expanded — starts with just the selected game's category open so
   // the menu isn't an overwhelming 19-item wall on first load; toggled by clicking a tab header.
   expandedCategories: new Set([categoryOf(GAMES[0].type).name]),
+  auth: null, // from initAuth(): mode, user, getToken()…
+  account: null, // own account from account.state (null for guests)
+  setup: null, // open username-setup dialog, if any
 };
 
 function setStatus(text, cls) {
@@ -170,6 +182,7 @@ function showScreen(name) {
   els.screenNickname.hidden = name !== 'nickname';
   els.screenMenu.hidden = name !== 'menu';
   els.screenRoom.hidden = name !== 'room';
+  els.screenPage.hidden = name !== 'page';
 }
 
 function saveSession() {
@@ -207,7 +220,7 @@ function connect() {
   ws.addEventListener('open', () => {
     state.reconnectDelay = 1000;
     setStatus('CONNECTED', 'connected');
-    if (state.nickname) send(ClientMessage.HELLO, { nickname: state.nickname });
+    sendHello();
   });
 
   ws.addEventListener('message', (ev) => {
@@ -232,15 +245,83 @@ function connect() {
   });
 }
 
+// Signed-in users greet with their Firebase ID token (the server looks up their account);
+// guests with a nickname. A signed-in hello also carries the guest nickname, if any, as fallback.
+async function sendHello() {
+  const token = state.auth && state.auth.user ? await state.auth.getToken() : null;
+  if (!token && !state.nickname) return; // landing screen: wait for a choice
+  send(ClientMessage.HELLO, { token: token || undefined, nickname: state.nickname || undefined });
+}
+
+// Sign-in state changed: start a fresh connection so the server sees the new identity.
+function reconnectAs() {
+  if (state.currentRoom) leaveRoom();
+  state.clientId = null;
+  state.account = null;
+  renderChip();
+  if (!state.nickname && !state.auth.user) showScreen('nickname');
+  if (state.ws) {
+    state.reconnectDelay = 100;
+    state.ws.close();
+  }
+}
+
+function renderChip() {
+  const a = state.auth;
+  renderAccountChip(els.accountSlot, {
+    mode: a ? a.mode : 'off',
+    user: state.account,
+    onSignIn: () => openSignIn(a),
+    onSignOut: () => a.signOut(),
+    onChangeAvatar: () => openAvatarChange(state.account.avatar, (avatar) => send(ClientMessage.ACCOUNT_UPDATE, { avatar })),
+  });
+  els.btnLandingSignin.closest('.panel').hidden = !a || a.mode === 'off';
+}
+
+function handleAccountState(p) {
+  state.account = p.user;
+  renderChip();
+  if (p.user && state.setup) {
+    state.setup.close();
+    state.setup = null;
+    toast(`Welcome, ${p.user.username}! Your stats are now saved.`, { kind: 'ok' });
+  }
+  if (p.needsUsername && !state.setup) {
+    state.setup = openUsernameSetup({
+      suggested: p.suggested,
+      onSubmit: (claim) => send(ClientMessage.ACCOUNT_CLAIM, claim),
+      onSignOut: () => { state.setup.close(); state.setup = null; state.auth.signOut(); },
+    });
+  }
+  if (p.needsTerms) {
+    openTermsUpdate({ onAccept: () => send(ClientMessage.ACCOUNT_ACCEPT_TERMS, {}), onSignOut: () => state.auth.signOut() });
+  }
+}
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function handleResultRecorded(p) {
+  const outcome = p.kind === 'solo' ? 'Run complete'
+    : p.draw ? 'It\'s a draw' : p.place === 0 ? 'You won' : `You placed ${ordinal(p.place + 1)}`; // place is 0-based
+  if (p.saved) toast(`${outcome}. Result saved to your profile.`, { kind: 'ok' });
+  else if (state.auth && state.auth.mode !== 'off') {
+    toast(`${outcome}. Guests' results aren't saved.`, { action: { label: 'SIGN IN', run: () => openSignIn(state.auth) } });
+  }
+}
+
 function handleServerMessage(type, payload) {
   switch (type) {
     case ServerMessage.WELCOME: {
       state.clientId = payload.clientId;
-      els.menuNickname.textContent = state.nickname;
+      els.menuNickname.textContent = payload.nickname;
       renderGameList();
       if (state.pendingJoin) {
         replayPendingJoin();
-      } else if (!state.currentRoom) {
+      } else if (!state.currentRoom && !state.onPage) {
         showScreen('menu');
       }
       break;
@@ -251,6 +332,7 @@ function handleServerMessage(type, payload) {
       state.pendingJoin = null;
       saveSession();
       els.roomCodeLabel.textContent = payload.isPublic ? `${payload.code} (public)` : payload.code;
+      els.btnCopyLink.hidden = payload.isPublic;
       renderRoster(payload.roster);
       showScreen('room');
       mountGame(payload.gameType, payload.stateSnapshot, payload.roster);
@@ -277,6 +359,23 @@ function handleServerMessage(type, payload) {
       if (state.activeGameHandle && typeof state.activeGameHandle.applyEvent === 'function') {
         state.activeGameHandle.applyEvent(payload.data);
       }
+      break;
+    }
+
+    case ServerMessage.ACCOUNT_STATE: {
+      handleAccountState(payload);
+      break;
+    }
+
+    case ServerMessage.ACCOUNT_ERROR: {
+      if (payload.for === 'claim' && state.setup) state.setup.showError(payload.message);
+      else toast(payload.message, { kind: 'error', ms: payload.banned ? 0 : 6000 });
+      if (payload.for === 'auth' && !state.nickname) showScreen('nickname');
+      break;
+    }
+
+    case ServerMessage.RESULT_RECORDED: {
+      handleResultRecorded(payload);
       break;
     }
 
@@ -351,7 +450,13 @@ function renderRoster(roster) {
   els.rosterList.innerHTML = '';
   for (const entry of roster) {
     const li = document.createElement('li');
-    li.textContent = entry.clientId === state.clientId ? `${entry.nickname} (you)` : entry.nickname;
+    const name = entry.clientId === state.clientId ? `${entry.nickname} (you)` : entry.nickname;
+    if (entry.account) {
+      li.append(avatarEl(entry.account.avatar, 20), h('a', { href: `/u/${encodeURIComponent(entry.account.username)}`, 'data-link': true, target: '_blank' }, name));
+    } else {
+      li.append(h('span.avatar.avatar-guest', { 'aria-hidden': 'true' }, '?'), h('span.guest', name));
+      li.title = 'Guest';
+    }
     els.rosterList.appendChild(li);
   }
 }
@@ -445,14 +550,82 @@ function leaveRoom() {
   unmountGame();
   state.currentRoom = null;
   saveSession();
+  if (location.pathname !== '/') history.replaceState(null, '', '/');
   showScreen('menu');
 }
+
+els.btnCopyLink.addEventListener('click', async () => {
+  const link = `${location.origin}/r/${state.currentRoom.code}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('Invite link copied. Anyone with it can join this room.', { kind: 'ok' });
+  } catch {
+    toast(`Invite link: ${link}`, { ms: 12000 });
+  }
+});
+
+els.btnLandingSignin.addEventListener('click', () => openSignIn(state.auth));
+
+// Client-side routes. Links marked data-link navigate without a page load.
+function route() {
+  const path = location.pathname;
+  const invite = /^\/r\/([A-Za-z0-9-]{3,12})\/?$/.exec(path);
+  if (invite) {
+    state.pendingJoin = { kind: 'code', code: invite[1].toUpperCase() };
+    if (state.clientId) replayPendingJoin();
+    return 'app';
+  }
+  if (path === '/' || path === '/index.html') return 'app';
+  const info = INFO_PAGES[path.replace(/\/$/, '')];
+  if (info) {
+    els.screenPage.replaceChildren(info.render());
+    document.title = `${info.title} — Game Terminal`;
+    showScreen('page');
+    return 'page';
+  }
+  renderNotFound();
+  return 'page';
+}
+
+function renderNotFound() {
+  els.screenPage.replaceChildren(h('div.notfound',
+    h('p.notfound-code', '404'),
+    h('h1', 'PAGE NOT FOUND'),
+    h('p.muted', `Nothing lives at ${location.pathname}.`),
+    h('a.btn-primary', { href: '/', 'data-link': true }, 'BACK TO GAMES')));
+  document.title = 'Not found — Game Terminal';
+  showScreen('page');
+}
+
+function navigate(href) {
+  history.pushState(null, '', href);
+  onRoute();
+}
+
+function onRoute() {
+  document.title = 'Game Terminal — free multiplayer games in your browser';
+  state.onPage = route() === 'page';
+  if (!state.onPage) {
+    if (state.currentRoom) showScreen('room');
+    else if (state.clientId) showScreen('menu');
+    else if (!state.nickname && !(state.auth && state.auth.user)) showScreen('nickname');
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-link]');
+  if (!a || a.target === '_blank' || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  navigate(a.getAttribute('href'));
+});
+window.addEventListener('popstate', onRoute);
 
 els.btnLeaveRoom.addEventListener('click', leaveRoom);
 
 // Bootstrap: restore a prior session (nickname/room) from this tab if present, so a
 // reconnect after a Render free-tier cold start can silently rejoin.
-(function init() {
+(async function init() {
+  document.getElementById('footer-links').replaceChildren(...footerLinks());
   const saved = loadSession();
   if (saved && saved.nickname) {
     state.nickname = saved.nickname;
@@ -466,5 +639,11 @@ els.btnLeaveRoom.addEventListener('click', leaveRoom);
       state.pendingJoin = { kind: 'code', code: saved.roomCode };
     }
   }
+  state.auth = await initAuth();
+  await state.auth.ready;
+  state.auth.onChange(reconnectAs);
+  renderChip();
+  onRoute();
+  if (!state.nickname && !state.auth.user && location.pathname === '/') showScreen('nickname');
   connect();
 })();

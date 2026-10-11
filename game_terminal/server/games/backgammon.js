@@ -145,6 +145,7 @@ function applyMove(st, color, from, die) {
 
   const idx = st.dice.indexOf(die);
   if (idx !== -1) st.dice.splice(idx, 1);
+  if (st.moves) st.moves.push([from, die]);
   st.lastMove = { color, from, to: result.to, die };
 
   if (st.borneOff[color] === 15) {
@@ -176,10 +177,32 @@ function startGame(st) {
     d1 = rollDie();
     d2 = rollDie();
   } while (d1 === d2); // ties reroll — standard rule, nobody can open on a tied roll
+  openGame(st, d1, d2);
+}
+
+// Replay: [[openingD1, openingD2], ...actions]; an action is a roll 'r<d1><d2>' or a leg
+// [from, die]. The dice are recorded, so re-playing it is deterministic.
+function openGame(st, d1, d2) {
   st.turn = d1 > d2 ? 'white' : 'black';
   st.dice = [d1, d2];
   st.lastRoll = [d1, d2];
   st.phase = 'playing';
+  st.moves = [[d1, d2]];
+  st.reported = false;
+}
+
+// A turn's roll (doubles play four times), then the dead-turn check.
+function applyRoll(st, d1, d2) {
+  st.dice = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
+  st.lastRoll = [d1, d2];
+  if (st.moves) st.moves.push(`r${d1}${d2}`);
+  maybeAdvanceTurn(st); // handles the "rolled but nothing playable at all" dead-turn case
+}
+
+// Bearing off the 15th checker is the only way a match ends (no cube, no gammons — see top).
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase === 'game_over') reportDuel(room, ['white', 'black'], st.winner, { replay: st.moves });
 }
 
 function resetToWaiting(st) {
@@ -213,6 +236,7 @@ function buildPublicState(room) {
 
 const { think } = require('./ai');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel, frameOf } = require('./boardResult');
 
 const BOT = 'BOT';
 
@@ -230,11 +254,7 @@ function maybeScheduleBotMove(room) {
   setTimeout(() => {
     if (!stillMine()) return;
     if (st.dice.length === 0) {
-      const d1 = rollDie();
-      const d2 = rollDie();
-      st.dice = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
-      st.lastRoll = [d1, d2];
-      maybeAdvanceTurn(st);
+      applyRoll(st, rollDie(), rollDie());
       send(room);
       if (!stillMine()) return maybeScheduleBotMove(room);
     }
@@ -252,6 +272,7 @@ function maybeScheduleBotMove(room) {
         }
       }
       maybeAdvanceTurn(st);
+      reportIfOver(room);
       send(room);
       if (stillMine()) setTimeout(() => play(legs), 550);
       else maybeScheduleBotMove(room);
@@ -292,6 +313,23 @@ module.exports = {
 
   serializeSnapshot(room) {
     return buildPublicState(room);
+  },
+
+  stats: { rated: true },
+
+  // Re-plays [[opening dice], ...rolls/legs] on a fresh board; one spectator snapshot per action.
+  replayFrames(replay) {
+    const room = { state: module.exports.createInitialState() };
+    const st = room.state;
+    openGame(st, replay[0][0], replay[0][1]);
+    const frames = [frameOf(buildPublicState(room))];
+    for (const a of replay.slice(1)) {
+      if (typeof a === 'string') applyRoll(st, Number(a[1]), Number(a[2]));
+      else if (applyMove(st, st.turn, a[0], a[1])) maybeAdvanceTurn(st);
+      else break;
+      frames.push(frameOf(buildPublicState(room)));
+    }
+    return frames;
   },
 
   onLeave(room, client) {
@@ -385,11 +423,7 @@ module.exports = {
       const seatColor = seatOf(st, ctx.senderId);
       if (!seatColor || seatColor !== st.turn) return reject('not_your_turn');
       if (st.dice.length !== 0) return reject('already_rolled');
-      const d1 = rollDie();
-      const d2 = rollDie();
-      st.dice = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
-      st.lastRoll = [d1, d2];
-      maybeAdvanceTurn(st); // handles the "rolled but nothing playable at all" dead-turn case
+      applyRoll(st, rollDie(), rollDie());
       broadcastState(room, ctx);
       maybeScheduleBotMove(room);
       return;
@@ -406,6 +440,7 @@ module.exports = {
       const ok = applyMove(st, seatColor, from, die);
       if (!ok) return reject('illegal_move');
       maybeAdvanceTurn(st);
+      reportIfOver(room);
       broadcastState(room, ctx);
       maybeScheduleBotMove(room);
       return;

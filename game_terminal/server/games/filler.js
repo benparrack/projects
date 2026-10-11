@@ -9,6 +9,7 @@
 const E = require('./ai/fillerEngine');
 const { think } = require('./ai');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { report } = require('../report');
 
 const TYPE = 'filler';
 const BOT = 'BOT';
@@ -47,7 +48,25 @@ function buildPublicState(room) {
   };
 }
 
+// Every game_over is followed by a broadcast, so report there — once: the flag re-arms on the
+// next broadcast outside game_over (a new game).
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase !== 'game_over') { st.reported = false; return; }
+  if (st.reported) return;
+  st.reported = true;
+  const n = publicCounts(st.owner);
+  const { p1, p2 } = st.players;
+  const placements = st.winner === 'draw' ? [[p1, p2]] : st.winner === 'p1' ? [[p1], [p2]] : [[p2], [p1]];
+  const result = { placements, scores: {} };
+  for (const s of SEATS) if (st.players[s] !== BOT) result.scores[st.players[s]] = n[s];
+  const bot = SEATS.find((s) => st.players[s] === BOT);
+  if (bot) result.botLevel = botLevelOf(st, bot);
+  report(room, result);
+}
+
 function broadcastState(room) {
+  reportIfOver(room);
   room.broadcast({ v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'state', ...buildPublicState(room) } } });
 }
 
@@ -137,6 +156,7 @@ const freshScore = () => ({ p1: 0, p2: 0, draws: 0 });
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true, score: { label: 'Cells', better: 'high', format: 'int' } },
 
   createInitialState() {
     const st = {

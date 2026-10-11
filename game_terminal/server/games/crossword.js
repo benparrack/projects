@@ -24,6 +24,7 @@
 
 const CLUES = require('./data/crossword_clues.json');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+const { reportRanked } = require('./wordResults');
 
 const TYPE = 'crossword';
 const COLOR_PALETTE = ['#00eaff', '#ff2fb0', '#ffb000', '#8c52ff', '#00ffa2', '#ff4d4d', '#ffee58', '#39ff14'];
@@ -344,6 +345,12 @@ function endRound(room, reason, winnerId = null) {
   clearBotTimers(st);
   for (const p of st.players.values()) p.cursor = null;
   if (reason === 'revealed') return;
+  // Result: race = the finisher first, then the rest by words solved; co-op = one shared place.
+  // The score is the solve time (only the race winner has one).
+  const ms = st.endedAt - st.startedAt;
+  reportRanked(room, [...st.players.values()].filter((p) => p.inRound).map((p) => (st.mode === 'coop' || p.clientId === winnerId
+    ? { id: p.clientId, rank: Infinity, score: ms, level: p.bot }
+    : { id: p.clientId, rank: p.solved, level: p.bot })));
   if (st.mode === 'race') {
     const w = st.players.get(winnerId);
     if (w) w.wins += 1;
@@ -497,6 +504,7 @@ const isCell = (st, r, c) => Number.isInteger(r) && Number.isInteger(c) && r >= 
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true, score: { label: 'Solve time', better: 'low', format: 'ms' } },
 
   createInitialState() {
     return {

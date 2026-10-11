@@ -8,7 +8,11 @@ class Room {
     this.gameType = gameType;
     this.isPublic = isPublic;
     this.plugin = plugin;
-    this.clients = new Map(); // clientId -> { ws, nickname }
+    this.clients = new Map(); // clientId -> { ws, nickname, uid, profile }
+    // Everyone who has been in the room (capped), so a result can still credit a player who left
+    // mid-match — see server/results.js.
+    this.seen = new Map(); // clientId -> { nickname, uid }
+    this.onResult = null; // set by RoomManager; plugins reach it through server/report.js
     this.state = plugin.createInitialState(this);
     this.emptySince = null;
     this.tickHandle = null;
@@ -40,6 +44,7 @@ class Room {
     return Array.from(this.clients.entries()).map(([clientId, c]) => ({
       clientId,
       nickname: c.nickname,
+      ...(c.profile ? { account: c.profile } : {}),
     }));
   }
 
@@ -58,9 +63,17 @@ class Room {
 }
 
 class RoomManager {
-  constructor(gameRegistry) {
+  constructor(gameRegistry, { onResult } = {}) {
     this.gameRegistry = gameRegistry; // gameType -> plugin module
     this.rooms = new Map(); // code -> Room
+    this.onResult = onResult || null; // (room, result) => void
+  }
+
+  makeRoom(code, gameType, isPublic, plugin) {
+    const room = new Room(code, gameType, isPublic, plugin);
+    if (this.onResult) room.onResult = (result) => this.onResult(room, result);
+    this.rooms.set(code, room);
+    return room;
   }
 
   getPlugin(gameType) {
@@ -81,11 +94,7 @@ class RoomManager {
     for (let n = 1; ; n++) {
       const code = n === 1 ? publicRoomCode(gameType) : `${publicRoomCode(gameType)}-${n}`;
       let room = this.rooms.get(code);
-      if (!room) {
-        room = new Room(code, gameType, true, plugin);
-        this.rooms.set(code, room);
-        return room;
-      }
+      if (!room) return this.makeRoom(code, gameType, true, plugin);
       if (!isFull(room)) return room;
     }
   }
@@ -97,18 +106,21 @@ class RoomManager {
     do {
       code = generateRoomCode();
     } while (this.rooms.has(code));
-    const room = new Room(code, gameType, false, plugin);
-    this.rooms.set(code, room);
-    return room;
+    return this.makeRoom(code, gameType, false, plugin);
   }
 
   getRoom(code) {
     return this.rooms.get(code) || null;
   }
 
-  joinRoom(room, clientId, ws, nickname) {
+  // `account` is { uid, profile } for signed-in players (profile = accounts.publicUser), else null.
+  joinRoom(room, clientId, ws, nickname, account = null) {
     if (room.emptySince) room.emptySince = null; // cancel pending cleanup
-    room.clients.set(clientId, { ws, nickname });
+    const uid = account ? account.uid : null;
+    room.clients.set(clientId, { ws, nickname, uid, profile: account ? account.profile : null });
+    room.seen.delete(clientId);
+    room.seen.set(clientId, { nickname, uid });
+    if (room.seen.size > 200) room.seen.delete(room.seen.keys().next().value);
     if (typeof room.plugin.onJoin === 'function') {
       room.plugin.onJoin(room, { clientId, nickname });
     }

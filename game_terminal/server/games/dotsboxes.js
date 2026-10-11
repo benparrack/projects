@@ -12,7 +12,9 @@
 //            loony-endgame values (Berlekamp's chain/cycle recursion) and double-dealing
 'use strict';
 
-const { normLevel } = require('./ai/levels');
+const { normLevel, LEVELS } = require('./ai/levels');
+const { report } = require('../report');
+const { frameOf } = require('./boardResult');
 
 const GAME = 'dotsboxes';
 const MIN_SEATS = 2;
@@ -382,6 +384,9 @@ function newBoard(st) {
   st.winners = [];
   st.moveCount = 0;
   st.gen++;
+  // Replay: [{ size, seats, first }, ...edge indices]; filled in by startGame.
+  st.moves = null;
+  st.reported = false;
 }
 
 function startGame(st) {
@@ -390,6 +395,31 @@ function startGame(st) {
   st.nextStarter = (st.nextStarter + 1) % Math.max(1, st.seats.length);
   st.phase = 'playing';
   st.note = null;
+  st.moves = [{ size: st.size, seats: st.seats.slice(), first: st.turnIdx }];
+}
+
+// The room-level move path (humans and bots): applyLine plus replay recording and, on the last
+// box, the end-of-match report — places by box count (ties share), bots reported as 'BOT' (a seat
+// a bot took over mid-game counts as the bot's), botLevel = the strongest bot at the table.
+function playLine(room, e) {
+  const st = room.state;
+  const made = applyLine(st, e);
+  if (made < 0) return made;
+  if (st.moves) st.moves.push(e);
+  if (st.phase === 'game_over' && !st.reported) {
+    st.reported = true;
+    const id = (i) => (isBot(st.seats[i]) ? 'BOT' : st.seats[i]);
+    const byScore = [...new Set(st.scores)].sort((a, b) => b - a);
+    const result = {
+      placements: byScore.map((sc) => st.seats.map((_, i) => i).filter((i) => st.scores[i] === sc).map(id)),
+      scores: Object.fromEntries(st.seats.map((_, i) => [id(i), st.scores[i]])),
+      replay: st.moves,
+    };
+    const bots = st.seats.filter(isBot).map((b) => LEVELS.indexOf(levelOfId(b)));
+    if (bots.length) result.botLevel = LEVELS[Math.max(...bots)];
+    report(room, result);
+  }
+  return made;
 }
 
 function toWaiting(st) {
@@ -444,7 +474,7 @@ function maybeScheduleBot(room) {
     let e = chooseMove(g, s.edges, levelOfId(id));
     if (e < 0 || s.edges[e]) e = undrawn(g, s.edges)[0];
     if (e == null) return;
-    applyLine(s, e);
+    playLine(room, e);
     broadcastState(room);
     maybeScheduleBot(room);
   }, lo + Math.random() * (hi - lo));
@@ -497,6 +527,27 @@ module.exports = {
 
   serializeSnapshot(room) {
     return buildPublicState(room);
+  },
+
+  stats: { rated: true },
+  score: { label: 'BOXES', better: 'high', format: 'int' },
+
+  // Re-plays [{ size, seats, first }, ...edges] on a fresh board; one spectator snapshot per
+  // position.
+  replayFrames(replay) {
+    const [setup, ...edges] = replay;
+    const room = { state: module.exports.createInitialState() };
+    const st = room.state;
+    st.size = setup.size;
+    st.seats = setup.seats.slice();
+    st.nextStarter = setup.first;
+    startGame(st);
+    const frames = [frameOf(buildPublicState(room))];
+    for (const e of edges) {
+      if (playLine(room, e) < 0) break;
+      frames.push(frameOf(buildPublicState(room)));
+    }
+    return frames;
   },
 
   onLeave(room, client) {
@@ -575,7 +626,7 @@ module.exports = {
         const e = edgeIndex(g, data.o, Number(data.r), Number(data.c));
         if (e === -1) return reject('invalid');
         if (st.edges[e]) return reject('taken');
-        applyLine(st, e);
+        playLine(room, e);
         break;
       }
       default:

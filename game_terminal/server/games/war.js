@@ -4,6 +4,8 @@
 // mid-war, unable to burn) is an instant loss.
 
 const { createDeck, shuffle, rankValue } = require('./cardCommon');
+const { seatResult } = require('./cardBots');
+const { report } = require('../report');
 
 const MAX_SEATS = 2;
 
@@ -20,7 +22,19 @@ function buildPublicState(room) {
   };
 }
 
+// Every game_over is followed by a broadcast, so report there — once: the flag re-arms on the
+// next broadcast outside game_over (a reset/new deal).
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase !== 'game_over') { st.reported = false; return; }
+  if (st.reported) return;
+  st.reported = true;
+  const loser = st.seats[st.winnerSeat === 0 ? 1 : 0];
+  report(room, seatResult(st.seats, [[st.seats[st.winnerSeat]], [loser]]));
+}
+
 function broadcastState(room, ctx) {
+  reportIfOver(room);
   ctx.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'war', data: { kind: 'state', ...buildPublicState(room) } } });
 }
 
@@ -84,6 +98,7 @@ function resolveRound(st) {
 
 module.exports = {
   type: 'war',
+  stats: { rated: false }, // pure luck
 
   createInitialState() {
     const st = { phase: 'waiting', seats: [] };

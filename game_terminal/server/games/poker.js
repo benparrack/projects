@@ -8,6 +8,8 @@
 // street (a minor deviation from strict tournament rules that doesn't matter for casual play).
 
 const { createDeck, shuffle, rankValue } = require('./cardCommon');
+const { seatResult } = require('./cardBots');
+const { report } = require('../report');
 
 const MIN_SEATS = 2;
 const MAX_SEATS = 6;
@@ -255,6 +257,10 @@ function concludeHandByShowdown(st) {
 
 function checkGameOver(st) {
   const stillIn = st.seats.map((_, i) => i).filter((i) => st.chips[i] > 0);
+  // Bust order for the final standings, latest first; seats busted in the same hand tie.
+  const out = st.out.flat();
+  const busted = st.seats.filter((id, i) => st.chips[i] <= 0 && !out.includes(id));
+  if (busted.length) st.out.unshift(busted);
   if (stillIn.length <= 1) {
     st.phase = 'game_over';
     st.winnerSeat = stillIn.length === 1 ? stillIn[0] : null;
@@ -319,7 +325,19 @@ function buildPublicState(room, forClientId) {
   };
 }
 
+// Every game_over is followed by a broadcast, so report there — once: the flag re-arms on the
+// next broadcast outside game_over (a new game).
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase !== 'game_over') { st.reported = false; return; }
+  if (st.reported) return;
+  st.reported = true;
+  // A tournament: last stack standing wins, the rest rank by when they busted.
+  report(room, seatResult(st.seats, [[st.seats[st.winnerSeat]], ...st.out]));
+}
+
 function broadcastState(room, ctx) {
+  reportIfOver(room);
   for (const clientId of room.clients.keys()) {
     ctx.sendTo(clientId, { v: 1, type: 'game.event', payload: { gameType: 'poker', data: { kind: 'state', ...buildPublicState(room, clientId) } } });
   }
@@ -327,6 +345,7 @@ function broadcastState(room, ctx) {
 
 module.exports = {
   type: 'poker',
+  stats: { rated: true },
   HAND_NAMES,
   evaluate5,
   evaluate7,
@@ -334,7 +353,7 @@ module.exports = {
   buildSidePots,
 
   createInitialState() {
-    return { phase: 'waiting', seats: [], chips: [], dealerIdx: 0, winnerSeat: null, hand: null };
+    return { phase: 'waiting', seats: [], chips: [], dealerIdx: 0, winnerSeat: null, hand: null, out: [] };
   },
 
   isRoomFull(room) {
@@ -385,6 +404,7 @@ module.exports = {
       if (st.phase !== 'waiting' || st.seats.length < MIN_SEATS) return;
       st.dealerIdx = 0;
       st.winnerSeat = null;
+      st.out = [];
       startHand(st);
       broadcastState(room, ctx);
       return;
@@ -396,6 +416,7 @@ module.exports = {
         st.chips = st.seats.map(() => STARTING_CHIPS);
         st.dealerIdx = 0;
         st.winnerSeat = null;
+        st.out = [];
         startHand(st);
       } else {
         st.phase = 'waiting';

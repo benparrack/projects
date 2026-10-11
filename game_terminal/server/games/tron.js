@@ -37,7 +37,8 @@ function cornerSpawns() {
   ];
 }
 
-const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+const { isBotId, newBot, dropBotsIfAlone, resultOf } = require('./tickBots');
+const { report } = require('../report');
 
 // --- CPU riders. Each tick, before movement, a bot picks straight / left / right:
 //   easy    looks a few cells ahead only, reacts late and wanders;
@@ -229,6 +230,7 @@ function lockInRoundParticipants(st) {
 }
 
 function spawnParticipants(st) {
+  st.outOrder = [];
   const corners = cornerSpawns();
   let idx = 0;
   const occupied = new Set();
@@ -281,6 +283,16 @@ function scoreRound(st, survivor, aliveBefore) {
       if (p) { p.draws++; st.drawIds.push(id); }
     }
   }
+}
+
+// Each round is a match (no best-of): survivor first, then the rest by how long they lasted.
+// Leavers are gone from st.players and drop out of the result.
+function reportRound(room, survivor) {
+  const st = room.state;
+  const groups = [...st.outOrder].reverse().map((ids) => ids.map((id) => st.players.get(id)).filter(Boolean));
+  if (survivor) groups.unshift([survivor]);
+  const res = groups.flat().length >= 2 && resultOf(groups);
+  if (res) report(room, res);
 }
 
 function resetScores(st) {
@@ -341,6 +353,7 @@ function stepPlaying(st) {
 
 module.exports = {
   type: 'tron',
+  stats: { rated: true },
   _test: { scoreRound, resetScores, TICK_MS, GRID_W, GRID_H },
   tickIntervalMs: TICK_MS,
 
@@ -358,6 +371,7 @@ module.exports = {
       roundsPlayed: 0,
       nextColorIdx: 0,
       tickTrailAdded: [],
+      outOrder: [],
     };
   },
 
@@ -449,6 +463,9 @@ module.exports = {
       steerBots(st);
       const aliveBefore = [...st.players.values()].filter((p) => p.inRound && p.alive).map((p) => p.clientId);
       stepPlaying(st);
+      // Crash order for the result report: cycles that crash on the same tick share a place.
+      const out = aliveBefore.filter((id) => !st.players.get(id).alive);
+      if (out.length) st.outOrder.push(out);
       const aliveCount = [...st.players.values()].filter((p) => p.inRound && p.alive).length;
       if (aliveCount <= 1) {
         const survivor = [...st.players.values()].find((p) => p.inRound && p.alive) || null;
@@ -458,6 +475,7 @@ module.exports = {
         st.winnerNickname = survivor ? survivor.nickname : null;
         st.isDraw = !survivor;
         scoreRound(st, survivor, aliveBefore);
+        reportRound(room, survivor);
       }
     } else if (st.phase === 'round_over') {
       if (now - st.roundOverAt >= ROUND_OVER_DISPLAY_MS) {

@@ -11,7 +11,7 @@
 // delay fires, so a state change in between (a human acted, a trick resolved) can't go stale.
 
 const { rankValue, SUITS, RANKS } = require('./cardCommon');
-const { normLevel } = require('./ai/levels');
+const { normLevel, LEVELS } = require('./ai/levels');
 
 const BOT_NAMES = ['Ace', 'Byte', 'Chip', 'Dot', 'Echo', 'Flux', 'Gizmo'];
 const POLL_MS = 250;
@@ -25,6 +25,16 @@ const botBase = (id) => id.slice(4).split('~')[0];
 const levelOfId = (id) => normLevel(id.split('~')[1]);
 // Chance per decision that a bot plays a random legal move instead of its considered one.
 const BLUNDER = { easy: 0.4, medium: 0.15, hard: 0, expert: 0 };
+
+// The report() payload for a card game: bot seats become 'BOT' (and drop out of scores), and
+// botLevel is the hardest level among the seated bots. War's level-less bots give no botLevel.
+function seatResult(seats, placements, scores) {
+  const out = { placements: placements.map((place) => place.map((id) => (isBot(id) ? 'BOT' : id))) };
+  if (scores) out.scores = Object.fromEntries(Object.entries(scores).filter(([id]) => !isBot(id)));
+  const level = LEVELS.filter((l) => seats.some((id) => isBot(id) && id.includes('~') && levelOfId(id) === l)).pop();
+  if (level) out.botLevel = level;
+  return out;
+}
 
 function botCtx(room, botId) {
   return {
@@ -635,4 +645,4 @@ function installCardBots(registry) {
   if (registry.spades) withBots(registry.spades, spadesBrain());
 }
 
-module.exports = { withBots, installCardBots, isBot, _test: { war, crazyeights, bs, pokerBrain, heartsBrain, spadesBrain } };
+module.exports = { withBots, installCardBots, isBot, seatResult, _test: { war, crazyeights, bs, pokerBrain, heartsBrain, spadesBrain } };

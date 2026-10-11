@@ -30,4 +30,26 @@ function dropBotsIfAlone(players) {
   for (const id of [...players.keys()]) if (isBotId(id)) players.delete(id);
 }
 
-module.exports = { isBotId, newBot, humanCount, dropBotsIfAlone, MAX_BOTS };
+// For report(): consecutive records with equal key(p) share a place (list sorted best first).
+function rankGroups(sorted, key) {
+  const groups = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i && key(sorted[i]) === key(sorted[i - 1])) groups[groups.length - 1].push(sorted[i]);
+    else groups.push([sorted[i]]);
+  }
+  return groups;
+}
+
+// Place groups of player records (best first) -> report() fields: bots become 'BOT', botLevel is
+// the hardest bot that raced. Null when no human took part (nothing worth recording).
+const LEVELS = ['easy', 'medium', 'hard', 'expert'];
+function resultOf(groups) {
+  const placements = groups.filter((g) => g.length).map((g) => g.map((p) => (p.bot ? 'BOT' : p.clientId)));
+  if (!placements.some((g) => g.some((id) => id !== 'BOT'))) return null;
+  const res = { placements };
+  const lv = Math.max(...groups.flat().map((p) => (p.bot ? LEVELS.indexOf(p.bot) : -1)));
+  if (lv >= 0) res.botLevel = LEVELS[lv];
+  return res;
+}
+
+module.exports = { isBotId, newBot, humanCount, dropBotsIfAlone, MAX_BOTS, rankGroups, resultOf };

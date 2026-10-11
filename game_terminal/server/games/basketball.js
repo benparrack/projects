@@ -16,6 +16,7 @@
 
 const Sim = require('../../public/games/basketball/sim.js');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel } = require('./duelResult');
 
 const TYPE = 'basketball';
 const BOT = 'BOT';
@@ -67,6 +68,7 @@ function buildPublicState(room) {
 }
 
 function broadcastState(room) {
+  reportDuel(room, (s) => room.state.scores[s]); // no-op unless a game just ended
   room.broadcast({ v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'state', ...buildPublicState(room) } } });
 }
 
@@ -163,6 +165,8 @@ function vacate(st, seat) {
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true },
+  score: { label: 'Points', better: 'high', format: 'pts' },
 
   createInitialState() {
     const st = { phase: 'waiting', players: { red: null, blue: null }, botLevels: {} };

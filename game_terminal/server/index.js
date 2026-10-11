@@ -6,13 +6,41 @@ const { handleStaticRequest } = require('./static');
 const { ClientMessage, ServerMessage, RoomErrorReason, makeEnvelope, publicRoomCode } = require('./protocol');
 const { RoomManager } = require('./roomManager');
 const gameRegistry = require('./games');
+const { createDb } = require('./db');
+const { createAuth, webConfig } = require('./auth');
+const { createAccounts, publicUser, TERMS_VERSION } = require('./accounts');
+const { createResults } = require('./results');
+const { createApi } = require('./api');
 
 const PORT = process.env.PORT || 3000;
 const MAX_PAYLOAD = 64 * 1024;
 
-const roomManager = new RoomManager(gameRegistry);
+const db = createDb();
+const auth = createAuth();
+const accounts = createAccounts(db);
+const results = createResults({ db, registry: gameRegistry });
+const handleApi = createApi({ db, accounts, authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
+console.log(`accounts: auth=${auth.mode} db=${db.backend}`);
 
-const server = http.createServer(handleStaticRequest);
+const roomManager = new RoomManager(gameRegistry, {
+  onResult(room, result) {
+    results.record(room, result).then((rec) => {
+      if (!rec) return;
+      // Tell each human how it went; guests get nudged to sign up so it would have counted.
+      const players = rec.summary.players.map(({ uid, ...q }) => q);
+      const draw = players.length > 1 && players.every((q) => q.place === 0);
+      for (const p of rec.people) {
+        if (p.bot) continue;
+        room.sendTo(p.clientId, makeEnvelope(ServerMessage.RESULT_RECORDED, { gameType: rec.summary.gameType, kind: rec.summary.kind, saved: !!p.uid, place: p.place, draw, players }));
+      }
+    }).catch((err) => console.error('results: record failed', err));
+  },
+});
+
+const server = http.createServer(async (req, res) => {
+  if (await handleApi(req, res)) return;
+  handleStaticRequest(req, res);
+});
 // Nagle's algorithm is on by default for Node TCP sockets and batches small writes for up to
 // ~40ms waiting to coalesce them — fine for bulk HTTP responses, but real-time game traffic here
 // is a steady stream of tiny messages (30Hz state broadcasts, per-frame move/look) where that
@@ -40,8 +68,31 @@ function leaveCurrentRoom(session, clientId) {
   room.broadcast(makeEnvelope(ServerMessage.ROOM_PRESENCE, { roster: room.roster(), left: clientId }));
 }
 
+// The signed-in user's own view of their account (includes settings; never sent to others).
+function ownAccount(user) {
+  return { ...publicUser(user), settings: user.settings || {}, achievements: user.achievements || {} };
+}
+
+function sendAccountState(ws, session) {
+  const user = session.user;
+  send(ws, ServerMessage.ACCOUNT_STATE, {
+    user: user && user.username ? ownAccount(user) : null,
+    needsUsername: !!session.uid && !(user && user.username),
+    needsTerms: !!(user && user.username && user.termsVersion !== TERMS_VERSION),
+    suggested: session.suggestedName || null,
+  });
+}
+
+// Once an account has a username it plays under that name (no separate nickname).
+function greetAccount(ws, session) {
+  session.nickname = session.user.username;
+  send(ws, ServerMessage.WELCOME, { clientId: session.clientId, nickname: session.nickname });
+  sendAccountState(ws, session);
+}
+
 function joinAndAck(ws, session, room) {
-  roomManager.joinRoom(room, session.clientId, ws, session.nickname);
+  const account = session.uid && session.user && session.user.username ? { uid: session.uid, profile: publicUser(session.user) } : null;
+  roomManager.joinRoom(room, session.clientId, ws, session.nickname, account);
   session.roomCode = room.code;
   send(ws, ServerMessage.ROOM_JOINED, {
     code: room.code,
@@ -57,10 +108,10 @@ function joinAndAck(ws, session, room) {
 }
 
 wss.on('connection', (ws) => {
-  const session = { clientId: crypto.randomUUID(), nickname: null, roomCode: null };
+  const session = { clientId: crypto.randomUUID(), nickname: null, roomCode: null, uid: null, user: null };
   sessions.set(ws, session);
 
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     let envelope;
     try {
       envelope = JSON.parse(raw);
@@ -71,16 +122,67 @@ wss.on('connection', (ws) => {
 
     const { type, payload } = envelope || {};
 
-    if (type !== ClientMessage.HELLO && !session.nickname) {
+    const preGreeting = type === ClientMessage.HELLO || (session.uid && type === ClientMessage.ACCOUNT_CLAIM);
+    if (!preGreeting && !session.nickname) {
       send(ws, ServerMessage.SYSTEM_ERROR, { reason: 'NOT_GREETED', message: 'Send hello first.' });
       return;
     }
 
     switch (type) {
       case ClientMessage.HELLO: {
-        const nickname = String((payload && payload.nickname) || '').trim().slice(0, 24) || 'Anonymous';
-        session.nickname = nickname;
-        send(ws, ServerMessage.WELCOME, { clientId: session.clientId });
+        const token = payload && payload.token;
+        if (token) {
+          const who = await auth.verify(token);
+          if (!who) {
+            send(ws, ServerMessage.ACCOUNT_ERROR, { for: 'auth', message: 'Your sign-in expired. Please sign in again.' });
+          } else {
+            const user = await accounts.getUser(who.uid);
+            if (user && user.bannedUntil && user.bannedUntil > Date.now()) {
+              send(ws, ServerMessage.ACCOUNT_ERROR, { for: 'auth', banned: true, message: `This account is suspended until ${new Date(user.bannedUntil).toUTCString()}.` });
+            } else {
+              session.uid = who.uid;
+              session.user = user;
+              session.suggestedName = (who.displayName || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 16) || null;
+              if (user && user.username) { greetAccount(ws, session); break; }
+              sendAccountState(ws, session); // needsUsername: the client shows the setup screen
+              break;
+            }
+          }
+        }
+        if (!payload || !payload.nickname) break; // signed-in attempt failed and no guest fallback given
+        session.uid = null;
+        session.user = null;
+        session.nickname = String(payload.nickname).trim().slice(0, 24) || 'Anonymous';
+        send(ws, ServerMessage.WELCOME, { clientId: session.clientId, nickname: session.nickname });
+        sendAccountState(ws, session);
+        break;
+      }
+
+      case ClientMessage.ACCOUNT_CLAIM: {
+        if (!session.uid) return;
+        const res = await accounts.claimUsername(session.uid, payload || {});
+        if (res.error) { send(ws, ServerMessage.ACCOUNT_ERROR, { for: 'claim', message: res.error }); return; }
+        const firstTime = !session.nickname;
+        session.user = res.user;
+        if (firstTime) greetAccount(ws, session);
+        else { session.nickname = res.user.username; sendAccountState(ws, session); }
+        break;
+      }
+
+      case ClientMessage.ACCOUNT_UPDATE: {
+        if (!session.uid || !session.user) return;
+        const res = await accounts.updateProfile(session.uid, payload || {});
+        if (res.error) { send(ws, ServerMessage.ACCOUNT_ERROR, { for: 'update', message: res.error }); return; }
+        session.user = res.user;
+        sendAccountState(ws, session);
+        break;
+      }
+
+      case ClientMessage.ACCOUNT_ACCEPT_TERMS: {
+        if (!session.uid || !session.user) return;
+        await accounts.acceptTerms(session.uid);
+        session.user = await accounts.getUser(session.uid);
+        sendAccountState(ws, session);
         break;
       }
 

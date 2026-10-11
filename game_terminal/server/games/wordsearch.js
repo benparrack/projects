@@ -13,6 +13,7 @@
 
 const { COMMON, isWord } = require('./words');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+const { reportRanked } = require('./wordResults');
 
 const TYPE = 'wordsearch';
 const SIZES = {
@@ -252,6 +253,7 @@ function endRound(room, reason) {
   st.roundTimer = null;
   clearBotTimers(st);
   const ranked = [...st.players.values()].filter((p) => p.inRound).sort((a, b) => b.score - a.score);
+  if (ranked.length) reportRanked(room, ranked.map((p) => ({ id: p.clientId, rank: p.score, score: p.score, level: p.bot })));
   if (ranked.length && ranked[0].score > 0) {
     for (const p of ranked) if (p.score === ranked[0].score) p.wins += 1;
   }
@@ -336,6 +338,7 @@ const isInt = (v) => Number.isInteger(v);
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true, score: { label: 'Points', better: 'high', format: 'pts' } },
 
   createInitialState() {
     return {

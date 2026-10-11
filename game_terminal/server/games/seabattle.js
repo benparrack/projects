@@ -21,6 +21,7 @@
 'use strict';
 
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { report } = require('../report');
 
 const TYPE = 'seabattle';
 const N = 10;
@@ -449,7 +450,21 @@ function buildView(room, forId) {
   };
 }
 
+// Every game_over is followed by a broadcast, so report there — once: the flag re-arms on the
+// next broadcast outside game_over (a new game).
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase !== 'game_over') { st.reported = false; return; }
+  if (st.reported) return;
+  st.reported = true;
+  const result = { placements: [[st.players[st.winner]], [st.players[other(st.winner)]]] };
+  const bot = SEATS.find((s) => st.players[s] === BOT);
+  if (bot) result.botLevel = botLevelOf(st, bot);
+  report(room, result);
+}
+
 function broadcastState(room) {
+  reportIfOver(room);
   for (const id of room.clients.keys()) {
     room.sendTo(id, { v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'state', ...buildView(room, id) } } });
   }
@@ -498,6 +513,7 @@ function vacate(room, clientId) {
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true },
 
   createInitialState() {
     const st = { phase: 'waiting', players: { p1: null, p2: null }, botLevels: {}, score: { p1: 0, p2: 0 }, starter: 'p1', powers: false };

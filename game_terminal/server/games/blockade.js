@@ -6,6 +6,7 @@
 
 const E = require('./ai/blockadeEngine');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel, frameOf } = require('./boardResult');
 
 const TYPE = 'blockade';
 const BOT = 'BOT';
@@ -53,6 +54,10 @@ function resetBoard(st, first) {
   st.lastWall = null;
   st.moveCount = 0;
   st.gen = (st.gen || 0) + 1;
+  // Replay: [firstMover, ...actions]; an action is [pawn, to], [o, r, c] (a wall), or the bot
+  // safety nets 's' (no pawn move: straight to walls) / 'p' (no wall: pass).
+  st.moves = [st.turn];
+  st.reported = false;
 }
 
 function startNewGame(st) {
@@ -86,6 +91,7 @@ function applyMove(st, seat, pawn, to) {
   if (pawn !== 0 && pawn !== 1 || !E.pawnTargets(st.walls, st.pawns, seat, pawn).includes(to)) return false;
   const from = st.pawns[seat][pawn];
   st.pawns[seat][pawn] = to;
+  st.moves.push([pawn, to]);
   st.lastMove = { id: st.moveCount, seat, pawn, from, to };
   if (E.isGoal(seat, to)) {
     st.phase = 'game_over';
@@ -104,6 +110,7 @@ function applyWall(st, seat, o, r, c) {
   st.walls[o === 'h' ? 'H' : 'V'][r * E.WC + c] = 1;
   st.wallOwner[`${o}${r * E.WC + c}`] = seat;
   st.left[seat][o]--;
+  st.moves.push([o, r, c]);
   st.lastWall = { id: st.moveCount, seat, o, r, c };
   endTurn(st);
   return true;
@@ -116,6 +123,12 @@ function randomLegalWall(st, seat) {
     for (let r = 0; r < E.ROWS - 1; r++) for (let c = 0; c < E.WC; c++) if (E.wallLegal(st.walls, st.pawns, o, r, c)) opts.push({ o, r, c });
   }
   return opts[Math.floor(Math.random() * opts.length)] || null;
+}
+
+// A pawn reaching a goal square is the only way a match ends.
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase === 'game_over') reportDuel(room, SEATS, st.winner, { replay: st.moves });
 }
 
 function maybeScheduleBot(room) {
@@ -136,16 +149,17 @@ function maybeScheduleBot(room) {
       if (!mv || !applyMove(st, seat, mv.pawn, mv.to)) {
         // Safety net: any legal step so a bot never stalls.
         const idx = [0, 1].find((i) => E.pawnTargets(st.walls, st.pawns, seat, i).length);
-        if (idx == null) st.step = 'wall';
+        if (idx == null) { st.step = 'wall'; st.moves.push('s'); }
         else applyMove(st, seat, idx, E.pawnTargets(st.walls, st.pawns, seat, idx)[0]);
       }
+      reportIfOver(room);
       broadcastState(room);
     }
     if (st.phase !== 'playing' || st.step !== 'wall' || st.turn !== seat) return maybeScheduleBot(room);
     setTimeout(() => {
       if (!stillOn() || st.step !== 'wall') return;
       const w = plan.wall && E.wallLegal(st.walls, st.pawns, plan.wall.o, plan.wall.r, plan.wall.c) && st.left[seat][plan.wall.o] ? plan.wall : randomLegalWall(st, seat);
-      if (!w || !applyWall(st, seat, w.o, w.r, w.c)) endTurn(st);
+      if (!w || !applyWall(st, seat, w.o, w.r, w.c)) { endTurn(st); st.moves.push('p'); }
       broadcastState(room);
       maybeScheduleBot(room);
     }, BOT_WALL_MS);
@@ -179,6 +193,26 @@ module.exports = {
 
   serializeSnapshot(room) {
     return buildPublicState(room);
+  },
+
+  stats: { rated: true },
+
+  // Re-plays [firstMover, ...actions] on a fresh board; one spectator snapshot per action (a pawn
+  // step and its wall are separate frames). (`score` in the frames is the replay's own tally.)
+  replayFrames(replay) {
+    const room = { state: module.exports.createInitialState() };
+    const st = room.state;
+    resetBoard(st, replay[0]);
+    st.phase = 'playing';
+    const frames = [frameOf(buildPublicState(room))];
+    for (const a of replay.slice(1)) {
+      const seat = st.turn;
+      if (a === 's') { st.step = 'wall'; st.moves.push('s'); }
+      else if (a === 'p') { endTurn(st); st.moves.push('p'); }
+      else if (!(a.length === 2 ? applyMove(st, seat, a[0], a[1]) : applyWall(st, seat, a[0], a[1], a[2]))) break;
+      frames.push(frameOf(buildPublicState(room)));
+    }
+    return frames;
   },
 
   onLeave(room, client) {
@@ -252,6 +286,7 @@ module.exports = {
         if (data.kind !== st.step) return reject(st.step === 'wall' ? 'place_wall' : 'move_first');
         const ok = data.kind === 'move' ? applyMove(st, seat, data.pawn, data.to) : applyWall(st, seat, data.o, data.r, data.c);
         if (!ok) return reject(data.kind === 'move' ? 'bad_move' : 'bad_wall');
+        reportIfOver(room);
         broadcastState(room);
         maybeScheduleBot(room);
         return;

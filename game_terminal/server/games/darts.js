@@ -15,6 +15,7 @@
 
 const Sim = require('../../public/games/darts/sim.js');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel } = require('./duelResult');
 
 const TYPE = 'darts';
 const BOT = 'BOT';
@@ -79,6 +80,9 @@ function buildPublicState(room) {
 }
 
 function broadcastState(room) {
+  // Score = 3-dart average, 01 modes only (cricket points don't compare across games).
+  const st = room.state;
+  reportDuel(room, st.mode === 'cricket' ? null : (s) => Math.round((st.stats[s].scored / Math.max(1, st.stats[s].darts)) * 30) / 10);
   room.broadcast({ v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'state', ...buildPublicState(room) } } });
 }
 
@@ -241,6 +245,8 @@ function backToWaiting(st) {
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true },
+  score: { label: '3-dart avg', better: 'high', format: 'pts' },
 
   createInitialState() {
     const st = { phase: 'waiting', mode: '501', players: { p1: null, p2: null }, botLevels: {} };

@@ -3,6 +3,8 @@
 // broadcast (segment/clear events, replayed identically by every client) with hangman.js's
 // per-recipient hidden-state pattern (only the drawer's view carries the actual word).
 
+const { report } = require('../report');
+
 const WORDS = [
   'dog', 'cat', 'house', 'tree', 'car', 'sun', 'moon', 'star', 'fish', 'bird',
   'apple', 'banana', 'pizza', 'guitar', 'robot', 'rainbow', 'umbrella', 'mountain', 'river', 'boat',
@@ -94,7 +96,31 @@ function goToLobby(room) {
   st.guessLog = [];
   st.lastRoundWord = null;
   st.roundEndsAt = null;
+  startRotation(st);
   broadcastState(room);
+}
+
+// Rounds loop forever and scores are room-lifetime, so a "game" for results is one full drawer
+// rotation: once everyone still here has drawn, rank the points each earned since it began.
+function startRotation(st) {
+  st.drewThisRotation = [];
+  st.rotationBaseScores = { ...st.scores };
+}
+
+function maybeReportRotation(room) {
+  const st = room.state;
+  if (!st.playerOrder.every((id) => st.drewThisRotation.includes(id))) return;
+  const earned = {};
+  for (const id of st.playerOrder) earned[id] = (st.scores[id] || 0) - (st.rotationBaseScores[id] || 0);
+  const sorted = [...st.playerOrder].sort((a, b) => earned[b] - earned[a]);
+  const placements = [];
+  sorted.forEach((id, i) => {
+    if (i && earned[id] === earned[sorted[i - 1]]) placements[placements.length - 1].push(id);
+    else placements.push([id]);
+  });
+  // An idle room (nobody guessed anything all rotation) isn't a game worth recording.
+  if (sorted.some((id) => earned[id] > 0)) report(room, { placements, scores: earned });
+  startRotation(st);
 }
 
 // Rotates the drawer to the next connected player after the current one (or the first connected
@@ -109,8 +135,10 @@ function startNewRound(room) {
     goToLobby(room);
     return;
   }
+  maybeReportRotation(room);
   const idx = st.drawerClientId ? st.playerOrder.indexOf(st.drawerClientId) : -1;
   st.drawerClientId = st.playerOrder[(idx + 1) % st.playerOrder.length];
+  st.drewThisRotation.push(st.drawerClientId);
   st.wordOptions = pickRandomWords(3);
   st.word = null;
   st.history = [];
@@ -162,6 +190,8 @@ function endRound(room, reason) {
 
 module.exports = {
   type: 'pictionary',
+  _test: { startNewRound },
+  stats: { rated: false, score: { label: 'POINTS', better: 'high', format: 'pts' } },
 
   createInitialState() {
     return {
@@ -172,6 +202,8 @@ module.exports = {
       wordOptions: [],
       history: [],
       scores: {},
+      drewThisRotation: [],
+      rotationBaseScores: {},
       correctGuessers: [],
       guessLog: [],
       lastRoundWord: null,

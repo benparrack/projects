@@ -15,6 +15,7 @@
 
 const Sim = require('../../public/games/archery/sim.js');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel } = require('./duelResult');
 
 const TYPE = 'archery';
 const BOT = 'BOT';
@@ -89,6 +90,7 @@ function buildPublicState(room) {
 }
 
 function broadcastState(room) {
+  reportDuel(room, (s) => room.state.totals[s]); // no-op unless a game just ended
   room.broadcast({ v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'state', ...buildPublicState(room) } } });
 }
 
@@ -227,6 +229,8 @@ function backToWaiting(st) {
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true },
+  score: { label: 'Points', better: 'high', format: 'pts' },
 
   createInitialState() {
     const st = { phase: 'waiting', players: { p1: null, p2: null }, botLevels: {} };

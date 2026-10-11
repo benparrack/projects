@@ -5,6 +5,8 @@
 // rules deal 7 for exactly 2 players) — kept uniform to avoid an extra branch for a minor variant.
 
 const { createDeck, shuffle } = require('./cardCommon');
+const { seatResult } = require('./cardBots');
+const { report } = require('../report');
 
 const MAX_SEATS = 6;
 const MIN_SEATS = 2;
@@ -70,7 +72,19 @@ function buildPublicState(room, forClientId) {
   };
 }
 
+// Every game_over is followed by a broadcast, so report there — once: the flag re-arms on the
+// next broadcast outside game_over. Winner first, everyone else shares second.
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase !== 'game_over') { st.reported = false; return; }
+  if (st.reported) return;
+  st.reported = true;
+  const winner = st.seats[st.winnerSeat];
+  report(room, seatResult(st.seats, [[winner], st.seats.filter((id) => id !== winner)]));
+}
+
 function broadcastState(room, ctx) {
+  reportIfOver(room);
   for (const clientId of room.clients.keys()) {
     ctx.sendTo(clientId, { v: 1, type: 'game.event', payload: { gameType: 'crazyeights', data: { kind: 'state', ...buildPublicState(room, clientId) } } });
   }
@@ -78,6 +92,7 @@ function broadcastState(room, ctx) {
 
 module.exports = {
   type: 'crazyeights',
+  stats: { rated: true },
 
   createInitialState() {
     return { phase: 'waiting', seats: [], hands: [], drawPile: [], discardPile: [], currentSuit: null, turnIdx: 0, hasDrawnThisTurn: false, winnerSeat: null, lastAction: null };

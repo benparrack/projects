@@ -18,6 +18,7 @@
 
 const { createDeck, shuffle } = require('./cardCommon');
 const { normLevel } = require('./ai/levels');
+const { report } = require('../report');
 
 const TYPE = 'blackjack';
 const MAX_SEATS = 6;
@@ -139,6 +140,7 @@ function newShoe(st) {
   st.reshuffleNext = false;
   st.shoeNo = (st.shoeNo || 0) + 1;
   st.shoeRounds = 0;
+  st.shoePlayers = []; // humans with a settled hand this shoe — who gets a result at shoe_over
   for (const p of Object.values(st.players)) p.shoeNet = 0;
 }
 
@@ -226,8 +228,19 @@ function buildView(st) {
   };
 }
 
+// A blackjack "match" is one shoe: each human who played it gets their own single-player result
+// with the shoe's net chips as the score (no opponent to place against — the dealer isn't one).
+// Reported on the first broadcast in shoe_over, once per shoe.
+function reportShoe(room) {
+  const st = room.state;
+  if (st.phase !== 'shoe_over' || st.reportedShoe === st.shoeNo) return;
+  st.reportedShoe = st.shoeNo;
+  for (const id of st.shoePlayers) report(room, { placements: [[id]], scores: { [id]: st.players[id].shoeNet } });
+}
+
 function broadcast(room) {
   const st = room.state;
+  reportShoe(room);
   st.seq++;
   room.broadcast({ v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'state', ...buildView(st) } } });
 }
@@ -413,6 +426,7 @@ function settle(st, now) {
   const dealerBJ = r.dealer.cards.length === 2 && d === 21;
   for (const e of r.entries) {
     const p = playerRec(st, e.id);
+    if (!isBot(e.id) && !st.shoePlayers.includes(e.id)) st.shoePlayers.push(e.id);
     let delta = 0;
     if (e.insurance > 0 && dealerBJ) {
       p.bankroll += e.insurance * 3;
@@ -788,6 +802,7 @@ function tick(room) {
 
 module.exports = {
   type: TYPE,
+  stats: { rated: false, score: { label: 'Shoe net', better: 'high', format: 'pts' } }, // vs the dealer
   tickIntervalMs: 100,
   tick,
 

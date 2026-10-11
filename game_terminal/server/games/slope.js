@@ -5,7 +5,8 @@
 // and relays everyone's positions so riders see each other's ghosts.
 
 const Sim = require('../../public/games/slope/sim.js');
-const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+const { isBotId, newBot, dropBotsIfAlone, rankGroups, resultOf } = require('./tickBots');
+const { report } = require('../report');
 
 const TICK_MS = 50;
 const COUNTDOWN_MS = 3000;
@@ -77,7 +78,7 @@ function startCountdown(st, now) {
   st.track = Sim.makeTrack(st.seed);
   for (const p of st.players.values()) {
     const b = Sim.newBall(st.track);
-    Object.assign(p, { inRound: true, alive: true, s: b.s, x: b.x, y: b.y, cause: null, lastPosAt: now, ball: p.bot ? b : null, mem: { steer: 0, hold: 0 } });
+    Object.assign(p, { inRound: true, alive: true, s: b.s, s0: b.s, x: b.x, y: b.y, cause: null, lastPosAt: now, ball: p.bot ? b : null, mem: { steer: 0, hold: 0 } });
   }
 }
 
@@ -88,17 +89,27 @@ function die(st, p, cause) {
   recordBest(st, p);
 }
 
-function endRound(st, now) {
+function endRound(room, now) {
+  const st = room.state;
   st.phase = 'results';
   st.phaseEndsAt = now + RESULTS_MS;
-  st.results = [...st.players.values()]
-    .filter((p) => p.inRound)
-    .sort((a, b) => b.s - a.s)
-    .map((p) => ({ nickname: p.nickname, score: Math.floor(p.s), bot: !!p.bot }));
+  const racers = [...st.players.values()].filter((p) => p.inRound).sort((a, b) => b.s - a.s);
+  // One round = one match: placed by distance (the shown score; equal scores share a place).
+  // Rounds auto-repeat, so a human who never rolled (AFK) is left out rather than logged as 0.
+  const ranked = racers.filter((p) => p.bot || p.s > p.s0);
+  const res = resultOf(rankGroups(ranked, (p) => Math.floor(p.s)));
+  if (res) {
+    res.scores = {};
+    for (const p of ranked) if (!p.bot) res.scores[p.clientId] = Math.floor(p.s);
+    report(room, res);
+  }
+  st.results = racers.map((p) => ({ nickname: p.nickname, score: Math.floor(p.s), bot: !!p.bot }));
 }
 
 module.exports = {
   type: 'slope',
+  // Unrated: humans' distances are client-reported (only loosely plausibility-capped).
+  stats: { rated: false, score: { label: 'DISTANCE', better: 'high', format: 'int' } },
   tickIntervalMs: TICK_MS,
 
   createInitialState() {
@@ -210,7 +221,7 @@ module.exports = {
       else if (!st.humansOutAt) st.humansOutAt = now;
       if (!live.length || (st.humansOutAt && now - st.humansOutAt > BOTS_ALONE_MS)) {
         for (const p of live) recordBest(st, p);
-        endRound(st, now);
+        endRound(room, now);
       }
     } else if (st.phase === 'results') {
       if (now >= st.phaseEndsAt) {

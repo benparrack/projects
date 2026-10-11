@@ -3,66 +3,112 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GAME TERMINAL</title>
-<link rel="stylesheet" href="style.css">
+<title>Game Terminal — free multiplayer games in your browser</title>
+<meta name="description" content="Play 50+ free multiplayer games with friends in your browser: chess, poker, slither, TRON, word games, GamePigeon classics and more. No download. Make an account to track stats, climb leaderboards and add friends.">
+<meta name="theme-color" content="#05080a">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Game Terminal">
+<meta property="og:image" content="/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:description" content="50+ free multiplayer browser games. Play with friends, climb the leaderboards.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/pages.css">
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="crt">
-  <header class="titlebar">
-    <span>GAME TERMINAL v0.1</span>
-    <span class="titlebar-right">
+  <header class="topbar">
+    <a class="brand" href="/" data-link aria-label="Game Terminal home">
+      <span class="brand-mark" aria-hidden="true">&gt;_</span><span class="brand-name">GAME TERMINAL</span>
+    </a>
+    <nav class="mainnav" aria-label="Main">
+      <a href="/" data-link data-nav="play">PLAY</a>
+    </nav>
+    <div class="topbar-right">
       <button id="btn-mute" class="btn-mute" type="button" title="Toggle sound">SFX: ON</button>
-      <span id="status" class="status status-connecting">CONNECTING&hellip;</span>
-    </span>
+      <span id="status" class="status status-connecting" role="status">CONNECTING&hellip;</span>
+      <div id="account-slot" class="account-slot"></div>
+    </div>
   </header>
 
-  <section id="screen-nickname" class="screen">
-    <p class="prompt">&gt; ENTER HANDLE TO CONTINUE_</p>
-    <form id="nickname-form">
-      <input id="nickname-input" type="text" maxlength="24" autocomplete="off" placeholder="handle" required>
-      <button type="submit">CONNECT</button>
-    </form>
-  </section>
-
-  <section id="screen-menu" class="screen" hidden>
-    <p class="prompt">&gt; WELCOME, <span id="menu-nickname"></span>_</p>
-    <p class="prompt">&gt; SELECT GAME:</p>
-    <ul id="game-list" class="game-list"></ul>
-
-    <div class="room-controls">
-      <button id="btn-join-public">JOIN PUBLIC ROOM</button>
-      <div class="room-row">
-        <button id="btn-create-private">CREATE PRIVATE ROOM</button>
+  <main id="main" tabindex="-1">
+    <section id="screen-nickname" class="screen landing" hidden>
+      <div class="landing-hero">
+        <h1 class="hero-title">GAME TERMINAL<span class="cursor-blink" aria-hidden="true">_</span></h1>
+        <p class="hero-sub">50+ multiplayer games in your browser. No download, no ads.</p>
       </div>
-      <div class="room-row">
-        <input id="join-code-input" type="text" maxlength="10" autocomplete="off" placeholder="ROOM CODE">
-        <button id="btn-join-code">JOIN BY CODE</button>
+      <div class="landing-grid">
+        <div class="panel landing-account">
+          <h2 class="panel-title">&gt; SIGN IN</h2>
+          <p class="muted">Save your stats, climb the leaderboards, add friends and chat.</p>
+          <button id="btn-landing-signin" class="btn-primary" type="button">SIGN IN / CREATE ACCOUNT</button>
+        </div>
+        <div class="panel landing-guest">
+          <h2 class="panel-title">&gt; PLAY AS GUEST</h2>
+          <p class="muted">Jump straight in. Nothing is saved.</p>
+          <form id="nickname-form">
+            <label class="sr-only" for="nickname-input">Nickname</label>
+            <input id="nickname-input" type="text" maxlength="24" autocomplete="off" placeholder="nickname" required>
+            <button type="submit">CONNECT</button>
+          </form>
+        </div>
       </div>
-    </div>
-    <p id="menu-error" class="error" hidden></p>
-  </section>
+    </section>
 
-  <section id="screen-room" class="screen" hidden>
-    <div class="room-header">
-      <span>ROOM: <strong id="room-code-label"></strong></span>
-      <span class="room-actions">
-        <span id="info-wrap" class="info-wrap" hidden>
-          <button id="btn-info" class="info-btn" aria-label="How to play" aria-expanded="false" aria-controls="info-pop">i</button>
-          <div id="info-pop" class="info-pop" role="dialog" aria-label="How to play"></div>
+    <section id="screen-menu" class="screen" hidden>
+      <p class="prompt">&gt; WELCOME, <span id="menu-nickname"></span>_</p>
+      <p class="prompt">&gt; SELECT GAME:</p>
+      <ul id="game-list" class="game-list"></ul>
+
+      <div class="room-controls">
+        <button id="btn-join-public">JOIN PUBLIC ROOM</button>
+        <div class="room-row">
+          <button id="btn-create-private">CREATE PRIVATE ROOM</button>
+        </div>
+        <div class="room-row">
+          <label class="sr-only" for="join-code-input">Room code</label>
+          <input id="join-code-input" type="text" maxlength="10" autocomplete="off" placeholder="ROOM CODE">
+          <button id="btn-join-code">JOIN BY CODE</button>
+        </div>
+      </div>
+      <p id="menu-error" class="error" hidden></p>
+    </section>
+
+    <section id="screen-room" class="screen" hidden>
+      <div class="room-header">
+        <span>ROOM: <strong id="room-code-label"></strong>
+          <button id="btn-copy-link" class="btn-small" type="button" title="Copy a link that joins this room" hidden>COPY INVITE LINK</button>
         </span>
-        <button id="btn-leave-room">LEAVE</button>
-      </span>
-    </div>
-    <div class="room-body">
-      <div id="game-mount" class="game-mount"></div>
-      <aside class="roster">
-        <p class="prompt">&gt; PLAYERS ONLINE</p>
-        <ul id="roster-list"></ul>
-      </aside>
-    </div>
-  </section>
+        <span class="room-actions">
+          <span id="info-wrap" class="info-wrap" hidden>
+            <button id="btn-info" class="info-btn" aria-label="How to play" aria-expanded="false" aria-controls="info-pop">i</button>
+            <div id="info-pop" class="info-pop" role="dialog" aria-label="How to play"></div>
+          </span>
+          <button id="btn-leave-room">LEAVE</button>
+        </span>
+      </div>
+      <div class="room-body">
+        <div id="game-mount" class="game-mount"></div>
+        <aside class="roster">
+          <p class="prompt">&gt; PLAYERS ONLINE</p>
+          <ul id="roster-list"></ul>
+        </aside>
+      </div>
+    </section>
+
+    <section id="screen-page" class="screen page" hidden></section>
+  </main>
+
+  <footer class="sitefooter">
+    <span class="muted">&copy; 2026 Game Terminal</span>
+    <nav id="footer-links" class="footer-links" aria-label="Site"></nav>
+  </footer>
 </div>
 
-<script type="module" src="hub.js"></script>
+<script type="module" src="/hub.js"></script>
 </body>
 </html>

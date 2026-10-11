@@ -9,6 +9,9 @@ const ClientMessage = {
   ROOM_JOIN: 'room.join',
   ROOM_LEAVE: 'room.leave',
   GAME_ACTION: 'game.action',
+  ACCOUNT_CLAIM: 'account.claim', // { username, avatar, acceptTerms } — first-time setup or rename
+  ACCOUNT_UPDATE: 'account.update', // { avatar?, settings? }
+  ACCOUNT_ACCEPT_TERMS: 'account.acceptTerms',
 };
 
 const ServerMessage = {
@@ -18,6 +21,9 @@ const ServerMessage = {
   ROOM_PRESENCE: 'room.presence',
   GAME_EVENT: 'game.event',
   SYSTEM_ERROR: 'system.error',
+  ACCOUNT_STATE: 'account.state', // { user, needsUsername, needsTerms } — the signed-in user's own view
+  ACCOUNT_ERROR: 'account.error', // { message, for }
+  RESULT_RECORDED: 'result.recorded', // { summary, saved } — sent to each human in a finished match
 };
 
 const RoomErrorReason = {

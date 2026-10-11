@@ -6,6 +6,8 @@
 // this is the one card game here with real hidden information, like Hangman's secret word.
 
 const { createDeck, shuffle } = require('./cardCommon');
+const { seatResult } = require('./cardBots');
+const { report } = require('../report');
 
 const MIN_SEATS = 2;
 const MAX_SEATS = 6;
@@ -63,7 +65,19 @@ function buildPublicState(room, forClientId) {
   };
 }
 
+// Every game_over is followed by a broadcast, so report there — once: the flag re-arms on the
+// next broadcast outside game_over. Winner first, everyone else shares second.
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase !== 'game_over') { st.reported = false; return; }
+  if (st.reported) return;
+  st.reported = true;
+  const winner = st.seats[st.winnerSeat];
+  report(room, seatResult(st.seats, [[winner], st.seats.filter((id) => id !== winner)]));
+}
+
 function broadcastState(room, ctx) {
+  reportIfOver(room);
   for (const clientId of room.clients.keys()) {
     ctx.sendTo(clientId, { v: 1, type: 'game.event', payload: { gameType: 'bs', data: { kind: 'state', ...buildPublicState(room, clientId) } } });
   }
@@ -71,6 +85,7 @@ function broadcastState(room, ctx) {
 
 module.exports = {
   type: 'bs',
+  stats: { rated: true },
 
   createInitialState() {
     return {

@@ -9,6 +9,7 @@
 const path = require('path');
 const { Worker } = require('worker_threads');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel, frameOf } = require('./boardResult');
 
 const N = 8;
 const BOT = 'BOT';
@@ -130,6 +131,8 @@ function resetBoard(st) {
   st.pass = null;
   st.moveNo = 0;
   st.gameId = (st.gameId || 0) + 1;
+  st.moves = []; // replay: r * N + c per disc placed (passes are implied)
+  st.reported = false;
 }
 
 function finishIfOver(st) {
@@ -159,6 +162,19 @@ function applyMove(st, color, r, c) {
   return true;
 }
 
+// The room-level move path (humans and bots): applyMove plus replay recording and the
+// end-of-match report.
+function playMove(room, color, r, c) {
+  const st = room.state;
+  if (!applyMove(st, color, r, c)) return false;
+  st.moves.push(r * N + c);
+  if (st.phase === 'game_over') {
+    const n = countDiscs(st.board);
+    reportDuel(room, COLORS, st.winner, { scores: n, replay: st.moves });
+  }
+  return true;
+}
+
 function maybeScheduleBotMove(room) {
   const st = room.state;
   if (st.phase !== 'playing' || st.players[st.turn] !== BOT) return;
@@ -176,7 +192,7 @@ function maybeScheduleBotMove(room) {
     const legal = legalMoves(st.board, color);
     if (!legal.length) return;
     if (!mv || !legal.some((m) => m.r === mv.r && m.c === mv.c)) mv = legal[Math.floor(Math.random() * legal.length)];
-    applyMove(st, color, mv.r, mv.c);
+    playMove(room, color, mv.r, mv.c);
     broadcastState(room);
     maybeScheduleBotMove(room);
   };
@@ -214,6 +230,22 @@ module.exports = {
 
   serializeSnapshot(room) {
     return buildPublicState(room);
+  },
+
+  stats: { rated: true },
+  score: { label: 'DISCS', better: 'high', format: 'int' },
+
+  // Re-plays the reported placements on a fresh board (black always opens); one spectator
+  // snapshot per position.
+  replayFrames(replay) {
+    const room = { state: module.exports.createInitialState() };
+    room.state.phase = 'playing';
+    const frames = [frameOf(buildPublicState(room))];
+    for (const i of replay) {
+      if (!playMove(room, room.state.turn, Math.floor(i / N), i % N)) break;
+      frames.push(frameOf(buildPublicState(room)));
+    }
+    return frames;
   },
 
   onLeave(room, client) {
@@ -294,7 +326,7 @@ module.exports = {
       const c = Number(data.c);
       if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || r >= N || c < 0 || c >= N) return reject('invalid');
       if (st.board[r][c]) return reject('occupied');
-      if (!applyMove(st, seat, r, c)) return reject('no_flips');
+      if (!playMove(room, seat, r, c)) return reject('no_flips');
       broadcastState(room);
       maybeScheduleBotMove(room);
     }

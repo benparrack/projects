@@ -74,6 +74,9 @@ function resetBoard(st, firstMover) {
   st.turn = firstMover || 'red';
   st.winner = null;
   st.lastMove = null;
+  // Replay: [firstMover, ...columns] — who opens alternates between games.
+  st.moves = [st.turn];
+  st.reported = false;
 }
 
 // Starts a fresh game and flips which color moves first compared to the previous game, so
@@ -86,22 +89,27 @@ function startNewGame(st) {
 
 const { think } = require('./ai');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { reportDuel, frameOf } = require('./boardResult');
 
 const BOT = 'BOT';
 const BOT_THINK_MS_MIN = 150;
 const BOT_THINK_MS_MAX = 350;
 
-function applyDrop(st, color, col) {
+function applyDrop(room, color, col) {
+  const st = room.state;
   const row = dropRow(st.board, col);
   if (row === -1) return false;
   st.board[row][col] = color;
+  st.moves.push(col);
   st.lastMove = { r: row, c: col };
   if (checkWin(st.board, row, col, color)) {
     st.phase = 'game_over';
     st.winner = color;
+    reportDuel(room, ['red', 'yellow'], color, { replay: st.moves });
   } else if (boardFull(st.board)) {
     st.phase = 'game_over';
     st.winner = null;
+    reportDuel(room, ['red', 'yellow'], null, { replay: st.moves });
   } else {
     st.turn = opponent(color);
   }
@@ -131,7 +139,7 @@ function maybeScheduleBotMove(room) {
       // Re-validate: the game may have been reset or moved on while the engine was thinking.
       if (st3 !== st2 || st3.board !== board || st3.phase !== 'playing' || st3.turn !== color || st3.players[color] !== BOT) return;
       if (col == null || dropRow(board, col) === -1) col = openCols[Math.floor(Math.random() * openCols.length)];
-      applyDrop(st3, color, col);
+      applyDrop(room, color, col);
       room.broadcast({ v: 1, type: 'game.event', payload: { gameType: 'connect4', data: { kind: 'state', ...buildPublicState(room) } } });
       maybeScheduleBotMove(room);
     };
@@ -151,6 +159,8 @@ module.exports = {
       winner: null,
       lastMove: null,
       nextFirstMover: 'red',
+      moves: ['red'],
+      reported: false,
     };
   },
 
@@ -161,6 +171,22 @@ module.exports = {
 
   serializeSnapshot(room) {
     return buildPublicState(room);
+  },
+
+  stats: { rated: true },
+
+  // Re-plays [firstMover, ...columns] on a fresh board through applyDrop; one spectator snapshot
+  // per position.
+  replayFrames(replay) {
+    const room = { state: module.exports.createInitialState() };
+    resetBoard(room.state, replay[0]);
+    room.state.phase = 'playing';
+    const frames = [frameOf(buildPublicState(room))];
+    for (const col of replay.slice(1)) {
+      if (!applyDrop(room, room.state.turn, col)) break;
+      frames.push(frameOf(buildPublicState(room)));
+    }
+    return frames;
   },
 
   onLeave(room, client) {
@@ -271,7 +297,7 @@ module.exports = {
       if (!seatColor || seatColor !== st.turn) return reject('not_your_turn');
       const col = Number(data.col);
       if (!Number.isInteger(col) || col < 0 || col >= COLS) return reject('invalid_column');
-      if (!applyDrop(st, seatColor, col)) return reject('column_full');
+      if (!applyDrop(room, seatColor, col)) return reject('column_full');
 
       broadcastState(room, ctx);
       maybeScheduleBotMove(room);

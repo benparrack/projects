@@ -64,6 +64,8 @@ function startGame(st) {
 
 module.exports = {
   type: 'garticphone',
+  // Cooperative telephone game: nobody wins or scores, so there is no result to report.
+  stats: { none: true },
 
   createInitialState() {
     return { phase: 'waiting', seats: [], totalRounds: 0, currentRound: 0, books: [], submittedThisRound: new Set() };

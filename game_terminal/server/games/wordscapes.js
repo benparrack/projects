@@ -21,6 +21,7 @@
 
 const { COMMON, DICT_LIST, isWord, letterCounts, canSpell } = require('./words');
 const { isBotId, newBot, humanCount, dropBotsIfAlone } = require('./tickBots');
+const { reportRanked } = require('./wordResults');
 
 const TYPE = 'wordscapes';
 const COLOR_PALETTE = ['#00eaff', '#ff2fb0', '#39ff14', '#ffb000', '#8c52ff', '#ff4d4d', '#ffee58', '#00ffa2'];
@@ -478,7 +479,20 @@ function isFoundCell(st, prog, r, c) {
 
 const envelope = (data) => ({ v: 1, type: 'game.event', payload: { gameType: TYPE, data } });
 
+// One result per completed level (checked on every broadcast, which follows every move): race =
+// the finisher first, then the rest by words found; co-op = one shared place. Score = solve time.
+function reportIfComplete(room) {
+  const st = room.state;
+  if (st.phase !== 'complete' || st.reportedPuzzle === st.puzzleId) return;
+  st.reportedPuzzle = st.puzzleId;
+  const coopMs = Date.now() - st.startAt;
+  reportRanked(room, [...st.players.values()].map((p) => (st.mode === 'coop' || p.clientId === st.winnerId
+    ? { id: p.clientId, rank: Infinity, score: st.mode === 'coop' ? coopMs : p.finishMs, level: p.bot }
+    : { id: p.clientId, rank: p.prog.found.size, level: p.bot })));
+}
+
 function broadcastState(room) {
+  reportIfComplete(room);
   for (const clientId of room.clients.keys()) {
     room.sendTo(clientId, envelope({ kind: 'state', ...buildView(room, clientId) }));
   }
@@ -514,6 +528,7 @@ function addPlayer(st, clientId, nickname, bot) {
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true, score: { label: 'Solve time', better: 'low', format: 'ms' } },
 
   createInitialState() {
     const st = {

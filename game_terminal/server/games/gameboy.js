@@ -60,6 +60,7 @@ function endLink(room, p, reason) {
 
 module.exports = {
   type: 'gameboy',
+  stats: { none: true }, // emulator, no results
 
   createInitialState() {
     return { players: new Map() };

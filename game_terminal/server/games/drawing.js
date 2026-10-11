@@ -3,6 +3,7 @@ const TRIM_TO = 4000; // when history exceeds MAX_HISTORY, cut back to this many
 
 module.exports = {
   type: 'drawing',
+  stats: { none: true }, // free-draw canvas, no results
 
   createInitialState() {
     return { history: [] };

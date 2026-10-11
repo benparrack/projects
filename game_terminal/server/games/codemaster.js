@@ -14,6 +14,8 @@
 'use strict';
 
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { report } = require('../report');
+const { frameOf } = require('./boardResult');
 
 const TYPE = 'codemaster';
 const COLORS = 6;
@@ -217,6 +219,12 @@ function startPlaying(room) {
   st.phase = 'playing';
   st.startedAt = Date.now();
   for (const b of Object.values(st.boards)) b.startedAt = st.startedAt;
+  // Replay: [setup, ...events], times in ms since the start. Events: [t, key, code, by] a guess,
+  // [t, key, null, by] a give-up, [t, '+' | '-', clientId] a racer joining / leaving mid-race.
+  st.log = [{ mode: st.mode, allowDup: st.allowDup, players: { ...st.players }, racers: st.racers.slice(),
+    // In board order: the replay rebuilds boards from these keys, and ranking ties keep that order.
+    secrets: Object.fromEntries(Object.keys(st.boards).map((k) => [k, st.secrets[k]])) }];
+  st.reported = false;
   scheduleBots(room);
 }
 
@@ -262,12 +270,12 @@ function cmpRank(x, y) {
   return 0;
 }
 
-function maybeFinish(room) {
+function maybeFinish(room, now = Date.now()) {
   const st = room.state;
   const keys = Object.keys(st.boards);
   if (!keys.length || !keys.every((k) => st.boards[k].done)) return false;
   st.phase = 'game_over';
-  st.endedAt = Date.now();
+  st.endedAt = now;
   const ranking = keys.slice().sort((x, y) => cmpRank(boardRank(st.boards[x]), boardRank(st.boards[y])));
   const top = ranking[0];
   let winners = [];
@@ -276,18 +284,57 @@ function maybeFinish(room) {
   }
   st.result = { ranking, winners };
   clearTimers(st);
+  reportResult(room, ranking);
   return true;
 }
 
-function applyGuess(st, key, code, by) {
+// Places follow the ranking (equal rank = shared place; two unsolved boards tie). Duel keys are
+// seats, race keys are clientIds; coop is one shared place for everyone who guessed. Scores are
+// guesses used, for solved boards only.
+function reportResult(room, ranking) {
+  const st = room.state;
+  if (st.reported) return;
+  st.reported = true;
+  const idsOf = (k) => (st.mode === 'duel' ? [st.players[k] === BOT ? BOT : st.players[k]]
+    : st.mode === 'race' ? [k] : [...new Set(st.boards[k].guesses.map((g) => g.by).filter(Boolean))]);
+  const placements = [];
+  const scores = {};
+  ranking.forEach((k, i) => {
+    const ids = idsOf(k);
+    if (i && cmpRank(boardRank(st.boards[k]), boardRank(st.boards[ranking[i - 1]])) === 0) placements[placements.length - 1].push(...ids);
+    else placements.push(ids);
+    if (st.boards[k].solved) for (const id of ids) scores[id] = st.boards[k].guesses.length;
+  });
+  if (!placements.flat().length) return;
+  const result = { placements, scores, replay: st.log };
+  const botSeat = st.mode === 'duel' && SEATS.find((s) => st.players[s] === BOT);
+  if (botSeat) result.botLevel = botLevelOf(st, botSeat);
+  report(room, result);
+}
+
+function logEvent(st, ...ev) {
+  if (st.log) st.log.push(ev);
+}
+
+function applyGuess(st, key, code, by, now = Date.now()) {
   const b = st.boards[key];
   const { exact, near } = score(st.secrets[key], code);
-  b.guesses.push({ code: code.slice(), exact, near, at: Date.now(), by: by || null });
+  b.guesses.push({ code: code.slice(), exact, near, at: now, by: by || null });
+  logEvent(st, now - st.startedAt, key, code.slice(), by || null);
   if (exact === PEGS) b.solved = true;
   if (b.solved || b.guesses.length >= MAX_GUESSES) {
     b.done = true;
-    b.finishedAt = Date.now();
+    b.finishedAt = now;
   }
+}
+
+function giveUp(room, key, by, now = Date.now()) {
+  const st = room.state;
+  const b = st.boards[key];
+  b.done = true;
+  b.finishedAt = now;
+  logEvent(st, now - st.startedAt, key, null, by);
+  maybeFinish(room, now);
 }
 
 // ---- Bots -------------------------------------------------------------------------------------
@@ -387,6 +434,41 @@ module.exports = {
     return buildView(room, client && client.clientId);
   },
 
+  stats: { rated: true },
+  score: { label: 'GUESSES', better: 'low', format: 'int' },
+
+  // Re-plays [setup, ...events] from the start of play (the secrets are in the setup); one
+  // spectator view per event, timestamps relative to the start (startedAt 0, `now` = event time).
+  replayFrames(replay) {
+    const [setup, ...events] = replay;
+    const room = { state: createInitialState() };
+    const st = room.state;
+    Object.assign(st, { mode: setup.mode, allowDup: setup.allowDup, players: { ...setup.players }, racers: setup.racers.slice(), secrets: { ...setup.secrets } });
+    st.sharedSecret = Object.values(setup.secrets)[0];
+    for (const k of Object.keys(setup.secrets)) st.boards[k] = { ...freshBoard(), startedAt: 0 };
+    st.phase = 'playing';
+    st.startedAt = 0;
+    st.log = [setup];
+    const frame = (t) => frameOf({ ...buildView(room, null), now: t });
+    const frames = [frame(0)];
+    for (const [t, key, code, by] of events) {
+      if (key === '+') {
+        st.racers.push(code);
+        st.boards[code] = { ...freshBoard(), startedAt: t };
+        st.secrets[code] = st.sharedSecret;
+      } else if (key === '-') {
+        st.racers.splice(st.racers.indexOf(code), 1);
+        delete st.boards[code];
+        delete st.secrets[code];
+        maybeFinish(room, t);
+      } else if (!st.boards[key]) break;
+      else if (code) { applyGuess(st, key, code, by, t); maybeFinish(room, t); }
+      else giveUp(room, key, by, t);
+      frames.push(frame(t));
+    }
+    return frames;
+  },
+
   onJoin(room) {
     broadcastState(room);
   },
@@ -403,6 +485,7 @@ module.exports = {
     if (ri !== -1) {
       st.racers.splice(ri, 1);
       if (st.phase === 'playing') {
+        logEvent(st, Date.now() - st.startedAt, '-', id);
         delete st.boards[id];
         delete st.secrets[id];
         if (!st.racers.length) resetToWaiting(st);
@@ -480,6 +563,7 @@ module.exports = {
           st.boards[me] = freshBoard();
           st.boards[me].startedAt = Date.now();
           st.secrets[me] = st.sharedSecret;
+          logEvent(st, st.boards[me].startedAt - st.startedAt, '+', me);
         }
         return done();
       }
@@ -488,6 +572,7 @@ module.exports = {
         if (i === -1) return;
         st.racers.splice(i, 1);
         if (st.phase === 'playing') {
+          logEvent(st, Date.now() - st.startedAt, '-', me);
           delete st.boards[me];
           delete st.secrets[me];
           if (!st.racers.length) resetToWaiting(st);
@@ -534,10 +619,7 @@ module.exports = {
         if (st.phase !== 'playing') return;
         const key = boardKeyFor(st, me);
         if (!key || !st.boards[key] || st.boards[key].done) return;
-        const b = st.boards[key];
-        b.done = true;
-        b.finishedAt = Date.now();
-        maybeFinish(room);
+        giveUp(room, key, me);
         return done();
       }
       default:

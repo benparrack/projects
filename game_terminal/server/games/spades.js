@@ -7,6 +7,8 @@
 // scope for this first version — see FUTURE.md.
 
 const { createDeck, shuffle, rankValue } = require('./cardCommon');
+const { seatResult } = require('./cardBots');
+const { report } = require('../report');
 
 const WIN_SCORE = 500;
 const BAG_PENALTY_THRESHOLD = 10;
@@ -122,7 +124,20 @@ function buildPublicStateFor(room, forClientId) {
   };
 }
 
+// Every game_over is followed by a broadcast, so report there — once: the flag re-arms on the
+// next broadcast outside game_over (a new game).
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase !== 'game_over') { st.reported = false; return; }
+  if (st.reported) return;
+  st.reported = true;
+  const team = (t) => [st.seats[t], st.seats[t + 2]];
+  const scores = Object.fromEntries(st.seats.map((id, i) => [id, st.teamScores[i % 2]]));
+  report(room, seatResult(st.seats, [team(st.winnerTeam), team(1 - st.winnerTeam)], scores));
+}
+
 function broadcastState(room, ctx) {
+  reportIfOver(room);
   for (const clientId of room.clients.keys()) {
     ctx.sendTo(clientId, { v: 1, type: 'game.event', payload: { gameType: 'spades', data: { kind: 'state', ...buildPublicStateFor(room, clientId) } } });
   }
@@ -134,6 +149,7 @@ function reject(ctx, reason) {
 
 module.exports = {
   type: 'spades',
+  stats: { rated: true, score: { label: 'Team points', better: 'high', format: 'pts' } },
 
   createInitialState() {
     return {

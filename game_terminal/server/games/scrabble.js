@@ -437,6 +437,8 @@ function botThink(input) {
 // ---- Room plugin ---------------------------------------------------------------------------
 const { normLevel } = require('./ai/levels');
 
+const { reportRanked } = require('./wordResults');
+
 const BOT_NAMES = ['Ace', 'Byte', 'Chip', 'Dot'];
 const LEVEL_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard', expert: 'Expert' };
 const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
@@ -481,6 +483,10 @@ function buildView(room, forId) {
 }
 
 function broadcastState(room) {
+  if (room.state.pendingResult) {
+    reportRanked(room, room.state.pendingResult);
+    room.state.pendingResult = null;
+  }
   for (const id of room.clients.keys()) {
     room.sendTo(id, { v: 1, type: 'game.event', payload: { gameType: 'scrabble', data: { kind: 'state', ...buildView(room, id) } } });
   }
@@ -506,6 +512,7 @@ function startGame(st) {
   st.log = [];
   st.lastMove = null;
   st.endInfo = null;
+  st.dropped = []; // resigned / left mid-game, in order
   st.phase = 'playing';
 }
 
@@ -547,6 +554,10 @@ function setFinal(st, reason, outSeat, deltas, room) {
     })),
   };
   st.phase = 'game_over';
+  // Result (sent by the next broadcastState, which has the room): seats by final score, then anyone
+  // who resigned or left mid-game as a forfeit, the latest leaver ranked highest.
+  st.pendingResult = st.seats.map((id, i) => ({ id, rank: st.scores[i], score: st.scores[i], level: st.botLevels[id] }))
+    .concat(st.dropped.map((id, k) => ({ id, rank: -1e9 + k })));
 }
 
 function advance(st) {
@@ -680,6 +691,7 @@ function removeSeat(room, id) {
   if (idx === -1) return false;
   if (st.phase === 'playing') {
     st.names[id] = nameOf(room, id);
+    st.dropped.push(id);
     for (const l of st.racks[idx]) st.bag.splice(Math.floor(Math.random() * (st.bag.length + 1)), 0, l);
     st.seats.splice(idx, 1);
     st.racks.splice(idx, 1);
@@ -714,6 +726,7 @@ const REASONS = ['no_tiles', 'bad_tiles', 'occupied', 'not_line', 'gap', 'center
 
 module.exports = {
   type: 'scrabble',
+  stats: { rated: true, score: { label: 'Points', better: 'high', format: 'pts' } },
 
   createInitialState() {
     return {

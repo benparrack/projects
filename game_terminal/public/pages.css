@@ -1,0 +1,10 @@
+/* Info pages (/terms, /privacy, /rules, /about, /credits) from pages.js. Uses style.css tokens. */
+.info-page { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; line-height: 1.55; }
+.info-page h1 { font-family: var(--display); font-size: 40px; color: var(--accent); letter-spacing: 2px; margin: 0 0 4px; text-shadow: var(--glow); }
+.info-page h2 { font-family: var(--display); font-size: 26px; color: var(--fg); margin: 28px 0 6px; }
+.info-page h3 { font-size: 16px; color: var(--accent); margin: 18px 0 4px; }
+.info-page p, .info-page li { color: var(--fg); overflow-wrap: anywhere; }
+.info-page ul { padding-left: 20px; }
+.info-page li { margin: 4px 0; }
+.info-page .credits strong { color: var(--accent); font-weight: normal; }
+.info-footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }

@@ -21,6 +21,7 @@
 
 const kb = require('./twentyq_kb');
 const { setBotLevel, botLevelOf } = require('./ai/levels');
+const { report } = require('../report');
 
 const TYPE = 'twentyq';
 const BOT = 'BOT';
@@ -361,8 +362,23 @@ function broadcastState(room) {
   }
 }
 
+// One result per finished two-round match (every state change passes through changed()): higher
+// match score first, a draw shares the place. Score = match points.
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase !== 'game_over' || st._reportedGame === st.gameId) return;
+  st._reportedGame = st.gameId;
+  const bot = SEATS.find((s) => st.players[s] === BOT);
+  const [a, b] = SEATS.map((s) => ({ id: st.players[s], pts: st.scores[s] })).sort((x, y) => y.pts - x.pts);
+  const result = { placements: a.pts === b.pts ? [[a.id, b.id]] : [[a.id], [b.id]], scores: {} };
+  for (const e of [a, b]) if (e.id !== BOT) result.scores[e.id] = e.pts;
+  if (bot) result.botLevel = botLevelOf(st, bot);
+  report(room, result);
+}
+
 // Broadcast, then (re)arm whatever timer the new state needs.
 function changed(room) {
+  reportIfOver(room);
   broadcastState(room);
   scheduleTimers(room);
 }
@@ -444,6 +460,7 @@ function vacate(st, seat) {
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true, score: { label: 'Match points', better: 'high', format: 'pts' } },
 
   createInitialState() {
     const st = { phase: 'waiting', players: { p1: null, p2: null }, botLevels: {}, firstPicker: 'p1', series: { p1: 0, p2: 0 }, seq: 0, gameId: 0 };

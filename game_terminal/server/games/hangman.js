@@ -1,4 +1,5 @@
 const { DICTIONARY, DICT_LIST, COMMON } = require('./words');
+const { reportRanked } = require('./wordResults');
 
 const MAX_WRONG_GUESSES = 6;
 const MAX_WORD_LENGTH = 40;
@@ -179,6 +180,7 @@ function resetRound(st) {
 
 module.exports = {
   type: 'hangman',
+  stats: { rated: false },
 
   createInitialState() {
     return {
@@ -321,6 +323,13 @@ module.exports = {
         st.lastResult = 'lose';
         st.roundWinner = st.pickerClientId;
         addWin(st, st.pickerClientId);
+      }
+      // Result: the guessers (one team, sharing a place) vs the picker. No score.
+      if (st.phase === 'round_over') {
+        const guessersWon = st.lastResult === 'win';
+        reportRanked(room, st.pickerOrder.map((id) => ({
+          id, rank: (id === st.pickerClientId) !== guessersWon ? 1 : 0, level: isBotId(id) ? botLevel(id) : undefined,
+        })));
       }
       broadcastState(room, ctx);
       return;

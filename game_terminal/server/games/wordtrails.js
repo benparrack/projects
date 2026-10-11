@@ -19,6 +19,7 @@
 
 const { COMMON, DICT_LIST, isWord } = require('./words');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
+const { reportRanked } = require('./wordResults');
 
 const TYPE = 'wordtrails';
 const TICK_MS = 100;
@@ -145,6 +146,7 @@ function startRound(room, opts) {
   st.endedAt = null;
   st.winner = null;
   st.endReason = null;
+  st.gone = []; // players who left mid-round, ranked as knocked out when they left
 }
 
 function beginTurn(st, now) {
@@ -189,6 +191,15 @@ function maybeEnd(st, now) {
     return true;
   }
   return false;
+}
+
+// Result: the last one standing first, then everyone else in reverse knock-out order (leavers
+// count as knocked out when they left). Solo: one place. Score = words this player added.
+function reportRound(room) {
+  const st = room.state;
+  const entries = st.order.map((id) => st.players.get(id)).filter(Boolean)
+    .map((p) => ({ id: p.clientId, rank: p.out ? p.outAt : Infinity, score: p.words, level: p.bot }));
+  reportRanked(room, entries.concat(st.gone));
 }
 
 // The current player loses a life (timeout). Returns true if the round ended.
@@ -325,12 +336,13 @@ function removePlayer(room, id) {
   st.players.delete(id);
   const idx = st.order.indexOf(id);
   if (idx !== -1 && (st.phase === 'playing' || st.phase === 'countdown')) {
+    st.gone.push({ id, rank: p.out ? p.outAt : Date.now(), score: p.words, level: p.bot });
     st.order.splice(idx, 1);
     if (idx < st.turnIdx) st.turnIdx -= 1;
     if (st.turnIdx >= st.order.length) st.turnIdx = 0;
     const now = Date.now();
     if (st.order.length === 0) return true;
-    if (st.phase === 'playing' && maybeEnd(st, now)) return true;
+    if (st.phase === 'playing' && maybeEnd(st, now)) { reportRound(room); return true; }
     if (wasTurn) {
       // Hand the turn on: step back one so advance() lands on whoever now sits at this index
       // (also cuts short a post-timeout pause, which would otherwise skip that player).
@@ -346,6 +358,7 @@ function removePlayer(room, id) {
 
 module.exports = {
   type: TYPE,
+  stats: { rated: true, score: { label: 'Words chained', better: 'high', format: 'int' } },
   tickIntervalMs: TICK_MS,
 
   createInitialState() {
@@ -417,7 +430,7 @@ module.exports = {
       return;
     }
     if (st.turnEndsAt && now >= st.turnEndsAt) {
-      loseLife(st, now);
+      if (loseLife(st, now)) reportRound(room);
       broadcastState(room);
       return;
     }

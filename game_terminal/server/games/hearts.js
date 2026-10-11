@@ -6,6 +6,8 @@
 // "Shooting the moon": take all 26 penalty points in one hand -> you score 0, everyone else +26.
 
 const { createDeck, shuffle, rankValue } = require('./cardCommon');
+const { seatResult } = require('./cardBots');
+const { report } = require('../report');
 
 const SEATS = 4;
 const PASS_CYCLE = ['left', 'right', 'across', 'none'];
@@ -170,7 +172,22 @@ function buildPublicStateFor(room, forClientId) {
   };
 }
 
+// Every game_over is followed by a broadcast, so report there — once: the flag re-arms on the
+// next broadcast outside game_over (a new game).
+function reportIfOver(room) {
+  const st = room.state;
+  if (st.phase !== 'game_over') { st.reported = false; return; }
+  if (st.reported) return;
+  st.reported = true;
+  // Lowest score first; equal scores share a place.
+  const ranked = [...new Set(st.scores)].sort((a, b) => a - b);
+  const placements = ranked.map((pts) => st.seats.filter((_, i) => st.scores[i] === pts));
+  const scores = Object.fromEntries(st.seats.map((id, i) => [id, st.scores[i]]));
+  report(room, seatResult(st.seats, placements, scores));
+}
+
 function broadcastState(room, ctx) {
+  reportIfOver(room);
   for (const clientId of room.clients.keys()) {
     ctx.sendTo(clientId, { v: 1, type: 'game.event', payload: { gameType: 'hearts', data: { kind: 'state', ...buildPublicStateFor(room, clientId) } } });
   }
@@ -182,6 +199,7 @@ function reject(ctx, reason) {
 
 module.exports = {
   type: 'hearts',
+  stats: { rated: true, score: { label: 'Points', better: 'low', format: 'pts' } },
 
   createInitialState() {
     return {
