@@ -86,6 +86,10 @@ fixes that actually move this number:
   already has a `graphify-out/`, use it unasked, and run `graphify update .` after
   code changes. Avoid `/graphify` on docs and media, because the semantic pass costs
   tokens.
+- **Subagent briefs must say to use graphify** when the target sub-project has a
+  `graphify-out/`. Subagents don't reliably follow CLAUDE.md, so put it in the
+  prompt itself: "use `graphify query/explain` to locate code before Read/Grep,
+  and read only the line ranges you need."
 
 ## Working across sub-projects
 
