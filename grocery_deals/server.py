@@ -3,6 +3,7 @@
 
   GET  /api/deals[?refresh=1]   settings + every offer at every store, tagged with the matching list item
   POST /api/settings            replace settings.json (validated in grocery.save_settings)
+  POST /api/trip                replace trip.json (validated in grocery.save_trip)
   GET  /api/stores?q=WORD       store search across ICA, Willys, Hemköp
 
 Binds to 127.0.0.1 only. Exits after IDLE_EXIT seconds without requests so it doesn't sit around draining battery;
@@ -49,7 +50,7 @@ class Handler(SimpleHTTPRequestHandler):
             cfg = grocery.load_settings()
             stores = [{"store": s, "offers": os_, "error": err}
                       for s, os_, err in grocery.tag(cfg, refresh="refresh" in q)]
-            return self.send_json({"settings": cfg, "stores": stores, "member_names": grocery.MEMBER,
+            return self.send_json({"settings": cfg, "stores": stores, "member_names": grocery.MEMBER, "trip": grocery.load_trip(),
                                    "fetched": time.time()})
         if u.path == "/api/stores":
             word = (q.get("q") or [""])[0].strip()
@@ -64,7 +65,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         global last_hit
         last_hit = time.time()
-        if urlparse(self.path).path != "/api/settings":
+        save = {"/api/settings": grocery.save_settings, "/api/trip": grocery.save_trip}.get(urlparse(self.path).path)
+        if not save:
             return self.send_json({"error": "not found"}, 404)
         # only the app's own page may write settings (blocks other sites POSTing to localhost)
         if self.headers.get("Origin") not in (None, f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}"):
@@ -73,9 +75,9 @@ class Handler(SimpleHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0))
             if n > 200_000:
                 raise ValueError("too large")
-            return self.send_json(grocery.save_settings(json.loads(self.rfile.read(n))))
+            return self.send_json(save(json.loads(self.rfile.read(n))))
         except (ValueError, KeyError, TypeError) as e:
-            return self.send_json({"error": f"bad settings: {e}"}, 400)
+            return self.send_json({"error": f"bad data: {e}"}, 400)
 
 
 def idle_watch(server):

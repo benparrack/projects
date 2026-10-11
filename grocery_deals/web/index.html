@@ -81,6 +81,17 @@ main { max-width: 1400px; margin: 0 auto; padding: 16px 20px 60px; }
 .saved { color: var(--accent); font-size: 12px; margin-left: 8px; }
 .empty { text-align: center; color: var(--muted); padding: 40px; }
 .stores-found { max-height: 260px; overflow: auto; margin-top: 8px; }
+.add { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--panel); color: var(--accent); font-size: 18px; line-height: 1; cursor: pointer; }
+.add[aria-pressed=true] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.card.picked { outline: 2px solid var(--accent); }
+.trow { display: flex; gap: 10px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--line); }
+.trow:first-of-type { border-top: 0; }
+.trow img { width: 40px; height: 40px; object-fit: contain; background: #fff; border-radius: 6px; }
+.trow .grow { flex: 1; min-width: 0; }
+.trow.done .grow { text-decoration: line-through; opacity: .5; }
+.trow input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
+.ended { color: var(--save); font-size: 12px; }
 code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
 </style>
 </head>
@@ -91,6 +102,7 @@ code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
   <nav class="tabs" role="tablist">
     <button role="tab" data-view="list" aria-selected="true">My list</button>
     <button role="tab" data-view="all" aria-selected="false">All deals</button>
+    <button role="tab" data-view="trip" aria-selected="false">Trip <span id="tripN"></span></button>
     <button role="tab" data-view="edit" aria-selected="false">Edit</button>
   </nav>
   <button class="btn" id="refresh" title="Fetch fresh offers from the stores">↻ Refresh</button>
@@ -127,11 +139,12 @@ async function load(refresh = false) {
   render();
 }
 
+const keyOf = o => [o.chain, o.name, o.brand, o.size, o.deal].join("|");
 // One entry per offer; the same offer at two stores of one chain merges into one card listing both.
 function allOffers() {
   const map = new Map();
   for (const {store, offers} of data.stores) for (const o of offers) {
-    const k = [store.chain, o.name, o.brand, o.size, o.deal].join("|");
+    const k = keyOf({...o, chain: store.chain});
     if (map.has(k)) map.get(k).stores.push(store); else map.set(k, {...o, chain: store.chain, stores: [store]});
   }
   return [...map.values()];
@@ -141,8 +154,9 @@ const visible = o => (ui.member || !o.member);
 function card(o) {
   const pct = o.pct ? ` · ${Math.round(o.pct * 100)}%` : "";
   const until = o.until ? new Date(o.until + "T12:00").toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"}) : "";
-  return `<article class="card ${o.item ? "onlist" : ""}">
-    <div class="pic">${o.image ? `<img loading="lazy" src="${esc(o.image)}" alt="">` : ""}${o.save ? `<span class="badge">−${kr(o.save)}${pct}</span>` : ""}</div>
+  const k = keyOf(o), picked = data.trip.some(e => e.key === k);
+  return `<article class="card ${o.item ? "onlist" : ""} ${picked ? "picked" : ""}">
+    <div class="pic"><button class="add" data-pick="${esc(k)}" aria-pressed="${picked}" title="Add to this week's trip" aria-label="Add to trip">${picked ? "✓" : "+"}</button>${o.image ? `<img loading="lazy" src="${esc(o.image)}" alt="">` : ""}${o.save ? `<span class="badge">−${kr(o.save)}${pct}</span>` : ""}</div>
     <div class="body">
       <span class="chip ${o.chain}">${esc(o.stores.map(s => s.name).join(" · "))}</span>
       <span class="name">${esc(o.name)}</span>
@@ -233,12 +247,55 @@ function renderEdit() {
   </div></div>`;
 }
 
+function renderTrip() {
+  const today = new Date().toISOString().slice(0, 10), trip = data.trip;
+  const groups = new Map();
+  for (const e of trip) { const g = e.store || "Anywhere"; groups.set(g, [...(groups.get(g) || []), e]); }
+  const save = trip.filter(e => !e.done).reduce((t, e) => t + (e.save || 0), 0);
+  const row = e => `<label class="trow ${e.done ? "done" : ""}">
+      <input type="checkbox" data-done="${esc(e.key)}" ${e.done ? "checked" : ""}>
+      ${e.image ? `<img src="${esc(e.image)}" alt="">` : ""}
+      <span class="grow"><b>${esc(e.name)}</b> <span class="meta">${esc([e.brand, e.size].filter(Boolean).join(" · "))}</span><br>
+        ${esc(e.deal)}${e.save ? ` <span class="badge">−${kr(e.save)}</span>` : ""}
+        ${e.until && e.until < today ? `<span class="ended">offer ended ${esc(e.until)}</span>` : ""}</span>
+      <button class="x" data-unpick="${esc(e.key)}" title="Remove" aria-label="Remove">×</button></label>`;
+  return `<div class="toolbar"><span class="sub">${trip.length} things · ${trip.filter(e => e.done).length} in the basket${save ? ` · saving ~${kr(save)} on the rest` : ""}</span>
+      <span style="flex:1"></span>
+      <button class="btn" id="clearDone">Clear ticked</button><button class="btn" id="clearAll">Clear all</button></div>
+    ${[...groups].map(([g, es]) => `<div class="listrow"><h3>${esc(g)} <span>${es.length}</span></h3>${es.map(row).join("")}</div>`).join("")
+      || `<div class="empty">Nothing picked yet. Press <b>+</b> on any deal, or add something below.</div>`}
+    <div class="erow"><input id="newTrip" placeholder="Add anything else, e.g. toalettpapper"><button class="btn primary" id="addTrip">Add</button></div>`;
+}
+
 function render() {
   if (!data) return;
   document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === view));
   renderSummary();
-  $("#view").innerHTML = {list: renderList, all: renderAll, edit: renderEdit}[view]();
+  $("#tripN").textContent = data.trip.filter(e => !e.done).length || "";
+  $("#view").innerHTML = {list: renderList, all: renderAll, trip: renderTrip, edit: renderEdit}[view]();
   if (view === "all") $("#sort").value = ui.sort;
+}
+
+async function saveTrip() {
+  const r = await fetch("/api/trip", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data.trip)});
+  const out = await r.json();
+  if (!r.ok) { alert(out.error); return; }
+  data.trip = out;
+}
+function pick(k) {
+  const i = data.trip.findIndex(e => e.key === k);
+  if (i >= 0) data.trip.splice(i, 1);
+  else {
+    const o = allOffers().find(o => keyOf(o) === k);
+    data.trip.push({key: k, chain: o.chain, store: o.stores[0].name, name: o.name, brand: o.brand, size: o.size,
+                    deal: o.deal, save: o.save, until: o.until, image: o.image, done: false});
+  }
+  saveTrip();
+  // update in place instead of re-rendering, so the scroll position in long lists stays put
+  document.querySelectorAll(`[data-pick="${CSS.escape(k)}"]`).forEach(b => {
+    b.setAttribute("aria-pressed", i < 0); b.textContent = i < 0 ? "✓" : "+"; b.closest(".card").classList.toggle("picked", i < 0);
+  });
+  $("#tripN").textContent = data.trip.filter(e => !e.done).length || "";
 }
 
 let saveTimer;
@@ -261,8 +318,15 @@ async function save(rerender = true) {
 
 document.addEventListener("click", async e => {
   const t = e.target;
-  if (t.closest(".tabs button")) { view = t.closest("button").dataset.view; localStorage.setItem("view", view); render(); }
+  if (t.closest(".tabs button")) { view = t.closest("button").dataset.view; localStorage.setItem("view", view); history.replaceState(null, "", "#" + view); render(); }
   else if (t.id === "refresh") load(true);
+  else if (t.dataset.pick) pick(t.dataset.pick);
+  else if (t.dataset.unpick) { e.preventDefault(); data.trip = data.trip.filter(x => x.key !== t.dataset.unpick); saveTrip(); render(); }
+  else if (t.id === "clearDone" || t.id === "clearAll") { data.trip = t.id === "clearAll" ? [] : data.trip.filter(x => !x.done); saveTrip(); render(); }
+  else if (t.id === "addTrip") {
+    const v = $("#newTrip").value.trim();
+    if (v) { data.trip.push({key: "free|" + Date.now(), name: v, done: false}); saveTrip(); render(); $("#newTrip").focus(); }
+  }
   else if (t.dataset.store) { const k = t.dataset.store; ui.off.has(k) ? ui.off.delete(k) : ui.off.add(k); render(); }
   else if (t.dataset.del) { data.settings[t.dataset.del].splice(+t.dataset.i, 1); save(); }
   else if (t.dataset.delstore) { data.settings.stores.splice(+t.dataset.delstore, 1); save(); }
@@ -279,6 +343,7 @@ document.addEventListener("click", async e => {
 document.addEventListener("keydown", e => {
   if (e.key !== "Enter") return;
   if (e.target.id === "newItem") $("#addItem").click();
+  if (e.target.id === "newTrip") $("#addTrip").click();
   if (e.target.id === "newSkip") $("#addSkip").click();
   if (e.target.id === "storeQ") searchStores();
 });
@@ -298,6 +363,7 @@ document.addEventListener("change", e => {
   else if (["onlyList", "member", "hideSkip"].includes(t.id)) ui[t.id] = t.checked;
   else if (t.id === "memberSet") { data.settings.member = t.checked; ui.member = t.checked; return save(); }
   else if (t.dataset.key) return save();
+  else if (t.dataset.done) { data.trip.find(x => x.key === t.dataset.done).done = t.checked; saveTrip(); render(); }
   else return;
   render();
 });

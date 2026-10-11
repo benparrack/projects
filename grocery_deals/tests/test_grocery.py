@@ -76,3 +76,17 @@ try:
 except ValueError:
     pass
 print("ok 3")
+
+# trip: offer snapshots and free-text entries, validated
+grocery.TRIP = Path(tempfile.mkdtemp()) / "trip.json"
+assert grocery.load_trip() == []
+t = grocery.save_trip([{"key": "ica|Kaffe", "chain": "ica", "store": "K", "name": "Kaffe", "save": "7.5"},
+                       {"key": "free|1", "name": "Mjölk", "done": 1}])
+assert t[0]["save"] == 7.5 and t[1]["save"] is None and t[1]["done"] is True and grocery.load_trip() == t
+for bad in ({"key": "x"}, [{"name": "no key"}], [{}] * 501):
+    try:
+        grocery.save_trip(bad)
+        raise AssertionError(f"accepted {bad!r:.40}")
+    except (ValueError, KeyError, TypeError):
+        pass
+print("ok 4")

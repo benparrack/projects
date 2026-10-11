@@ -14,6 +14,9 @@ own after 2 h without use.
   top show each store's total saving on your list; the best store is highlighted.
 - **All deals**: every offer, searchable. Sort by kr or % off, filter by category or store, member prices
   on or off. Offers that are identical at two stores of one chain are shown once.
+- **Trip**: press **+** on any deal to put it on this week's trip, grouped by store, with what you'll save.
+  Add anything else (toilet paper, …) as free text. Tick things off as they go in the basket, then
+  "Clear ticked". Saved in `trip.json`; entries whose offer has ended are flagged.
 - **Edit**: shopping list, skip list and stores (search any ICA/Willys/Hemköp by name or area). Saves
   automatically to `settings.json`, which the weekly push reads too. Each line shows how many offers it
   matches as you type.

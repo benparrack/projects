@@ -18,6 +18,7 @@ import requests
 
 HERE = Path(__file__).resolve().parent
 SETTINGS = HERE / "settings.json"
+TRIP = HERE / "trip.json"  # this week's picked deals + free-text items, shared by the app and `grocery.py trip`
 CACHE = HERE / "cache"
 CACHE_TTL = 3 * 3600  # offers change weekly; 3 h keeps the app snappy without going stale
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0"}
@@ -162,10 +163,31 @@ def save_settings(cfg):
     clean = {"stores": stores, "member": bool(cfg.get("member", True)), "extras": int(cfg.get("extras", 6)),
              "items": [str(i).strip() for i in cfg["items"] if str(i).strip()],
              "skip": [str(i).strip() for i in cfg.get("skip", []) if str(i).strip()]}
-    tmp = SETTINGS.with_suffix(".tmp")
-    tmp.write_text(json.dumps(clean, ensure_ascii=False, indent=2))
-    tmp.replace(SETTINGS)  # atomic, so a crash mid-write can't eat the list
-    return clean
+    return write_json(SETTINGS, clean)
+
+
+def write_json(path, obj):
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2))
+    tmp.replace(path)  # atomic, so a crash mid-write can't eat the list
+    return obj
+
+
+def load_trip():
+    return json.loads(TRIP.read_text()) if TRIP.exists() else []
+
+
+def save_trip(trip):
+    """Trip entries are snapshots of offers (so they survive the weekly offer change) or free text (no chain)."""
+    if not isinstance(trip, list) or len(trip) > 500:
+        raise ValueError("trip must be a list of at most 500 entries")
+    s = lambda v: str(v or "")[:300]
+    return write_json(TRIP, [{
+        "key": s(e["key"]), "chain": s(e.get("chain")), "store": s(e.get("store")), "name": s(e["name"]),
+        "brand": s(e.get("brand")), "size": s(e.get("size")), "deal": s(e.get("deal")),
+        "save": float(e["save"]) if e.get("save") is not None else None, "until": s(e.get("until"))[:10],
+        "image": s(e.get("image")), "done": bool(e.get("done")),
+    } for e in trip])
 
 
 def tag(cfg, refresh=False):
