@@ -795,3 +795,7 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 .activity-text a { color: var(--fg); }
 .activity-at { font-size: .85em; white-space: nowrap; }
 .activity-empty { margin: 0; font-size: .9em; }
+
+/* Fullscreen room (hub.js): only the room header and the game. */
+body.gt-fullscreen .topbar, body.gt-fullscreen .sitefooter, body.gt-fullscreen .roster { display: none; }
+body.gt-fullscreen .crt { max-width: none; }

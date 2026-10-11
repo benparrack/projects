@@ -696,6 +696,7 @@ els.btnJoinCode.addEventListener('click', () => {
 // Factored out (not just an inline listener) so game modules that take over the full viewport
 // (hiding the normal LEAVE button) can still trigger it — passed into mount() as `api.leaveRoom`.
 function leaveRoom() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   send(ClientMessage.ROOM_LEAVE, {});
   unmountGame();
   document.getElementById('room-chat').replaceChildren();
@@ -826,6 +827,20 @@ document.addEventListener('click', (e) => {
 window.addEventListener('popstate', onRoute);
 
 els.btnLeaveRoom.addEventListener('click', leaveRoom);
+
+// Fullscreen the whole page rather than the game box, so overlays games attach to <body>
+// (toasts, modals, results) stay visible; CSS hides the site chrome while it's on.
+if (document.fullscreenEnabled) {
+  const fs = document.getElementById('btn-fullscreen');
+  fs.hidden = false;
+  fs.addEventListener('click', () => {
+    (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+  });
+  document.addEventListener('fullscreenchange', () => {
+    document.body.classList.toggle('gt-fullscreen', !!document.fullscreenElement);
+    fs.textContent = document.fullscreenElement ? '✕ EXIT FULLSCREEN' : '⛶ FULLSCREEN';
+  });
+}
 
 // Bootstrap: restore a prior session (nickname/room) from this tab if present, so a
 // reconnect after a Render free-tier cold start can silently rejoin.
