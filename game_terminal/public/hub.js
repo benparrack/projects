@@ -804,6 +804,9 @@ function onRoute() {
     else if (state.clientId) showScreen('menu');
     else if (!state.nickname && !(state.auth && state.auth.user)) showScreen('nickname');
   }
+  // In-page anchors (/privacy#storage) once the page is rendered.
+  const target = location.hash && document.getElementById(location.hash.slice(1));
+  if (target) target.scrollIntoView();
 }
 
 document.addEventListener('click', (e) => {

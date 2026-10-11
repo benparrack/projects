@@ -170,7 +170,7 @@ call with the right placements. This is the long, careful part of the project.
 - [x] **Privacy Policy** (`/privacy`): what's collected (email via Firebase, username,
       stats, chat messages and how long they're kept), processors (Google/Firebase, Render),
       no ads/no selling, GDPR rights (access/export, deletion, correction), contact address
-- [ ] **Cookie/storage notice:** only strictly necessary storage (Firebase auth,
+- [x] **Cookie/storage notice:** only strictly necessary storage (Firebase auth,
       session, settings), and no analytics, so an info notice in the footer is enough
       and no consent banner is needed. If analytics get added later, a consent banner becomes required
 - [x] **Community Guidelines** (`/rules`), linked from chat and the report dialog
@@ -180,12 +180,12 @@ call with the right placements. This is the long, careful part of the project.
 - [x] **Credits/licenses** page: Three.js (MIT), Firebase, homebrew Game Boy ROM
       licenses (`gameboy/`), word lists, and fonts
 - [x] About/FAQ page, a styled 404 page, a contact email (Ben to choose)
-- [ ] Security basics: HTTP security headers (CSP allowing gstatic/firebase, HSTS,
+- [x] Security basics: HTTP security headers (CSP allowing gstatic/firebase, HSTS,
       X-Content-Type-Options, frame-ancestors), WebSocket rate limits per IP, max sockets per IP,
       and a size check on every client payload
 - [x] SEO/sharing: `<meta description>`, Open Graph tags + a share image, favicon,
       `robots.txt`
-- [ ] README "Deploying" section updated with the Firebase setup and env vars
+- [x] README "Deploying" section updated with the Firebase setup and env vars
 
 The legal pages will be solid templates, not legal advice. Before real traffic,
 Ben should read them and fill in his contact address and governing law.
@@ -245,3 +245,4 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 - 2026-10-11 — Phase 6: cosmetics. 6 name colors + 7 avatar frames unlocked by level or achievement (`COSMETICS` in progression.js; server re-checks on equip, null unequips), picker on your own profile, shown on profile/header chip/leaderboards/chat/room roster. Follow-up (not done): in-game skins (slither skins, TRON trail colors, chess/checkers board themes) need per-game color-conflict handling.
 - 2026-10-11 — Phase 6: daily challenge. `DAILY-<GAME>` joins open a private solo room seeded from sha256(date, game) (Maze Dash maze, Word Hunt grid); the run is claimed atomically at START (no rerolls, no bots, no spectators), the finish lands via results.record into `daily/{date}_{game}_{uid}` with +40 XP, rank and a UTC-day streak (Daily Grind/7-day achievements, daily frame). Menu card (today's games, your score, streak, reset countdown), `/daily` boards page + nav/footer links, `/api/daily`. `test/daily.test.js`.
 - 2026-10-11 — Phase 6 done: home screen. Live strip under the welcome line for everyone (online now, games today, hot this week → selects that game; `/api/live`, per-day counters in `meta/plays_{date}`). Friends' activity panel for accounts (ranked wins, top-3 daily finishes, 3/7/14…-day streaks, level-ups, achievement unlocks; `activity/{uid}` last 20, merged over the socket since friend lists are private; empty state links to FIND FRIENDS). `test/activity.test.js`.
+- 2026-10-11 — Phase 7 done: footer storage notice (no ads/tracking, links `/privacy#storage`; in-app anchors now scroll), HSTS also on when Render's `RENDER` env is set, WebSocket abuse limits (20 sockets per IP → 1008, 200 msg/s per socket with 400 burst, excess dropped; existing 64 KB maxPayload). README: env table (+`ADMIN_UIDS`, RENDER note), admin step, no-indexes note, built-in protections. All phases complete → polish passes next.

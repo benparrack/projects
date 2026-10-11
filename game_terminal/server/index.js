@@ -278,11 +278,31 @@ function joinAndAck(ws, session, room) {
   }
 }
 
-wss.on('connection', (ws) => {
+// Abuse limits: sockets per IP, and a per-socket message budget.
+const MAX_SOCKETS_PER_IP = 20;
+const MSG_RATE = 200; // tokens per second (drawing sends a segment per pointermove, ~144/s on fast screens)
+const MSG_BURST = 400;
+const socketsPerIp = new Map();
+// The proxy's client address (Cloudflare/Render); spoofing it only dodges the soft per-IP cap.
+const ipOf = (req) => String(req.headers['cf-connecting-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0] || req.socket.remoteAddress || '').trim();
+
+wss.on('connection', (ws, req) => {
+  const ip = ipOf(req);
+  const count = (socketsPerIp.get(ip) || 0) + 1;
+  if (count > MAX_SOCKETS_PER_IP) { ws.close(1008, 'Too many connections'); return; }
+  socketsPerIp.set(ip, count);
+  ws.on('close', () => { const n = socketsPerIp.get(ip) - 1; if (n > 0) socketsPerIp.set(ip, n); else socketsPerIp.delete(ip); });
+  let tokens = MSG_BURST;
+  let refilled = Date.now();
   const session = { clientId: crypto.randomUUID(), nickname: null, roomCode: null, uid: null, user: null };
   sessions.set(ws, session);
 
   ws.on('message', async (raw) => {
+    const t = Date.now();
+    tokens = Math.min(MSG_BURST, tokens + ((t - refilled) / 1000) * MSG_RATE);
+    refilled = t;
+    if (tokens < 1) return; // over budget: drop silently (a flood shouldn't cost us replies)
+    tokens -= 1;
     let envelope;
     try {
       envelope = JSON.parse(raw);

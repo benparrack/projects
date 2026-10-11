@@ -44,7 +44,7 @@ const SECURITY_HEADERS = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
   // Required by Firebase's signInWithPopup to talk back to the opener window.
   'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
-  ...(process.env.NODE_ENV === 'production' ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),
+  ...(process.env.NODE_ENV === 'production' || process.env.RENDER ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),
 };
 
 // Extensionless paths are app routes (/u/name, /leaderboards, /terms, ...) handled client-side by

@@ -81,9 +81,10 @@ connect, nothing breaks.
 
 | Variable | Required | What it is |
 |---|---|---|
-| `NODE_ENV` | **yes, set to `production`** | Turns on HSTS and **turns off the dev sign-in bypass**. Without it and without Firebase, the server accepts `dev:<name>` tokens, so anyone could sign in as anyone. |
+| `NODE_ENV` | recommended: `production` | Turns on HSTS and **turns off the dev sign-in bypass** (`dev:<name>` tokens, which would let anyone sign in as anyone). Render also sets `RENDER=true` on every service, which does the same, so a Render deploy is safe even without it. |
 | `FIREBASE_SERVICE_ACCOUNT` | for accounts | The whole service-account JSON (one line). Enables Firebase token checks and the Firestore database. **Secret: never commit it.** |
 | `FIREBASE_WEB_CONFIG` | for accounts | The web app's `firebaseConfig` object as JSON. Not secret; served to browsers from `/api/config`. |
+| `ADMIN_UIDS` | to moderate | Comma-separated Firebase uids that get the `/admin` moderation console (reports queue, mutes, bans, renames). Find your uid in Firebase → Authentication → Users after signing in once. |
 | `PORT` | no | Set by Render automatically (local default is 3000). |
 
 Without the Firebase vars the site still runs: everyone plays as a guest, and nothing is
@@ -108,3 +109,14 @@ bypass, which lets you test accounts without a Firebase project.
    JSON into `FIREBASE_SERVICE_ACCOUNT` on Render, then delete the local file.
 8. Render → your service → **Environment:** set the three variables above and redeploy. The
    server logs `accounts: auth=<mode> db=<backend>` at startup; you want `auth=firebase`.
+9. Sign in on the live site once, then add your uid to `ADMIN_UIDS` to get `/admin`.
+
+No Firestore indexes are needed: every query is a single equality filter or a single
+`orderBy`, which Firestore indexes automatically.
+
+### Built-in protections
+
+Security headers (CSP, HSTS, `nosniff`, `frame-ancestors 'self'`, referrer policy) are set in
+`server/static.js`. The WebSocket server caps each IP at 20 sockets, gives each socket a
+200-messages/second budget (with a burst of 400; extra messages are dropped), and rejects
+payloads over 64 KB. Chat has its own rate limits and filters (`server/chat.js`).
