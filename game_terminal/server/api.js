@@ -4,6 +4,7 @@
 const { publicUser } = require('./accounts');
 const { tierOf, seasonOf } = require('./ratings');
 const { levelFor, ACHIEVEMENT_LIST, cosmeticsFor } = require('./progression');
+const { isAdmin } = require('./moderation');
 const { DAILY_GAMES } = require('./daily');
 
 const BOARD_TTL_MS = 5 * 60 * 1000;
@@ -102,7 +103,7 @@ function createApi({ db, accounts, daily = null, live = null, authMode, firebase
       return [200, {
         user: publicUser(found.user),
         progress: levelFor(found.user.xp || 0),
-        cosmetics: cosmeticsFor(found.user),
+        cosmetics: cosmeticsFor(found.user, isAdmin(found.uid, found.user)),
         achievements: ACHIEVEMENT_LIST.map((a) => ({ ...a, at: (found.user.achievements || {})[a.id] || null })),
         stats: stats.map(({ id, uid, ...s }) => ({ ...s, ...(s.rating != null ? { tier: tierOf(s.rating) } : {}), score: ((registry[s.gameType] || {}).stats || {}).score || null })),
         matches: matches.map(stripUids),

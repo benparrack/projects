@@ -389,7 +389,7 @@ wss.on('connection', (ws, req) => {
 
       case ClientMessage.ACCOUNT_UPDATE: {
         if (!session.uid || !session.user) return;
-        const res = await accounts.updateProfile(session.uid, payload || {});
+        const res = await accounts.updateProfile(session.uid, payload || {}, isAdmin(session.uid, session.user));
         if (res.error) { send(ws, ServerMessage.ACCOUNT_ERROR, { for: 'update', message: res.error }); return; }
         session.user = res.user;
         social.forgetProfile(session.uid);

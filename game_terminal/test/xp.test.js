@@ -67,6 +67,13 @@ const B = ['B', 'Bob', 'u2'];
   assert.match((await accounts.updateProfile('u1', { cosmetics: { nameColor: 'magenta' } })).error, /Locked: Reach level 10/);
   assert.match((await accounts.updateProfile('u1', { cosmetics: { frame: 'gold' } })).error, /Locked: Unlock "Champion"/);
   assert.strictEqual((await accounts.updateProfile('u1', { cosmetics: { frame: 'nope' } })).error, 'Unknown cosmetic.');
+  // Staff: everything unlocked, plus staff-only items nobody else can equip or even see.
+  assert.match((await accounts.updateProfile('u1', { cosmetics: { nameColor: 'sysop' } })).error, /Locked: Staff only/);
+  assert.ok((await accounts.updateProfile('u1', { cosmetics: { nameColor: 'sysop', frame: 'gold' } }, true)).user);
+  await accounts.updateProfile('u1', { cosmetics: { nameColor: 'cyan', frame: 'neon' } });
+  const { cosmeticsFor } = require('../server/progression');
+  assert.ok(!cosmeticsFor({}).some((c) => c.id === 'sysop'));
+  assert.ok(cosmeticsFor({}, true).every((c) => c.unlocked) && cosmeticsFor({}, true).some((c) => c.id === 'sysop'));
   assert.deepStrictEqual((await db.get('users/u1')).cosmetics, { nameColor: 'cyan', frame: 'neon' });
   await accounts.updateProfile('u1', { cosmetics: { frame: null } });
   assert.deepStrictEqual((await db.get('users/u1')).cosmetics, { nameColor: 'cyan', frame: null });

@@ -100,7 +100,7 @@ function createAccounts(db) {
     return { user: await getUser(uid) };
   }
 
-  async function updateProfile(uid, { avatar, settings, cosmetics }) {
+  async function updateProfile(uid, { avatar, settings, cosmetics }, staff = false) {
     const patch = {};
     if (cosmetics && typeof cosmetics === 'object') {
       const user = await getUser(uid);
@@ -111,7 +111,7 @@ function createAccounts(db) {
         if (id == null) { next[slot] = null; continue; } // null, not delete: merge is deep
         const c = COSMETICS.find((x) => x.slot === slot && x.id === id);
         if (!c) return { error: 'Unknown cosmetic.' };
-        if (!hasCosmetic(c, user || {})) return { error: `Locked: ${c.how}.` };
+        if (!hasCosmetic(c, user || {}, staff)) return { error: `Locked: ${c.how}.` };
         next[slot] = id;
       }
       patch.cosmetics = next;

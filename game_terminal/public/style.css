@@ -727,7 +727,11 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 .nc-magenta { color: #ff4fd8 !important; }
 .nc-ice { color: #bfefff !important; text-shadow: 0 0 6px rgba(160, 230, 255, .7); }
 .nc-gold { color: #ffd34d !important; text-shadow: 0 0 6px rgba(255, 200, 40, .6); }
-.nc-rainbow { background: linear-gradient(90deg, #ff4d4d, #ffb000, #39ff14, #22e5ff, #ff4fd8); -webkit-background-clip: text; background-clip: text; color: transparent !important; text-shadow: none; }
+.nc-rainbow { background: linear-gradient(90deg, #ff4d4d, #ffb000, #39ff14, #22e5ff, #ff4fd8, #ff4d4d) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important; text-shadow: none; animation: nc-flow 4s linear infinite; }
+@keyframes nc-flow { to { background-position: -200% 0; } }
+/* Staff only: a hot red/amber/white sweep with a glow that flickers like a failing CRT. */
+.nc-sysop { background: linear-gradient(90deg, #ff3b3b, #ffb000, #fff6d8, #ffb000, #ff3b3b) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important; filter: drop-shadow(0 0 4px rgba(255, 80, 40, .7)); animation: nc-flow 2.5s linear infinite, nc-flicker 5s steps(1) infinite; }
+@keyframes nc-flicker { 0%, 100% { opacity: 1; } 91% { opacity: .55; } 92% { opacity: 1; } 95% { opacity: .7; } 96% { opacity: 1; } }
 .avatar.af { border-width: 2px; }
 .af-neon { border-color: var(--fg); box-shadow: 0 0 6px rgba(57, 255, 20, .7); }
 .af-amber { border-color: var(--accent); box-shadow: 0 0 6px rgba(255, 176, 0, .6); }
@@ -735,8 +739,16 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 @keyframes af-pulse { 50% { box-shadow: 0 0 10px rgba(255, 77, 77, .9); } }
 .af-circuit { border: 2px dashed #22e5ff; }
 .af-daily { border: 2px double var(--fg); outline: 1px solid rgba(57, 255, 20, .35); outline-offset: 1px; }
-.af-gold { border-color: #ffd34d; box-shadow: 0 0 0 1px #8a6400, 0 0 10px rgba(255, 211, 77, .7); }
-.af-diamond { border-color: #bfefff; box-shadow: 0 0 0 1px #3a7fa0, 0 0 12px rgba(160, 230, 255, .8); }
+.af-gold { border-color: #ffd34d; box-shadow: 0 0 0 1px #8a6400, 0 0 10px rgba(255, 211, 77, .7); animation: af-gold 2.4s ease-in-out infinite; }
+@keyframes af-gold { 50% { border-color: #fff1b0; box-shadow: 0 0 0 1px #8a6400, 0 0 16px rgba(255, 211, 77, 1); } }
+.af-diamond { border-color: #bfefff; box-shadow: 0 0 0 1px #3a7fa0, 0 0 12px rgba(160, 230, 255, .8); animation: af-diamond 3s linear infinite; }
+@keyframes af-diamond { 33% { border-color: #ffd6ff; box-shadow: 0 0 0 1px #8a3fa0, 0 0 14px rgba(255, 180, 255, .8); } 66% { border-color: #d6fff0; box-shadow: 0 0 0 1px #3aa07f, 0 0 14px rgba(160, 255, 220, .8); } }
+.af-sysop { border-color: #ff3b3b; animation: af-sysop 1.8s linear infinite; }
+@keyframes af-sysop {
+  0%, 100% { border-color: #ff3b3b; box-shadow: 0 0 0 1px #5a0000, 0 0 10px rgba(255, 59, 59, .9); }
+  50% { border-color: #ffb000; box-shadow: 0 0 0 1px #5a3a00, 0 0 18px rgba(255, 176, 0, 1), 0 0 4px #fff inset; }
+}
+@media (prefers-reduced-motion: reduce) { .nc-rainbow, .nc-sysop, .avatar.af { animation: none !important; } }
 .cos-group + .cos-group { margin-top: 14px; }
 .cos-title { font-size: 12px; letter-spacing: 1px; color: var(--muted); font-weight: normal; margin: 10px 0 6px; }
 .cos-row { display: flex; flex-wrap: wrap; gap: 8px; }

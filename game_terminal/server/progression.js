@@ -98,7 +98,8 @@ function newAchievements({ summary, me, stat, allStats, have = {}, extra = {} })
 // Client-safe catalog (no functions), for the profile grid and unlock toasts.
 const ACHIEVEMENT_LIST = ACHIEVEMENTS.map(({ id, name, desc }) => ({ id, name, desc }));
 
-// Cosmetics: [slot, id, name, unlock] where unlock is a level number or an achievement id.
+// Cosmetics: [slot, id, name, unlock] where unlock is a level number, an achievement id, or
+// 'staff' (admins only, hidden from everyone else). Staff have every cosmetic unlocked.
 // The client styles them by class (.nc-<id> name colors, .af-<id> avatar frames).
 const COSMETICS = [
   ['nameColor', 'amber', 'Amber', 3],
@@ -107,6 +108,7 @@ const COSMETICS = [
   ['nameColor', 'ice', 'Ice', 'rating_1400'],
   ['nameColor', 'gold', 'Gold', 'wins_50'],
   ['nameColor', 'rainbow', 'Rainbow', 25],
+  ['nameColor', 'sysop', 'Sysop', 'staff'],
   ['frame', 'neon', 'Neon', 2],
   ['frame', 'amber', 'Amber', 8],
   ['frame', 'pulse', 'Pulse', 'streak_5'],
@@ -114,12 +116,14 @@ const COSMETICS = [
   ['frame', 'daily', 'Calendar', 'daily_7'],
   ['frame', 'gold', 'Gold', 'wins_100'],
   ['frame', 'diamond', 'Diamond', 'rating_1400'],
+  ['frame', 'sysop', 'Sysop', 'staff'],
 ].map(([slot, id, name, unlock]) => {
   const ach = typeof unlock === 'string' && ACHIEVEMENT_LIST.find((a) => a.id === unlock);
-  return { slot, id, name, unlock, how: ach ? `Unlock "${ach.name}"` : `Reach level ${unlock}` };
+  return { slot, id, name, unlock, how: unlock === 'staff' ? 'Staff only' : ach ? `Unlock "${ach.name}"` : `Reach level ${unlock}` };
 });
-const hasCosmetic = (c, user) => (typeof c.unlock === 'number' ? (user.level || 1) >= c.unlock : !!(user.achievements || {})[c.unlock]);
-// The catalog as one user sees it (with an `unlocked` flag).
-const cosmeticsFor = (user) => COSMETICS.map(({ unlock, ...c }) => ({ ...c, unlocked: hasCosmetic({ unlock }, user) }));
+const hasCosmetic = (c, user, staff = false) => staff || (typeof c.unlock === 'number' ? (user.level || 1) >= c.unlock : !!(user.achievements || {})[c.unlock]);
+// The catalog as one user sees it (with an `unlocked` flag); staff-only items only show to staff.
+const cosmeticsFor = (user, staff = false) => COSMETICS.filter((c) => staff || c.unlock !== 'staff')
+  .map(({ unlock, ...c }) => ({ ...c, unlocked: hasCosmetic({ unlock }, user, staff) }));
 
 module.exports = { DAILY_CAP, matchXp, grantXp, xpToNext, levelFor, newAchievements, ACHIEVEMENT_LIST, COSMETICS, hasCosmetic, cosmeticsFor };
