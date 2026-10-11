@@ -78,9 +78,9 @@ export const HOWTO = {
       'Highest total after ten frames wins; a tie is a draw.',
     ],
     controls: [
-      'Drag sideways to line up the ball on the foul line.',
-      'Swipe up and let go: direction aims, swipe speed sets ball speed.',
-      'Curve the swipe to put hook on the ball.',
+      'Press and slide sideways: the ball follows your finger along the foul line.',
+      'Flick up toward the pins and let go: the ball rolls where you flicked; a faster flick rolls faster.',
+      'Curve the flick to hook it (bow out left, sweep back right = hooks right). A faint dotted line previews the path.',
     ],
   },
   bs: {
@@ -181,7 +181,7 @@ export const HOWTO = {
       'Clear all of the opponent\'s cups to win. Red throws first; a rematch swaps colours.',
     ],
     controls: [
-      'Drag up from anywhere on the table and let go: sideways aims, a longer drag throws harder.',
+      'Pull down from anywhere on the table and let go, like a slingshot: pull left to aim right (and vice versa), a longer pull throws harder.',
     ],
   },
   darts: {
@@ -194,8 +194,9 @@ export const HOWTO = {
       'Game stops after 20 rounds: lowest remaining (01) or most points (Cricket) wins.',
     ],
     controls: [
-      'Press and hold on the board to raise the dart; a wobbling reticle appears.',
-      'Drag to adjust and release when the reticle is steady (green).',
+      'Grab below the board, line up under your target and flick UP; let go while still moving.',
+      'Where you let go sets left/right. Flick speed sets height: too slow drops low, too fast flies high.',
+      'Lean or curve in the flick pushes the dart wide. After each dart you see its speed/lean/curve.',
     ],
   },
   dotsboxes: {
@@ -339,6 +340,7 @@ export const HOWTO = {
     rules: [
       'Both balls play the same hole; putts alternate stroke by stroke.',
       'Water = +1 stroke and a retry from where you hit.',
+      'Windmills and sliders knock resting balls too — no stroke for that (knocked into water: dropped nearby, no penalty).',
       '6 strokes max per hole — miss the 6th and you score 7.',
       'Lowest total after 9 holes wins; the lower score on the last hole tees off first.',
     ],
@@ -397,7 +399,7 @@ export const HOWTO = {
     ],
     controls: [
       'Click/drag on the table to aim; ←/→ fine-tune (Shift = finer).',
-      'Drag the power bar down and release to shoot (or ↑/↓ then Space); set spin on the cue-ball widget.',
+      'Drag along the power bar (below the table) and release to shoot (or ↑/↓ then Space); set spin on the cue-ball widget.',
       'With ball in hand, drag the cue ball to place it.',
     ],
   },
@@ -434,11 +436,13 @@ export const HOWTO = {
       'Take turns firing at the enemy grid.',
       'A hit lets you fire again; a miss passes the turn. Sunk ships are revealed.',
       'First to sink the whole enemy fleet wins.',
+      'Optional POWERS (either player can switch them on before the battle; off by default): Barrage fires at every unshot cell of one row or column (first on your 10th turn, then every 12 turns); Radar shows which cells of a 2x2 area hold a ship, without hitting them (first on your 5th turn, then every 9). Using a power ends your turn. Only you see your radar readings; your opponent sees where you scanned.',
     ],
     controls: [
       'Placing: drag ships to move them; tap a ship then tap again (or R / ROTATE) to rotate.',
-      'RANDOMIZE for a random layout, then READY.',
-      'Battle: click a cell on the enemy grid to fire.',
+      'RANDOMIZE for a random layout, then READY. Tap POWERS: ON/OFF to change the rule (both players must re-ready).',
+      'Battle: click a cell on the enemy grid to fire. Your own fleet shows every incoming shot live, and the ship they hit.',
+      'Powers: press BARRAGE or RADAR, hover to preview the target, click to use it (touch: tap to preview, tap again to fire). R flips Barrage between row and column; Esc cancels.',
     ],
   },
   shooter: {
@@ -465,7 +469,8 @@ export const HOWTO = {
       'First to the target (15 or 21) wins; the round\'s scorer leads the next round.',
     ],
     controls: [
-      'Drag sideways to place your puck, then drag UP and let go: tilt aims, length is power.',
+      'Drag sideways to place your puck, then FLICK UP and let go while still moving: tilt aims, flick speed is power.',
+      'Stop before letting go to cancel the shot.',
     ],
   },
   skeeball: {
@@ -525,6 +530,7 @@ export const HOWTO = {
     rules: [
       'Each turn you may drive with that turn\'s fuel, aim, choose a weapon and fire.',
       'Shell is unlimited; Big Shot, Triple and Bouncer have 2 rounds each. Wind changes every turn.',
+      'Triple flies as one shell and splits into three at the top of its arc, so it spreads right over the target.',
       'Blasts carve craters, and tanks that fall a long way take damage.',
       'First tank to 0 HP loses; after 30 shots in total the healthier tank wins.',
     ],

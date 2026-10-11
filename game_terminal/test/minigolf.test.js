@@ -7,7 +7,7 @@ const assert = require('assert');
 const plugin = require('../server/games/minigolf');
 const Sim = require('../public/games/minigolf/sim.js');
 
-const { timing, applyShot, total } = plugin._internal;
+const { timing, applyShot, applyPush, nextKnock, scheduleKnock, total, FRAME_MS } = plugin._internal;
 let failures = 0;
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -178,8 +178,145 @@ test('rules: t0 window — stale/future t0 falls back to server time', () => {
   const rec = applyShot(st, 'red', { angle: 0, power: 0.3, t0: now - 5000 }, now);
   assert.strictEqual(rec.t0, now);
   st.busyUntil = 0;
+  const rolledUntil = st.settledAt;
+  assert.ok(rolledUntil > now);
+  // a putt can't claim to start before the last ball came to rest
   const rec2 = applyShot(st, 'blue', { angle: 0, power: 0.3, t0: now - 300 }, now);
-  assert.strictEqual(rec2.t0, now - 300);
+  assert.strictEqual(rec2.t0, Math.ceil(rolledUntil));
+  st.busyUntil = 0;
+  st.settledAt = 0;
+  const rec3 = applyShot(st, 'red', { angle: 0, power: 0.3, t0: now - 300 }, now);
+  assert.strictEqual(rec3.t0, now - 300);
+});
+
+// ---- movers vs resting balls ----
+// deepest overlap of a ball at (x,y) with any mover at server time ms (0 = touching at most)
+function moverDepth(hi, x, y, ms) {
+  let d = 0;
+  for (const c of Sim.moverShapes(hi, (ms % 60000) / 1000)) {
+    const dx = c.bx - c.ax;
+    const dy = c.by - c.ay;
+    const l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, ((x - c.ax) * dx + (y - c.ay) * dy) / l2)) : 0;
+    d = Math.max(d, Sim.BALL_R + c.r - Math.hypot(x - c.ax - dx * t, y - c.ay - dy * t));
+  }
+  return d;
+}
+// a room on hole `hi` with red resting at p (in a sweep), blue on the tee, rest time chosen clear of the movers
+function knockRoom(hi, p, base = 1_000_000) {
+  const room = seated();
+  const st = room.state;
+  st.hole = hi;
+  st.balls = { red: { x: p.x, y: p.y, done: false, sunk: false }, blue: { ...teeOf(hi), done: false, sunk: false } };
+  let t = base;
+  while (moverDepth(hi, p.x, p.y, t) > 0) t += 1;
+  st.settledAt = t;
+  return room;
+}
+const SWEEP_SPOTS = [[2, 150, 330], [2, 210, 250], [2, 228, 318], [7, 150, 215], [7, 250, 345], [7, 120, 352], [8, 120, 250], [8, 70, 200], [8, 135, 190]];
+
+test('knocks: a resting ball in a windmill/slider path is knocked out, no stroke, never overlapped', () => {
+  for (const [hi, x, y] of SWEEP_SPOTS) {
+    assert.ok(Sim.inSweep(hi, x, y), `${hi} ${x},${y} in sweep`);
+    const room = knockRoom(hi, { x, y });
+    const st = room.state;
+    const k = nextKnock(st);
+    assert.ok(k && k.color === 'red', `knock found on hole ${hi}`);
+    // nothing touches the ball until the knock
+    for (let ms = st.settledAt; ms < k.at; ms++) assert.ok(moverDepth(hi, x, y, ms) <= 0, `overlap before knock at ${ms}`);
+    const rec = applyPush(st, 'red', k.at, k.at - timing.lead);
+    assert.ok(rec && rec.push && rec.by === 'red');
+    assert.deepStrictEqual(st.strokes, { red: 0, blue: 0 }, 'no stroke for a knock');
+    assert.strictEqual(st.turn, 'red', 'turn unchanged');
+    assert.ok(rec.events.some((e) => e.type === 'mover'), 'mover hit event');
+    rec.frames.forEach(([fx, fy], i) => assert.ok(moverDepth(hi, fx, fy, k.at + i * FRAME_MS) < 0.05, `hole ${hi} frame ${i} overlaps`));
+    const b = st.balls.red;
+    assert.ok(Sim.inPoly(Sim.HOLES[hi].fairway, b.x, b.y), 'stays on the course');
+    assert.ok(b.x !== x || b.y !== y, 'ball moved');
+    // after it settles, it's clear of the movers until the next knock (if any)
+    const n = nextKnock(st);
+    const until = n ? n.at : st.settledAt + 6000;
+    for (let ms = Math.ceil(st.settledAt); ms < until; ms += 2) assert.ok(moverDepth(hi, b.x, b.y, ms) < 0.05, `hole ${hi} overlap after rest`);
+    // the game continues: red can putt (after the knock's busy window)
+    st.busyUntil = 0;
+    assert.ok(applyShot(st, 'red', { angle: -Math.PI / 2, power: 0.3, t0: st.settledAt }, Math.ceil(st.settledAt)));
+    assert.strictEqual(st.strokes.red, 1);
+  }
+});
+
+test('knocks: the other ball gets knocked during a putt (record.side), no stroke for it', () => {
+  const room = knockRoom(2, { x: 150, y: 330 });
+  const st = room.state;
+  st.turn = 'blue';
+  const k = nextKnock(st);
+  const rec = applyShot(st, 'blue', { angle: -Math.PI / 2, power: 0.5, t0: k.at - 40 }, k.at - 40);
+  assert.ok(rec.side && rec.side.color === 'red', 'side path for red');
+  assert.ok(rec.side.frames.length > 2);
+  assert.deepStrictEqual(rec.post.balls.red, { ...st.balls.red });
+  assert.ok(st.balls.red.x !== 150 || st.balls.red.y !== 330);
+  assert.deepStrictEqual(st.strokes, { red: 0, blue: 1 });
+  rec.side.frames.forEach(([fx, fy], i) => assert.ok(moverDepth(2, fx, fy, rec.t0 + i * FRAME_MS) < 0.05, `side frame ${i} overlaps`));
+  assert.strictEqual(st.turn, 'red');
+});
+
+test('knocks: a putt that stops in a sweep zone gets knocked next (no free pass)', () => {
+  let found = 0;
+  for (let p = 0.2; p <= 0.34 && found < 3; p += 0.01) {
+    const room = knockRoom(2, { x: 180, y: 420 });
+    const st = room.state;
+    applyShot(st, 'red', { angle: -2.1, power: p, t0: st.settledAt }, st.settledAt);
+    const b = { ...st.balls.red };
+    if (b.done || !Sim.inSweep(2, b.x, b.y)) continue;
+    found++;
+    const k = nextKnock(st);
+    assert.ok(k && k.color === 'red' && k.at - st.settledAt < 4000, 'knock within one windmill turn');
+    for (let ms = Math.ceil(st.settledAt); ms < k.at; ms++) assert.ok(moverDepth(2, b.x, b.y, ms) < 0.05, 'clear until the knock');
+    st.busyUntil = 0;
+    const rec = applyPush(st, 'red', k.at, k.at);
+    assert.ok(rec && rec.push);
+    assert.strictEqual(st.strokes.red, 1);
+    assert.strictEqual(st.turn, 'blue', 'still blue to putt after red was knocked');
+  }
+  assert.ok(found > 0, 'some putt stopped in the sweep');
+});
+
+test('knocks: safe drop spot is clear of movers, rails and water', () => {
+  for (const [hi, x, y] of SWEEP_SPOTS) {
+    const s = Sim.safeSpot(hi, x, y);
+    assert.ok(!Sim.inSweep(hi, s.x, s.y) && Sim.inPoly(Sim.HOLES[hi].fairway, s.x, s.y));
+    assert.ok(Math.hypot(s.x - x, s.y - y) < 80, 'near the knock');
+  }
+});
+
+test('knocks: server timer knocks a resting ball, then play (and bots) carry on', async () => {
+  const saved = { ...timing };
+  Object.assign(timing, { min: 0, max: 2 });
+  try {
+    const room = knockRoom(2, { x: 150, y: 330 }, Date.now());
+    const st = room.state;
+    const k = nextKnock(st);
+    scheduleKnock(room);
+    await wait(Math.max(0, k.at - Date.now()) + 50);
+    const s1 = lastState(room);
+    assert.ok(s1.lastShot && s1.lastShot.push && s1.lastShot.by === 'red', 'knock broadcast');
+    assert.strictEqual(s1.strokes.red, 0);
+    // a putt during the knock is busy-rejected; afterwards it's accepted
+    act(room, 'A', { kind: 'putt', angle: -1.2, power: 0.3 });
+    assert.strictEqual(lastReject(room, 'A'), 'busy');
+    // hand blue to a bot with red's ball in the windmill: the bot must still putt
+    plugin.onLeave(room, { clientId: 'B' });
+    act(room, 'X', { kind: 'sit', seat: 'blue', bot: true, level: 'easy' });
+    st.hole = 2;
+    st.turn = 'blue';
+    st.balls.blue = { x: 150, y: 330, done: false, sunk: false };
+    st.settledAt = Date.now();
+    st.busyUntil = 0;
+    scheduleKnock(room);
+    plugin.onMessage(room, { clientId: 'A' }, { kind: 'setBotLevel', seat: 'blue', level: 'easy' }, ctxFor(room, 'A'));
+    const t = Date.now();
+    while (st.strokes.blue === 0 && Date.now() - t < 6000) await wait(20);
+    assert.strictEqual(st.strokes.blue, 1, 'bot putted');
+  } finally { Object.assign(timing, saved); }
 });
 
 function finishGame(st, scoreFn) {

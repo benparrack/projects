@@ -5,7 +5,7 @@
 const assert = require('assert');
 const plugin = require('../server/games/seabattle');
 
-const { N, FLEET, shipCells, normalizeFleet, randomFleet, chooseShot, fire } = plugin._internal;
+const { N, FLEET, POWERS, shipCells, normalizeFleet, randomFleet, chooseShot, fire, usePower, botMove, powerLeft } = plugin._internal;
 let failures = 0;
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -256,6 +256,183 @@ test('bot plays a whole game against a scripted human to the end', async () => {
   }
   assert.strictEqual(room.state.phase, 'game_over');
   assert.ok(room.state.winner === 'p1' || room.state.winner === 'p2');
+});
+
+// ---- powers ------------------------------------------------------------------------------------
+function poweredBattle() {
+  const room = makeRoom();
+  seatTwo(room);
+  act(room, 'A', { kind: 'setPowers', on: true });
+  act(room, 'A', { kind: 'placeFleet', ships: ROWS_FLEET });
+  act(room, 'B', { kind: 'placeFleet', ships: ROWS_FLEET });
+  return room;
+}
+// Burn turns with misses (odd rows of ROWS_FLEET are empty) until `seat` has taken `n` turns.
+function burnTurns(room, n) {
+  const misses = [];
+  for (let r = 1; r < N; r += 2) for (let c = 0; c < N; c++) misses.push([r, c]);
+  const ids = { p1: 'A', p2: 'B' };
+  while (room.state.turnsTaken.p1 < n || room.state.turnsTaken.p2 < n || room.state.turn !== 'p1') {
+    const seat = room.state.turn;
+    const [r, c] = misses.find(([rr, cc]) => !room.state.shots[seat][rr][cc]);
+    act(room, ids[seat], { kind: 'fire', r, c });
+  }
+}
+
+test('powers toggle: default off, seated-only, pre-game only, un-readies humans, rejected when off', () => {
+  const room = makeRoom();
+  assert.strictEqual(room.state.powers, false);
+  act(room, 'C', { kind: 'setPowers', on: true }); // spectator
+  assert.strictEqual(room.state.powers, false);
+  seatTwo(room);
+  act(room, 'A', { kind: 'setPowers', on: 'yes' });
+  assert.strictEqual(room.state.powers, false);
+  act(room, 'A', { kind: 'placeFleet', ships: ROWS_FLEET });
+  act(room, 'B', { kind: 'setPowers', on: true });
+  assert.strictEqual(room.state.powers, true);
+  assert.strictEqual(room.state.ready.p1, false, 'rule change un-readies');
+  assert.strictEqual(lastFor(room, 'C', 'state').powers, true, 'everyone sees the rule');
+  act(room, 'B', { kind: 'setPowers', on: false });
+  act(room, 'A', { kind: 'placeFleet', ships: ROWS_FLEET });
+  act(room, 'B', { kind: 'placeFleet', ships: ROWS_FLEET });
+  act(room, 'A', { kind: 'setPowers', on: true }); // too late
+  assert.strictEqual(room.state.powers, false);
+  act(room, 'A', { kind: 'power', power: 'radar', r: 0, c: 0 });
+  assert.strictEqual(lastFor(room, 'A', 'moveRejected').reason, 'powers_off');
+});
+
+test('powers: validation and cooldowns counted in own turns', () => {
+  const room = poweredBattle();
+  act(room, 'A', { kind: 'power', power: 'radar', r: 0, c: 0 });
+  assert.strictEqual(lastFor(room, 'A', 'moveRejected').reason, 'power_cooldown');
+  burnTurns(room, POWERS.barrage.first);
+  assert.strictEqual(powerLeft(room.state, 'p1', 'barrage'), 0);
+  for (const bad of [{ power: 'nuke' }, { power: 'radar', r: 9, c: 0 }, { power: 'radar', r: -1, c: 0 }, { power: 'radar', r: 1.5, c: 0 },
+    { power: 'barrage', axis: 'diag', i: 0 }, { power: 'barrage', axis: 'row', i: 10 }, { power: 'barrage', axis: 'row' }, { power: '__proto__' }]) {
+    act(room, 'A', { kind: 'power', ...bad });
+    assert.strictEqual(lastFor(room, 'A', 'moveRejected').reason, 'invalid', JSON.stringify(bad));
+  }
+  act(room, 'B', { kind: 'power', power: 'radar', r: 0, c: 0 });
+  assert.strictEqual(lastFor(room, 'B', 'moveRejected').reason, 'not_your_turn');
+  act(room, 'A', { kind: 'power', power: 'barrage', axis: 'row', i: 1 }); // row 1 is all burned misses
+  assert.strictEqual(lastFor(room, 'A', 'moveRejected').reason, 'nothing_left');
+  const t = room.state.turnsTaken.p1;
+  act(room, 'A', { kind: 'power', power: 'radar', r: 2, c: 2 });
+  assert.strictEqual(room.state.turn, 'p2', 'a power ends the turn');
+  assert.strictEqual(powerLeft(room.state, 'p1', 'radar'), POWERS.radar.cooldown);
+  assert.strictEqual(room.state.powerAt.p1.radar, t + POWERS.radar.cooldown);
+  assert.strictEqual(powerLeft(room.state, 'p1', 'barrage'), 0, 'cooldowns are per power');
+});
+
+test('barrage fires a whole line (skipping shot cells), can sink and win; radar reads a 2x2', () => {
+  const room = poweredBattle();
+  burnTurns(room, POWERS.barrage.first);
+  act(room, 'A', { kind: 'fire', r: 0, c: 0 }); // hit, keeps the turn
+  act(room, 'A', { kind: 'power', power: 'barrage', axis: 'row', i: 0 }); // carrier row: 5 hits + misses
+  const ls = room.state.lastShot;
+  assert.strictEqual(ls.power, 'barrage');
+  assert.strictEqual(ls.cells.length, 9, 'already-shot (0,0) skipped');
+  assert.strictEqual(ls.result, 'sunk');
+  assert.ok(room.state.sunk.p1.some((s) => s.id === 'carrier'));
+  assert.strictEqual(room.state.turn, 'p2');
+  // B scans the battleship row: cells (2,0),(2,1) ship, (3,0),(3,1) empty.
+  const before = room.state.shotCount.p2;
+  act(room, 'B', { kind: 'power', power: 'radar', r: 2, c: 0 });
+  assert.deepStrictEqual([room.state.radar.p2[2][0], room.state.radar.p2[2][1], room.state.radar.p2[3][0], room.state.radar.p2[3][1]], ['ship', 'ship', 'empty', 'empty']);
+  assert.strictEqual(room.state.shotCount.p2, before, 'radar fires no shells');
+  assert.strictEqual(room.state.turn, 'p1');
+  // Barrage that finishes the fleet ends the game mid-line.
+  const st = room.state;
+  for (const s of ROWS_FLEET.slice(1, 4)) for (const [r, c] of shipCells(s)) st.shots.p1[r][c] = 'hit';
+  st.shots.p1[8][0] = 'hit'; // destroyer (8,0)-(8,1): column 1 finishes it
+  st.sunk.p1 = ROWS_FLEET.slice(0, 4).map((s) => ({ ...s }));
+  st.turn = 'p1';
+  st.powerAt.p1.barrage = 0;
+  act(room, 'A', { kind: 'power', power: 'barrage', axis: 'col', i: 1 });
+  assert.strictEqual(st.phase, 'game_over');
+  assert.strictEqual(st.winner, 'p1');
+});
+
+test('powers never leak the hidden fleet or radar readings to the opponent / spectators', () => {
+  const room = poweredBattle();
+  burnTurns(room, POWERS.radar.first);
+  act(room, 'A', { kind: 'power', power: 'radar', r: 0, c: 0 });
+  const vA = lastFor(room, 'A', 'state');
+  const vB = lastFor(room, 'B', 'state');
+  const vC = lastFor(room, 'C', 'state');
+  assert.strictEqual(vA.radar.p1[0][0], 'ship');
+  assert.strictEqual(vB.radar.p1, null, 'opponent does not get the reading');
+  assert.strictEqual(vC.radar.p1, null, 'spectator does not get the reading');
+  assert.deepStrictEqual(vB.radarAreas.p1, [{ r: 0, c: 0 }], 'but everyone sees where the scan was');
+  assert.strictEqual(vB.lastShot.power, 'radar');
+  assert.ok(!('cells' in vB.lastShot), 'radar lastShot has no results');
+  assert.strictEqual(vA.fleets.p2, null);
+  assert.strictEqual(vC.fleets.p1, null);
+  assert.strictEqual(vB.fleets.p1, null);
+  assert.strictEqual(vC.fleets.p2, null);
+  // A plain hit doesn't name the ship to anyone.
+  act(room, 'B', { kind: 'fire', r: 0, c: 0 });
+  assert.strictEqual(lastFor(room, 'A', 'state').lastShot.ship, null);
+});
+
+test('bots use powers at every level when on, never when off, and never stall', () => {
+  for (const level of ['easy', 'medium', 'hard', 'expert']) {
+    let used = 0;
+    for (let g = 0; g < 20; g++) {
+      const st = plugin.createInitialState();
+      st.powers = g % 4 !== 0;
+      st.fleets.p1 = randomFleet();
+      st.fleets.p2 = randomFleet();
+      st.phase = 'playing';
+      st.turn = 'p1';
+      st.turnsTaken.p1 = 1;
+      let n = 0;
+      while (st.phase === 'playing') {
+        const seat = st.turn;
+        const mv = botMove(st, seat, level);
+        assert.ok(mv, `${level} bot had no move`);
+        if (mv.kind === 'power') {
+          assert.ok(st.powers, 'power used while off');
+          assert.strictEqual(usePower(st, seat, mv), null, `${level} made an illegal power move`);
+          used++;
+        } else {
+          assert.ok(fire(st, seat, mv.r, mv.c), `${level} fired at a shot cell`);
+        }
+        assert.ok(++n < 400, `${level} stalled`);
+      }
+    }
+    assert.ok(used > 0, `${level} never used a power`);
+  }
+});
+
+test('expert with powers beats expert without', () => {
+  const play = (powers, seed) => {
+    let s = seed;
+    const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    const st = plugin.createInitialState();
+    st.powers = powers;
+    st.fleets.p2 = randomFleet(rand);
+    st.fleets.p1 = randomFleet(rand);
+    st.phase = 'playing';
+    st.turn = 'p1';
+    let turns = 0;
+    while (st.phase === 'playing') {
+      st.turn = 'p1';
+      st.turnsTaken.p1++;
+      turns++;
+      for (;;) {
+        const mv = botMove(st, 'p1', 'expert', rand);
+        if (mv.kind === 'power') { usePower(st, 'p1', mv); break; }
+        if (fire(st, 'p1', mv.r, mv.c).result === 'miss' || st.phase !== 'playing') break;
+      }
+    }
+    return turns;
+  };
+  let a = 0;
+  let b = 0;
+  for (let g = 0; g < 40; g++) { a += play(false, 77 + g * 131); b += play(true, 77 + g * 131); }
+  console.log(`     expert turns to win: plain ${(a / 40).toFixed(1)}, powers ${(b / 40).toFixed(1)}`);
+  assert.ok(b < a, 'powers should help expert');
 });
 
 (async () => {

@@ -35,7 +35,11 @@ const REASONS = {
 const REJECT_MESSAGES = {
   not_your_turn: "It's not your turn", not_playing: 'The game is not in progress', invalid: 'Invalid shot', bad_spot: "The cue ball can't go there",
 };
-const M = 14; // rail + wood around the cloth, in table units
+const M = 12; // rail + wood around the cloth, in table units
+const CUSH = 4.2; // cushion depth behind the nose line, in table units
+// Round holes in the wood behind each mouth (looks only — scoring is the nose line, see drawTable).
+const pocketHoles = (L, W) => [[0, 0, -1, -1], [L / 2, 0, 0, -1], [L, 0, 1, -1], [0, W, -1, 1], [L / 2, W, 0, 1], [L, W, 1, 1]]
+  .map(([x, y, sx, sy]) => (sx ? { x: x + sx * 2.6, y: y + sy * 2.6, r: 8.4 } : { x, y: y + sy * 4.8, r: 7 }));
 
 const CSS = `
 .pl-root { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
@@ -50,15 +54,17 @@ const CSS = `
 .pl-modes { display: flex; gap: 6px; align-items: center; font-size: 14px; }
 .pl-modes button.on { background: #39ff14; color: #000; }
 .pl-score { font-size: 14px; color: #3ad7ff; }
-.pl-main { display: flex; gap: 10px; align-items: stretch; justify-content: center; max-width: 100%; }
+.pl-main { display: flex; flex-direction: column; gap: 8px; align-items: center; width: 100%; }
 .pl-canvas { display: block; touch-action: none; cursor: crosshair; border-radius: 10px; }
-.pl-side { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.pl-power { position: relative; width: 30px; flex: 1; min-height: 120px; border: 2px solid #1f8f0c; border-radius: 8px; background: #050805; cursor: ns-resize; touch-action: none; overflow: hidden; user-select: none; }
+.pl-side { display: flex; gap: 12px; align-items: center; width: 100%; max-width: 100%; box-sizing: border-box; }
+.pl-spincell { flex: 0 0 132px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.pl-powcell { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pl-power { position: relative; height: 40px; border: 2px solid #1f8f0c; border-radius: 8px; background: #050805; cursor: ew-resize; touch-action: none; overflow: hidden; user-select: none; }
 .pl-power.off { opacity: .35; cursor: default; }
-.pl-power .fill { position: absolute; left: 0; right: 0; top: 0; background: linear-gradient(#39ff14, #ffb000 60%, #ff4d4d); }
-.pl-power .lbl { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font-size: 11px; color: #9f9; pointer-events: none; }
+.pl-power .fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #39ff14, #ffb000 60%, #ff4d4d); }
+.pl-power .lbl { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: bold; color: #dfd; text-shadow: 0 0 3px #000; pointer-events: none; }
 .pl-spin { width: 64px; height: 64px; touch-action: none; cursor: pointer; }
-.pl-sidelbl { font-size: 11px; color: #8c8; text-align: center; }
+.pl-sidelbl { font-size: 13px; color: #8c8; text-align: center; white-space: nowrap; overflow: hidden; height: 1.3em; line-height: 1.3em; width: 100%; }
 .pl-racks { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; align-items: center; min-height: 26px; }
 .pl-rack { display: flex; gap: 3px; align-items: center; font-size: 12px; }
 .pl-mini { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: bold 9px sans-serif; color: #000; box-shadow: inset -2px -3px 4px rgba(0,0,0,.45); }
@@ -133,7 +139,7 @@ export function mount(container, api) {
   side.className = 'pl-side';
   const powerEl = document.createElement('div');
   powerEl.className = 'pl-power';
-  powerEl.title = 'Drag down to pull back, release to shoot';
+  powerEl.title = 'Drag along the bar to pull back, release to shoot';
   const powerFill = document.createElement('div');
   powerFill.className = 'fill';
   const powerLbl = document.createElement('div');
@@ -148,17 +154,26 @@ export function mount(container, api) {
   const powLbl = document.createElement('div');
   powLbl.className = 'pl-sidelbl';
   powLbl.textContent = 'POWER';
-  side.append(powLbl, powerEl, spinCanvas, spinLbl);
+  // fixed-size cells: the spin label's text changes, the layout never does
+  const spinCell = document.createElement('div');
+  spinCell.className = 'pl-spincell';
+  spinCell.append(spinCanvas, spinLbl);
+  const powCell = document.createElement('div');
+  powCell.className = 'pl-powcell';
+  powCell.append(powLbl, powerEl);
+  side.append(spinCell, powCell);
   main.append(canvas, side);
   const racks = document.createElement('div');
   racks.className = 'pl-racks';
   const help = document.createElement('div');
   help.className = 'pl-help';
-  help.textContent = 'Click/drag on the table to aim · ←/→ fine aim (Shift = finer) · drag the power bar down and release to shoot (or ↑/↓ then Space) · drag the cue ball when you have ball in hand';
+  help.textContent = 'Click/drag on the table to aim · ←/→ fine aim (Shift = finer) · drag the power bar and release to shoot (or ↑/↓ then Space) · drag the cue ball when you have ball in hand';
   root.append(status, err, seats, bar, main, racks, help);
 
   let ctx = null;
   let scale = 3;
+  let portrait = false;
+  let fittedChrome = -1;
   let cssW = 0;
   let spinCtx = sharpCanvas(spinCanvas, 64, 64);
 
@@ -186,20 +201,35 @@ export function mount(container, api) {
   const ty = (y) => (y + M) * scale;
   function toTable(ev) {
     const r = canvas.getBoundingClientRect();
-    return { x: (ev.clientX - r.left) / scale - M, y: (ev.clientY - r.top) / scale - M };
+    const X = ev.clientX - r.left;
+    const Y = ev.clientY - r.top;
+    // portrait: the table is drawn turned 90° (head string at the top), see resize()
+    return portrait ? { x: Y / scale - M, y: (r.width - X) / scale - M } : { x: X / scale - M, y: Y / scale - M };
   }
 
   function resize() {
     if (!Sim) return;
-    const avail = Math.max(260, Math.min(980, (container.clientWidth || window.innerWidth) - 110));
-    const availH = Math.max(200, window.innerHeight - 330);
+    // The table takes the full mount width, then shrinks only as far as needed to keep the
+    // whole game (chrome measured live) inside the viewport — never below 70% of that width.
+    // On a narrow portrait screen (phones) the table stands on end, which more than doubles it.
+    const avail = Math.max(240, Math.min(1400, root.clientWidth || container.clientWidth || window.innerWidth));
+    portrait = avail < 560 && window.innerHeight > window.innerWidth * 1.2;
     const totalW = Sim.L + 2 * M;
     const totalH = Sim.W + 2 * M;
-    scale = Math.min(avail / totalW, availH / totalH);
-    scale = Math.max(1, scale);
-    cssW = Math.round(totalW * scale);
-    ctx = sharpCanvas(canvas, cssW, Math.round(totalH * scale));
-    powerEl.style.height = `${Math.round(totalH * scale) - 110}px`;
+    const [across, along] = portrait ? [totalH, totalW] : [totalW, totalH];
+    const fullScale = avail / across;
+    const chromeH = root.offsetHeight - canvas.offsetHeight;
+    fittedChrome = chromeH;
+    const top = root.getBoundingClientRect().top + window.scrollY;
+    const availH = window.innerHeight - Math.max(0, top) - chromeH - 10;
+    // portrait phones scroll anyway: just keep the table plus the power/spin row on one screen
+    scale = portrait ? Math.min(fullScale, (window.innerHeight - 140) / along)
+      : Math.max(fullScale * 0.7, Math.min(fullScale, availH / along));
+    scale = Math.max(0.8, scale);
+    cssW = Math.floor(across * scale);
+    ctx = sharpCanvas(canvas, cssW, Math.round(along * scale));
+    if (portrait) ctx.transform(0, 1, -1, 0, cssW, 0); // table x runs down the screen
+    side.style.width = `${Math.max(cssW, Math.min(avail, 420))}px`;
     draw();
   }
 
@@ -318,38 +348,58 @@ export function mount(container, api) {
       c.stroke();
     }
     c.restore();
-    // cushions (rubber) — slightly darker cloth band inside the wood
-    const cush = 4.2;
-    c.fillStyle = '#0b5e2b';
-    c.fillRect(tx(-cush), ty(-cush), (L + 2 * cush) * s, (W + 2 * cush) * s);
+    const POCKET_HOLES = pocketHoles(L, W);
+    // Pockets, drawn from the sim's own geometry so what you see is what scores: the cushions are
+    // exactly Sim.RAILS (nose line + jaw tips), every gap between them is open hole, and a ball
+    // drops the moment its centre crosses the nose line inside a gap.
+    for (const p of POCKET_HOLES) {
+      c.beginPath();
+      c.arc(tx(p.x), ty(p.y), p.r * s, 0, Math.PI * 2);
+      c.fillStyle = '#262019';
+      c.fill();
+    }
+    c.fillStyle = '#030303';
+    c.fillRect(tx(-CUSH), ty(-CUSH), (L + 2 * CUSH) * s, (W + 2 * CUSH) * s);
+    for (const p of POCKET_HOLES) {
+      const g = c.createRadialGradient(tx(p.x), ty(p.y), 0, tx(p.x), ty(p.y), (p.r - 0.8) * s);
+      g.addColorStop(0, '#000');
+      g.addColorStop(0.8, '#050505');
+      g.addColorStop(1, '#1a1a1a');
+      c.beginPath();
+      c.arc(tx(p.x), ty(p.y), (p.r - 0.8) * s, 0, Math.PI * 2);
+      c.fillStyle = g;
+      c.fill();
+    }
     // cloth
     const felt = c.createRadialGradient(tx(L / 2), ty(W / 2), 10, tx(L / 2), ty(W / 2), L * 0.62 * s);
     felt.addColorStop(0, '#16a04c');
     felt.addColorStop(1, '#0c7334');
     c.fillStyle = felt;
     c.fillRect(tx(0), ty(0), L * s, W * s);
-    // cushion nose shading
-    c.strokeStyle = 'rgba(0,0,0,.28)';
-    c.lineWidth = Math.max(1, 0.8 * s);
-    c.strokeRect(tx(0), ty(0), L * s, W * s);
-    // pocket jaws: carve the openings in the cushion band
-    for (const p of Sim.POCKETS) {
+    // cushions: one rubber block per rail segment, jaw facings angling slightly into the pocket
+    for (const r of Sim.RAILS) {
+      const len = Math.hypot(r.x2 - r.x1, r.y2 - r.y1);
+      const ux = (r.x2 - r.x1) / len;
+      const uy = (r.y2 - r.y1) / len;
+      // outward normal: away from the middle of the cloth
+      let ox = -uy;
+      let oy = ux;
+      if (ox * ((r.x1 + r.x2) / 2 - L / 2) + oy * ((r.y1 + r.y2) / 2 - W / 2) < 0) { ox = -ox; oy = -oy; }
+      const k = CUSH * 0.25;
       c.beginPath();
-      c.arc(tx(p.x), ty(p.y), (p.r + 1.6) * s, 0, Math.PI * 2);
-      c.fillStyle = '#0a4a22';
+      c.moveTo(tx(r.x1), ty(r.y1));
+      c.lineTo(tx(r.x2), ty(r.y2));
+      c.lineTo(tx(r.x2 + ox * CUSH + ux * k), ty(r.y2 + oy * CUSH + uy * k));
+      c.lineTo(tx(r.x1 + ox * CUSH - ux * k), ty(r.y1 + oy * CUSH - uy * k));
+      c.closePath();
+      c.fillStyle = '#0b5e2b';
       c.fill();
-    }
-    for (const p of Sim.POCKETS) {
-      const g = c.createRadialGradient(tx(p.x), ty(p.y), 0, tx(p.x), ty(p.y), p.r * s);
-      g.addColorStop(0, '#000');
-      g.addColorStop(0.75, '#050505');
-      g.addColorStop(1, '#262626');
+      // nose highlight
+      c.strokeStyle = 'rgba(120,255,160,.22)';
+      c.lineWidth = Math.max(1, 0.5 * s);
       c.beginPath();
-      c.arc(tx(p.x), ty(p.y), p.r * s, 0, Math.PI * 2);
-      c.fillStyle = g;
-      c.fill();
-      c.strokeStyle = 'rgba(200,170,90,.55)';
-      c.lineWidth = Math.max(1, 0.6 * s);
+      c.moveTo(tx(r.x1), ty(r.y1));
+      c.lineTo(tx(r.x2), ty(r.y2));
       c.stroke();
     }
     // diamonds (sights)
@@ -364,7 +414,7 @@ export function mount(container, api) {
       c.closePath();
       c.fill();
     };
-    const off = -(4.2 + (M - 4.2) / 2);
+    const off = -(CUSH + (M - CUSH) / 2);
     for (let i = 1; i < 8; i++) {
       if (i === 4) continue;
       const x = tx((L * i) / 8);
@@ -395,11 +445,85 @@ export function mount(container, api) {
     }
   }
 
+  // ---- rolling balls ---------------------------------------------------------------------------
+  // Each ball keeps a 3x3 orientation (body -> screen, row-major; x right, y down, z into the
+  // table) that rolls with its movement, so the number spots and stripe turn and go out of view
+  // like a real ball. Body frame: number spots on ±z (printed twice, like real balls), stripe band
+  // around the y axis. Identity = number facing up, stripe horizontal (how a fresh rack looks).
+  const orient = new Map();
+  const IDENT = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  const orientOf = (n) => orient.get(n) || IDENT;
+  function rollBall(n, dx, dy) {
+    const d = Math.hypot(dx, dy);
+    if (d < 1e-6) return;
+    // rolling without slipping: axis (dy, -dx, 0) in the table plane, angle = distance / radius
+    const kx = dy / d;
+    const ky = -dx / d;
+    const a = d / Sim.R;
+    const co = Math.cos(a);
+    const si = Math.sin(a);
+    const t = 1 - co;
+    const Rm = [co + t * kx * kx, t * kx * ky, si * ky, t * kx * ky, co + t * ky * ky, -si * kx, -si * ky, si * kx, co];
+    const O = orientOf(n);
+    const o = new Array(9);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) o[i * 3 + j] = Rm[i * 3] * O[j] + Rm[i * 3 + 1] * O[3 + j] + Rm[i * 3 + 2] * O[6 + j];
+    // re-orthonormalise the columns (Gram-Schmidt) so float drift never skews the ball
+    const c0 = [o[0], o[3], o[6]];
+    let m = Math.hypot(...c0);
+    c0[0] /= m; c0[1] /= m; c0[2] /= m;
+    const c1 = [o[1], o[4], o[7]];
+    const dp = c0[0] * c1[0] + c0[1] * c1[1] + c0[2] * c1[2];
+    c1[0] -= dp * c0[0]; c1[1] -= dp * c0[1]; c1[2] -= dp * c0[2];
+    m = Math.hypot(...c1);
+    c1[0] /= m; c1[1] /= m; c1[2] /= m;
+    const c2 = [c0[1] * c1[2] - c0[2] * c1[1], c0[2] * c1[0] - c0[0] * c1[2], c0[0] * c1[1] - c0[1] * c1[0]];
+    orient.set(n, [c0[0], c1[0], c2[0], c0[1], c1[1], c2[1], c0[2], c1[2], c2[2]]);
+  }
+
+  const hexRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const WHITE = hexRgb('#f3efe2');
+  const SPOT = hexRgb('#fbf8ee');
+  const MEASLE = [205, 60, 55];
+  const sprite = document.createElement('canvas');
+  const spriteCtx = sprite.getContext('2d');
+  const SPOT_COS = 0.88; // number disc: ~0.48 R across, as before
+  const STRIPE = 0.55;
+
+  // Paints the ball's surface (colour, stripe, spots) into `sprite`, S x S device pixels.
+  function paintSprite(n, O, S) {
+    if (sprite.width < S) { sprite.width = S; sprite.height = S; }
+    const img = spriteCtx.createImageData(S, S);
+    const px = img.data;
+    const col = n === 0 ? WHITE : hexRgb(ballColor(n));
+    for (let j = 0; j < S; j++) {
+      const ny0 = ((j + 0.5) / S) * 2 - 1;
+      for (let i = 0; i < S; i++) {
+        let nx = ((i + 0.5) / S) * 2 - 1;
+        let ny = ny0;
+        let r2 = nx * nx + ny * ny;
+        if (r2 > 1) { const k = 1 / Math.sqrt(r2); nx *= k; ny *= k; r2 = 1; }
+        const nz = -Math.sqrt(1 - r2); // facing the viewer
+        // body coords = O^T n
+        const by = O[1] * nx + O[4] * ny + O[7] * nz;
+        const bz = O[2] * nx + O[5] * ny + O[8] * nz;
+        let c;
+        if (n === 0) c = bz < -0.965 || bz > 0.965 ? MEASLE : WHITE;
+        else if (bz > SPOT_COS || bz < -SPOT_COS) c = SPOT;
+        else if (n > 8) c = by < STRIPE && by > -STRIPE ? col : WHITE;
+        else c = col;
+        const o = (j * S + i) * 4;
+        px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = 255;
+      }
+    }
+    spriteCtx.putImageData(img, 0, 0);
+  }
+
   function drawBall(c, b, alpha = 1, sizeK = 1) {
     const s = scale;
     const R = Sim.R * s * sizeK;
     const x = tx(b.x);
     const y = ty(b.y);
+    const O = orientOf(b.n);
     c.save();
     c.globalAlpha = alpha;
     // shadow
@@ -411,34 +535,34 @@ export function mount(container, api) {
     c.arc(x, y, R, 0, Math.PI * 2);
     c.save();
     c.clip();
-    const col = ballColor(b.n);
-    if (b.n > 8) {
-      c.fillStyle = '#f3efe2';
-      c.fillRect(x - R, y - R, 2 * R, 2 * R);
-      c.fillStyle = col;
-      c.fillRect(x - R, y - R * 0.55, 2 * R, R * 1.1);
-    } else {
-      c.fillStyle = col;
-      c.fillRect(x - R, y - R, 2 * R, 2 * R);
+    const tf = c.getTransform();
+    const dpr = Math.hypot(tf.a, tf.b) || 1;
+    const S = Math.max(8, Math.min(96, Math.ceil(2 * R * dpr)));
+    paintSprite(b.n, O, S);
+    c.drawImage(sprite, 0, 0, S, S, x - R, y - R, 2 * R, 2 * R);
+    if (b.n !== 0 && R > 3) {
+      // the number, drawn on the plane of whichever spot faces us (orthographic projection of
+      // the spot's tangent frame, so it turns and foreshortens as the ball rolls)
+      const sgn = O[8] < 0 ? 1 : -1; // the spot on body sgn*z is the one facing us (screen z < 0)
+      const sz = sgn * O[8];
+      if (sz < -0.3) {
+        const cx = x + sgn * O[2] * R;
+        const cy = y + sgn * O[5] * R;
+        // text axes: body x (flipped for the +z spot so the print never reads mirrored), body y
+        const ux = -sgn * O[0];
+        const uy = -sgn * O[3];
+        c.save();
+        c.globalAlpha = alpha * Math.min(1, (-sz - 0.3) / 0.25);
+        c.transform(ux, uy, O[1], O[4], cx, cy);
+        c.fillStyle = '#111';
+        c.font = `bold ${Math.max(5, R * 0.62)}px sans-serif`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText(String(b.n), 0, R * 0.04);
+        c.restore();
+      }
     }
-    if (b.n !== 0 && R > 4) {
-      c.fillStyle = '#fbf8ee';
-      c.beginPath();
-      c.arc(x, y, R * 0.48, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = '#111';
-      c.font = `bold ${Math.max(6, R * 0.62)}px sans-serif`;
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.fillText(String(b.n), x, y + R * 0.04);
-    } else if (b.n === 0) {
-      // a faint red dot (measle) so the cue ball reads as a cue ball
-      c.fillStyle = 'rgba(200,40,40,.35)';
-      c.beginPath();
-      c.arc(x + R * 0.25, y + R * 0.2, R * 0.16, 0, Math.PI * 2);
-      c.fill();
-    }
-    // shading + specular
+    // shading + specular (fixed light, so it stays put while the ball rolls)
     const sh = c.createRadialGradient(x - R * 0.4, y - R * 0.45, R * 0.1, x, y, R * 1.05);
     sh.addColorStop(0, 'rgba(255,255,255,.55)');
     sh.addColorStop(0.25, 'rgba(255,255,255,.08)');
@@ -565,7 +689,10 @@ export function mount(container, api) {
   function draw() {
     if (!ctx || !Sim || destroyed) return;
     const c = ctx;
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, canvas.width, canvas.height);
+    c.restore();
     drawTable(c);
     const balls = shownBalls();
     for (const b of balls) drawBall(c, b);
@@ -597,7 +724,12 @@ export function mount(container, api) {
           c.fillStyle = 'rgba(255,255,255,.75)';
           c.font = `${Math.max(10, 2.6 * scale)}px sans-serif`;
           c.textAlign = 'center';
-          c.fillText('✋ drag to place', tx(cue.x), ty(cue.y) - (Sim.R + 3) * scale);
+          // label above the ball on screen, upright even when the table is turned for portrait
+          c.save();
+          c.translate(tx(cue.x), ty(cue.y));
+          if (portrait) c.rotate(-Math.PI / 2);
+          c.fillText('✋ drag to place', 0, -(Sim.R + 3) * scale);
+          c.restore();
         }
       }
     } else if (remoteAim && remoteAim.shotNo === view.shotNo) {
@@ -634,7 +766,7 @@ export function mount(container, api) {
 
   function drawPower() {
     const p = pulling ? pull : kbPower;
-    powerFill.style.height = `${Math.round(p * 100)}%`;
+    powerFill.style.width = `${Math.round(p * 100)}%`;
     powerFill.style.opacity = pulling ? 1 : 0.4;
     powerLbl.textContent = `${Math.round(p * 100)}%`;
     powerEl.classList.toggle('off', !myTurn());
@@ -650,6 +782,7 @@ export function mount(container, api) {
       const want = Math.min(Math.floor(((now - anim.startT) / 1000) * 480), anim.stepsDone + 480);
       let loudBall = 0;
       let loudRail = 0;
+      const frameStart = anim.run.balls.map((b) => [b, b.x, b.y]);
       while (anim.stepsDone < want && !anim.run.done) {
         const before = new Map(anim.run.balls.map((b) => [b.n, { x: b.x, y: b.y }]));
         const ev = anim.run.step();
@@ -664,6 +797,7 @@ export function mount(container, api) {
           }
         }
       }
+      for (const [b, x0, y0] of frameStart) if (b.on) rollBall(b.n, b.x - x0, b.y - y0);
       if (loudBall > 15) sfx.play('move', { vol: Math.min(1, loudBall / 300) });
       if (loudRail > 25) sfx.play('dry', { vol: Math.min(1, loudRail / 400) });
       if (anim.run.done && performance.now() - Math.max(0, ...anim.sinking.map((k) => k.t0)) > 280) finishAnim();
@@ -801,20 +935,21 @@ export function mount(container, api) {
     if (cue && traceAim(balls, cue, aim.x, aim.y).kind !== 'ball') defaultAim(view.turn);
   }
 
-  let pullStartY = 0;
+  let pullStart = { x: 0, y: 0 };
   powerEl.addEventListener('pointerdown', (ev) => {
     if (!myTurn()) return;
     powerEl.setPointerCapture(ev.pointerId);
     pulling = true;
-    pullStartY = ev.clientY;
+    pullStart = { x: ev.clientX, y: ev.clientY };
     pull = 0;
     drawPower();
     draw();
   });
   powerEl.addEventListener('pointermove', (ev) => {
     if (!pulling) return;
-    const h = powerEl.clientHeight || 200;
-    pull = Math.max(0, Math.min(1, (ev.clientY - pullStartY) / (h * 0.9)));
+    // any direction works: the distance dragged is the pull-back (full power at ~240px)
+    const span = Math.min(powerEl.clientWidth || 240, 260) * 0.92;
+    pull = Math.max(0, Math.min(1, Math.hypot(ev.clientX - pullStart.x, ev.clientY - pullStart.y) / span));
     drawPower();
     sendAim();
     draw();
@@ -1046,7 +1181,9 @@ export function mount(container, api) {
     renderBar();
     renderRacks();
     drawPower();
-    draw();
+    // re-fit the table when the chrome around it changes height (seats filled, racks wrap, …)
+    if (Sim && root.offsetHeight - canvas.offsetHeight !== fittedChrome) resize();
+    else draw();
   }
 
   function applyState(data) {
@@ -1054,6 +1191,7 @@ export function mount(container, api) {
     view = data;
     if (!Sim) { render(); return; }
     const ls = data.lastShot;
+    if (!prev || prev.gameId !== data.gameId) orient.clear(); // fresh rack: numbers face up again
     if (prev && prev.gameId !== data.gameId) {
       anim = null;
       shownShotNo = data.shotNo;
@@ -1075,9 +1213,9 @@ export function mount(container, api) {
     if (destroyed) return;
     Sim = S;
     if (view) shownShotNo = view.shotNo;
-    resize();
     if (view) afterSettle();
     render();
+    resize();
   }).catch((e) => { status.textContent = `Failed to load physics: ${e.message}`; });
 
   return {

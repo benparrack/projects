@@ -26,7 +26,12 @@ const REJECT_MESSAGES = {
   bad_fleet: 'That fleet layout is not valid',
   invalid: 'Invalid target',
   no_room: 'No room to rotate there',
+  powers_off: 'Powers are off this game',
+  power_cooldown: 'That power is still recharging',
+  nothing_left: 'Nothing left to hit there',
 };
+const POWER_ICON = { barrage: '🔥', radar: '📡' };
+const cellName = (r, c) => `${COLS[c]}${r + 1}`;
 
 const CSS = `
 .gt-sb { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; user-select: none; -webkit-user-select: none; }
@@ -52,7 +57,7 @@ const CSS = `
 .gt-sb .sb-collabels { grid-column: 2; grid-row: 1; grid-template-columns: repeat(10, 1fr); }
 .gt-sb .sb-rowlabels { grid-column: 1; grid-row: 2; grid-template-rows: repeat(10, 1fr); }
 .gt-sb .sb-grid { grid-column: 2; grid-row: 2; position: relative; display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(10, 1fr);
-  border-radius: 6px; overflow: hidden; touch-action: none;
+  border-radius: 6px; overflow: hidden; touch-action: none; isolation: isolate;
   background:
     radial-gradient(ellipse at 30% 20%, rgba(120,200,255,.18), transparent 60%),
     linear-gradient(160deg, #0b3a5c 0%, #0a2b47 55%, #071d33 100%);
@@ -63,9 +68,10 @@ const CSS = `
 @keyframes sb-waves { from { transform: translateX(0); } to { transform: translateX(40px); } }
 .gt-sb .sb-grid.target { cursor: crosshair; box-shadow: inset 0 0 0 1px #1d5f86, 0 0 0 2px #39ff14, 0 0 18px 2px rgba(57,255,20,.4); }
 .gt-sb .sb-grid.dim { filter: saturate(.6) brightness(.8); }
-.gt-sb .sb-cell { position: relative; border-right: 1px solid rgba(120,190,230,.13); border-bottom: 1px solid rgba(120,190,230,.13); z-index: 1; }
-.gt-sb .sb-grid.target .sb-cell.open:hover { background: rgba(57,255,20,.18); box-shadow: inset 0 0 0 2px rgba(57,255,20,.7); }
-.gt-sb .sb-grid.target .sb-cell.open:hover::after { content: ''; position: absolute; inset: 22%; border: 2px solid #39ff14; border-radius: 50%;
+.gt-sb .sb-cell { position: relative; border-right: 1px solid rgba(120,190,230,.13); border-bottom: 1px solid rgba(120,190,230,.13); }
+/* No z-index on cells: a stacking context per cell trapped hit/miss marks UNDER the ship hulls. */
+.gt-sb .sb-grid.target:not(.armed) .sb-cell.open:hover { background: rgba(57,255,20,.18); box-shadow: inset 0 0 0 2px rgba(57,255,20,.7); }
+.gt-sb .sb-grid.target:not(.armed) .sb-cell.open:hover::after { content: ''; position: absolute; inset: 22%; border: 2px solid #39ff14; border-radius: 50%;
   background: linear-gradient(#39ff14,#39ff14) center/2px 100% no-repeat, linear-gradient(#39ff14,#39ff14) center/100% 2px no-repeat; opacity: .8; }
 .gt-sb .sb-mark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 4; pointer-events: none; }
 .gt-sb .sb-mark.miss::before { content: ''; width: 26%; height: 26%; border-radius: 50%; background: rgba(220,240,255,.8); box-shadow: 0 0 0 3px rgba(220,240,255,.18); }
@@ -109,8 +115,29 @@ const CSS = `
 .gt-sb .sb-fleetlist span.down { color: #ff6b5c; text-decoration: line-through; opacity: .8; }
 .gt-sb .sb-pips { display: inline-flex; gap: 1px; }
 .gt-sb .sb-pips i { width: 6px; height: 6px; background: currentColor; border-radius: 1px; display: inline-block; }
+.gt-sb .sb-pips i.hit { background: #ff3c1f; box-shadow: 0 0 4px #ff3c1f; }
+.gt-sb .sb-fleetlist span.struck { color: #ffb000; animation: sb-blink .5s ease-in-out 4; }
+.gt-sb .sb-ship.damaged .hull { filter: brightness(.82) sepia(.35); }
+.gt-sb .sb-callout { font-size: 15px; font-weight: bold; padding: 4px 12px; border-radius: 6px; text-align: center; color: #cfe; min-height: 1.3em; }
+.gt-sb .sb-callout.bad { color: #ff8a8a; background: rgba(255,77,77,.1); }
+.gt-sb .sb-callout.good { color: #39ff14; background: rgba(57,255,20,.08); }
+.gt-sb .sb-callout.fresh { animation: sb-pop .45s ease-out; }
+.gt-sb .sb-rules { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 13px; }
+.gt-sb .sb-rules button.on { background: #ffb000; color: #1a0f00; font-weight: bold; }
+.gt-sb .sb-powers { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; font-size: 12px; }
+.gt-sb .sb-powers button.armed { background: #ffb000; color: #1a0f00; font-weight: bold; box-shadow: 0 0 10px #ffb000; }
+.gt-sb .sb-powers .foe { opacity: .75; }
+.gt-sb .sb-cell.pv { background: rgba(255,176,0,.28); box-shadow: inset 0 0 0 2px rgba(255,176,0,.85); }
+.gt-sb .sb-radar { position: absolute; inset: 0; z-index: 2; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+.gt-sb .sb-radar.ship::before { content: ''; width: 40%; height: 40%; border-radius: 50%; border: 2px solid #39ff14; background: rgba(57,255,20,.35); box-shadow: 0 0 8px #39ff14; animation: sb-blink 1.4s ease-in-out infinite; }
+.gt-sb .sb-radar.empty { background: rgba(120,200,255,.08); }
+.gt-sb .sb-radar.empty::before { content: '·'; color: rgba(160,220,255,.6); font-size: 14px; }
+.gt-sb .sb-scan { position: absolute; z-index: 5; pointer-events: none; border: 2px dashed rgba(57,255,20,.55); border-radius: 4px; box-sizing: border-box; }
+.gt-sb .sb-scan.fresh { border-style: solid; border-color: #39ff14; box-shadow: 0 0 14px rgba(57,255,20,.6);
+  background: conic-gradient(from 0deg, rgba(57,255,20,.45), transparent 30%, transparent); animation: sb-sweep 1s linear 2; }
+@keyframes sb-sweep { from { background: conic-gradient(from 0deg, rgba(57,255,20,.45), transparent 30%, transparent); } 50% { background: conic-gradient(from 180deg, rgba(57,255,20,.45), transparent 30%, transparent); } to { background: transparent; } }
 .gt-sb .sb-hint { font-size: 12px; opacity: .65; text-align: center; max-width: 560px; }
-@media (prefers-reduced-motion: reduce) { .gt-sb .sb-grid::before, .gt-sb .sb-mark.hit::before, .gt-sb .sb-mark.hit::after, .gt-sb .sb-last { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .gt-sb .sb-grid::before, .gt-sb .sb-mark.hit::before, .gt-sb .sb-mark.hit::after, .gt-sb .sb-last, .gt-sb .sb-radar.ship::before, .gt-sb .sb-scan.fresh { animation: none; } }
 `;
 let styled = false;
 function ensureStyles() {
@@ -170,6 +197,8 @@ export function mount(container, api) {
   let drag = null; // { id, grabK, startX, startY, moved, cand, el, grid, valid }
   let pendingRender = false;
   let freshKey = null; // lastShot key that should animate on next render
+  let armed = null; // power being aimed: { power: 'barrage'|'radar', axis: 'row'|'col' }
+  let pvAnchor = null; // touch: first tap previews, a second tap on the same target fires
 
   const root = document.createElement('div');
   root.className = 'gt-sb';
@@ -200,7 +229,8 @@ export function mount(container, api) {
 
   // ---- board building --------------------------------------------------------------------------
   // opts: { shots: grid of null|'miss'|'hit' fired AT this board, ships: [{ship, cls}], target: bool,
-  //         sunkCells: Set, last: {r,c,fresh} | null, onCell(r,c), dim }
+  //         sunkCells: Set, last: {cells: Set(r*N+c), fresh} | null, onCell(r,c), dim,
+  //         radar: grid of null|'ship'|'empty' (my readings), scans: [{r,c,fresh}] }
   function buildBoard(opts) {
     const frame = document.createElement('div');
     frame.className = 'sb-frame';
@@ -214,6 +244,7 @@ export function mount(container, api) {
     grid.className = 'sb-grid';
     if (opts.target) grid.classList.add('target');
     if (opts.dim) grid.classList.add('dim');
+    const lastHas = (r, c) => !!(opts.last && opts.last.cells.has(r * N + c));
     for (let r = 0; r < N; r++) {
       for (let c = 0; c < N; c++) {
         const cell = document.createElement('div');
@@ -224,7 +255,7 @@ export function mount(container, api) {
           const mark = document.createElement('div');
           mark.className = `sb-mark ${shot}`;
           if (shot === 'hit' && opts.sunkCells && opts.sunkCells.has(r * N + c)) mark.classList.add('sunkcell');
-          if (opts.last && opts.last.r === r && opts.last.c === c && opts.last.fresh) {
+          if (lastHas(r, c) && opts.last.fresh) {
             mark.classList.add('fresh');
             const boom = document.createElement('div');
             boom.className = 'sb-boom';
@@ -232,17 +263,29 @@ export function mount(container, api) {
           }
           cell.appendChild(mark);
         }
-        if (opts.last && opts.last.r === r && opts.last.c === c) {
+        const reading = !shot && opts.radar ? opts.radar[r][c] : null;
+        if (reading) {
+          const blip = document.createElement('div');
+          blip.className = `sb-radar ${reading}`;
+          cell.appendChild(blip);
+        }
+        if (lastHas(r, c)) {
           const ring = document.createElement('div');
           ring.className = 'sb-last';
           cell.appendChild(ring);
         }
         if (opts.onCell) cell.addEventListener('click', () => opts.onCell(r, c, shot));
-        cell.title = `${COLS[c]}${r + 1}`;
+        cell.title = cellName(r, c) + (reading === 'ship' ? ' — radar: ship!' : reading === 'empty' ? ' — radar: clear' : '');
         grid.appendChild(cell);
       }
     }
     for (const { ship, cls } of opts.ships || []) grid.appendChild(shipEl(ship, cls));
+    for (const sc of opts.scans || []) {
+      const box = document.createElement('div');
+      box.className = `sb-scan${sc.fresh ? ' fresh' : ''}`;
+      Object.assign(box.style, { left: `${sc.c * 10}%`, top: `${sc.r * 10}%`, width: '20%', height: '20%' });
+      grid.appendChild(box);
+    }
     frame.append(colLabels, rowLabels, grid);
     return { frame, grid };
   }
@@ -273,7 +316,8 @@ export function mount(container, api) {
     return set;
   }
 
-  function fleetList(sunkList, label) {
+  // fleet + shots (optional, my own fleet): light one pip per hit cell and flag the ship just struck.
+  function fleetList(sunkList, label, fleet, shots, struck) {
     const box = document.createElement('div');
     box.className = 'sb-fleetlist';
     const down = new Set((sunkList || []).map((s) => s.id));
@@ -284,9 +328,16 @@ export function mount(container, api) {
     for (const s of spec()) {
       const item = document.createElement('span');
       if (down.has(s.id)) item.classList.add('down');
+      else if (struck && struck.has(s.id)) item.classList.add('struck');
+      const mine = fleet && fleet.find((x) => x.id === s.id);
+      const cells = mine ? shipCells(mine, s.len) : [];
       const pips = document.createElement('span');
       pips.className = 'sb-pips';
-      for (let k = 0; k < s.len; k++) pips.appendChild(document.createElement('i'));
+      for (let k = 0; k < s.len; k++) {
+        const pip = document.createElement('i');
+        if (mine && shots && shots[cells[k][0]][cells[k][1]] === 'hit') pip.classList.add('hit');
+        pips.appendChild(pip);
+      }
       item.append(pips, document.createTextNode(s.name));
       box.appendChild(item);
     }
@@ -412,6 +463,8 @@ export function mount(container, api) {
   }
 
   function onKey(e) {
+    if (armed && e.key === 'Escape') { armed = null; render(); return; }
+    if (armed && armed.power === 'barrage' && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); flipAxis(); return; }
     if (!view || view.phase !== 'placing' || !mySeat() || view.ready[mySeat()]) return;
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if ((e.key === 'r' || e.key === 'R') && selected) { e.preventDefault(); rotate(selected); }
@@ -511,11 +564,194 @@ export function mount(container, api) {
     return total ? `${total} shots · ${Math.round((hits / total) * 100)}% hit` : '';
   }
 
+  // The newest action aimed at `boardOwner`'s board: its cells (one shot or a barrage line) and
+  // whether it should animate now.
   function lastFor(boardOwner) {
     const ls = view.lastShot;
-    if (!ls || ls.by === boardOwner) return null;
-    const key = `${view.roundId}:${ls.n}`;
-    return { r: ls.r, c: ls.c, fresh: key === freshKey };
+    if (!ls || ls.by === boardOwner || ls.power === 'radar') return null;
+    const cells = new Set(ls.power === 'barrage' ? ls.cells.map((x) => x.r * N + x.c) : [ls.r * N + ls.c]);
+    return { cells, fresh: `${view.roundId}:${ls.n}` === freshKey };
+  }
+
+  // Radar scans made by `shooter` (drawn on the board they scanned); the newest one sweeps.
+  function scansBy(shooter) {
+    const ls = view.lastShot;
+    const list = (view.radarAreas && view.radarAreas[shooter]) || [];
+    return list.map((a, k) => ({ ...a, fresh: k === list.length - 1 && ls && ls.power === 'radar' && ls.by === shooter && `${view.roundId}:${ls.n}` === freshKey }));
+  }
+
+  // Ships of mine the newest enemy action struck, by id.
+  function struckMine() {
+    const ls = view.lastShot;
+    const seat = mySeat();
+    const fleet = seat && view.fleets[seat];
+    if (!ls || !fleet || ls.by === seat || ls.power === 'radar') return new Set();
+    const cells = ls.power === 'barrage' ? ls.cells : [ls];
+    const out = new Set();
+    for (const x of cells) {
+      if (x.result === 'miss') continue;
+      const ship = fleet.find((s) => shipCells(s, lens()[s.id]).some(([r, c]) => r === x.r && c === x.c));
+      if (ship) out.add(ship.id);
+    }
+    return out;
+  }
+
+  // One line describing the newest action, from this viewer's side.
+  function callout() {
+    const ls = view.lastShot;
+    if (!ls || (view.phase !== 'playing' && view.phase !== 'game_over')) return null;
+    const seat = mySeat();
+    const mine = seat && ls.by === seat;
+    const who = mine ? 'You' : seatName(ls.by);
+    const shipName = (id) => (spec().find((s) => s.id === id) || { name: id }).name;
+    const struck = !mine && seat ? [...struckMine()].map(shipName) : [];
+    const yours = !mine && seat;
+    const target = yours ? 'your' : mine ? 'the enemy' : `${seatName(other(ls.by))}'s`;
+    if (ls.power === 'radar') {
+      if (mine) {
+        const g = view.radar && view.radar[seat];
+        let n = 0;
+        if (g) for (let r = ls.r; r < ls.r + 2; r++) for (let c = ls.c; c < ls.c + 2; c++) if (g[r][c] === 'ship') n++;
+        return { text: `📡 Radar at ${cellName(ls.r, ls.c)}: ${n ? `${n} ship cell${n > 1 ? 's' : ''} found!` : 'all clear'}`, cls: n ? 'good' : '' };
+      }
+      return { text: `📡 ${who} scanned ${target} waters at ${cellName(ls.r, ls.c)}–${cellName(ls.r + 1, ls.c + 1)}`, cls: yours ? 'bad' : '' };
+    }
+    if (ls.power === 'barrage') {
+      const hits = ls.cells.filter((x) => x.result !== 'miss').length;
+      const sunk = ls.cells.filter((x) => x.result === 'sunk').map((x) => shipName(x.ship));
+      const line = ls.axis === 'row' ? `row ${ls.i + 1}` : `column ${COLS[ls.i]}`;
+      let text = `🔥 ${who === 'You' ? 'Your' : `${who}'s`} BARRAGE on ${line}: ${hits ? `${hits} hit${hits > 1 ? 's' : ''}` : 'all misses'}`;
+      if (struck.length) text += ` — struck your ${struck.join(', ')}`;
+      if (sunk.length) text += ` — ${sunk.join(', ')} sunk!`;
+      return { text, cls: hits ? (yours ? 'bad' : 'good') : '' };
+    }
+    const at = cellName(ls.r, ls.c);
+    if (ls.result === 'miss') return { text: `💦 ${who} missed at ${at}`, cls: '' };
+    if (yours) {
+      const name = struck[0] || 'ship';
+      return { text: ls.result === 'sunk' ? `☠ ${who} SANK your ${name}! (${at})` : `💥 ${who} hit your ${name} at ${at}!`, cls: 'bad' };
+    }
+    if (ls.result === 'sunk') return { text: `☠ ${who} sank ${mine ? 'their' : target} ${shipName(ls.ship)}! (${at})`, cls: mine ? 'good' : '' };
+    return { text: `💥 ${who} hit at ${at}!`, cls: mine ? 'good' : '' };
+  }
+
+  // ---- powers ----------------------------------------------------------------------------------
+  function flipAxis() {
+    if (!armed) return;
+    armed.axis = armed.axis === 'row' ? 'col' : 'row';
+    pvAnchor = null;
+    sfx.play('swap');
+    render();
+  }
+
+  // The cells (and server message) a power aimed at hovered cell (r, c) covers.
+  function aimAt(r, c) {
+    if (armed.power === 'barrage') {
+      const i = armed.axis === 'row' ? r : c;
+      const cells = Array.from({ length: N }, (_, k) => (armed.axis === 'row' ? [i, k] : [k, i]));
+      return { cells, msg: { kind: 'power', power: 'barrage', axis: armed.axis, i }, key: `b${armed.axis}${i}` };
+    }
+    const r0 = Math.min(r, N - 2);
+    const c0 = Math.min(c, N - 2);
+    return { cells: [[r0, c0], [r0, c0 + 1], [r0 + 1, c0], [r0 + 1, c0 + 1]], msg: { kind: 'power', power: 'radar', r: r0, c: c0 }, key: `r${r0},${c0}` };
+  }
+
+  // Hover preview: toggles classes on existing cells only (never rebuilds under the pointer).
+  function attachAim(grid) {
+    const cellEls = [...grid.querySelectorAll('.sb-cell')];
+    let shown = null;
+    const show = (aim) => {
+      const key = aim ? aim.key : null;
+      if (key === shown) return;
+      shown = key;
+      for (const el of cellEls) el.classList.remove('pv');
+      if (aim) for (const [r, c] of aim.cells) cellEls[r * N + c].classList.add('pv');
+    };
+    grid.addEventListener('pointermove', (e) => {
+      if (!armed || e.pointerType !== 'mouse') return;
+      const cell = cellFromEvent(grid, e);
+      show(cell && cell.r >= 0 && cell.r < N && cell.c >= 0 && cell.c < N ? aimAt(cell.r, cell.c) : null);
+    });
+    grid.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') show(null); });
+    grid.addEventListener('pointerdown', (e) => {
+      if (!armed || e.pointerType === 'mouse') return;
+      const cell = cellFromEvent(grid, e);
+      if (cell) show(aimAt(cell.r, cell.c));
+    });
+    return (r, c) => {
+      const aim = aimAt(r, c);
+      // Mouse users saw the preview on hover; touch users confirm with a second tap on the same target.
+      if (lastPointer !== 'mouse' && pvAnchor !== aim.key) { pvAnchor = aim.key; show(aim); sfx.play('tick'); return; }
+      pvAnchor = null;
+      sfx.play('click');
+      api.sendAction(aim.msg);
+    };
+  }
+  let lastPointer = 'mouse';
+  root.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType || 'mouse'; }, true);
+
+  function powersBar() {
+    const seat = mySeat();
+    const bar = document.createElement('div');
+    bar.className = 'sb-powers';
+    const left = view.powerLeft || {};
+    const ps = view.powerSpec || {};
+    const label = (s, p) => (left[s][p] ? `${left[s][p]} turn${left[s][p] > 1 ? 's' : ''}` : 'READY');
+    if (seat && view.phase === 'playing') {
+      for (const p of Object.keys(ps)) {
+        const isArmed = armed && armed.power === p;
+        const b = button(`${POWER_ICON[p] || ''} ${ps[p].name.toUpperCase()} · ${isArmed ? 'AIMING' : label(seat, p)}`, () => {
+          if (!myTurn()) return showError('not_your_turn');
+          if (left[seat][p]) return showError('power_cooldown');
+          armed = isArmed ? null : { power: p, axis: (armed && armed.axis) || 'row' };
+          pvAnchor = null;
+          sfx.play('select');
+          render();
+        });
+        b.disabled = !myTurn() || left[seat][p] > 0;
+        b.title = p === 'barrage' ? 'Fire at every cell of one row or column (ends your turn)' : 'Learn which cells of a 2×2 area hold a ship (ends your turn)';
+        if (isArmed) b.classList.add('armed');
+        bar.appendChild(b);
+      }
+      if (armed) {
+        if (armed.power === 'barrage') bar.appendChild(button(armed.axis === 'row' ? '↔ ROW (R)' : '↕ COLUMN (R)', flipAxis));
+        bar.appendChild(button('CANCEL', () => { armed = null; render(); }));
+      }
+    }
+    const foes = seat ? [other(seat)] : ['p1', 'p2'];
+    for (const s of foes) {
+      const t = document.createElement('span');
+      t.className = 'foe';
+      t.textContent = `${seat ? 'Enemy' : seatName(s)}: ${Object.keys(ps).map((p) => `${ps[p].name} ${label(s, p)}`).join(' · ')}`;
+      bar.appendChild(t);
+    }
+    return bar;
+  }
+
+  // Pre-game rule toggle (any seated admiral; everyone sees it).
+  function rulesEl() {
+    const box = document.createElement('div');
+    box.className = 'sb-rules';
+    const on = !!view.powers;
+    if (mySeat()) {
+      const b = button(`⚡ POWERS: ${on ? 'ON' : 'OFF'}`, () => { sfx.play('click'); api.sendAction({ kind: 'setPowers', on: !on }); });
+      if (on) b.classList.add('on');
+      b.title = 'Barrage (a whole row/column) and Radar (2×2 scan) on long cooldowns';
+      box.appendChild(b);
+    } else {
+      const t = document.createElement('b');
+      t.textContent = `⚡ POWERS: ${on ? 'ON' : 'OFF'}`;
+      t.style.color = on ? '#ffb000' : '#8aa';
+      box.appendChild(t);
+    }
+    const note = document.createElement('span');
+    note.style.opacity = '.7';
+    const ps = view.powerSpec || {};
+    note.textContent = on && ps.barrage
+      ? `Barrage from your turn ${ps.barrage.first} (then every ${ps.barrage.cooldown}) · Radar from turn ${ps.radar.first} (then every ${ps.radar.cooldown})`
+      : 'Classic rules';
+    box.appendChild(note);
+    return box;
   }
 
   function render() {
@@ -527,7 +763,17 @@ export function mount(container, api) {
     if (!view) { root.textContent = 'Loading…'; return; }
     ensureDraft();
     const seat = mySeat();
+    if (!myTurn()) { armed = null; pvAnchor = null; }
     root.append(statusEl(), renderSeats());
+    if (view.phase === 'waiting' || view.phase === 'placing') root.appendChild(rulesEl());
+    const co = callout();
+    if (co) {
+      const el = document.createElement('div');
+      el.className = `sb-callout ${co.cls}${freshKey ? ' fresh' : ''}`;
+      el.textContent = co.text;
+      root.appendChild(el);
+    }
+    if (view.powers && view.phase === 'playing') root.appendChild(powersBar());
     const err = document.createElement('div');
     err.className = 'sb-err';
     err.textContent = flashError ? (REJECT_MESSAGES[flashError] || 'Move rejected') : '';
@@ -540,7 +786,7 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       const { frame } = buildBoard({ shots: null, ships: [], dim: true });
       boards.appendChild(panel('<b>OPEN WATERS</b>', '', frame));
-      root.appendChild(hint('Each admiral hides five ships (5, 4, 3, 3, 2) on a 10×10 grid, then you take turns firing. Hit a ship and you shoot again — sink the whole enemy fleet to win.'));
+      root.appendChild(hint('Each admiral hides five ships (5, 4, 3, 3, 2) on a 10×10 grid, then you take turns firing. Hit a ship and you shoot again — sink the whole enemy fleet to win. Turn POWERS on for Barrage (a whole row or column) and Radar (2×2 scan) on long cooldowns.'));
       return;
     }
 
@@ -584,25 +830,35 @@ export function mount(container, api) {
       const foe = other(seat);
       const enemyShips = (over && view.fleets[foe] ? view.fleets[foe] : view.sunk[seat])
         .map((s) => ({ ship: s, cls: `enemy${view.sunk[seat].some((x) => x.id === s.id) ? ' sunk' : ''}` }));
+      let aim = null;
       const target = buildBoard({
         shots: view.shots[seat], ships: enemyShips, target: myTurn(), sunkCells: sunkCellSet(view.sunk[seat]), last: lastFor(foe),
+        radar: view.radar && view.radar[seat], scans: scansBy(seat),
         onCell: (r, c, shot) => {
           if (view.phase !== 'playing') return;
           if (!myTurn()) return showError('not_your_turn');
+          if (armed && aim) return aim(r, c);
           if (shot) return showError('already_shot');
           api.sendAction({ kind: 'fire', r, c });
         },
       });
+      if (armed) target.grid.classList.add('armed');
+      if (view.powers && !over) aim = attachAim(target.grid);
       boards.appendChild(panel(`<b>ENEMY WATERS</b> — ${esc(seatName(foe))}`, shotSummary(seat), target.frame, fleetList(view.sunk[seat], 'ENEMY:')));
-      const mine = (view.fleets[seat] || []).map((s) => ({ ship: s, cls: view.sunk[foe].some((x) => x.id === s.id) ? 'sunk' : '' }));
-      const home = buildBoard({ shots: view.shots[foe], ships: mine, sunkCells: sunkCellSet(view.sunk[foe]), last: lastFor(seat), dim: myTurn() });
-      boards.appendChild(panel('<b>YOUR FLEET</b>', shotSummary(foe), home.frame, fleetList(view.sunk[foe], 'YOURS:'), true));
+      const myFleet = view.fleets[seat] || [];
+      const hitAt = (r, c) => view.shots[foe][r][c] === 'hit';
+      const mine = myFleet.map((s) => ({
+        ship: s,
+        cls: view.sunk[foe].some((x) => x.id === s.id) ? 'sunk' : shipCells(s, lens()[s.id]).some(([r, c]) => hitAt(r, c)) ? 'damaged' : '',
+      }));
+      const home = buildBoard({ shots: view.shots[foe], ships: mine, sunkCells: sunkCellSet(view.sunk[foe]), last: lastFor(seat), dim: myTurn() && !armed, scans: scansBy(foe) });
+      boards.appendChild(panel('<b>YOUR FLEET</b>', shotSummary(foe), home.frame, fleetList(view.sunk[foe], 'YOURS:', myFleet, view.shots[foe], struckMine()), true));
     } else {
       for (const s of ['p1', 'p2']) {
         const shooter = other(s);
         const ships = (over && view.fleets[s] ? view.fleets[s] : view.sunk[shooter])
           .map((x) => ({ ship: x, cls: view.sunk[shooter].some((y) => y.id === x.id) ? 'sunk' : '' }));
-        const b = buildBoard({ shots: view.shots[shooter], ships, sunkCells: sunkCellSet(view.sunk[shooter]), last: lastFor(s) });
+        const b = buildBoard({ shots: view.shots[shooter], ships, sunkCells: sunkCellSet(view.sunk[shooter]), last: lastFor(s), scans: scansBy(shooter), radar: over && view.radar ? view.radar[shooter] : null });
         boards.appendChild(panel(`<b style="color:${SEAT_COLOR[s]}">${esc(seatName(s))}</b>'S FLEET`, shotSummary(shooter), b.frame, fleetList(view.sunk[shooter], 'SUNK:'), true));
       }
     }
@@ -612,7 +868,10 @@ export function mount(container, api) {
       tools.appendChild(button('REMATCH', () => api.sendAction({ kind: 'resetGame' })));
       root.appendChild(tools);
     } else if (!over) {
-      root.appendChild(hint('Hit = fire again. Miss = their turn. Sunk ships are revealed.'));
+      root.appendChild(hint(armed
+        ? (armed.power === 'barrage' ? 'BARRAGE: pick a row or column on the enemy grid (R flips). Fires at every unshot cell, then your turn ends.' : 'RADAR: pick a 2×2 area on the enemy grid. Green blips = ship, dots = clear. Ends your turn.')
+          + (lastPointer !== 'mouse' ? ' Tap once to preview, tap again to fire.' : ' Esc cancels.')
+        : 'Hit = fire again. Miss = their turn. Sunk ships are revealed.' + (view.powers ? ' Using a power ends your turn.' : '')));
     }
   }
 
@@ -653,7 +912,8 @@ export function mount(container, api) {
     const a = prev.lastShot;
     const b = next.lastShot;
     if (b && (!a || a.n !== b.n || prev.roundId !== next.roundId)) {
-      if (b.result === 'miss') sfx.play('pop');
+      if (b.power === 'radar') sfx.play('whoosh');
+      else if (b.result === 'miss') sfx.play('pop');
       else if (b.result === 'hit') sfx.play(b.by === seat || !seat ? 'crash' : 'hurt');
       else sfx.play('kill');
     }

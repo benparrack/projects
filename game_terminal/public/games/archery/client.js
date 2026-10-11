@@ -492,7 +492,7 @@ export function mount(container, api) {
     const d = Sim.windDrift(a.wind);
     const s = pxPerCmScreen();
     const L0 = { x: L.x - d.dx * s, y: L.y - d.dy * s };
-    const P0 = { x: g.W * 0.46, y: g.H * 1.05 };
+    const P0 = bowGrip(); // leaves from the bow
     const w = (1 - t) / (1 + 13 * t);
     const arc = g.R0 * zoom * 0.9 * 4 * t * (1 - t);
     return { x: L0.x + (P0.x - L0.x) * w + d.dx * s * t * t, y: L0.y + (P0.y - L0.y) * w + d.dy * s * t * t - arc, w };
@@ -631,52 +631,98 @@ export function mount(container, api) {
     ctx.restore();
   }
 
-  // The archer's bow at the lower left; the string comes back while drawing and snaps on release.
+  // The archer's recurve bow, in profile at the lower left, aimed toward the target. Local frame:
+  // +x = shooting direction, +y = down the bow, grip at the origin, u = half the bow's length.
+  const bowGrip = () => ({ x: g.W * 0.22, y: g.H * 0.67 });
   function drawBow(ctx, now, swayPx) {
     const W = g.W;
     const H = g.H;
+    const u = H * 0.3;
     let draw = 0;
+    let twang = 0;
     if (aim) draw = Math.min(1, (now - aim.start) / 350);
-    else if (release) draw = Math.max(0, 1 - (now - release.at) / 110);
-    const ox = swayPx.x * 0.3;
-    const oy = swayPx.y * 0.3;
-    const rx = W * 0.12 + ox;
-    const top = { x: W * 0.085 + ox, y: H * 0.56 + oy };
-    const bot = { x: W * 0.085 + ox, y: H * 1.12 + oy };
+    else if (release) {
+      const since = now - release.at;
+      draw = Math.max(0, 1 - since / 70);
+      if (since < 420) twang = Math.sin(since / 18) * (1 - since / 420); // string shudders after the snap
+    }
+    draw = draw * (2 - draw); // ease out
+    const G = bowGrip();
     const col = view && view.phase === 'playing' ? SEAT_COLOR[view.turn] : '#888';
     ctx.save();
+    ctx.translate(G.x + swayPx.x * 0.3, G.y + swayPx.y * 0.3);
+    ctx.rotate(-0.17);
     ctx.lineCap = 'round';
-    // string
-    const anchor = { x: rx + (W * 0.36 - rx) * draw, y: H * 0.86 + (H * 0.18) * draw };
-    ctx.strokeStyle = 'rgba(240,240,240,0.85)';
+    ctx.lineJoin = 'round';
+    // Limbs flex back toward the archer as the string comes back.
+    const fx = -0.07 * u * draw;
+    const fy = 0.025 * u * draw;
+    const limb = (sg) => {
+      ctx.moveTo(0, sg * 0.24 * u);
+      ctx.bezierCurveTo(-0.03 * u + fx * 0.3, sg * 0.55 * u, -0.17 * u + fx, sg * (0.8 * u - fy), -0.15 * u + fx, sg * (0.93 * u - fy));
+      ctx.quadraticCurveTo(-0.13 * u + fx, sg * (1.0 * u - fy), -0.06 * u + fx, sg * (1.0 * u - fy)); // recurve tip
+    };
+    // string: tip -> recurve contact -> nock -> contact -> tip
+    const tipY = 1.0 * u - fy;
+    const contact = { x: -0.16 * u + fx, y: 0.9 * u - fy };
+    const nock = { x: draw > 0.01 ? -0.16 * u + (-0.66 * u - -0.16 * u) * draw : -0.16 * u + twang * 0.035 * u, y: 0 };
+    ctx.strokeStyle = 'rgba(245,245,245,0.9)';
+    ctx.lineWidth = Math.max(1, u * 0.008);
+    ctx.beginPath();
+    ctx.moveTo(-0.06 * u + fx, -tipY);
+    ctx.lineTo(contact.x, -contact.y);
+    ctx.lineTo(nock.x, nock.y);
+    ctx.lineTo(contact.x, contact.y);
+    ctx.lineTo(-0.06 * u + fx, tipY);
+    ctx.stroke();
+    // limbs (dark laminate with a seat-colour face stripe)
+    ctx.strokeStyle = '#1b1e24';
+    ctx.lineWidth = u * 0.045;
+    ctx.beginPath(); limb(-1); limb(1); ctx.stroke();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = u * 0.014;
+    ctx.beginPath(); limb(-1); limb(1); ctx.stroke();
+    // riser with the grip bulging back toward the archer
+    ctx.fillStyle = '#3a3f48';
+    ctx.strokeStyle = '#15171b';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(top.x, top.y);
-    ctx.lineTo(draw > 0.02 ? anchor.x : top.x + W * 0.005, draw > 0.02 ? anchor.y : (top.y + bot.y) / 2);
-    ctx.lineTo(bot.x, bot.y);
+    ctx.moveTo(-0.025 * u, -0.27 * u);
+    ctx.lineTo(0.035 * u, -0.27 * u);
+    ctx.quadraticCurveTo(0.05 * u, 0, 0.035 * u, 0.27 * u);
+    ctx.lineTo(-0.025 * u, 0.27 * u);
+    ctx.quadraticCurveTo(-0.09 * u, 0.12 * u, -0.05 * u, 0.02 * u); // grip
+    ctx.lineTo(-0.02 * u, -0.01 * u); // arrow shelf
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
-    // limbs + riser
-    ctx.strokeStyle = '#2a2f38';
-    ctx.lineWidth = Math.max(4, W * 0.014);
-    ctx.beginPath();
-    ctx.moveTo(top.x, top.y);
-    ctx.quadraticCurveTo(rx + W * 0.04, H * 0.66 + oy, rx, H * 0.8 + oy);
-    ctx.quadraticCurveTo(rx + W * 0.04, H * 0.98 + oy, bot.x, bot.y);
-    ctx.stroke();
-    ctx.strokeStyle = col;
-    ctx.lineWidth = Math.max(3, W * 0.009);
-    ctx.beginPath();
-    ctx.moveTo(top.x, top.y);
-    ctx.lineTo(top.x + W * 0.01, top.y + H * 0.03);
-    ctx.stroke();
-    // nocked arrow
-    if (draw > 0.02 || (canShoot() && !aim)) {
-      ctx.strokeStyle = '#202329';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(draw > 0.02 ? anchor.x : rx + W * 0.06, draw > 0.02 ? anchor.y : H * 0.9);
-      ctx.lineTo(rx + W * 0.01, H * 0.79 + oy);
-      ctx.stroke();
+    // nocked arrow, resting on the shelf
+    const loaded = draw > 0.01 || (canShoot() && (!release || now - release.at > 420));
+    if (loaded) {
+      const len = 0.74 * u;
+      const tail = nock.x;
+      ctx.strokeStyle = '#d7d9de';
+      ctx.lineWidth = u * 0.018;
+      ctx.beginPath(); ctx.moveTo(tail, -0.012 * u); ctx.lineTo(tail + len, -0.012 * u); ctx.stroke();
+      ctx.fillStyle = '#9aa0a8'; // point
+      ctx.beginPath(); ctx.moveTo(tail + len + 0.05 * u, -0.012 * u); ctx.lineTo(tail + len, -0.03 * u); ctx.lineTo(tail + len, 0.006 * u); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = col; // fletching
+      for (const sg of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(tail + 0.03 * u, -0.012 * u);
+        ctx.lineTo(tail + 0.16 * u, -0.012 * u);
+        ctx.lineTo(tail + 0.05 * u, (-0.012 + sg * 0.05) * u);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    // hands: bow hand wrapped round the grip, draw hand's fingers on the string at the nock
+    ctx.fillStyle = '#d9a37e';
+    ctx.strokeStyle = '#7a4f35';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(-0.04 * u, 0.12 * u, 0.06 * u, 0.1 * u, 0.1, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (draw > 0.01) {
+      ctx.beginPath(); ctx.ellipse(nock.x - 0.05 * u, 0.03 * u, 0.065 * u, 0.085 * u, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
     ctx.restore();
   }

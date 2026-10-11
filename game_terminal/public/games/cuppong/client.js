@@ -1,7 +1,7 @@
 // Cup Pong client. Three.js scene of the table (three.min.js shared with Slope) + the shared throw
 // physics (sim.js). The camera always stands behind whoever is throwing and swings around the
-// table when the turn passes. On your turn, drag up from anywhere on the table view and let go:
-// sideways = aim, distance dragged = power. Your own throw starts flying instantly from a local
+// table when the turn passes. On your turn, pull down from anywhere on the table view and let go
+// (slingshot): pulling left aims right and vice versa, distance pulled = power. Your own throw starts flying instantly from a local
 // run of the same sim; the server's authoritative trajectory (identical in practice) takes over
 // when it arrives. Everyone else replays the server's frames.
 
@@ -322,7 +322,7 @@ export function mount(container, api) {
   options.className = 'cp-row';
   const help = document.createElement('div');
   help.className = 'cp-help';
-  help.textContent = 'Drag up from anywhere on the table and let go — sideways aims, a longer drag throws harder. Two throws a turn; sink both for BALLS BACK. Clear all their cups to win.';
+  help.textContent = 'Pull down from anywhere on the table and let go, like a slingshot — pull left to aim right and vice versa, a longer pull throws harder. Two throws a turn; sink both for BALLS BACK. Clear all their cups to win.';
   root.append(status, err, seats, stage, options, help);
 
   // ---- game-state helpers ----
@@ -489,8 +489,8 @@ export function mount(container, api) {
   });
   stage.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
-    // the camera faces the throw, so screen-right is the thrower's right either way
-    const inp = inputFromDrag(e.clientX - drag.x0, drag.y0 - e.clientY);
+    // slingshot: pull down to throw, pulling left aims right (the camera faces the throw, so screen-right is the thrower's right)
+    const inp = inputFromDrag(drag.x0 - e.clientX, e.clientY - drag.y0);
     drag.aim = inp.aim;
     drag.power = inp.power;
     power.classList.add('on');
@@ -544,7 +544,8 @@ export function mount(container, api) {
     let showBall = false;
     if (anim) {
       const rec = anim.rec;
-      const f = (now - anim.start) / FRAME_MS;
+      // rAF's timestamp can be a hair earlier than the performance.now() a local throw started at
+      const f = Math.max(0, (now - anim.start) / FRAME_MS);
       const n = rec.frames.length;
       const i = Math.min(n - 1, Math.floor(f));
       const t = Math.min(1, f - i);
@@ -757,7 +758,7 @@ export function mount(container, api) {
     }
     const ct = canThrow();
     stage.classList.toggle('can-throw', ct);
-    hint.textContent = ct ? (view.throwsLeft === 2 && view.madeThisTurn === 0 ? 'DRAG UP & RELEASE TO THROW' : 'ONE MORE THROW') : '';
+    hint.textContent = ct ? (view.throwsLeft === 2 && view.madeThisTurn === 0 ? 'PULL DOWN & RELEASE TO THROW' : 'ONE MORE THROW') : '';
 
     options.innerHTML = '';
     if (view.phase !== 'playing') {

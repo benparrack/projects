@@ -1,4 +1,4 @@
-// Darts: board scoring, wobble determinism, 01 bust/checkout rules, cricket, protocol guards,
+// Darts: board scoring, flick-landing model, 01 bust/checkout rules, cricket, protocol guards,
 // checkout planner, and bot-vs-bot games at every level in every mode.
 // Run: node test/darts.test.js
 'use strict';
@@ -9,6 +9,7 @@ const Sim = require('../public/games/darts/sim.js');
 
 const { applyDart, resetGame, timing } = plugin._internal;
 const LEVELS = ['easy', 'medium', 'hard', 'expert'];
+const T20 = { x: 0, angle: 0, speed: 2.99, curve: 0 }; // ~ideal flick at treble 20
 let failures = 0;
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -57,18 +58,42 @@ test('scoreAt: every named target scores itself; edges and misses', () => {
   assert.strictEqual(Sim.scoreAt(-103, 0).label, 'T11');
 });
 
-test('wobble is deterministic per seed, settles then grows', () => {
-  const a = Sim.landing(0, 0, 1234, 1500);
-  const b = Sim.landing(0, 0, 1234, 1500);
-  assert.deepStrictEqual(a, b);
-  assert.notDeepStrictEqual(Sim.landing(0, 0, 1235, 1500), a);
-  assert.ok(Sim.wobbleAmp(0) > Sim.wobbleAmp(1.5) * 3);
-  assert.ok(Sim.wobbleAmp(5) > Sim.wobbleAmp(1.5) * 3);
-  // a steady-window throw at T20 lands within the wobble radius (+ jitter) of the aim
-  for (let seed = 1; seed < 200; seed++) {
-    const p = Sim.landing(0, -103, seed, 1600);
-    assert.ok(Math.hypot(p.x, p.y + 103) < Sim.wobbleAmp(1.6) * 1.1 + 12);
+test('flick landing: deterministic, speed sets height, lean/curve push wide, clamped', () => {
+  const f = { x: 0, angle: 0, speed: 2.4, curve: 0 };
+  assert.deepStrictEqual(Sim.flickLanding(f, 1234), Sim.flickLanding(f, 1234));
+  assert.notDeepStrictEqual(Sim.flickLanding(f, 1235), Sim.flickLanding(f, 1234));
+  // the ideal flick hits its point (within the release jitter)
+  for (const label of ['T20', 'D16', 'DB', 'T19', 'S11']) {
+    const p = Sim.targetPoint(label);
+    const ideal = Sim.idealFlick(p.x, p.y);
+    let hits = 0;
+    for (let seed = 1; seed <= 100; seed++) {
+      const l = Sim.flickLanding(ideal, seed);
+      if (Sim.scoreAt(l.x, l.y).label === Sim.scoreAt(p.x, p.y).label) hits++;
+    }
+    assert.ok(hits >= 60, `${label} ideal hit ${hits}/100`);
   }
+  const at = (o) => Sim.flickLanding({ ...f, ...o }, 7);
+  assert.ok(at({ speed: 1.2 }).y > at({}).y + 50, 'slow drops low');
+  assert.ok(at({ speed: 3.6 }).y < at({}).y - 50, 'fast flies high');
+  assert.ok(at({ angle: 6 }).x > at({}).x + 20 && at({ angle: -6 }).x < at({}).x - 20, 'lean goes wide');
+  assert.ok(at({ curve: 0.15 }).x > at({}).x + 20, 'curve drifts');
+  assert.deepStrictEqual(Sim.clampFlick({ x: 1e9, angle: -500, speed: 99, curve: 5 }), { x: 300, angle: -45, speed: 8, curve: 1 });
+  assert.strictEqual(Sim.scoreAt(at({ speed: 0.2 }).x, at({ speed: 0.2 }).y).ring, 'MISS');
+});
+
+test('bot flick skill gradient (points per dart at T20)', () => {
+  const avg = {};
+  let seed = 99;
+  const rand = Sim.mulberry32(seed);
+  for (const level of LEVELS) {
+    let t = 0;
+    for (let i = 0; i < 20000; i++) { const p = Sim.botThrow('T20', level, rand); t += Sim.scoreAt(p.x, p.y).value; }
+    avg[level] = Math.round((t / 20000) * 10) / 10;
+  }
+  console.log(`  points per dart at T20: ${JSON.stringify(avg)}`);
+  assert.ok(avg.easy < avg.medium && avg.medium < avg.hard && avg.hard < avg.expert);
+  assert.ok(avg.easy < 15 && avg.expert > 28 && avg.expert < 45);
 });
 
 test('checkout planner: classic finishes, impossible ones, straight-out', () => {
@@ -185,22 +210,22 @@ test('protocol: seats, turn guard, garbage, stale seed, spectators, mode switch'
   assert.strictEqual(room.state.phase, 'playing');
   act(room, 'A', { kind: 'setMode', mode: '301' }); // not mid-game
   assert.strictEqual(room.state.mode, '501');
-  act(room, 'B', { kind: 'throw', x: 0, y: -103, t: 1500 });
+  act(room, 'B', { kind: 'throw', ...T20 });
   assert.strictEqual(lastReject(room, 'B'), 'not_your_turn');
-  act(room, 'C', { kind: 'throw', x: 0, y: -103, t: 1500 });
+  act(room, 'C', { kind: 'throw', ...T20 });
   assert.strictEqual(lastReject(room, 'C'), 'not_your_turn');
-  for (const bad of [{ x: 'a', y: 0, t: 1 }, { x: 0, y: 0, t: -5 }, { x: 1e9, y: 0, t: 5 }, { x: 0, y: 0 }]) {
+  for (const bad of [{ ...T20, x: 'a' }, { ...T20, speed: NaN }, { x: 0, angle: 0, speed: 2 }, {}]) {
     act(room, 'A', { kind: 'throw', ...bad });
     assert.strictEqual(lastReject(room, 'A'), 'invalid');
   }
-  act(room, 'A', { kind: 'throw', x: 0, y: -103, t: 1500, seed: room.state.dartSeed + 1 });
+  act(room, 'A', { kind: 'throw', ...T20, seed: room.state.dartSeed + 1 });
   assert.strictEqual(lastReject(room, 'A'), 'stale');
   const seed = room.state.dartSeed;
-  act(room, 'A', { kind: 'throw', x: 0, y: -103, t: 1500, seed });
+  act(room, 'A', { kind: 'throw', ...T20, seed });
   assert.strictEqual(room.state.throwNo, 1);
-  const expect = Sim.landing(0, -103, seed, 1500);
+  const expect = Sim.flickLanding(T20, seed);
   assert.strictEqual(room.state.turnDarts[0].label, Sim.scoreAt(expect.x, expect.y).label);
-  act(room, 'A', { kind: 'throw', x: 0, y: -103, t: 1500, seed }); // double-send with the old seed
+  act(room, 'A', { kind: 'throw', ...T20, seed }); // double-send with the old seed
   assert.strictEqual(room.state.throwNo, 1);
   plugin.onLeave(room, { clientId: 'B' });
   assert.strictEqual(room.state.phase, 'waiting');

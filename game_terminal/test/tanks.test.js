@@ -132,6 +132,17 @@ test('sim: weapons — triple fires 3 shells, big digs deeper, bouncer bounces',
   const tri = Sim.simulate(flat, tanks, 'red', { angle: 45, power: 60, weapon: 'triple' }, 0);
   assert.strictEqual(tri.projectiles.length, 3);
   assert.strictEqual(tri.explosions.length, 3);
+  // flies as one shell until the apex, then fans out: identical frames first, three distinct landings
+  const [f0, f1, f2] = tri.projectiles.map((p) => p.frames);
+  const apex = f1.reduce((m, q, i) => (q[1] > f1[m][1] ? i : m), 0);
+  for (let i = 0; i < apex - 1; i++) assert.deepStrictEqual([f0[i], f2[i]], [f1[i], f1[i]]);
+  const xs = tri.explosions.map((e) => e.x).sort((a, b) => a - b);
+  assert.ok(xs[1] - xs[0] > 20 && xs[2] - xs[1] > 20 && xs[2] - xs[0] < 140, `spread ${xs}`);
+  // a triple that hits something before its apex is a single blast, not three stacked ones
+  const wall = flat.slice();
+  for (let x = 140; x < 160; x++) wall[x] = 600;
+  const early = Sim.simulate(wall, tanks, 'red', { angle: 45, power: 60, weapon: 'triple' }, 0);
+  assert.strictEqual(early.explosions.length, 1);
   const sh = Sim.simulate(flat, tanks, 'red', { angle: 45, power: 60, weapon: 'shell' }, 0);
   const bg = Sim.simulate(flat, tanks, 'red', { angle: 45, power: 60, weapon: 'big' }, 0);
   assert.ok(Math.min(...bg.terrain) < Math.min(...sh.terrain));
@@ -452,8 +463,8 @@ test('bots: skill gradient — expert crushes easy, each level beats the one bel
   assert.ok(ee.rateA > ee.rateB + 0.25, `hit rates ${ee.rateA} vs ${ee.rateB}`);
   const hm = series('hard', 'medium', 12);
   assert.ok(hm.wa >= 8, `hard vs medium ${hm.wa}-${hm.wb}`);
-  const me = series('medium', 'easy', 12);
-  assert.ok(me.wa >= 7, `medium vs easy ${me.wa}-${me.wb}`);
+  const me = series('medium', 'easy', 24); // bots aren't seeded, so 12 games was a coin-flip-ish sample
+  assert.ok(me.wa >= 14, `medium vs easy ${me.wa}-${me.wb}`);
   console.log(`     expert-easy ${ee.wa}-${ee.wb} (hit ${(ee.rateA * 100).toFixed(0)}% vs ${(ee.rateB * 100).toFixed(0)}%), `
     + `hard-medium ${hm.wa}-${hm.wb}, medium-easy ${me.wa}-${me.wb}`);
 });

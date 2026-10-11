@@ -336,6 +336,26 @@
       }
     };
 
+    const squeeze = (c, f) => {
+      const L = Math.sqrt(c.len2);
+      if (L < 1e-9) return;
+      const ux = c.dx / L;
+      const uy = c.dy / L;
+      const ax = x - c.ax;
+      const ay = y - c.ay;
+      const along = ax * ux + ay * uy;
+      const side = -ax * uy + ay * ux; // signed distance off the segment's line
+      const lim = RR + c.r;
+      const out = along < 0 ? -along : along > L ? along - L : 0;
+      if (out >= lim) return;
+      const need = Math.sqrt(lim * lim - out * out) + 0.01;
+      if (side >= need || side <= -need) return;
+      const sg = side < 0 ? -1 : 1;
+      x += -uy * sg * (need - side * sg);
+      y += ux * sg * (need - side * sg);
+      for (let i = 0; i < st.length; i++) collide(st[i], f);
+    };
+
     for (step = 1; step <= MAX_STEPS; step++) {
       const f = Math.ceil(step / FRAME_EVERY);
       const sand = inSand(h, x, y);
@@ -368,6 +388,10 @@
       if (hasMovers) {
         const ms = moverShapes(hi, T0 + step * DT);
         for (let i = 0; i < ms.length; i++) collide(ms[i], f);
+        // rails win: a mover squeezing the ball against a rail can't shove it through...
+        for (let i = 0; i < st.length; i++) collide(st[i], f);
+        // ...so a still-pinned ball squirts out sideways past the mover instead of sitting inside it
+        for (let i = 0; i < ms.length; i++) squeeze(ms[i], f);
       }
       if (step % FRAME_EVERY === 0) frames.push([r2(x), r2(y)]);
       // hazards
@@ -407,6 +431,73 @@
     else if (outcome === 'water') end = { x: from.x, y: from.y };
     else end = { x: r2(x), y: r2(y) };
     return { input, frames, events, outcome, end };
+  }
+
+  // ---- resting balls vs movers ----
+  // A resting ball inside a mover's swept area gets knocked: the server finds the contact time with
+  // nextContact and plays simulate(hi, ball, {power: 0}, contactMs) — the mover hits it at step 1.
+  const segD2 = (ax, ay, bx, by, x, y) => {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const l2 = dx * dx + dy * dy;
+    const t = l2 > 0 ? clamp(((x - ax) * dx + (y - ay) * dy) / l2, 0, 1) : 0;
+    const px = x - ax - dx * t;
+    const py = y - ay - dy * t;
+    return px * px + py * py;
+  };
+  function inSweep(hi, x, y) {
+    for (const m of HOLES[hi].movers || []) {
+      if (m.kind === 'spinner') {
+        const lim = m.len + SPINNER_ARM_R + BALL_R;
+        if ((x - m.cx) * (x - m.cx) + (y - m.cy) * (y - m.cy) < lim * lim) return true;
+      } else {
+        const e = m.amp + m.half;
+        const lim = SLIDER_R + BALL_R;
+        if (segD2(m.cx - m.dx * e, m.cy - m.dy * e, m.cx + m.dx * e, m.cy + m.dy * e, x, y) < lim * lim) return true;
+      }
+    }
+    return false;
+  }
+  // overlap of a ball at (x,y) with any mover at time T (seconds)
+  function moverHit(hi, x, y, T) {
+    for (const c of moverShapes(hi, T)) {
+      if (segD2(c.ax, c.ay, c.bx, c.by, x, y) < (BALL_R + c.r) * (BALL_R + c.r)) return true;
+    }
+    return false;
+  }
+  // First whole ms m in [fromMs, toMs) where a mover touches a ball resting at p at the sim's first
+  // step (time m/1000 + DT), or -1.
+  function nextContact(hi, p, fromMs, toMs) {
+    if (!HOLES[hi] || !inSweep(hi, p.x, p.y)) return -1;
+    const end = Math.min(toMs, fromMs + 60000);
+    for (let m = Math.ceil(fromMs); m < end; m++) {
+      if (moverHit(hi, p.x, p.y, (m % 60000) / 1000 + DT)) return m;
+    }
+    return -1;
+  }
+  // Nearest free spot to (x,y) outside every mover's sweep (drop after a knock into water, or a ball
+  // pinned against a mover). Falls back to the tee.
+  function safeSpot(hi, x, y) {
+    const h = HOLES[hi];
+    const ok = (px, py) => {
+      if (!inPoly(h.fairway, px, py) || inWater(h, px, py) || inSweep(hi, px, py)) return false;
+      if ((px - h.cup[0]) * (px - h.cup[0]) + (py - h.cup[1]) * (py - h.cup[1]) < (CUP_R + BALL_R) * (CUP_R + BALL_R)) return false;
+      for (const c of statics(hi)) {
+        const lim = BALL_R + c.r + 0.5;
+        if (segD2(c.ax, c.ay, c.bx, c.by, px, py) < lim * lim) return false;
+      }
+      return true;
+    };
+    if (ok(x, y)) return { x: r2(x), y: r2(y) };
+    for (let r = 2; r <= 200; r += 2) {
+      for (let k = 0; k < 32; k++) {
+        const a = (TAU * k) / 32;
+        const px = x + r * dcos(a);
+        const py = y + r * dsin(a);
+        if (ok(px, py)) return { x: r2(px), y: r2(py) };
+      }
+    }
+    return { x: h.tee[0], y: h.tee[1] };
   }
 
   // ---- bot: path-distance field + search over putts ----
@@ -637,7 +728,7 @@
   const api = {
     W, H, BALL_R, CUP_R, WALL_R, V_MAX, MIN_POWER, MAX_STROKES, PICKUP_SCORE, FRAME_EVERY, SPINNER_ARM_R, SLIDER_R,
     HOLES, TOTAL_PAR, dsin, dcos, normInput, simulate, statics, moverShapes, inShape, inPoly, slopeAccel,
-    distField, pathDist, botPutt, scoreName, BOT_LEVELS: Object.keys(BOT),
+    distField, pathDist, botPutt, scoreName, inSweep, moverHit, nextContact, safeSpot, BOT_LEVELS: Object.keys(BOT),
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.MiniGolfSim = api;

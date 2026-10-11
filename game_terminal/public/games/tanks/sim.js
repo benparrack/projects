@@ -39,7 +39,7 @@
   const WEAPONS = {
     shell: { name: 'Shell', r: 26, dmg: 34, ammo: null, shells: 1 },
     big: { name: 'Big Shot', r: 46, dmg: 46, ammo: 2, shells: 1 },
-    triple: { name: 'Triple', r: 20, dmg: 22, ammo: 2, shells: 3, spread: 5 },
+    triple: { name: 'Triple', r: 20, dmg: 22, ammo: 2, shells: 3, splitDv: 34 }, // flies as one shell, splits at the apex
     bouncer: { name: 'Bouncer', r: 28, dmg: 36, ammo: 2, shells: 1, bounces: 3 },
   };
   const WEAPON_KEYS = Object.keys(WEAPONS);
@@ -218,10 +218,12 @@
     const ax = wind * WIND_K;
     const ps = [];
     for (let i = 0; i < W0.shells; i++) {
-      const off = W0.shells > 1 ? (i - (W0.shells - 1) / 2) * W0.spread : 0;
-      const l = launch(terrain, tanks[by].x, input.angle + off, input.power);
+      const l = launch(terrain, tanks[by].x, input.angle, input.power);
       ps.push({ ...l, alive: true, bounces: 0, frames: lite ? null : [[r1(l.x), r1(l.y)]], bounceFrames: [], end: null });
     }
+    // Multi-shell weapons ride along with the centre shell until the apex, then fan out sideways.
+    const lead = (W0.shells - 1) >> 1;
+    let split = W0.shells === 1;
     const explosions = [];
     let f = 0;
     const explode = (p, i, x, y, type) => {
@@ -239,7 +241,7 @@
       f++;
       for (let i = 0; i < ps.length; i++) {
         const p = ps[i];
-        if (!p.alive) continue;
+        if (!p.alive || (!split && i !== lead)) continue;
         for (let s = 0; s < SUB && p.alive; s++) {
           p.vx += ax * DT;
           p.vy -= G * DT;
@@ -284,6 +286,18 @@
         }
         if (!lite && p.frames) p.frames.push([r1(p.x), r1(p.y)]);
         if (!p.alive && !p.end) p.end = { f, type: 'off', x: r1(p.x), y: r1(p.y) };
+      }
+      if (!split) {
+        const L = ps[lead];
+        for (let i = 0; i < ps.length; i++) {
+          if (i === lead) continue;
+          const p = ps[i];
+          Object.assign(p, { x: L.x, y: L.y, vx: L.vx, vy: L.vy });
+          if (!lite) p.frames.push([r1(p.x), r1(p.y)]);
+          // ended before the split: the followers vanish with it (no extra blasts)
+          if (!L.alive) { p.alive = false; p.end = { f, type: 'merged', x: L.end.x, y: L.end.y }; } else if (L.vy <= 0) p.vx += (i - lead) * W0.splitDv;
+        }
+        if (L.alive && L.vy <= 0) split = true;
       }
     }
     for (const p of ps) if (!p.end) { p.alive = false; p.end = { f, type: 'timeout', x: r1(p.x), y: r1(p.y) }; }

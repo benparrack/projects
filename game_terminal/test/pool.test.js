@@ -175,6 +175,61 @@ test('protocol: seats, turn guard, ball-in-hand placement validation, mode switc
   assert.strictEqual(st.phase, 'waiting');
 });
 
+test('pockets: balls rolled into each mouth score in that pocket, balls on the jaw just outside do not', () => {
+  const { L, W, R, CORNER, SIDE_HALF } = Sim;
+  const roll = (x, y, dx, dy) => Sim.simulate([{ n: 0, x, y }], { dx, dy, power: 0.25 }).summary.pots;
+  // [pocket, along-rail coordinate in the mouth, coordinate just outside the jaw tip, rail]
+  const inMouth = CORNER - R - 0.3; // clears the rounded jaw tip
+  const cases = [];
+  for (const [p, cx, cy] of [[0, 0, 0], [2, L, 0], [3, 0, W], [5, L, W]]) {
+    const sx = cx === 0 ? 1 : -1;
+    const sy = cy === 0 ? 1 : -1;
+    // into the long rail near the corner, into the short rail near the corner, and down the diagonal
+    cases.push({ p, x: cx + sx * inMouth, y: cy + sy * 20, dx: 0, dy: -sy, pot: true });
+    cases.push({ p, x: cx + sx * (CORNER + 0.3), y: cy + sy * 20, dx: 0, dy: -sy, pot: false });
+    cases.push({ p, x: cx + sx * 20, y: cy + sy * inMouth, dx: -sx, dy: 0, pot: true });
+    cases.push({ p, x: cx + sx * 20, y: cy + sy * (CORNER + 0.3), dx: -sx, dy: 0, pot: false });
+    cases.push({ p, x: cx + sx * 30, y: cy + sy * 30, dx: -sx, dy: -sy, pot: true });
+  }
+  for (const [p, cy] of [[1, 0], [4, W]]) {
+    const sy = cy === 0 ? 1 : -1;
+    for (const k of [-1, 0, 1]) cases.push({ p, x: L / 2 + k * (SIDE_HALF - R - 0.3), y: cy + sy * 20, dx: 0, dy: -sy, pot: true });
+    for (const k of [-1, 1]) cases.push({ p, x: L / 2 + k * (SIDE_HALF + 0.3), y: cy + sy * 20, dx: 0, dy: -sy, pot: false });
+  }
+  for (const c of cases) {
+    const pots = roll(c.x, c.y, c.dx, c.dy);
+    if (c.pot) assert.ok(pots.length === 1 && pots[0].pocket === c.p, `expected pot in ${c.p}: ${JSON.stringify(c)} -> ${JSON.stringify(pots)}`);
+    else assert.strictEqual(pots.length, 0, `jaw shot should not score: ${JSON.stringify(c)} -> ${JSON.stringify(pots)}`);
+  }
+});
+
+// Small seeded PRNG so the statistical tests are repeatable.
+const seeded = (seed) => () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+
+test('bot breaks: soft and scattered at low levels, potting rises with the level', () => {
+  const stats = {};
+  for (const level of LEVELS) {
+    const rand = seeded(7);
+    let pots = 0;
+    let dry = 0;
+    const N = 150;
+    for (let i = 0; i < N; i++) {
+      const st = table('8ball', null);
+      I.newRack(st);
+      const pick = I.chooseBotShot(st, st.turn, level, rand);
+      const balls = st.balls.map((b) => (b.n === 0 && pick.cue ? { n: 0, ...pick.cue } : b));
+      const p = Sim.simulate(balls, Sim.normShot(pick.shot)).summary.pots.filter((x) => x.n !== 0).length;
+      pots += p;
+      if (!p) dry++;
+    }
+    stats[level] = { avg: pots / N, dry: dry / N };
+  }
+  console.log('  break stats', JSON.stringify(stats));
+  for (let i = 1; i < LEVELS.length; i++) assert.ok(stats[LEVELS[i]].avg > stats[LEVELS[i - 1]].avg, `break gradient ${LEVELS[i - 1]} -> ${LEVELS[i]}`);
+  assert.ok(stats.easy.dry >= 0.55 && stats.medium.dry >= 0.3, 'easy/medium should often come up dry');
+  assert.ok(stats.expert.avg < 2.2, 'expert break too strong');
+});
+
 test('bot-vs-bot (sync) at every level finishes in both modes', () => {
   for (const mode of ['8ball', '9ball']) {
     for (const level of LEVELS) {
@@ -195,6 +250,23 @@ test('bot-vs-bot (sync) at every level finishes in both modes', () => {
       console.log(`  ${mode} ${level} vs hard: ${st.winner} wins (${st.winReason}) in ${shots} shots`);
     }
   }
+});
+
+test('level gradient: expert beats easy in most 8-ball games', () => {
+  const rand = seeded(11);
+  let expertWins = 0;
+  const N = 12;
+  for (let g = 0; g < N; g++) {
+    const st = table('8ball', null, { breaker: g % 2 ? 'p2' : 'p1' });
+    I.newRack(st);
+    for (let shots = 0; !st.winner && shots < 300; shots++) {
+      const pick = I.chooseBotShot(st, st.turn, st.turn === 'p1' ? 'expert' : 'easy', rand);
+      I.applyShot(st, st.turn, Sim.normShot(pick.shot), pick.cue);
+    }
+    if (st.winner === 'p1') expertWins++;
+  }
+  console.log(`  expert vs easy: ${expertWins}/${N}`);
+  assert.ok(expertWins >= 9, `expert only won ${expertWins}/${N}`);
 });
 
 test('bot-vs-bot through the room plugin (worker thread) reaches game over', async () => {

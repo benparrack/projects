@@ -2,9 +2,10 @@
 // (sim.js). The camera stands behind the bowler, rides down the lane with the ball and holds on
 // the pin deck while the pins fly, then swings back for the next ball.
 //
-// On your turn: drag sideways to slide the ball along the foul line, then swipe up and let go to
-// roll it — the swipe's direction aims, its speed sets the ball speed and the bend of the swipe
-// puts hook on it (curve the swipe the way you want the ball to break). Your own roll starts at
+// On your turn: press and slide sideways — the ball follows the pointer 1:1 along the foul line —
+// then flick up and let go. The flick's chord, laid from the ball on screen, picks the spot on the
+// head-pin row the ball will cross (perspective-true); its speed sets the ball speed and its bend
+// sets the hook (the launch angle is solved so the hooked ball still crosses that spot). Your own roll starts at
 // once from a local run of the same sim; the server's authoritative frames (identical in
 // practice) take over when they arrive. Everyone else replays the server's frames.
 
@@ -68,7 +69,7 @@ const CSS = `
 .bw-power > div { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(0deg, #39ff14, #ffe14d 60%, #ff4d4d); }
 .bw-spin { position: absolute; left: 12px; bottom: 54px; font-size: 12px; font-weight: bold; color: #ffe14d; pointer-events: none; opacity: 0; transition: opacity .15s; text-shadow: 0 0 6px #000; }
 .bw-spin.on { opacity: 1; }
-.bw-hint { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 12px; color: #9fdc98; pointer-events: none; text-shadow: 0 1px 2px #000; animation: bw-hint 1.6s ease-in-out infinite alternate; }
+.bw-hint { position: absolute; left: 0; right: 0; bottom: 19%; padding: 0 8px; text-align: center; font-size: 12px; color: #9fdc98; pointer-events: none; text-shadow: 0 1px 2px #000; animation: bw-hint 1.6s ease-in-out infinite alternate; }
 @keyframes bw-hint { from { opacity: .45; } to { opacity: 1; } }
 .bw-callout { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); font-size: 34px; font-weight: bold; letter-spacing: 3px; white-space: nowrap; pointer-events: none;
   text-shadow: 0 0 14px currentColor, 0 2px 3px #000; animation: bw-call 1.6s cubic-bezier(.2,1.4,.4,1) forwards; }
@@ -421,9 +422,9 @@ function createScene(THREE, S, canvas) {
 
   // aim guide: glowing dots along the launch line
   const dots = [];
-  const dotGeo = new THREE.CircleGeometry(0.02, 12);
+  const dotGeo = new THREE.CircleGeometry(0.025, 12);
   dotGeo.rotateX(-Math.PI / 2);
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 16; i++) {
     const d = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0x39ff14, transparent: true, opacity: 0.8, depthWrite: false }));
     d.visible = false;
     scene.add(d);
@@ -492,7 +493,7 @@ export function mount(container, api) {
   options.className = 'bw-row';
   const help = document.createElement('div');
   help.className = 'bw-help';
-  help.textContent = 'Drag sideways to line up on the foul line, then swipe up and let go — direction aims, swipe speed sets ball speed, and curving the swipe puts hook on the ball. Ten frames; strikes and spares score bonus balls.';
+  help.textContent = 'Press and slide sideways: the ball follows your finger along the foul line. Then flick up toward the pins and let go — the ball rolls where you flicked, a faster flick rolls it faster, and a curved flick hooks it (bow out left and sweep back right = hooks right). Ten frames; strikes and spares score bonus balls.';
   root.append(status, err, seats, stage, cardEl, options, help);
 
   // ---- helpers ----
@@ -520,6 +521,8 @@ export function mount(container, api) {
   let drag = null;
   let lastRumble = 0;
   const cam = { x: 0, y: 1.3, z: 2.0, lx: 0, ly: 0.05, lz: -14, init: false };
+  // aiming view: far enough back that the ball waiting at the foul line is on screen
+  const AIM_CAM = [0, 1.3, 3.4, 0, 0.05, -14];
   const ballSpin = { q: null, px: 0, pz: 0 };
 
   function shownFromView() {
@@ -669,15 +672,32 @@ export function mount(container, api) {
       && !localPending && clock.now() >= view.busyUntil - 150);
   }
 
-  // Swipe -> roll input. pts: [{x, y, t}] from where the swipe began.
+  // Screen <-> lane helpers (stage-relative px). World = sim with z flipped.
+  function toScreen(x, y, z) {
+    const v = new G.THREE.Vector3(x, y, -z).project(G.camera);
+    return { x: (v.x + 1) / 2 * stage.clientWidth, y: (1 - v.y) / 2 * stage.clientHeight };
+  }
+  // Where the pointer sits across the lane at the ball's depth — the ball follows it 1:1.
+  function pointerLaneX(px, py) {
+    const { THREE, camera } = G;
+    const v = new THREE.Vector3(px / stage.clientWidth * 2 - 1, 1 - py / stage.clientHeight * 2, 0.5).unproject(camera);
+    const o = camera.position;
+    const t = (AIM_Z - o.z) / (v.z - o.z);
+    return (o.x + (v.x - o.x) * t) / S.START_MAX;
+  }
+  const AIM_Z = 0.45; // world z of the ball while lining up (sim z -0.45)
+  const rel = (e) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+
+  // Swipe -> roll input. pts: [{x, y, t}] (stage px) from where the swipe began.
+  // Aim is perspective-true: the swipe's chord, laid from the ball on screen, points at a spot on
+  // the head-pin row, and the ball (hook included) is launched to cross that row right there.
   function swipeInput(pts) {
     const a = pts[0];
     const b = pts[pts.length - 1];
     const cx = b.x - a.x;
     const cy = a.y - b.y; // up = positive
     const len = Math.hypot(cx, cy);
-    if (len < 1) return null;
-    const ang = Math.atan2(cx, cy);
+    if (len < 1 || cy <= 0) return null;
     // bend: biggest sideways bulge of the path off the straight chord (+ = right of it)
     const ux = cx / len;
     const uy = -cy / len; // chord direction in screen space (y down)
@@ -688,7 +708,7 @@ export function mount(container, api) {
     }
     const bend = bulge / len;
     // a swipe that bows out left and comes back right is curving right: hook right
-    let spin = Math.abs(bend) < 0.03 ? 0 : clamp(-bend / 0.22, -1, 1);
+    let spin = Math.abs(bend) < 0.04 ? 0 : clamp(-bend / 0.25, -1, 1);
     spin = Math.round(spin * 100) / 100;
     // speed over the last ~110 ms
     const h = stage.clientHeight || 500;
@@ -697,38 +717,50 @@ export function mount(container, api) {
     const p0 = pts[Math.max(0, k - 1)];
     const dt = Math.max(16, b.t - p0.t);
     const v = (Math.hypot(b.x - p0.x, b.y - p0.y) / dt) * 1000 / h; // stage-heights per second
-    const pw = clamp((v - 0.7) / 3.3, 0, 1);
-    return { x: aimX, aim: clamp(ang / 0.6, -1, 1), power: pw, spin, len };
+    const pw = Math.round(clamp((v - 0.4) / 2.1, 0, 1) * 100) / 100; // full speed at ~2.5 stage-heights/s
+    // chord from the ball's spot on screen to the head-pin row, read off as a lane x there
+    const ball = toScreen(aimX * S.START_MAX, 0, -AIM_Z);
+    const row0 = toScreen(0, 0, S.PIN_Z0);
+    const row1 = toScreen(1, 0, S.PIN_Z0);
+    const sx = ball.x + (cx / cy) * (ball.y - row0.y);
+    const target = (sx - row0.x) / (row1.x - row0.x);
+    return { x: aimX, aim: S.solveAim(aimX, pw, spin, clamp(target, -1.5, 1.5)), power: pw, spin, len };
   }
 
   stage.addEventListener('pointerdown', (e) => {
     if (!canRoll() || drag) return;
     e.preventDefault();
     try { stage.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: performance.now(), mode: 'pos', pos0: aimX, lastX: e.clientX, lastY: e.clientY, pts: [], input: null };
+    // the camera may still be swinging back from the last roll: settle it so the mapping is exact
+    updateCamera(...AIM_CAM, 1);
+    G.camera.updateMatrixWorld();
+    const p = rel(e);
+    aimX = clamp(pointerLaneX(p.x, p.y), -1, 1); // the ball jumps under the pointer
+    drag = { id: e.pointerId, mode: 'pos', low: p, pts: [], input: null };
     stage.classList.add('dragging');
   });
   stage.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
     const now = performance.now();
+    const p = rel(e);
     if (drag.mode === 'pos') {
-      const up = drag.lastY - e.clientY;
-      const side = Math.abs(e.clientX - drag.lastX);
-      if (up > 26 && up > side * 0.9) {
+      // sideways: the ball tracks the pointer; a clear move up the lane starts the throw
+      const up = drag.low.y - p.y;
+      const side = Math.abs(p.x - drag.low.x);
+      if (up > 24 && up > side * 0.6) {
         drag.mode = 'swipe';
-        if (now - drag.t0 < 200) aimX = drag.pos0; // a quick flick, not a reposition
-        drag.pts.push({ x: drag.lastX, y: drag.lastY, t: now - 16 });
+        drag.pts.push({ x: drag.low.x, y: drag.low.y, t: now - 16 });
       } else {
-        const w = stage.clientWidth || 500;
-        aimX = clamp(drag.pos0 + (e.clientX - drag.x0) / (w * 0.42), -1, 1);
-        if (up < 0 || side > 4) { drag.lastX = e.clientX; drag.lastY = Math.max(drag.lastY, e.clientY); }
+        // mostly sideways (or back down): reposition, and measure the swipe from here.
+        // A diagonal start up the lane is left alone so a curved flick isn't eaten.
+        if (up <= 0 || side > up) { aimX = clamp(pointerLaneX(p.x, p.y), -1, 1); drag.low = p; }
         return;
       }
     }
-    drag.pts.push({ x: e.clientX, y: e.clientY, t: now });
+    drag.pts.push({ x: p.x, y: p.y, t: now });
     const inp = swipeInput(drag.pts);
+    drag.input = inp;
     if (inp) {
-      drag.input = inp;
       power.classList.add('on');
       powerFill.style.height = `${Math.round(inp.power * 100)}%`;
       spinEl.classList.toggle('on', inp.spin !== 0);
@@ -743,7 +775,8 @@ export function mount(container, api) {
     power.classList.remove('on');
     spinEl.classList.remove('on');
     if (e.type === 'pointercancel' || d.mode !== 'swipe') { renderDom(); return; }
-    d.pts.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+    const p = rel(e);
+    d.pts.push({ x: p.x, y: p.y, t: performance.now() });
     const inp = swipeInput(d.pts);
     if (!inp || inp.len < 45 || !canRoll()) { renderDom(); return; }
     const input = S.normInput(inp);
@@ -902,7 +935,7 @@ export function mount(container, api) {
         by = S.BALL_R + Math.sin(now / 400) * 0.004 * (canRoll() ? 1 : 0);
       }
       ballSpin.px = bx; ballSpin.pz = bz;
-      updateCamera(bx * 0.25, 1.3, 2.0, bx * 0.08, 0.05, -14, 0.07);
+      updateCamera(...AIM_CAM, drag ? 1 : 0.07); // fixed while lining up so the ball tracks the pointer
     }
 
     ball.visible = showBall;
@@ -913,7 +946,7 @@ export function mount(container, api) {
     // aim guide while swiping
     const guide = drag && drag.mode === 'swipe' && drag.input && drag.input.len > 20;
     if (guide) {
-      const path = S.ballPath(S.normInput(drag.input), 6.5, 30);
+      const path = S.ballPath(S.normInput(drag.input), 13, 48);
       for (let k = 0; k < G.dots.length; k++) {
         const p = path[Math.min(path.length - 1, k + 1)];
         G.dots[k].visible = !!p && k + 1 < path.length;
@@ -1112,7 +1145,7 @@ export function mount(container, api) {
 
     const cr = canRoll();
     stage.classList.toggle('can-roll', cr);
-    hint.textContent = cr ? (view.ball === 0 && view.pins.length === 10 ? '◀ DRAG TO LINE UP ▶ · SWIPE UP TO BOWL' : 'PICK UP THE SPARE — SWIPE UP') : '';
+    hint.textContent = cr ? (view.ball === 0 && view.pins.length === 10 ? '◀ SLIDE ▶ · FLICK AT THE PINS · CURVE IT TO HOOK' : 'SPARE: FLICK AT THE PINS LEFT') : '';
 
     options.innerHTML = '';
     if (over && seat) {

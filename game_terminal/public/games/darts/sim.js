@@ -1,13 +1,12 @@
-// Darts — shared board geometry, scoring, aim wobble and checkout planner. Loaded by the browser
-// as a plain <script> (window.DartsSim) and by the server with require() (server/games/darts.js),
-// so the reticle a player watches wobble and the point the server scores are computed by the
-// very same function.
+// Darts — shared board geometry, scoring, the flick-throw model and checkout planner. Loaded by
+// the browser as a plain <script> (window.DartsSim) and by the server with require()
+// (server/games/darts.js), so the client and the authoritative server land a flick with the very
+// same function.
 //
 // Units are millimetres on a regulation board, origin at the bullseye, +x right, +y DOWN (screen
-// space), 20 at the top. A throw lands at aim + wobble(seed, t) + jitter(seed): `seed` is a fresh
-// per-dart number the server hands out, `t` is how long (ms) the thrower held before releasing.
-// The wobble starts wide, settles to its steadiest around 1.2-2.2s, then grows again (arm fatigue)
-// — so timing the release is the skill, not just pointing.
+// space), 20 at the top. A throw is a flick (see flickLanding): where you let go sets left/right,
+// the flick's lean and curve push it wide, and its SPEED sets the height (too slow drops low, too
+// fast flies high) — so a treble needs a consistent, practised flick.
 
 (function (root) {
   'use strict';
@@ -74,54 +73,49 @@
     return { x: rad * Math.sin(a), y: -rad * Math.cos(a) };
   }
 
-  // --- aim wobble ----------------------------------------------------------------------------
-  const STEADY_FROM = 1.2; // s — roughly where the wobble is at its smallest...
-  const FATIGUE_FROM = 2.2; // ...until here, after which it grows again
-  const MAX_HOLD_MS = 8000; // the arm gives out: holding longer throws anyway
+  // --- the flick -----------------------------------------------------------------------------
+  // A throw is a flick up at the board: { x, angle, speed, curve }.
+  //   x     — board mm (left/right) where the hand let go; the canvas maps 1:1 onto the board.
+  //   angle — degrees the flick leaned off straight up (+ = right): a lean sends the dart wide.
+  //   speed — release speed in canvas-widths per second (screen-size independent). It sets the
+  //           height: gravity drops a slow dart low, a fast one flies high (log-shaped, like a real
+  //           arc: drop ~ 1/v^2).
+  //   curve — signed bow of the flick's path (sagitta / chord, + = bowed right): adds side drift.
+  const SPEED_BULL = 2.0; // canvas-widths/s that lands level with the bull
+  const DROP_K = 260; // mm of height per e-fold of speed
+  const REACH = 250; // mm of sideways error per unit tan(angle)
+  const CURVE_MM = 200; // mm of drift per unit curve
+  const LIMITS = { x: 300, angle: 45, speedMin: 0.2, speedMax: 8, curve: 1 };
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  // Wobble radius scale (mm) after holding for s seconds.
-  function wobbleAmp(s) {
-    const settle = 6 + 26 * Math.exp(-s / 0.42);
-    const fatigue = Math.min(36, Math.max(0, s - FATIGUE_FROM) * 10);
-    return settle + fatigue;
-  }
-
-  // Per-dart oscillator set, cached by seed (the client asks every frame).
-  const oscCache = new Map();
-  function oscillators(seed) {
-    let o = oscCache.get(seed);
-    if (o) return o;
-    const rand = mulberry32(seed ^ 0x9e3779b9);
-    const mk = (lo, hi, w) => ({ f: lo + rand() * (hi - lo), p: rand() * Math.PI * 2, w });
-    o = {
-      x: [mk(0.5, 0.85, 0.62), mk(1.1, 1.6, 0.28), mk(2.3, 3.1, 0.1)],
-      y: [mk(0.45, 0.8, 0.62), mk(1.2, 1.7, 0.28), mk(2.1, 2.9, 0.1)],
+  // Clamps a flick to the legal ranges (server-side trust boundary; client uses it too).
+  function clampFlick(f) {
+    return {
+      x: clamp(f.x, -LIMITS.x, LIMITS.x),
+      angle: clamp(f.angle, -LIMITS.angle, LIMITS.angle),
+      speed: clamp(f.speed, LIMITS.speedMin, LIMITS.speedMax),
+      curve: clamp(f.curve, -LIMITS.curve, LIMITS.curve),
     };
-    if (oscCache.size > 64) oscCache.clear();
-    oscCache.set(seed, o);
-    return o;
   }
 
-  function wobble(seed, tMs) {
-    const s = Math.max(0, Math.min(MAX_HOLD_MS, tMs)) / 1000;
-    const o = oscillators(seed);
-    const amp = wobbleAmp(s);
-    const sum = (list) => list.reduce((acc, k) => acc + k.w * Math.sin(2 * Math.PI * k.f * s + k.p), 0);
-    return { dx: amp * sum(o.x), dy: amp * sum(o.y), amp };
-  }
-
-  // Small release jitter (the only part of a throw the thrower can't see coming).
+  // Small release jitter (the only part of a throw the thrower can't control).
   function jitter(seed) {
     const rand = mulberry32(seed ^ 0x51f15e);
-    return { dx: gauss(rand) * 2.2, dy: gauss(rand) * 2.2 };
+    return { dx: gauss(rand) * 2.5, dy: gauss(rand) * 2.5 };
   }
 
-  // Where a human throw lands.
-  function landing(aimX, aimY, seed, tMs) {
-    const w = wobble(seed, tMs);
+  // Where a flick lands (board mm). Deterministic for (flick, seed).
+  function flickLanding(flick, seed) {
+    const f = clampFlick(flick);
     const j = jitter(seed);
-    return { x: aimX + w.dx + j.dx, y: aimY + w.dy + j.dy };
+    return {
+      x: f.x + Math.tan((f.angle * Math.PI) / 180) * REACH + f.curve * CURVE_MM + j.dx,
+      y: -DROP_K * Math.log(f.speed / SPEED_BULL) + j.dy,
+    };
   }
+
+  // The perfect flick for a board point (bots, tests).
+  const idealFlick = (x, y) => ({ x, angle: 0, speed: SPEED_BULL * Math.exp(-y / DROP_K), curve: 0 });
 
   // --- checkout planning -------------------------------------------------------------------
   const TARGETS = [];
@@ -211,18 +205,31 @@
     return n === 25 ? 'DB' : `T${n}`;
   }
 
-  // Bot scatter (mm, per-axis sigma) by difficulty.
-  const BOT_SIGMA = { easy: 30, medium: 18, hard: 11.5, expert: 7.2 }; // ~30 / 45 / 68 / 97 three-dart avg
+  // Bot flick error by difficulty: relative speed sigma, angle sigma (deg), curve sigma.
+  const BOT_SKILL = {
+    easy: { speed: 0.2, angle: 7, curve: 0.05 },
+    medium: { speed: 0.1, angle: 3.4, curve: 0.03 },
+    hard: { speed: 0.055, angle: 1.9, curve: 0.016 },
+    expert: { speed: 0.032, angle: 1.1, curve: 0.01 },
+  };
 
+  // A bot's throw at a named target: an imperfect flick through the same landing model as a human.
   function botThrow(label, level, rand) {
     const p = targetPoint(label);
-    const sigma = BOT_SIGMA[level] || BOT_SIGMA.hard;
-    return { x: p.x + gauss(rand) * sigma, y: p.y + gauss(rand) * sigma };
+    const k = BOT_SKILL[level] || BOT_SKILL.hard;
+    const ideal = idealFlick(p.x, p.y);
+    const flick = {
+      x: ideal.x,
+      angle: gauss(rand) * k.angle,
+      speed: ideal.speed * Math.exp(gauss(rand) * k.speed),
+      curve: gauss(rand) * k.curve,
+    };
+    return { ...flickLanding(flick, (rand() * 0x100000000) >>> 0), flick };
   }
 
   const api = {
-    R, ORDER, SEG_DEG, CRICKET_NUMS, STEADY_FROM, FATIGUE_FROM, MAX_HOLD_MS, BOT_SIGMA,
-    mulberry32, angleOf, scoreAt, targetPoint, wobbleAmp, wobble, jitter, landing,
+    R, ORDER, SEG_DEG, CRICKET_NUMS, SPEED_BULL, DROP_K, REACH, CURVE_MM, LIMITS, BOT_SKILL,
+    mulberry32, angleOf, scoreAt, targetPoint, clampFlick, jitter, flickLanding, idealFlick,
     planCheckout, chooseTarget01, chooseTargetCricket, leaveScore, botThrow,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

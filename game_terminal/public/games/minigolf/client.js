@@ -376,6 +376,7 @@ export function mount(container, api) {
   }
 
   function startAnim(rec, start, local) {
+    if (rec.push) start += Math.max(0, rec.t0 - clock.now()); // knocks are announced just before contact
     anim = { rec, start, fired: new Set(), local };
     disp = deep(rec.pre);
     trail.length = 0;
@@ -454,7 +455,7 @@ export function mount(container, api) {
   function onNewShot(rec) {
     if (rec.seq <= lastSeqSeen) return;
     lastSeqSeen = rec.seq;
-    if (anim && anim.local && localPending && rec.by === mySeat()) {
+    if (anim && anim.local && localPending && rec.by === mySeat() && !rec.push) {
       anim.rec = rec;
       anim.local = false;
       localPending = null;
@@ -464,7 +465,7 @@ export function mount(container, api) {
     if (anim || interlude) queue.push(rec);
     else {
       startAnim(rec, performance.now(), false);
-      sfx.play('move', { vol: 0.8 });
+      if (!rec.push) sfx.play('move', { vol: 0.8 });
     }
   }
 
@@ -538,8 +539,10 @@ export function mount(container, api) {
     return { pw, ph };
   }
 
-  function fireEvent(ev, rec) {
-    const fr = rec.frames[Math.min(ev.f, rec.frames.length - 1)];
+  function fireEvent(ev, rec, side) {
+    const frames = side ? side.frames : rec.frames;
+    const color = side ? side.color : rec.by;
+    const fr = frames[Math.min(ev.f, frames.length - 1)];
     const [x, y] = fr;
     const vol = Math.min(1, (ev.v || 200) / 400);
     switch (ev.type) {
@@ -563,6 +566,7 @@ export function mount(container, api) {
       case 'mover':
         sfx.play('swap');
         fx.burst(x, y, '#ffa040', { count: 8, speed: 90, life: 0.3, size: 1.5 });
+        if (ev.knock) callout('KNOCKED!', TEXT_COLOR[color], true);
         break;
       case 'sand':
         sfx.play('slide', { vol: 0.5 });
@@ -575,14 +579,14 @@ export function mount(container, api) {
         sfx.play('whoosh');
         fx.burst(x, y, '#7fc4ff', { count: 26, speed: 90, life: 0.6, size: 1.8 });
         fx.ring(x, y, '#9fd4ff', { radius: 18, life: 0.6, width: 2 });
-        callout('SPLASH! +1', '#5aa0ff', true);
+        callout(ev.knock ? 'SPLASH!' : 'SPLASH! +1', '#5aa0ff', true);
         break;
       case 'sink':
-        sinkAnim = { color: rec.by, start: performance.now() };
+        sinkAnim = { color, start: performance.now() };
         sfx.play('pop');
         setTimeout(() => sfx.play('chime'), 90);
         fx.burst(x, y, '#ffe14d', { count: 30, speed: 110, life: 0.7, size: 1.8 });
-        fx.burst(x, y, BALL_FILL[rec.by][1], { count: 16, speed: 80, life: 0.6, size: 1.6 });
+        fx.burst(x, y, BALL_FILL[color][1], { count: 16, speed: 80, life: 0.6, size: 1.6 });
         fx.ring(x, y, '#ffffff', { radius: 22, life: 0.5, width: 2 });
         break;
       default:
@@ -605,11 +609,13 @@ export function mount(container, api) {
     }
   }
 
+  const animLen = (rec) => Math.max(rec.frames.length, rec.side ? rec.side.frames.length : 0);
+
   function timeNowT() {
     // obstacle time: replay time during a putt, the shared server clock otherwise
     if (anim) {
       const el = performance.now() - anim.start;
-      return ((anim.rec.phaseMs + el) % 60000) / 1000;
+      return ((((anim.rec.phaseMs + el) % 60000) + 60000) % 60000) / 1000;
     }
     return (clock.now() % 60000) / 1000;
   }
@@ -847,7 +853,7 @@ export function mount(container, api) {
     let rolling = null;
     if (anim) {
       const r = anim.rec;
-      const fl = (performance.now() - anim.start) / FRAME_MS;
+      const fl = Math.max(0, (performance.now() - anim.start) / FRAME_MS);
       const i0 = Math.min(r.frames.length - 1, Math.floor(fl));
       const i1 = Math.min(r.frames.length - 1, i0 + 1);
       const a = Math.min(1, fl - i0);
@@ -856,6 +862,17 @@ export function mount(container, api) {
       rolling = { color: r.by, p, done, rec: r };
       delete ballPos[r.by];
       if (!(done && r.outcome !== 'rest')) ballPos[r.by] = p;
+      if (r.side) {
+        // the other ball, knocked by a mover during this record
+        const sf = r.side.frames;
+        const j0 = Math.min(sf.length - 1, Math.floor(fl));
+        const j1 = Math.min(sf.length - 1, j0 + 1);
+        const b = Math.min(1, fl - j0);
+        delete ballPos[r.side.color];
+        if (!(fl >= sf.length - 1 && r.side.outcome !== 'rest')) {
+          ballPos[r.side.color] = [sf[j0][0] + (sf[j1][0] - sf[j0][0]) * b, sf[j0][1] + (sf[j1][1] - sf[j0][1]) * b];
+        }
+      }
       const last = trail[trail.length - 1];
       if (!done && (!last || last[0] !== p[0] || last[1] !== p[1])) {
         trail.push(p);
@@ -993,7 +1010,14 @@ export function mount(container, api) {
           fireEvent(ev, rec);
         }
       }
-      if (fi >= rec.frames.length + HOLD_FRAMES && !anim.local) {
+      const sev = rec.side ? rec.side.events : [];
+      for (let i = 0; i < sev.length; i++) {
+        if (sev[i].f <= fi && !anim.fired.has(`s${i}`)) {
+          anim.fired.add(`s${i}`);
+          fireEvent(sev[i], rec, rec.side);
+        }
+      }
+      if (fi >= animLen(rec) + HOLD_FRAMES && !anim.local) {
         onAnimEnd(rec);
         finishAnim();
       }
@@ -1129,7 +1153,7 @@ export function mount(container, api) {
       status.textContent = 'Loading...';
       return;
     }
-    const showTurn = anim ? anim.rec.by : view.turn;
+    const showTurn = anim && !anim.rec.push ? anim.rec.by : view.turn;
     status.className = 'mg-status';
     status.style.color = '';
     if (view.phase === 'waiting') {
@@ -1253,7 +1277,7 @@ export function mount(container, api) {
     }
     if (prev && !prev.winner && data.winner && !fromSnapshot) {
       const seat = mySeat();
-      const delay = anim ? Math.max(0, (anim.rec.frames.length + HOLD_FRAMES) * FRAME_MS - (performance.now() - anim.start)) + 200 : 0;
+      const delay = anim ? Math.max(0, (animLen(anim.rec) + HOLD_FRAMES) * FRAME_MS - (performance.now() - anim.start)) + 200 : 0;
       setTimeout(() => sfx.play(!seat || data.winner === 'draw' ? 'point' : data.winner === seat ? 'win' : 'lose'), delay);
     }
     flashError = null;
@@ -1272,7 +1296,7 @@ export function mount(container, api) {
           anim = null;
           localPending = null;
           trail.length = 0;
-          if (view) disp = fromView(view);
+          if (!interlude) afterShot();
         }
         flashError = data.reason || 'invalid';
         sfx.play('error');

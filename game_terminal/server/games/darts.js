@@ -5,11 +5,11 @@
 // reverts the turn's score and ends the turn. Both modes stop after MAX_ROUNDS rounds (lowest
 // remaining / most points wins) so a game can't drag on forever.
 //
-// Throws are server-authoritative: the client sends where it aimed and how long it held (t, ms);
-// the server lands the dart with the shared wobble from public/games/darts/sim.js using the per-dart
-// seed it handed out, so the reticle the thrower watched is exactly what gets scored (plus a small
-// release jitter nobody can see coming). Bots aim at sensible targets (checkout planner / cricket
-// strategy) and scatter by difficulty.
+// Throws are server-authoritative: the client sends its flick (release x, lean angle, speed,
+// curve); the server clamps it and lands the dart with the shared flickLanding() from
+// public/games/darts/sim.js using the per-dart seed it handed out (a small release jitter).
+// Bots aim at sensible targets (checkout planner / cricket strategy) and throw imperfect flicks
+// through the same model, scattering by difficulty.
 
 'use strict';
 
@@ -339,13 +339,11 @@ module.exports = {
       if (st.phase !== 'playing') return reject('not_playing');
       const seat = seatOf(st, me);
       if (!seat || seat !== st.turn) return reject('not_your_turn');
-      const x = Number(data.x);
-      const y = Number(data.y);
-      const t = Number(data.t);
-      if (![x, y, t].every(Number.isFinite) || Math.abs(x) > 400 || Math.abs(y) > 400 || t < 0 || t > 60000) return reject('invalid');
+      const f = { x: Number(data.x), angle: Number(data.angle), speed: Number(data.speed), curve: Number(data.curve) };
+      if (!Object.values(f).every(Number.isFinite)) return reject('invalid');
       // The client may only throw with the seed it was shown (stale double-sends are dropped).
       if (data.seed !== undefined && Number(data.seed) !== st.dartSeed) return reject('stale');
-      const land = Sim.landing(x, y, st.dartSeed, t);
+      const land = Sim.flickLanding(Sim.clampFlick(f), st.dartSeed);
       applyDart(st, land.x, land.y);
       broadcastState(room);
       maybeScheduleBot(room);

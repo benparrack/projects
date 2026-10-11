@@ -162,6 +162,25 @@ test('score: 10th-frame edge cases', () => {
 });
 
 // ---- sim ----
+// The flick controls pick a spot on the head-pin row and solve the launch so the ball (hook and
+// all) crosses right there — that's what makes "the ball goes where you flicked" hold.
+test('sim: solveAim lands a hooked or straight ball on the flicked spot', () => {
+  let outOfRange = 0;
+  for (const x of [-0.6, 0, 0.6]) {
+    for (const spin of [-0.8, -0.3, 0, 0.4, 1]) {
+      for (const power of [0, 0.5, 1]) {
+        for (const tx of [-0.3, 0, 0.25]) {
+          const inp = Sim.normInput({ x, aim: Sim.solveAim(x, power, spin, tx), power, spin });
+          const cx = Sim.crossX(inp, Sim.PIN_Z0);
+          if (Math.abs(inp.aim) > 0.999 || cx == null) { outOfRange++; continue; } // unreachable (launch limit / gutters first): best effort
+          assert.ok(cx != null && Math.abs(cx - tx) < 0.02, `x ${x} spin ${spin} power ${power} -> ${tx}: crossed ${cx}`);
+        }
+      }
+    }
+  }
+  assert.ok(outOfRange < 20, `${outOfRange} of 135 targets out of range`);
+});
+
 test('sim: rack is the standard 10-pin triangle', () => {
   const r = Sim.rack();
   assert.strictEqual(r.length, 10);

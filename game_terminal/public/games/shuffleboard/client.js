@@ -1,6 +1,6 @@
 // Shuffleboard client. 2D canvas with a pinhole-perspective view down the table from the shooting
 // end + the shared puck physics (sim.js). On your turn: drag sideways to slide your puck across
-// the start line, then drag UP and let go — the drag's tilt aims, its length is power. Your shot
+// the start line, then FLICK up and let go — the flick's tilt aims, its speed is power. Your shot
 // plays instantly from a local run of the same sim; the server's authoritative frames (identical:
 // the sim is bit-exact) take over when they arrive. Everyone else replays the server's frames.
 // The camera dollies down the table after the lead puck and returns for the next shot.
@@ -27,9 +27,11 @@ const REJECT_MESSAGES = {
   busy: 'Wait for the pucks to stop.',
   not_playing: 'The game is not running.',
   invalid: 'Invalid shot.',
+  flick: 'Flick UP and let go while still moving — the flick speed is the power.',
 };
 
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+const reduced = () => !!(motionQuery && motionQuery.matches);
 
 function loadScript(src, global) {
   if (window[global]) return Promise.resolve(window[global]);
@@ -73,7 +75,6 @@ const CSS = `
 .sb-power { position: absolute; right: 10px; top: 50%; width: 14px; height: 50%; transform: translateY(-50%); border: 1px solid #39ff14; border-radius: 7px; background: rgba(0,0,0,.55); overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .15s; }
 .sb-power.on { opacity: 1; }
 .sb-power > div.fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(0deg, #39ff14, #ffe14d 70%, #ff4d4d); }
-.sb-power > span { position: absolute; left: 0; right: 0; height: 2px; background: rgba(255,255,255,.75); }
 .sb-callout { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: 30px; font-weight: bold; letter-spacing: 3px; white-space: nowrap; pointer-events: none;
   text-shadow: 0 0 14px currentColor, 0 2px 3px #000; animation: sb-call 1.5s cubic-bezier(.2,1.4,.4,1) forwards; }
 .sb-callout.small { font-size: 18px; top: 50%; }
@@ -238,7 +239,7 @@ export function mount(container, api) {
   options.className = 'sb-row';
   const help = document.createElement('div');
   help.className = 'sb-help';
-  help.textContent = 'Drag sideways to place your puck, then drag UP and let go — tilt aims, length is power. '
+  help.textContent = 'Drag sideways to place your puck, then FLICK UP and let go while moving — tilt aims, flick speed is power. '
     + 'Only the furthest puck\'s owner scores: 1/2/3 by zone, 4 for a HANGER over the edge, for every puck past the opponent\'s best. '
     + 'Pucks short of the red foul line are removed.';
   root.append(status, err, seats, stage, options, help);
@@ -262,8 +263,11 @@ export function mount(container, api) {
   let localPending = false;
   let lastSeqSeen = 0;
   let camY = 0;
+  let dirty = true; // canvas needs a repaint even though nothing is animating
+  let paintedKey = '';
   let aimX = 0; // start position across the table (table units)
-  let drag = null; // { id, x0, y0, sx, mode:'slide'|'shot', ax, ay, aim, power }
+  let drag = null; // { id, x0, y0, sx, mode:'slide'|'shot', ax, ay, aim, pts:[{t,y}] }
+  let meterTimer = null;
   let fading = []; // [{ owner, x, y, born }] pucks cleared from the table
   const hudScores = { red: null, blue: null }; // shown scores (lag the state during replays)
 
@@ -361,11 +365,14 @@ export function mount(container, api) {
     if (!canShoot()) return;
     e.preventDefault();
     stage.setPointerCapture(e.pointerId);
-    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, sx: aimX, mode: 'slide', ax: 0, ay: 0, aim: 0, power: 0 };
+    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, sx: aimX, mode: 'slide', ax: 0, ay: 0, aim: 0, pts: [{ t: e.timeStamp, y: e.clientY }] };
     stage.classList.add('dragging');
   });
   stage.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
+    const ces = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const ce of ces.length ? ces : [e]) drag.pts.push({ t: ce.timeStamp, y: ce.clientY });
+    while (drag.pts.length > 2 && drag.pts[1].t < e.timeStamp - 4 * S.FLICK_MS) drag.pts.shift();
     const r = stage.getBoundingClientRect();
     const scale = P.w / r.width; // CSS px -> canvas layout px
     if (drag.mode === 'slide') {
@@ -382,20 +389,28 @@ export function mount(container, api) {
     const ddx = (e.clientX - drag.ax) * scale;
     const ddy = (drag.ay - e.clientY) * scale;
     if (ddy > 10) drag.aim = Math.max(-1, Math.min(1, ddx / ddy / 0.48));
-    drag.power = Math.max(0, Math.min(1, (ddy - 10) / (P.h * 0.5)));
+    clearTimeout(meterTimer);
     power.classList.add('on');
-    powerFill.style.height = `${(drag.power * 100).toFixed(1)}%`;
   });
+  // live flick speed on the meter (decays when the pointer stops)
+  function showMeter(p) {
+    const h = `${(p * 100).toFixed(0)}%`;
+    if (powerFill.style.height !== h) powerFill.style.height = h;
+  }
   const endDrag = (e) => {
     if (!drag || e.pointerId !== drag.id) return;
     const d = drag;
     drag = null;
     stage.classList.remove('dragging');
-    power.classList.remove('on');
-    if (e.type === 'pointercancel' || d.mode !== 'shot' || d.power < 0.01) return;
+    const pw = d.mode === 'shot' ? S.flickPower(d.pts, e.timeStamp, e.clientY, stage.getBoundingClientRect().height) : 0;
+    showMeter(pw); // the meter holds the released power for a moment so the shot can be learned
+    clearTimeout(meterTimer);
+    meterTimer = setTimeout(() => power.classList.remove('on'), pw > 0 ? 900 : 0);
+    if (e.type === 'pointercancel' || d.mode !== 'shot') return;
+    if (pw <= 0) { flash('flick'); return; }
     if (!canShoot()) return;
     const seat = mySeat();
-    const input = S.normInput({ x: aimX / S.X_MAX, aim: d.aim, power: d.power });
+    const input = S.normInput({ x: aimX / S.X_MAX, aim: d.aim, power: pw });
     const res = S.simulate(view.pucks, input, seat, view.nextId);
     if (!res) return;
     localPending = true;
@@ -408,36 +423,50 @@ export function mount(container, api) {
   stage.addEventListener('pointerup', endDrag);
   stage.addEventListener('pointercancel', endDrag);
 
-  // Power-meter tick marks where an unobstructed straight shot stops in each zone.
-  function powerTicks() {
-    for (const el of [...power.querySelectorAll('span')]) el.remove();
-    for (const y of [S.LINE1 + S.R, S.LINE2 + S.R, S.LINE3 + S.R, S.TABLE_L - S.R / 2]) {
-      const t = document.createElement('span');
-      t.style.bottom = `${(S.powerFor(y - S.START_Y) * 100).toFixed(1)}%`;
-      if (y > S.TABLE_L - S.R) t.style.background = '#ffe14d';
-      power.appendChild(t);
+  // ---- drawing ----
+  // The table only changes when the camera moves, so it is rendered into an offscreen layer and
+  // blitted; the floor gradient is rendered once per canvas size.
+  const layer = document.createElement('canvas');
+  const lctx = layer.getContext('2d');
+  const floor = document.createElement('canvas');
+  let layerKey = '';
+  function drawTable() {
+    const key = `${camY}|${canvas.width}|${canvas.height}`;
+    if (key !== layerKey) {
+      if (layer.width !== canvas.width || layer.height !== canvas.height) {
+        layer.width = floor.width = canvas.width;
+        layer.height = floor.height = canvas.height;
+        const fg = floor.getContext('2d');
+        fg.setTransform(P.dpr, 0, 0, P.dpr, 0, 0);
+        const bg = fg.createRadialGradient(P.w / 2, P.h * 0.35, 10, P.w / 2, P.h * 0.4, P.h * 0.9);
+        bg.addColorStop(0, '#10261a');
+        bg.addColorStop(1, '#020604');
+        fg.fillStyle = bg;
+        fg.fillRect(0, 0, P.w, P.h);
+      }
+      layerKey = key;
+      lctx.setTransform(1, 0, 0, 1, 0, 0);
+      lctx.drawImage(floor, 0, 0);
+      lctx.setTransform(P.dpr, 0, 0, P.dpr, 0, 0);
+      renderTable(lctx);
     }
+    ctx.drawImage(layer, 0, 0, P.w, P.h);
   }
 
-  // ---- drawing ----
-  function drawTable() {
+  function renderTable(g) {
     const L = S.TABLE_L;
     const W2 = S.TABLE_W / 2;
     const y0 = Math.max(0, camY - 6);
-    const g = ctx;
-    // floor glow + grid
-    const bg = g.createRadialGradient(P.w / 2, P.h * 0.35, 10, P.w / 2, P.h * 0.4, P.h * 0.9);
-    bg.addColorStop(0, '#10261a');
-    bg.addColorStop(1, '#020604');
-    g.fillStyle = bg;
-    g.fillRect(0, 0, P.w, P.h);
+    // floor grid
     g.strokeStyle = 'rgba(57,255,20,.07)';
     g.lineWidth = 1;
+    g.beginPath();
     for (let y = Math.ceil(y0 / 8) * 8; y < L + 40; y += 8) {
       const a = proj(-60, y); const b = proj(60, y);
       if (a.z < 4) continue;
-      g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+      g.moveTo(a.x, a.y); g.lineTo(b.x, b.y);
     }
+    g.stroke();
     // gutters (dark troughs) + rail
     const quad = (x0, x1, ya, yb, fill) => {
       const a = proj(x0, ya); const b = proj(x1, ya); const c = proj(x1, yb); const d = proj(x0, yb);
@@ -449,9 +478,10 @@ export function mount(container, api) {
     quad(W2, W2 + 1.6, y0, L + 2.4, '#050705');
     quad(-W2 - 1.6, W2 + 1.6, L, L + 2.4, '#050705');
     // wood surface, drawn as thin strips of the texture (affine per strip ~ exact perspective)
-    const step = 1;
-    for (let y = y0; y < L; y += step) {
-      const yb = Math.min(L, y + step);
+    // strips ~12 screen px tall (1 table unit near the camera, up to 6 far away)
+    for (let y = y0, yb; y < L; y = yb) {
+      const z = zOf(y);
+      yb = Math.min(L, y + Math.max(1, Math.min(6, Math.floor((12 * z * z) / P.kH))));
       const a = proj(-W2, y); const b = proj(W2, yb);
       const top = b.y; const bot = a.y;
       if (bot - top <= 0) continue;
@@ -459,17 +489,18 @@ export function mount(container, api) {
       const sy = (L - yb) * PX;
       g.drawImage(tex, 0, sy, tex.width, (yb - y) * PX, P.w / 2 - wMid / 2, top, wMid, bot - top + 0.6);
     }
-    // neon edges
+    // neon edges: glow faked with wide translucent strokes (shadowBlur over the whole table cost
+    // ~10 ms a frame in Firefox)
     g.save();
-    g.strokeStyle = '#39ff14';
-    g.shadowColor = '#39ff14';
-    g.shadowBlur = 10;
-    g.lineWidth = 2;
-    const pl = (pts) => { g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke(); };
-    pl([proj(-W2 - 2.2, y0), proj(-W2 - 2.2, L + 3), proj(W2 + 2.2, L + 3), proj(W2 + 2.2, y0)]);
-    g.strokeStyle = 'rgba(255,225,77,.9)';
-    g.shadowColor = '#ffe14d';
-    pl([proj(-W2, L), proj(W2, L)]);
+    g.lineJoin = 'round';
+    const pl = (pts, col) => {
+      g.beginPath();
+      pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
+      g.strokeStyle = col;
+      for (const [w, a] of [[9, 0.08], [5, 0.16], [2, 0.95]]) { g.globalAlpha = a; g.lineWidth = w; g.stroke(); }
+    };
+    pl([proj(-W2 - 2.2, y0), proj(-W2 - 2.2, L + 3), proj(W2 + 2.2, L + 3), proj(W2 + 2.2, y0)], '#39ff14');
+    pl([proj(-W2, L), proj(W2, L)], '#ffe14d');
     g.restore();
     // "4" hanger label on the end rail
     const lab = proj(0, L + 1.2);
@@ -615,11 +646,11 @@ export function mount(container, api) {
   function drawAim() {
     const seat = mySeat();
     const p0 = { x: aimX, y: S.START_Y };
-    if (drag && drag.mode === 'shot' && drag.power > 0) {
-      const inp = S.normInput({ x: aimX / S.X_MAX, aim: drag.aim, power: drag.power });
-      const v = S.launch(inp);
+    if (drag && drag.mode === 'shot') {
+      // direction only — the guide's length is fixed so it never hints at where the puck stops
+      const v = S.launch(S.normInput({ x: aimX / S.X_MAX, aim: drag.aim, power: 0.5 }));
       const sp = Math.hypot(v.vx, v.vy);
-      const len = 14 + drag.power * 40;
+      const len = 30;
       ctx.save();
       for (let k = 1; k <= 14; k++) {
         const d = (len * k) / 14;
@@ -659,6 +690,18 @@ export function mount(container, api) {
       layout(w, h);
     }
     P.dpr = dpr;
+    const cs = canShoot();
+    if (stage.classList.contains('can-shoot') !== cs) renderStatus();
+    // nothing moving and nothing changed since the last paint: skip the frame
+    if (drag && drag.mode === 'shot' && drag.pts.length) {
+      const last = drag.pts[drag.pts.length - 1];
+      showMeter(S.flickPower(drag.pts, Math.max(last.t, now), last.y, stage.clientHeight));
+    }
+    const showHeld = cs || !!drag;
+    const key = `${canvas.width}|${canvas.height}|${showHeld}|${aimX}`;
+    if (!anim && !tally && !drag && !fading.length && !fx.active && camY === 0 && !dirty && key === paintedKey) return;
+    dirty = false;
+    paintedKey = key;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const pucks = scenePucks(now);
@@ -672,7 +715,6 @@ export function mount(container, api) {
 
     fx.applyShake(ctx);
     drawTable();
-    const showHeld = canShoot() || !!drag;
     if (showHeld) drawAim();
     pucks.sort((a, b) => b.y - a.y);
     const drawn = [];
@@ -704,7 +746,6 @@ export function mount(container, api) {
     ctx.restore();
     fx.drawOverlay(ctx, P.w, P.h);
     if (tally && now - tally.start > TALLY_MS) finishTally();
-    if (stage.classList.contains('can-shoot') !== canShoot()) renderStatus();
   }
 
   // ---- DOM ----
@@ -800,11 +841,12 @@ export function mount(container, api) {
     }
     const cs = canShoot();
     stage.classList.toggle('can-shoot', cs);
-    hint.textContent = cs ? 'DRAG ◀ ▶ TO PLACE · DRAG UP & RELEASE TO SHOOT' : '';
+    hint.textContent = cs ? 'DRAG ◀ ▶ TO PLACE · FLICK UP TO SHOOT' : '';
   }
 
   function renderDom() {
     if (destroyed) return;
+    dirty = true; // repaint the canvas on the next frame
     const seat = mySeat();
     const over = view && view.phase === 'game_over' && !anim && !tally && !queue.length;
     results.update(over ? duelResults({
@@ -855,7 +897,6 @@ export function mount(container, api) {
       if (destroyed) return;
       S = Sim;
       tex = tableTexture(S);
-      powerTicks();
       raf = requestAnimationFrame(frame);
       renderDom();
     })
@@ -892,6 +933,13 @@ export function mount(container, api) {
     renderDom();
   }
 
+  function flash(reason) {
+    flashError = reason;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { flashError = null; renderDom(); }, 2000);
+    renderDom();
+  }
+
   return {
     applySnapshot(snapshot) {
       applyState(snapshot, true);
@@ -904,11 +952,8 @@ export function mount(container, api) {
           anim = null;
           localPending = false;
         }
-        flashError = data.reason || 'invalid';
         sfx.play('error');
-        clearTimeout(flashTimer);
-        flashTimer = setTimeout(() => { flashError = null; renderDom(); }, 2000);
-        renderDom();
+        flash(data.reason || 'invalid');
       }
     },
     applyRoster(newRoster) {
@@ -919,6 +964,7 @@ export function mount(container, api) {
       destroyed = true;
       cancelAnimationFrame(raf);
       clearTimeout(flashTimer);
+      clearTimeout(meterTimer);
       results.destroy();
       container.innerHTML = '';
     },

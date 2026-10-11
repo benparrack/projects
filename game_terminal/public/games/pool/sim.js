@@ -32,10 +32,11 @@
   const MAX_STEPS = 480 * 25;
 
   // Pocket mouths: each corner leaves CORNER cm of rail open on both sides; side pockets leave
-  // SIDE_HALF either side of the middle. A ball whose centre crosses a rail line (only possible
+  // SIDE_HALF either side of the middle (regulation-ish: ~11.6 cm corner and ~13.2 cm side mouths
+  // between the jaw tips). The client draws the cushions and pocket mouths from these same numbers. A ball whose centre crosses a rail line (only possible
   // through a mouth, because the cushions block everywhere else) drops into the nearest pocket.
-  const CORNER = 9.5;
-  const SIDE_HALF = 7.2;
+  const CORNER = 8.2;
+  const SIDE_HALF = 6.6;
   const HEAD_X = L / 4; // head string — the break is played from behind it
   const FOOT = { x: L * 0.75, y: W / 2 };
 

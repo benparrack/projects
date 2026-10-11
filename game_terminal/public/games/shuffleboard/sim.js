@@ -68,6 +68,21 @@
   // Inverse of launch's distance mapping (bots / tests): power that slides `d` units.
   const powerFor = (d) => clamp((d - D_MIN) / (D_MAX - D_MIN), 0, 1);
 
+  // Human shots take power from the release FLICK, not the drag length, so it has to be judged by
+  // feel: `samples` = pointer [{t (ms), y (px, down = +)}] oldest first, (t, y) = the release.
+  // Speed is measured over the last FLICK_MS and normalised by the board's on-screen height, so
+  // the same gesture works on a phone and a desktop. Returns power in [0, 1]; 0 = no flick.
+  const FLICK_MS = 80;
+  const FLICK_V0 = 0.4; // board heights per second for power 0
+  const FLICK_V1 = 5.4; // ... and power 1
+  function flickPower(samples, t, y, height) {
+    if (!samples || !samples.length || !(height > 0)) return 0;
+    let ref = samples[0];
+    for (const p of samples) { if (p.t <= t - FLICK_MS) ref = p; else break; }
+    const v = ((ref.y - y) / Math.max(16, t - ref.t)) * 1000 / height;
+    return clamp((v - FLICK_V0) / (FLICK_V1 - FLICK_V0), 0, 1);
+  }
+
   // Points a resting puck is worth on its own (before the "furthest puck" rule).
   function zoneValue(p) {
     if (p.y > TABLE_L || Math.abs(p.x) > TABLE_W / 2) return 0;
@@ -190,11 +205,13 @@
   // ---- bots ---------------------------------------------------------------------------------
   // Execution noise (std dev, in input units) per level, plus how hard each level looks for a
   // shot. Measured in test/shuffleboard.test.js: Expert beats Easy nearly every game.
+  // Power noise is sized against a human's flick (power = flick speed, so ~5-10% speed error):
+  // even Expert misses its depth by ~1.5 table units now and then.
   const BOT = {
-    easy: { x: 0.08, aim: 0.09, power: 0.04, search: 'draw', reply: 0, robust: 0 },
-    medium: { x: 0.04, aim: 0.045, power: 0.02, search: 'basic', reply: 0, robust: 0 },
-    hard: { x: 0.02, aim: 0.022, power: 0.01, search: 'full', reply: 8, robust: 0 },
-    expert: { x: 0.01, aim: 0.01, power: 0.0045, search: 'full', reply: 14, robust: 3 },
+    easy: { x: 0.08, aim: 0.09, power: 0.065, search: 'draw', reply: 0, robust: 0 },
+    medium: { x: 0.04, aim: 0.05, power: 0.045, search: 'basic', reply: 0, robust: 0 },
+    hard: { x: 0.02, aim: 0.025, power: 0.025, search: 'full', reply: 8, robust: 0 },
+    expert: { x: 0.015, aim: 0.02, power: 0.02, search: 'full', reply: 14, robust: 3 },
   };
 
   function gauss(rand) {
@@ -327,7 +344,7 @@
   const api = {
     TABLE_L, TABLE_W, R, START_Y, FOUL_Y, LINE1, LINE2, LINE3, X_MAX, MAX_SLOPE, DECEL, D_MIN, D_MAX,
     FRAME_MS, PUCKS_PER_ROUND,
-    normInput, launch, powerFor, zoneValue, scoreRound, simulate, evaluate, aimAt, botShot,
+    FLICK_MS, normInput, launch, powerFor, flickPower, zoneValue, scoreRound, simulate, evaluate, aimAt, botShot,
     BOT_LEVELS: Object.keys(BOT),
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

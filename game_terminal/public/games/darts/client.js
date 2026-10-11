@@ -1,9 +1,9 @@
-// Darts client. Press and hold on the board to raise the dart: a reticle appears where you point
-// and wobbles (wide at first, steadiest after ~1-2s, then the arm tires). Drag to adjust, release
-// to throw. The wobble comes from the shared sim (sim.js) with the per-dart seed the server sent,
-// so where the reticle is when you let go is where the server lands the dart (plus a hair of
-// release jitter). Darts fly in, stick, and pop their score; the side panel keeps the 01 or
-// cricket scoreboard, checkout hints and the turn's three darts.
+// Darts client. Front-on board with a throwing hand below it: grab anywhere, line up under your
+// target and FLICK UP. Where you let go sets left/right, the flick's lean and curve push it wide,
+// and its speed sets the height (slow drops low, fast flies high). The client measures the flick
+// (release x, angle, speed in canvas-widths/s, curve) and the server lands it with the shared
+// flickLanding() in sim.js. Darts arc in from the hand, stick, and pop their score; the side
+// panel keeps the 01 or cricket scoreboard, checkout hints and the turn's three darts.
 import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
@@ -18,9 +18,11 @@ const REJECT_MESSAGES = {
   stale: 'Too quick — wait for the last dart',
 };
 const VIEW_MM = 236; // half-width of the canvas in board millimetres
-const FLIGHT_MS = 260;
-const TOUCH_LIFT = 70; // px the reticle sits above a finger so it isn't hidden under it
-const MIN_HOLD_MS = 150;
+const FLIGHT_MS = 420;
+const LANE = 0.32; // throwing lane below the board, as a fraction of the board width
+const SPEED_WIN_MS = 80; // release speed/angle = the last 80ms of the flick
+const CURVE_WIN_MS = 220; // curve = the bow of the last 220ms
+const MIN_SPEED = 0.6; // canvas-widths/s; slower than this isn't a throw (it would land off the board anyway)
 
 const CSS = `
 .dt-root { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
@@ -36,9 +38,8 @@ const CSS = `
 .dt-main { display: flex; gap: 14px; align-items: flex-start; justify-content: center; flex-wrap: wrap; width: 100%; }
 .dt-boardwrap { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; flex: 0 1 auto; }
 .dt-canvas { display: block; border-radius: 12px; cursor: default; }
-.dt-canvas.can-aim { cursor: crosshair; }
-.dt-steady { height: 6px; border-radius: 3px; background: #0b1a0b; border: 1px solid #1f8f0c; overflow: hidden; margin-top: 6px; position: relative; }
-.dt-steady i { position: absolute; left: 0; top: 0; bottom: 0; background: #39ff14; transition: none; }
+.dt-canvas.can-aim { cursor: grab; }
+.dt-canvas.can-aim.flicking { cursor: grabbing; }
 .dt-hint { font-size: 12px; color: #6fae5f; text-align: center; margin-top: 4px; min-height: 1.3em; }
 .dt-panel { display: flex; flex-direction: column; gap: 8px; min-width: 220px; flex: 0 1 260px; }
 .dt-meta { display: flex; justify-content: space-between; font-size: 12px; color: #6fae5f; letter-spacing: 1px; }
@@ -303,7 +304,9 @@ export function mount(container, api) {
   let raf = 0;
   let destroyed = false;
   let pendingThrow = null; // throwNo we're waiting to see advance
-  let aim = null; // { pointerId, start, px, py, touch } in canvas CSS px
+  let aim = null; // { pointerId, pts: [{x, y, t}] } in canvas CSS px — the flick in progress
+  let handX = null; // where my hand rests between throws (canvas px)
+  let myFlick = null; // { throwNo, px, py, flick } — my last throw, for the launch point + feedback
   let sizePx = 0;
   let boardImg = null;
   const seenDarts = new Map(); // n -> { start } flight start time
@@ -331,13 +334,9 @@ export function mount(container, api) {
   wrap.className = 'dt-boardwrap';
   const canvas = document.createElement('canvas');
   canvas.className = 'dt-canvas';
-  const steady = document.createElement('div');
-  steady.className = 'dt-steady';
-  const steadyFill = document.createElement('i');
-  steady.appendChild(steadyFill);
   const hint = document.createElement('div');
   hint.className = 'dt-hint';
-  wrap.append(canvas, steady, hint);
+  wrap.append(canvas, hint);
   const panel = document.createElement('div');
   panel.className = 'dt-panel';
   main.append(wrap, panel);
@@ -368,17 +367,16 @@ export function mount(container, api) {
 
   // --- sizing / coordinates ---
   function resize() {
-    const avail = Math.max(240, Math.min(520, (container.clientWidth || 520) - 8, window.innerWidth - 24));
+    const avail = Math.max(240, Math.min(520, (container.clientWidth || 520) - 8, window.innerWidth - 24, (window.innerHeight - 290) / (1 + LANE)));
     const narrow = (container.clientWidth || 800) < 760;
     const size = Math.floor(narrow ? avail : Math.min(avail, (container.clientWidth || 800) - 290));
     if (size === sizePx && boardImg) return;
     sizePx = Math.max(240, size);
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(sizePx * dpr);
-    canvas.height = Math.round(sizePx * dpr);
+    canvas.height = Math.round(sizePx * (1 + LANE) * dpr);
     canvas.style.width = `${sizePx}px`;
-    canvas.style.height = `${sizePx}px`;
-    steady.style.width = `${sizePx}px`;
+    canvas.style.height = `${Math.round(sizePx * (1 + LANE))}px`;
     hint.style.width = `${sizePx}px`;
     if (Sim) boardImg = paintBoard(Sim, sizePx, dpr);
   }
@@ -386,43 +384,79 @@ export function mount(container, api) {
   const toMm = (px, py) => ({ x: (px - sizePx / 2) * mmPerPx(), y: (py - sizePx / 2) * mmPerPx() });
   const toPx = (x, y) => ({ px: x / mmPerPx() + sizePx / 2, py: y / mmPerPx() + sizePx / 2 });
 
-  // --- aiming ---
-  function aimPoint() {
-    if (!aim) return null;
-    const lift = aim.touch ? TOUCH_LIFT : 0;
-    return toMm(aim.px, aim.py - lift);
-  }
+  // --- flicking ---
+  const handY = () => sizePx * (1 + LANE) - 30 * Math.max(0.7, sizePx / 470);
   function localXY(e) {
     const r = canvas.getBoundingClientRect();
-    return { px: e.clientX - r.left, py: e.clientY - r.top };
+    return { x: e.clientX - r.left, y: e.clientY - r.top, t: e.timeStamp || performance.now() };
   }
+  function addPoints(e) {
+    const list = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const ev of list.length ? list : [e]) aim.pts.push(localXY(ev));
+    const cut = aim.pts[aim.pts.length - 1].t - 600;
+    while (aim.pts.length > 2 && aim.pts[0].t < cut) aim.pts.shift();
+  }
+
+  // Turns the recorded stroke into a flick, or null if it wasn't a real upward flick.
+  function measureFlick(pts) {
+    const end = pts[pts.length - 1];
+    const since = (ms) => {
+      let i = pts.length - 1;
+      while (i > 0 && end.t - pts[i - 1].t <= ms) i--;
+      return i === pts.length - 1 ? Math.max(0, i - 1) : i;
+    };
+    const p0 = pts[since(SPEED_WIN_MS)];
+    const dx = end.x - p0.x;
+    const dy = end.y - p0.y;
+    const dt = Math.max(8, end.t - p0.t);
+    if (p0 === end || -dy < 4) return null;
+    const speed = (Math.hypot(dx, dy) / dt) * 1000 / sizePx;
+    if (speed < MIN_SPEED) return null;
+    const angle = (Math.atan2(dx, -dy) * 180) / Math.PI;
+    // Curve: biggest sideways bow of the recent path from its chord (+ = bowed right).
+    const pc = pts[since(CURVE_WIN_MS)];
+    const cx = end.x - pc.x;
+    const cy = end.y - pc.y;
+    const L = Math.hypot(cx, cy);
+    let dev = 0;
+    if (L > 10) {
+      for (let i = since(CURVE_WIN_MS); i < pts.length; i++) {
+        const d = ((pts[i].x - pc.x) * -cy + (pts[i].y - pc.y) * cx) / L;
+        if (Math.abs(d) > Math.abs(dev)) dev = d;
+      }
+    }
+    return Sim.clampFlick({ x: toMm(end.x, 0).x, angle, speed, curve: L > 10 ? dev / L : 0 });
+  }
+
   canvas.addEventListener('pointerdown', (e) => {
     if (!canThrow() || aim) return;
     e.preventDefault();
-    const { px, py } = localXY(e);
-    aim = { pointerId: e.pointerId, start: performance.now(), px, py, touch: e.pointerType === 'touch' };
+    aim = { pointerId: e.pointerId, pts: [localXY(e)] };
     try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     sfx.play('select');
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!aim || e.pointerId !== aim.pointerId) return;
-    const { px, py } = localXY(e);
-    aim.px = px;
-    aim.py = py;
+    addPoints(e);
   });
   const release = (e) => {
-    if (!aim || (e && e.pointerId !== aim.pointerId)) return;
-    const held = performance.now() - aim.start;
-    const p = aimPoint();
+    if (!aim || e.pointerId !== aim.pointerId) return;
+    addPoints(e);
+    const pts = aim.pts;
     aim = null;
-    if (held < MIN_HOLD_MS) {
-      hint.textContent = 'Hold to raise the dart — let go when the reticle is steady';
-      delete hint.dataset.auto;
+    const end = pts[pts.length - 1];
+    handX = Math.max(0, Math.min(sizePx, end.x));
+    const flick = canThrow() ? measureFlick(pts) : null;
+    if (!flick) {
+      if (canThrow()) {
+        hint.textContent = 'Flick UP at the board and let go while still moving';
+        delete hint.dataset.auto;
+      }
       return;
     }
-    if (!canThrow()) return;
     pendingThrow = view.throwNo;
-    api.sendAction({ kind: 'throw', x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100, t: Math.round(held), seed: view.dartSeed });
+    myFlick = { throwNo: view.throwNo + 1, px: end.x, py: Math.min(end.y, handY()), flick };
+    api.sendAction({ kind: 'throw', x: +flick.x.toFixed(2), angle: +flick.angle.toFixed(2), speed: +flick.speed.toFixed(3), curve: +flick.curve.toFixed(3), seed: view.dartSeed });
     sfx.play('whoosh');
   };
   canvas.addEventListener('pointerup', release);
@@ -445,17 +479,69 @@ export function mount(container, api) {
     return plan ? plan[0] : null;
   }
 
+  // Oche lane under the board.
+  function drawLane(ctx) {
+    const top = sizePx;
+    const g = ctx.createLinearGradient(0, top, 0, sizePx * (1 + LANE));
+    g.addColorStop(0, 'rgba(57,255,20,0)');
+    g.addColorStop(1, 'rgba(57,255,20,0.08)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, top, sizePx, sizePx * LANE);
+    ctx.strokeStyle = 'rgba(57,255,20,0.25)';
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(0, sizePx * (1 + LANE * 0.92));
+    ctx.lineTo(sizePx, sizePx * (1 + LANE * 0.92));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // The thrower's hand pinching a dart, seen from behind (follows the pointer while flicking).
+  function drawHand(ctx, s) {
+    if (!view || view.phase !== 'playing') return;
+    const mine = mySeat() === view.turn;
+    const inFlight = pendingThrow != null || [...seenDarts.values()].some((d) => !d.landed);
+    let x = mine && handX != null ? handX : sizePx / 2;
+    let y = handY();
+    if (aim) { const p = aim.pts[aim.pts.length - 1]; x = p.x; y = Math.max(sizePx * 0.55, p.y + 30 * s); }
+    const k = s;
+    const ln = (col, w, y0, y1) => { ctx.strokeStyle = col; ctx.lineWidth = w * k; ctx.beginPath(); ctx.moveTo(0, y0 * k); ctx.lineTo(0, y1 * k); ctx.stroke(); };
+    const blob = (cx, cy, rx, ry, rot) => { ctx.beginPath(); ctx.ellipse(cx * k, cy * k, rx * k, ry * k, rot, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); };
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = mine ? 1 : 0.45;
+    ctx.lineCap = 'round';
+    if (!inFlight) {
+      ln('#c9ccd2', 2, -66, -50); // point
+      ln('#7f858f', 6.5, -50, -30); // barrel
+      ln('#2b2f36', 2.5, -30, -6); // shaft
+      ctx.fillStyle = SEAT_COLOR[view.turn];
+      ctx.beginPath(); ctx.moveTo(0, -20 * k); ctx.lineTo(-10 * k, -2 * k); ctx.lineTo(0, -6 * k); ctx.lineTo(10 * k, -2 * k); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = '#d9a37e';
+    ctx.strokeStyle = '#7a4f35';
+    ctx.lineWidth = 1.4;
+    ctx.fillRect(-13 * k, 18 * k, 27 * k, 60 * k); // wrist (runs off the bottom)
+    ctx.strokeRect(-13 * k, 18 * k, 27 * k, 60 * k);
+    blob(17, 4, 6, 9, 0.5); // ring finger, curled
+    blob(15, -6, 6, 10, 0.4); // middle finger, curled
+    blob(1, 12, 16, 18, 0); // palm / back of hand
+    blob(-9, -22, 5, 19, -0.22); // thumb up the left of the barrel
+    blob(8, -26, 5.5, 20, 0.2); // index finger over the barrel
+    ctx.restore();
+  }
+
   function frame(now) {
     if (destroyed) return;
     raf = requestAnimationFrame(frame);
     if (!Sim || !boardImg) return;
-    if (aim && performance.now() - aim.start > Sim.MAX_HOLD_MS) release(null);
     const ctx = canvas.getContext('2d');
     const dpr = canvas.width / sizePx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(boardImg, 0, 0);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawLane(ctx);
     const k = 1 / mmPerPx();
 
     // Checkout target glow for my turn.
@@ -488,8 +574,15 @@ export function mount(container, api) {
         }
       }
       const { px, py } = toPx(d.x, d.y);
-      drawDart(ctx, px, py, SEAT_COLOR[seat], s, t * t);
+      if (t >= 1) { drawDart(ctx, px, py, SEAT_COLOR[seat], s, 1); continue; }
+      // In flight: arcs up from the hand and shrinks into the board.
+      const from = myFlick && myFlick.throwNo === d.n ? myFlick : { px, py: handY() };
+      const e = 1 - (1 - t) * (1 - t);
+      const fx = from.px + (px - from.px) * e;
+      const fy = from.py + (py - from.py) * e - Math.sin(Math.PI * t) * sizePx * 0.12;
+      drawDart(ctx, fx, fy, SEAT_COLOR[seat], s * (1 + 1.6 * (1 - e)), 1);
     }
+    drawHand(ctx, s);
 
     // Score popups.
     for (let i = popups.length - 1; i >= 0; i--) {
@@ -509,53 +602,27 @@ export function mount(container, api) {
       ctx.restore();
     }
 
-    // Reticle.
-    if (aim) {
-      const held = now - aim.start;
-      const a = aimPoint();
-      const w = Sim.wobble(view.dartSeed, held);
-      const c = toPx(a.x + w.dx, a.y + w.dy);
-      const ampPx = w.amp * k;
-      const col = w.amp < 8 ? '#39ff14' : w.amp < 16 ? '#ffb000' : '#ff4d4d';
+    // The flick in progress: a fading trail.
+    if (aim && aim.pts.length > 1) {
+      const end = aim.pts[aim.pts.length - 1].t;
       ctx.save();
-      ctx.strokeStyle = col;
-      ctx.fillStyle = col;
-      ctx.shadowColor = col;
-      ctx.shadowBlur = 8;
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = 0.45;
-      ctx.beginPath();
-      ctx.arc(c.px, c.py, Math.max(4, ampPx), 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.beginPath();
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        ctx.moveTo(c.px + dx * 5, c.py + dy * 5);
-        ctx.lineTo(c.px + dx * 12, c.py + dy * 12);
+      ctx.lineCap = 'round';
+      for (let i = 1; i < aim.pts.length; i++) {
+        const a0 = aim.pts[i - 1];
+        const a1 = aim.pts[i];
+        const age = (end - a1.t) / 300;
+        if (age >= 1) continue;
+        ctx.strokeStyle = `rgba(57,255,20,${0.55 * (1 - age)})`;
+        ctx.lineWidth = 4 * (1 - age) + 1;
+        ctx.beginPath();
+        ctx.moveTo(a0.x, a0.y);
+        ctx.lineTo(a1.x, a1.y);
+        ctx.stroke();
       }
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(c.px, c.py, 2.2, 0, Math.PI * 2);
-      ctx.fill();
-      // What it's on right now.
-      const m = toMm(c.px, c.py);
-      const on = Sim.scoreAt(m.x, m.y);
-      ctx.font = 'bold 13px "Courier New", monospace';
-      ctx.textAlign = 'left';
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-      ctx.shadowBlur = 0;
-      ctx.strokeText(on.label, c.px + 14, c.py - 10);
-      ctx.fillText(on.label, c.px + 14, c.py - 10);
       ctx.restore();
-      // Steadiness meter: full when calm.
-      const calm = Math.max(0, Math.min(1, (32 - w.amp) / 26));
-      steadyFill.style.width = `${Math.round(calm * 100)}%`;
-      steadyFill.style.background = col;
-    } else {
-      steadyFill.style.width = '0%';
     }
     canvas.classList.toggle('can-aim', !!canThrow());
+    canvas.classList.toggle('flicking', !!aim);
   }
 
   function onLanded(d, seat) {
@@ -567,6 +634,13 @@ export function mount(container, api) {
     else if (d.ring === 'D') color = '#39ff14';
     if (view && view.mode === 'cricket' && d.scored) text = `${d.label} +${d.scored}`;
     popups.push({ x: px, y: py, text, color, start: performance.now() });
+    if (myFlick && myFlick.throwNo === d.n) {
+      const f = myFlick.flick;
+      const side = (v, unit) => (Math.abs(v) < 0.5 ? 'straight' : `${Math.abs(v).toFixed(0)}${unit} ${v > 0 ? 'right' : 'left'}`);
+      const why = Math.abs(d.x) > Math.abs(d.y) ? ' — too wide' : d.y > 0 ? ' — too slow, it dropped' : ' — too fast, it flew high';
+      hint.textContent = `${text} · speed ${f.speed.toFixed(2)} · lean ${side(f.angle, '°')} · curve ${side(f.curve * 100, '%')}${d.ring === 'MISS' ? why : ''}`;
+      delete hint.dataset.auto;
+    }
     if (d.ring === 'MISS') sfx.play('dry');
     else sfx.play(d.ring === 'T' || d.ring === 'DB' ? 'capture' : 'move');
     if (d.ring === 'T' || d.ring === 'DB') setTimeout(() => sfx.play('point'), 90);
@@ -825,7 +899,7 @@ export function mount(container, api) {
 
     if (view.phase === 'playing' && seat === view.turn) {
       if (!hint.textContent || hint.dataset.auto) {
-        hint.textContent = 'Press & hold to aim · release when the reticle is steady (green)';
+        hint.textContent = 'Grab, line up under your target and FLICK UP — faster flies higher';
         hint.dataset.auto = '1';
       }
     } else {

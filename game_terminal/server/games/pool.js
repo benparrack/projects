@@ -190,10 +190,12 @@ function applyShot(st, seat, shot, cuePos) {
 // ---- bot ------------------------------------------------------------------------------------
 
 const LEVEL_CFG = {
-  easy: { aim: 0.03, power: 0.16, pick: 4, cands: 6, powers: [0.35, 0.6], spins: [0], lookahead: false },
-  medium: { aim: 0.012, power: 0.08, pick: 2, cands: 8, powers: [0.3, 0.5, 0.75], spins: [0], lookahead: false },
-  hard: { aim: 0.005, power: 0.04, pick: 1, cands: 10, powers: [0.25, 0.4, 0.6, 0.85], spins: [0, -0.6], lookahead: true },
-  expert: { aim: 0.0018, power: 0.02, pick: 1, cands: 12, powers: [0.22, 0.35, 0.5, 0.7, 0.9], spins: [0, -0.6, 0.6], lookahead: true },
+  // brk: break power range [lo, hi] and aim scatter at the apex (cm, s.d.) — a soft, scattered
+  // break pots far less, so Easy/Medium often come up dry instead of controlling every break.
+  easy: { brk: [0.28, 0.5, 4.2], aim: 0.03, power: 0.16, pick: 4, cands: 6, powers: [0.35, 0.6], spins: [0], lookahead: false },
+  medium: { brk: [0.35, 0.62, 3.4], aim: 0.012, power: 0.08, pick: 2, cands: 8, powers: [0.3, 0.5, 0.75], spins: [0], lookahead: false },
+  hard: { brk: [0.45, 0.8, 2.8], aim: 0.005, power: 0.04, pick: 1, cands: 10, powers: [0.25, 0.4, 0.6, 0.85], spins: [0, -0.6], lookahead: true },
+  expert: { brk: [0.6, 0.9, 2.2], aim: 0.0018, power: 0.02, pick: 1, cands: 12, powers: [0.22, 0.35, 0.5, 0.7, 0.9], spins: [0, -0.6, 0.6], lookahead: true },
 };
 
 // Ball numbers this seat may legally hit first.
@@ -336,8 +338,8 @@ function chooseBotShot(st, seat, level, rand = Math.random) {
     const side = (rand() < 0.5 ? -1 : 1) * (15 + rand() * 20);
     const cue = st.ballInHand ? { x: HEAD_X - 22, y: W / 2 + side } : { x: cue0.x, y: cue0.y };
     const apex = { x: Sim.FOOT.x, y: Sim.FOOT.y };
-    const aimOff = (rand() - 0.5) * 1.2;
-    const shot = { dx: apex.x - cue.x, dy: apex.y + aimOff - cue.y, power: level === 'easy' ? 0.8 : 0.95 + rand() * 0.05, spinX: 0, spinY: 0 };
+    const [lo, hi, sd] = cfg.brk;
+    const shot = { dx: apex.x - cue.x, dy: apex.y + gauss(rand) * sd - cue.y, power: lo + rand() * (hi - lo), spinX: 0, spinY: 0 };
     return { shot, cue: st.ballInHand ? cue : null };
   }
 

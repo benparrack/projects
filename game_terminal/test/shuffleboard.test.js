@@ -122,6 +122,29 @@ test('sim: bot shots are valid inputs for every level and never throw', () => {
   assert.ok(Sim.botShot([], 'blue', 'nonsense', { rand }));
 });
 
+test('sim: flickPower — power is the release flick speed, not the drag length', () => {
+  const H = 600; // board height, px
+  // steady upward flick at v px/ms, sampled every 8 ms, released at t = 200 while still moving
+  const flick = (v, pause = 0) => {
+    const pts = [];
+    for (let t = 0; t <= 200; t += 8) pts.push({ t, y: 500 - v * t });
+    const end = pts[pts.length - 1];
+    return Sim.flickPower(pts, end.t + pause, end.y, H);
+  };
+  const slow = flick(1); const fast = flick(2.5);
+  assert.ok(slow > 0 && fast > slow && fast <= 1, `${slow} < ${fast}`);
+  // same speed, any drag length -> same power (only the last FLICK_MS counts)
+  const long = []; for (let t = 0; t <= 400; t += 8) long.push({ t, y: 900 - 1 * t });
+  const e = long[long.length - 1];
+  assert.ok(Math.abs(Sim.flickPower(long, e.t, e.y, H) - slow) < 1e-9);
+  // stopped before letting go -> no shot; normalised by board height
+  assert.strictEqual(flick(2, 200), 0);
+  assert.ok(Math.abs(Sim.flickPower([{ t: 0, y: 200 }], 80, 0, 400) - Sim.flickPower([{ t: 0, y: 100 }], 80, 0, 200)) < 1e-9);
+  assert.strictEqual(Sim.flickPower([], 10, 0, H), 0);
+  assert.strictEqual(Sim.flickPower([{ t: 0, y: 0 }], 10, 0, 0), 0);
+  assert.strictEqual(flick(50), 1);
+});
+
 // ---- bot skill: head-to-head games with the shared sim ----
 function botGame(levels, rand, target) {
   const sc = { red: 0, blue: 0 };
