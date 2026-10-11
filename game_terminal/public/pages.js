@@ -2,13 +2,13 @@
 // Standalone on purpose: hub.js wires them in with
 //   const page = INFO_PAGES[location.pathname];
 //   if (page) { els.screenPage.replaceChildren(page.render()); document.title = `${page.title} — Game Terminal`; }
-// Templates, not legal advice. Ben must fill CONTACT_EMAIL and GOVERNING_LAW before real traffic.
+// Templates, not legal advice.
 import { h } from './ui.js';
 
 // Bump when Terms/Privacy change materially; sign-up stores it so users get re-prompted.
 export const TERMS_VERSION = '2026-10-11';
-export const CONTACT_EMAIL = 'contact@example.com'; // TODO(Ben): real address
-const GOVERNING_LAW = '[COUNTRY/STATE — TODO(Ben)]';
+export const CONTACT_EMAIL = 'benparrack@gmail.com';
+const GOVERNING_LAW = 'the Commonwealth of Virginia, USA';
 
 const mail = () => h('a', { href: `mailto:${CONTACT_EMAIL}` }, CONTACT_EMAIL);
 const link = (href, text) => h('a', { href, 'data-link': true }, text);

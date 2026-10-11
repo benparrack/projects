@@ -219,8 +219,6 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 
 ## Blocked / needs Ben
 
-- `public/pages.js`: set `CONTACT_EMAIL` and `GOVERNING_LAW` (placeholders in the Terms/Privacy pages).
-
 - Firebase project + credentials (see "What Ben has to do"). Until then the server runs on the
   in-memory backend + dev-auth locally; production keeps guest-only behaviour.
 
