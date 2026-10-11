@@ -75,41 +75,54 @@ def matches(item, offer):
 
 
 def find_deals(cfg):
-    """-> [(store, [(item, offer), ...]), ...] in config order."""
+    """-> [(store, list_matches, extras), ...] in config order. Each is [(item, offer)], biggest saving first.
+    extras: the best other offers not on the list (cfg 'extras' many, minus anything matching cfg 'skip')."""
     result = []
     for s in cfg["stores"]:
-        found, seen = [], set()
+        found, other, seen = [], [], set()
         for o in offers(s["chain"], s["id"]):
             key = (o["name"], o["brand"], o["size"], o["deal"])
+            if key in seen or (o["member"] and not cfg.get("member", True)):
+                continue  # the API lists some offers twice
+            seen.add(key)
             item = next((i for i in cfg["items"] if matches(i, o)), None)
-            if item and key not in seen:  # the API lists some offers twice
-                seen.add(key)
+            if item:
                 found.append((item, o))
-        found.sort(key=lambda x: -(x[1]["save"] or 0))
-        if not cfg.get("member", True):
-            found = [(i, o) for i, o in found if not o["member"]]
-        result.append((s, found))
+            elif o["save"] and not any(matches(x, o) for x in cfg.get("skip", [])):
+                other.append((None, o))
+        by_save = lambda x: -(x[1]["save"] or 0)
+        result.append((s, sorted(found, key=by_save), sorted(other, key=by_save)[:cfg.get("extras", 6)]))
     return result
 
 
+def line(o):
+    saving = f", -{o['save']:.0f} kr" if o["save"] else ""
+    what = " ".join(x for x in (o["name"], o["brand"], o["size"]) if x)
+    return f"- {what}: {o['deal']}{saving}{' *' if o['member'] else ''}"
+
+
 def report(result):
-    lines, totals = [], []
-    for s, found in result:
+    lines, totals, shown = [], [], {}  # shown: chain -> (first store's name, its offer lines)
+    for s, found, extras in result:
         save = sum(o["save"] or 0 for _, o in found)
         totals.append((save, s["name"]))
-        lines.append(f"## {s['name']}  ({len(found)} matches, ~{save:.0f} kr saved)")
-        for item, o in found:
-            star = " *" if o["member"] else ""
-            saving = f", save {o['save']:.0f} kr" if o["save"] else ""
-            lines.append(f"- {o['name']} {o['brand']} {o['size']}: {o['deal']} (was {o['was']}{saving}){star}".replace("  ", " "))
-    if any(f for _, f in result):
-        best = max(totals)
-        lines.insert(0, f"Best this week: {best[1]} (~{best[0]:.0f} kr saved)\n")
-        if any(o["member"] for _, f in result for _, o in f):
-            lines.append("\n* member price (Willys Plus / Hemköp Klubb)")
-    else:
-        lines.append("No offers match your list this week.")
-    return "\n".join(lines)
+        lines.append(f"\n## {s['name']} (list: {len(found)}, ~{save:.0f} kr off)")
+        # stores of one chain mostly share offers: later ones only list what the first didn't
+        first, seen = shown.setdefault(s["chain"], (s["name"], set()))
+        mine, other = [line(o) for _, o in found], [line(o) for _, o in extras]
+        if first != s["name"]:
+            lines.append(f"(same as {first}, plus:)")
+            mine, other = [l for l in mine if l not in seen], [l for l in other if l not in seen]
+        seen.update(mine + other)
+        lines += mine or ["- nothing new from your list" if first != s["name"] else "- nothing from your list"]
+        if other:
+            lines.append("Other good deals:")
+            lines += other
+    best = max(totals)
+    head = f"Best for your list: {best[1]} (~{best[0]:.0f} kr off)" if best[0] else "No offers match your list this week."
+    if any(o["member"] for _, f, e in result for _, o in f + e):
+        lines.append("\n* member price (Willys Plus / Hemköp Klubb)")
+    return head + "\n" + "\n".join(lines)
 
 
 def push(title, message):
@@ -122,7 +135,7 @@ def push(title, message):
     if not topic:
         print("NTFY (no topic set), not sent")
         return
-    requests.post("https://ntfy.sh", data=json.dumps({"topic": topic, "title": title, "message": message[:4000],
+    requests.post("https://ntfy.sh", data=json.dumps({"topic": topic, "title": title, "message": message.encode()[:4000].decode(errors="ignore"),  # ntfy turns >4 KB into an attachment
                                                      "tags": ["shopping_cart"]}).encode(), timeout=15).raise_for_status()
 
 

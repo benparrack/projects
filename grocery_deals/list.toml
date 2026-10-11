@@ -1,36 +1,35 @@
 # Your stores: find ids with `python3 grocery.py stores <area or street>` and paste the lines here.
-# PLACEHOLDERS: two central stores until Ben picks his own.
+# Closest to Blekholmstorget (straight-line distance):
 stores = [
-  { chain = "willys", id = "2258", name = "Willys Stockholm Fridhemsplan" },
-  { chain = "hemkop", id = "4297", name = "Hemköp Stockholm City" },
+  { chain = "hemkop", id = "4297", name = "Hemköp City" },        # Klarabergsgatan 50, 0.6 km
+  { chain = "hemkop", id = "4658", name = "Hemköp Wasahallen" },  # Upplandsgatan 28-32, 0.9 km
+  { chain = "willys", id = "2258", name = "Willys Fridhemsplan" }, # Fleminggatan 40, 1.1 km, cheapest chain
 ]
 
 # false = hide member-only prices (Willys Plus / Hemköp Klubb, both free to join)
 member = true
 
-# Your standing list. Each line matches any offer whose name or brand contains it (case-insensitive).
-# Use | for alternatives: "havredryck|oatly" catches "Oatly Barista" too; -word excludes: "ägg -lägg" skips "pålägg".
-# A word matches at the start or end of a word in the offer, so "kyckling" hits "Kycklingfilé" and "bröd" hits "Lantbröd".
-# Swedish compounds help: "kyckling" matches "Kycklingfilé", "Kycklinglårfilé", ...
-# STARTER LIST: generic student staples, edit to what you actually buy.
+# Besides your list: how many of the biggest other savings to show per store (things worth buying only on sale)
+extras = 6
+
+# Your list. A word matches at the start or end of a word in the offer's name/brand, so "kyckling" hits
+# "Kycklingbröstfilé" and "bröd" hits "Lantbröd". | = alternatives, -word = exclude, put -words at the END of the line ("ägg -lägg" skips "pålägg").
+# Find good words with `python3 grocery.py browse [word]`.
 items = [
-  "kyckling",
-  "köttfärs|blandfärs|nötfärs",
-  "lax",
-  "ägg -lägg",
-  "mjölk",
-  "havredryck|oatly",
-  "yoghurt|kvarg",
-  "hushållsost|präst|grevé|västerbotten",
-  "smör|bregott",
-  "bröd|lingongrova",
-  "pasta|spagetti",
-  "ris",
-  "kaffe|zoégas|gevalia|löfbergs",
-  "banan",
-  "äpple",
-  "tomat",
-  "lök",
-  "potatis",
-  "pizza",
+  # whole milk is "standardmjölk" (3%); offers often just say "Mjölk"
+  "standardmjölk|helmjölk|mjölk -kokos -choklad -havre -mandel -soja -fil",
+  "kyckling -pålägg",
+  "nötfärs|blandfärs|köttfärs|högrev|entrecôte|ryggbiff|oxfilé|nötkött|rostbiff|biff -soja -vegansk",
+  "pålägg|skinka|salami|kalkon|kycklingpålägg|medwurst -vegansk",
+  "flingor|müsli|granola|havrefras|cornflakes|special k|cheerios|frosties|crunchy",
+  "banan|äpple|äpplen|druv|hallon|blåbär|jordgubb|clementin|mandarin|päron|kiwi|mango|nektarin",
+  "chips -taco -tortilla -nacho",
+  "jordnöt|nötter|nötmix|cashew|mandlar",
+  "bröd|surdeg|baguette|fralla|frallor|limpa|grova -knäcke -tunnbröd -tortilla -pita -pizza",
+]
+
+# Never show these in "other good deals" (same matching rules)
+skip = [
+  "kattfoder|hundfoder|kattmat|hundmat|kattsand|blöjor|libero|pampers|tvättmedel|sköljmedel|diskmedel|tamponger|bindor",
+  "barnmat|välling|ersättning",
 ]

@@ -32,10 +32,23 @@ cfg = {"items": ["kaffe", "ost"], "stores": [{"chain": "willys", "id": "1", "nam
                                              {"chain": "hemkop", "id": "2", "name": "B"}]}
 res = grocery.find_deals(cfg)
 assert [x["name"] for _, x in res[0][1]] == ["Hushållsost", "Kaffe"], res
+assert [x["name"] for _, x in res[0][2]] == []  # Lakrits has no saving, so not an extra
 text = grocery.report(res)
-assert text.startswith("Best this week: A (~46 kr saved)"), text
+assert text.startswith("Best for your list: A (~46 kr off)"), text
+assert "- Kaffe: 10/st, -7 kr" in text
 res = grocery.find_deals({**cfg, "member": False})
 assert [x["name"] for _, x in res[0][1]] == ["Kaffe"]
-assert "Best this week: B" in grocery.report(res)
-assert "No offers match" in grocery.report([(cfg["stores"][0], [])])
+assert "Best for your list: B" in grocery.report(res)
+assert "No offers match" in grocery.report([(cfg["stores"][0], [], [])])
 print("ok")
+
+# a second store of the same chain only lists offers the first didn't
+offers["3"] = [o("Kaffe", save=7), o("Hushållsost", save=39, member=True), o("Kaffebröd", save=3)]
+cfg["stores"].append({"chain": "willys", "id": "3", "name": "C"})
+text = grocery.report(grocery.find_deals({**cfg, "items": ["kaffe", "ost", "bröd"]}))
+c = text.split("## C")[1]
+assert "(same as A, plus:)" in c and "Kaffebröd" in c and "Hushållsost" not in c, text
+# exclusions at the end of a line
+assert not m("pålägg|skinka -vegansk", o("Veganskt pålägg"))
+assert m("pålägg|skinka -vegansk", o("Rökt skinka"))
+print("ok 2")

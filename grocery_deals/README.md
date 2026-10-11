@@ -20,6 +20,8 @@ Pushes go to `NTFY_ALERT_TOPIC` from `./.env`, else `../money/flip-bot/.env`.
 
 ## Notes
 
+- "Other good deals": the biggest "Spara X kr" offers not on your list (`extras` per store, minus `skip`).
+- A second store of the same chain only lists offers the first one did not.
 - Data: Willys/Hemköp's own public site API (`/search/campaigns/offline?q=<storeId>`), no key needed.
   Both are Axfood, so one code path serves both.
 - `*` marks member prices (Willys Plus / Hemköp Klubb, free to join). Set `member = false` to hide them.
