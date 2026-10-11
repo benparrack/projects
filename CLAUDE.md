@@ -66,10 +66,14 @@ fixes that actually move this number:
 - On a long tool-call-heavy stretch (iterative debugging, repeated test/build
   runs, lots of small Read/Bash calls in a row), run `/compact` proactively
   well before it's forced — don't wait for auto-compact.
-- Push exploration/research-heavy work into a subagent or fork rather than doing
-  dozens of Read/Grep calls in the main conversation — a subagent's tool calls
-  never get replayed into the parent's growing context, only its final summary
-  does.
+- **Subagents only when Ben asks, or when clearly cheaper.** Each subagent starts
+  cold and re-reads the brief, `CLAUDE.md`, the code and the test harness, so
+  fanning out N agents pays that N times. For multi-item requests (bug lists,
+  playtest feedback, per-game fixes), work through the items one at a time in the
+  main session, finishing and verifying each before the next; commit after each
+  (or every few) and `/compact` between groups. A single subagent is fine for one
+  big read-only sweep (dozens of Read/Grep calls where only the conclusion
+  matters), since its tool calls never get replayed into the main context.
 - `/clear` between unrelated sub-projects instead of carrying dead context
   forward into the next task.
 - Keep `CLAUDE.md` files and always-loaded memory lean — every line in them gets
