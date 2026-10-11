@@ -237,6 +237,8 @@ test('two bots not allowed; bot level change; remove bot', () => {
   const room = makeRoom();
   join(room, 'p1');
   act(room, 'p1', { kind: 'sit', seat: 'a', bot: true, level: 'easy' });
+  assert.strictEqual(room.state.players.b, 'p1', 'unseated sender auto-sits opposite the bot');
+  act(room, 'p1', { kind: 'leaveSeat' });
   act(room, 'p1', { kind: 'sit', seat: 'b', bot: true });
   assert.strictEqual(room.state.players.b, null);
   act(room, 'p1', { kind: 'setBotLevel', seat: 'a', level: 'expert' });

@@ -245,7 +245,8 @@ export function mount(container, api) {
     const jy = (hash(i, k, 5) - 0.5) * 0.05;
     return {
       x: 50 + (Math.cos(a) * rr + jx) * 100,
-      y: 50 + (Math.sin(a) * rr * (isStore ? 2.25 : 1) + jy) * 100 * (isStore ? 0.98 : 1),
+      // y is % of height: a store is ~2.2x taller than wide, so 1.25 keeps a full store inside its cup.
+      y: 50 + (Math.sin(a) * rr * (isStore ? 1.25 : 1) + jy) * 100,
     };
   }
 

@@ -1,5 +1,5 @@
 // Codemaster (Mastermind) — crack a hidden 4-colour code in 10 guesses. GREEN feedback pegs =
-// right colour in the right spot, RED = right colour in the wrong spot. Modes: DUEL (each seat
+// right colour in the right spot, YELLOW = right colour in the wrong spot. Modes: DUEL (each seat
 // sets a code for the other, race to crack it; either seat can be a CPU), RACE (the computer sets
 // one code, everyone who joins cracks it on their own board) and CO-OP (one shared board).
 // Pick colours from the palette (or keys 1-6), tap a filled slot to clear it, Enter submits.
@@ -18,7 +18,7 @@ export const PEG_COLORS = [
   { name: 'Purple', hex: '#b46bff', dark: '#6a2db0', sym: '✚' },
 ];
 const FB_GREEN = '#2bff5e';
-const FB_RED = '#ff3b3b';
+const FB_YELLOW = '#ffd21f';
 const PEGS = 4;
 
 const MODE_INFO = {
@@ -84,11 +84,11 @@ const CSS = `
 .cm-fb { display:grid; grid-template-columns:repeat(2,12px); grid-template-rows:repeat(2,12px); gap:3px; margin-left:4px; }
 .cm-fbp { width:12px; height:12px; border-radius:50%; background:#020403; box-shadow: inset 0 1px 2px rgba(0,0,0,.9); box-sizing:border-box; }
 .cm-fbp.g { background:radial-gradient(circle at 35% 30%,#b4ffc8,${FB_GREEN} 50%,#0a9e33); box-shadow:0 0 6px ${FB_GREEN}; }
-.cm-fbp.r { background:radial-gradient(circle at 35% 30%,#ffc0c0,${FB_RED} 50%,#a00); box-shadow:0 0 6px ${FB_RED}; }
+.cm-fbp.r { background:radial-gradient(circle at 35% 30%,#fff3b0,${FB_YELLOW} 50%,#a68400); box-shadow:0 0 6px ${FB_YELLOW}; }
 .cm-fbp.pop { animation: cm-pop .3s cubic-bezier(.3,1.8,.5,1) backwards; }
 @keyframes cm-pop { from { transform:scale(0); } }
 .cm-fbtxt { font-size:10px; width:34px; opacity:.75; font-variant-numeric:tabular-nums; }
-.cm-fbtxt .g { color:${FB_GREEN}; } .cm-fbtxt .r { color:${FB_RED}; }
+.cm-fbtxt .g { color:${FB_GREEN}; } .cm-fbtxt .r { color:${FB_YELLOW}; }
 .cm-palette { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
 .cm-pal { width:44px; height:44px; border-radius:50%; padding:0; border:2px solid transparent; position:relative; transition: transform .1s; }
 .cm-pal:hover:not(:disabled) { transform: scale(1.1); background:transparent; }
@@ -146,7 +146,7 @@ function pegEl(color, { hidden = false, anim = '', delay = 0 } = {}) {
   return p;
 }
 
-// Feedback block: `exact` green then `near` red pegs, then empty holes.
+// Feedback block: `exact` green then `near` yellow pegs, then empty holes.
 function fbEl(exact, near, { animate = false, pegs = PEGS } = {}) {
   const box = el('div', 'cm-fb');
   box.title = `${exact} right colour & spot, ${near} right colour wrong spot`;

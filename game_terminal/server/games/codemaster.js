@@ -1,5 +1,5 @@
 // Codemaster (Mastermind): crack a hidden 4-peg code of 6 colours in at most 10 guesses. Each
-// guess is scored with GREEN pegs (right colour, right spot) and RED pegs (right colour, wrong
+// guess is scored with GREEN pegs (right colour, right spot) and YELLOW pegs (right colour, wrong
 // spot). Three modes:
 //   duel — two seats each set a secret code for the other, then both race to crack theirs.
 //          Solving beats not solving, fewer guesses beats more, and a tie on guesses goes to
@@ -529,6 +529,8 @@ module.exports = {
           if (st.players[other(data.seat)] === BOT) return reject('two_bots');
           st.players[data.seat] = BOT;
           setBotLevel(st, data.seat, data.level);
+          // One click to play a bot: an unseated sender takes the other seat if it's free.
+          if (!seatOf(st, me) && !st.players[other(data.seat)]) st.players[other(data.seat)] = me;
         } else {
           if (seatOf(st, me)) return;
           st.players[data.seat] = me;

@@ -124,7 +124,7 @@ export const HOWTO = {
   codemaster: {
     about: 'Mastermind: crack a hidden code of 4 pegs in 6 colours within 10 guesses.',
     rules: [
-      'Each guess gets GREEN pegs (right colour, right spot) and RED pegs (right colour, wrong spot).',
+      'Each guess gets GREEN pegs (right colour, right spot) and YELLOW pegs (right colour, wrong spot).',
       'DUEL: each seat sets a code for the other; solving beats not solving, then fewer guesses, then speed.',
       'RACE: the computer sets one code and everyone cracks it on their own board.',
       'CO-OP: the computer sets a code and everyone shares one board.',
