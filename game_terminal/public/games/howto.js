@@ -637,4 +637,18 @@ export const HOWTO = {
       'Type your word and press Enter on your turn.',
     ],
   },
+  minesweeper: {
+    about: 'Minesweeper as a head-to-head race: both players sweep the same hidden minefield at the same time.',
+    rules: [
+      'Both boards have the same mines and start from the same opened patch. Clear every safe cell before your opponent does.',
+      'Numbers count the mines touching that cell (including diagonals).',
+      'Opening a mine doesn\'t end your game, but it freezes you for 5 seconds and marks the mine.',
+      'You only see your opponent\'s progress bar (cleared %, mines hit, flags), not their board.',
+      'Pick Small (9×9, 10 mines), Medium (16×16, 40) or Large (30×16, 99) between races, or any time vs a bot (restarts).',
+    ],
+    controls: [
+      'Click a cell to open it. Click a number whose mines are all flagged to open all of its other neighbours at once.',
+      'Right-click (or long-press on touch, or turn on FLAG MODE) to place or remove a flag.',
+    ],
+  },
 };

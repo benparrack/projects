@@ -36,6 +36,7 @@ const CATEGORIES = [
       { type: 'mancala', label: 'MANCALA' },
       { type: 'dotsboxes', label: 'DOTS AND BOXES' },
       { type: 'codemaster', label: 'CODEMASTER (MASTERMIND)' },
+      { type: 'minesweeper', label: 'MINESWEEPER (RACE)' },
     ],
   },
   {
