@@ -161,8 +161,8 @@ call with the right placements. This is the long, careful part of the project.
       Crossword/Wordscapes if easy). One scored attempt per account, a daily leaderboard,
       and a streak counter. (Shipped for Maze Dash + Word Hunt; Minesweeper is a 2-seat race
       with no solo mode, Crossword/Wordscapes have no score — left out.)
-- [ ] Activity feed on the home screen: friends' notable results, unlocks and streaks
-- [ ] Homepage live stats: online now, games played today, most popular game this week
+- [x] Activity feed on the home screen: friends' notable results, unlocks and streaks
+- [x] Homepage live stats: online now, games played today, most popular game this week
 
 ### Phase 7 — "Real website" essentials
 - [x] **Terms of Service** page (`/terms`): 13+ age requirement, acceptable use, chat
@@ -244,3 +244,4 @@ memory backend and dev-auth. Real Firebase is only needed to deploy.
 - 2026-10-11 — Phase 6: XP + levels + achievements live. results.js grants daily-capped XP (500/UTC day) on `users/{uid}` and unlocks the 42-item catalog (beat-a-friend via social, rating/level extras); RESULT_RECORDED carries `progress` → +XP / LEVEL UP / ACHIEVEMENT UNLOCKED toasts, open tabs get a fresh account state. Profile: XP bar under the level, achievements grid (unlocked newest first, locked folded). `test/xp.test.js`.
 - 2026-10-11 — Phase 6: cosmetics. 6 name colors + 7 avatar frames unlocked by level or achievement (`COSMETICS` in progression.js; server re-checks on equip, null unequips), picker on your own profile, shown on profile/header chip/leaderboards/chat/room roster. Follow-up (not done): in-game skins (slither skins, TRON trail colors, chess/checkers board themes) need per-game color-conflict handling.
 - 2026-10-11 — Phase 6: daily challenge. `DAILY-<GAME>` joins open a private solo room seeded from sha256(date, game) (Maze Dash maze, Word Hunt grid); the run is claimed atomically at START (no rerolls, no bots, no spectators), the finish lands via results.record into `daily/{date}_{game}_{uid}` with +40 XP, rank and a UTC-day streak (Daily Grind/7-day achievements, daily frame). Menu card (today's games, your score, streak, reset countdown), `/daily` boards page + nav/footer links, `/api/daily`. `test/daily.test.js`.
+- 2026-10-11 — Phase 6 done: home screen. Live strip under the welcome line for everyone (online now, games today, hot this week → selects that game; `/api/live`, per-day counters in `meta/plays_{date}`). Friends' activity panel for accounts (ranked wins, top-3 daily finishes, 3/7/14…-day streaks, level-ups, achievement unlocks; `activity/{uid}` last 20, merged over the socket since friend lists are private; empty state links to FIND FRIENDS). `test/activity.test.js`.

@@ -9,6 +9,7 @@ import { renderProfile } from './profile.js';
 import { renderReplay } from './replay.js';
 import { renderLeaderboards } from './leaderboards.js';
 import { renderDailyCard, renderDaily } from './daily.js';
+import { renderLive, renderActivity } from './home.js';
 import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, openConversation, getSocial } from './friends.js';
 import { initChat, initGlobalDock, setDockAvailable, chatBox, reopenChats, handleChatHistory, handleChatMessage, handleChatDeleted, handleChatError } from './chat.js';
 import { renderAdmin, handleAdminData } from './admin.js';
@@ -190,7 +191,7 @@ function setStatus(text, cls) {
 function showScreen(name) {
   els.screenNickname.hidden = name !== 'nickname';
   els.screenMenu.hidden = name !== 'menu';
-  if (name === 'menu') renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
+  if (name === 'menu') refreshHome();
   els.screenRoom.hidden = name !== 'room';
   els.screenPage.hidden = name !== 'page';
   // Global chat lives on the menu and pages; rooms have their own chat. Accounts-off deploys have none.
@@ -329,7 +330,8 @@ function handleAccountState(p) {
   // Leaderboards highlight your row and offer a FRIENDS tab only when signed in.
   if (location.pathname.startsWith('/leaderboards') && (prev && prev.username) !== (p.user && p.user.username)) onRoute();
   // The daily card shows your runs and streak; refresh it whenever the account changes.
-  if (!els.screenMenu.hidden) renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
+  const homeKey = (u) => u && JSON.stringify([u.username, u.daily]);
+  if (!els.screenMenu.hidden && homeKey(prev) !== homeKey(p.user)) refreshHome();
   if (location.pathname === '/daily' && JSON.stringify(prev && prev.daily) !== JSON.stringify(p.user && p.user.daily)) onRoute();
   if (location.pathname === '/admin' && !!(prev && prev.admin) !== !!(p.user && p.user.admin)) onRoute();
   if (p.user && state.setup) {
@@ -353,6 +355,25 @@ function ordinal(n) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// Menu extras: live strip, daily card, friends' activity (fetched fresh each time the menu shows).
+function refreshHome() {
+  renderLive(document.getElementById('live-slot'), { gameLabel, pick: pickGame });
+  renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
+  if (state.account) send(ClientMessage.ACTIVITY_GET, {});
+  else document.getElementById('activity-slot').replaceChildren();
+}
+
+// Select a game in the menu list (expanding its category) and bring it into view.
+function pickGame(type) {
+  const cat = CATEGORIES.find((c) => c.games.some((g) => g.type === type));
+  if (!cat) return;
+  state.selectedGameType = type;
+  state.expandedCategories.add(cat.name);
+  renderGameList();
+  const li = els.gameList.querySelector(`li[data-type="${type}"]`);
+  if (li) li.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 const playDaily = (type) => send(ClientMessage.ROOM_JOIN, { code: dailyRoomCode(type) });
@@ -434,6 +455,11 @@ function handleServerMessage(type, payload) {
 
     case ServerMessage.ACCOUNT_STATE: {
       handleAccountState(payload);
+      break;
+    }
+
+    case ServerMessage.ACTIVITY: {
+      if (state.account) renderActivity(document.getElementById('activity-slot'), payload, { gameLabel, openFriends: () => document.getElementById('btn-friends').click() });
       break;
     }
 

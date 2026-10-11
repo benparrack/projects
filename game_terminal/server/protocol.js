@@ -17,6 +17,7 @@ const ClientMessage = {
   FRIEND_REQUEST: 'friend.request', // { username }
   FRIEND_ACCEPT: 'friend.accept', // { username }
   FRIEND_REMOVE: 'friend.remove', // { username } — unfriend, decline, or cancel a request
+  ACTIVITY_GET: 'activity.get', // {} -> activity (friends' recent moments; accounts only)
   USER_BLOCK: 'user.block', // { username, on }
   ROOM_INVITE: 'room.invite', // { username } — invite a friend into your current room
   PARTY_INVITE: 'party.invite', // { username }
@@ -46,6 +47,7 @@ const ServerMessage = {
   ACCOUNT_DELETED: 'account.deleted', // {} — the account is gone; client signs out
   SOCIAL_STATE: 'social.state', // { friends, incoming, outgoing, blocked, recent, party } — accounts only
   SOCIAL_NOTICE: 'social.notice', // { kind: 'request'|'accepted'|'invite'|'party'|'follow'|'ok'|'error', from?, message?, gameType?, code?, id? }
+  ACTIVITY: 'activity', // { items: [{ at, kind, ..., user: { username, avatar, cosmetics } }], friends }
   CHAT_MESSAGE: 'chat.message', // { channel, with?, msg: { id, at, from: { username, avatar, level, role? }, text } }
   CHAT_HISTORY: 'chat.history', // { channel, with?, messages, canPost, reason? }
   CHAT_DELETED: 'chat.deleted', // { id }

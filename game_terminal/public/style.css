@@ -771,3 +771,21 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 .daily-player:hover { text-decoration: underline; }
 .daily-score { font-variant-numeric: tabular-nums; }
 @media (max-width: 480px) { .daily-boards { grid-template-columns: 1fr; } .daily-title { font-size: 20px; } }
+
+/* ---- Home: live strip + friends' activity ---- */
+.live-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: -4px 0 12px; font-size: .85em; color: var(--fg-dim); }
+.live-strip b { color: var(--fg); font-weight: normal; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fg); box-shadow: 0 0 6px var(--fg); animation: live-pulse 2s ease-in-out infinite; }
+@keyframes live-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+.live-sep { opacity: .6; }
+.live-hot { background: none; border: none; padding: 0; color: var(--accent); font-size: inherit; text-decoration: underline dotted; }
+.live-hot:hover:not(:disabled) { background: none; color: #ffd27a; }
+.activity { border: 1px solid var(--border); padding: 10px 14px; margin: 0 0 1em; }
+.activity-title { font-family: var(--display); font-weight: normal; font-size: 20px; margin: 0 0 6px; color: var(--accent); letter-spacing: 1px; }
+.activity-list { list-style: none; margin: 0; padding: 0; }
+.activity-item { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 4px 0; font-size: .9em; }
+.activity-item + .activity-item { border-top: 1px solid rgba(31, 143, 12, .3); }
+.activity-text a { color: var(--fg); }
+.activity-at { font-size: .85em; white-space: nowrap; }
+.activity-empty { margin: 0; font-size: .9em; }

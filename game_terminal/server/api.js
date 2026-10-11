@@ -17,7 +17,7 @@ function json(res, status, body, maxAge = 0) {
   res.end(JSON.stringify(body));
 }
 
-function createApi({ db, accounts, daily = null, authMode, firebaseWebConfig, registry, now = () => Date.now() }) {
+function createApi({ db, accounts, daily = null, live = null, authMode, firebaseWebConfig, registry, now = () => Date.now() }) {
   // What the client needs to know per game: does it have a ladder, and what's its score.
   const games = Object.fromEntries(Object.entries(registry).filter(([, p]) => !(p.stats || {}).none)
     .map(([type, p]) => [type, { rated: !!(p.stats || {}).rated, score: (p.stats || {}).score || null }]));
@@ -52,6 +52,8 @@ function createApi({ db, accounts, daily = null, authMode, firebaseWebConfig, re
   }
 
   const routes = [
+    // Homepage strip: people connected now, games finished today, most played this week.
+    [/^\/api\/live$/, async () => (live ? [200, await live(), 15] : [404, { error: 'Not found.' }])],
     // Today's daily-challenge boards (top 50 per game, profiles joined, no uids).
     [/^\/api\/daily$/, async () => {
       if (!daily) return [404, { error: 'Not found.' }];

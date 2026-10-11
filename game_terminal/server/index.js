@@ -11,6 +11,7 @@ const { createAuth, webConfig } = require('./auth');
 const { createAccounts, publicUser, TERMS_VERSION } = require('./accounts');
 const { createResults } = require('./results');
 const { createDaily, DAILY_GAMES, seedOf } = require('./daily');
+const { createActivity, itemsFor } = require('./activity');
 const { createApi } = require('./api');
 const { createSocial } = require('./social');
 const { Parties } = require('./party');
@@ -24,12 +25,13 @@ const db = createDb();
 const auth = createAuth();
 const accounts = createAccounts(db);
 const daily = createDaily(db);
-const results = createResults({ db, registry: gameRegistry, daily });
+const activity = createActivity(db);
+const results = createResults({ db, registry: gameRegistry, daily, onRecorded: (summary) => activity.counted(summary.gameType).catch((err) => console.error('activity: count failed', err)) });
 const social = createSocial(db, accounts);
 const parties = new Parties();
 const chat = createChat(db);
 const moderation = createModeration(db, accounts, { chat });
-const handleApi = createApi({ db, accounts, daily, authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
+const handleApi = createApi({ db, accounts, daily, live: async () => ({ online: wss.clients.size, ...(await activity.stats()) }), authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
 console.log(`accounts: auth=${auth.mode} db=${db.backend}`);
 
 const roomManager = new RoomManager(gameRegistry, {
@@ -44,7 +46,11 @@ const roomManager = new RoomManager(gameRegistry, {
         room.sendTo(p.clientId, makeEnvelope(ServerMessage.RESULT_RECORDED, { gameType: rec.summary.gameType, kind: rec.summary.kind, saved: !!p.uid, place: p.place, draw, players, ranked: rec.summary.ranked, rating: (p.uid && rec.ratings && rec.ratings[p.uid]) || null, progress: (p.uid && rec.progress && rec.progress[p.uid]) || null, daily: (p.uid && rec.daily && rec.daily[p.uid]) || null }));
       }
       // XP/level/achievements changed: refresh every open tab of that account (header level, profile).
-      for (const uid of Object.keys(rec.progress || {})) refreshAccount(uid).catch((err) => console.error('account refresh failed', err));
+      for (const uid of Object.keys(rec.progress || {})) {
+        refreshAccount(uid).catch((err) => console.error('account refresh failed', err));
+        const items = itemsFor(rec.summary, uid, { progress: rec.progress[uid], daily: rec.daily && rec.daily[uid], rating: rec.ratings && rec.ratings[uid] });
+        activity.log(uid, items).catch((err) => console.error('activity: log failed', err));
+      }
       const uids = rec.people.map((p) => p.uid).filter(Boolean);
       if (uids.length > 1) social.noteRecent(uids, rec.summary.gameType).then(() => pushMany(uids)).catch((err) => console.error('social: recent failed', err));
     }).catch((err) => console.error('results: record failed', err));
@@ -379,6 +385,18 @@ wss.on('connection', (ws) => {
         session.uid = null;
         session.user = null;
         send(ws, ServerMessage.ACCOUNT_DELETED, {});
+        break;
+      }
+
+      case ClientMessage.ACTIVITY_GET: {
+        if (!session.uid) { send(ws, ServerMessage.ACTIVITY, { items: [], friends: 0 }); break; }
+        const friends = await social.friendUids(session.uid);
+        const items = await activity.feed(friends);
+        const users = new Map(await Promise.all([...new Set(items.map((it) => it.uid))].map(async (u) => [u, publicUser(await accounts.getUser(u))])));
+        send(ws, ServerMessage.ACTIVITY, {
+          friends: friends.length,
+          items: items.filter((it) => users.get(it.uid)).map(({ uid, ...it }) => ({ ...it, user: users.get(uid) })),
+        });
         break;
       }
 

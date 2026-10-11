@@ -1,0 +1,47 @@
+// Menu extras: the live stats strip (everyone) and friends' activity (signed in).
+import { h, timeAgo } from './ui.js';
+import { avatarEl, nameColor } from './avatars.js';
+
+let live = null; // { at, data }
+
+export async function renderLive(mount, { gameLabel, pick }) {
+  if (!live || Date.now() - live.at > 30000) {
+    try {
+      const res = await fetch('/api/live');
+      if (!res.ok) throw new Error(res.status);
+      live = { at: Date.now(), data: await res.json() };
+    } catch { if (!live) { mount.replaceChildren(); return; } }
+  }
+  const d = live.data;
+  const stat = (n, label) => h('span.live-stat', h('b', n.toLocaleString()), ` ${label}`);
+  mount.replaceChildren(h('p.live-strip', { 'aria-label': 'Site activity' },
+    h('span.live-dot', { 'aria-hidden': 'true' }), stat(d.online, 'online now'),
+    h('span.live-sep', { 'aria-hidden': 'true' }, '·'), stat(d.today, d.today === 1 ? 'game today' : 'games today'),
+    d.topWeek ? [h('span.live-sep', { 'aria-hidden': 'true' }, '·'), h('span.live-stat', 'hot this week: ',
+      h('button.live-hot', { type: 'button', title: `${d.topWeek.plays.toLocaleString()} games in 7 days`, onclick: () => pick(d.topWeek.gameType) }, gameLabel(d.topWeek.gameType).toUpperCase()))] : null));
+}
+
+const LINE = {
+  ranked: (it, g) => [`won ranked ${g(it.gameType)} `, h('span.muted', `(${it.rating})`)],
+  daily: (it, g) => `placed #${it.rank} of ${it.of} in the daily ${g(it.gameType)}`,
+  streak: (it) => `hit a ${it.days}-day daily streak 🔥`,
+  level: (it) => `reached level ${it.level}`,
+  achievement: (it) => ['unlocked ', h('b', it.name)],
+};
+
+// payload: { items, friends } from the server's ACTIVITY message.
+export function renderActivity(mount, payload, { gameLabel, openFriends }) {
+  const items = payload.items.filter((it) => LINE[it.kind]).slice(0, 6);
+  mount.replaceChildren(h('section.activity', { 'aria-labelledby': 'activity-title' },
+    h('h2#activity-title.activity-title', '> FRIENDS\' ACTIVITY'),
+    items.length
+      ? h('ul.activity-list', items.map((it) => h('li.activity-item',
+        avatarEl(it.user.avatar, 20, it.user.cosmetics),
+        h('span.activity-text',
+          h('a', { href: `/u/${encodeURIComponent(it.user.username)}`, 'data-link': true, class: nameColor(it.user.cosmetics) }, it.user.username), ' ',
+          LINE[it.kind](it, gameLabel)),
+        h('time.muted.activity-at', { datetime: new Date(it.at).toISOString() }, timeAgo(it.at)))))
+      : h('p.muted.activity-empty', payload.friends
+        ? 'Nothing new from your friends yet. Wins, level-ups and unlocks show up here.'
+        : ['Add friends to see their wins, level-ups and unlocks here. ', h('button.link-btn', { type: 'button', onclick: openFriends }, 'FIND FRIENDS')])));
+}
