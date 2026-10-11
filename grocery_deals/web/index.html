@@ -91,6 +91,8 @@ main { max-width: 1400px; margin: 0 auto; padding: 16px 20px 60px; }
 .trow .grow { flex: 1; min-width: 0; }
 .trow.done .grow { text-decoration: line-through; opacity: .5; }
 .trow input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
+.hist { font-size: 12px; color: var(--muted); }
+.hist.good { color: var(--accent); font-weight: 600; }
 .ended { color: var(--save); font-size: 12px; }
 code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
 </style>
@@ -151,6 +153,15 @@ function allOffers() {
 }
 const visible = o => (ui.member || !o.member);
 
+// Price history: says nothing until 2+ weeks are recorded, then whether this is actually a good price.
+function histNote(h) {
+  if (!h || h.of < 2 || h.now == null) return "";
+  const often = `on offer ${h.weeks} of ${h.of} wks`;
+  if (h.weeks <= 1) return `<span class="hist good">New: first time on offer in ${h.of} wks</span>`;
+  if (h.low == null || h.now <= h.low) return `<span class="hist good">Best price in ${h.of} wks · ${often}</span>`;
+  return `<span class="hist">Was ${kr(h.low)}/${esc(h.unit)} in ${esc(h.low_week.split("-")[1])} · ${often}</span>`;
+}
+
 function card(o) {
   const pct = o.pct ? ` · ${Math.round(o.pct * 100)}%` : "";
   const until = o.until ? new Date(o.until + "T12:00").toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"}) : "";
@@ -163,6 +174,7 @@ function card(o) {
       <span class="meta">${esc([o.brand, o.size].filter(Boolean).join(" · "))}</span>
       <span class="deal">${esc(o.deal)}</span>
       ${o.was ? `<span class="was">Regular ${esc(o.was)}</span>` : ""}
+      ${histNote(o.hist)}
       <div class="foot">
         ${o.member ? `<span class="tag member">${esc(data.member_names[o.chain])}</span>` : ""}
         ${o.item ? `<span class="tag list">${esc(label(o.item))}</span>` : ""}

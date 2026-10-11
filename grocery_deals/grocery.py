@@ -10,8 +10,10 @@ The desktop app (server.py + web/) uses the same functions; settings live in set
 """
 import json
 import re
+import sqlite3
 import sys
 import time
+from datetime import date
 from pathlib import Path
 
 import requests
@@ -20,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 SETTINGS = HERE / "settings.json"
 TRIP = HERE / "trip.json"  # this week's picked deals + free-text items, shared by the app and `grocery.py trip`
 CACHE = HERE / "cache"
+HISTORY = HERE / "history.db"  # every offer seen, per ISO week: answers "is this deal actually good?"
 CACHE_TTL = 3 * 3600  # offers change weekly; 3 h keeps the app snappy without going stale
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0"}
 # Willys and Hemköp are both Axfood and share the same public site API.
@@ -134,7 +137,58 @@ def offers(chain, store_id, refresh=False):
             seen.add(key)
             out.append(o)
     f.write_text(json.dumps(out, ensure_ascii=False))
+    record(chain, store_id, out)
     return out
+
+
+# ---------- price history ----------
+
+def unit_price(deal):
+    """'2 för 40 kr' -> (20.0, 'st'), '179 kr/kg' -> (179.0, 'kg'), '29,95 kr' -> (29.95, 'st'); None if no price."""
+    deal = str(deal or "").lower()
+    if m := re.search(r"(\d+)\s*för\s*(\d+(?:[,.]\d+)?)", deal):
+        return round(float(m[2].replace(",", ".")) / int(m[1]), 2), "st"
+    if m := re.search(r"(\d+(?:[,.]\d+)?)\s*(?:kr)?\s*/\s*(kg|st|l)\b", deal):
+        return float(m[1].replace(",", ".")), m[2]
+    p = num(deal)
+    return (p, "st") if p is not None else None
+
+
+def db():
+    con = sqlite3.connect(HISTORY, timeout=10)
+    con.execute("""CREATE TABLE IF NOT EXISTS seen (week TEXT, chain TEXT, store TEXT, name TEXT, brand TEXT, size TEXT,
+                   deal TEXT, price REAL, unit TEXT, PRIMARY KEY (week, chain, store, name, brand, size))""")
+    return con
+
+
+def week(d=None):
+    y, w, _ = (d or date.today()).isocalendar()
+    return f"{y}-W{w:02d}"
+
+
+def record(chain, store_id, offers_, when=None):
+    rows = [(week(when), chain, str(store_id), o["name"], o["brand"], o["size"], o["deal"], *(unit_price(o["deal"]) or (None, None)))
+            for o in offers_]
+    with db() as con:
+        con.executemany("INSERT OR REPLACE INTO seen VALUES (?,?,?,?,?,?,?,?,?)", rows)
+
+
+def annotate(chain, store_id, offers_):
+    """Add o['hist'] = {weeks: weeks on offer, of: weeks recorded, low/low_week: best unit price seen, now, unit}."""
+    with db() as con:
+        rows = con.execute("SELECT week, name, brand, size, price, unit FROM seen WHERE chain=? AND store=?",
+                           (chain, str(store_id))).fetchall()
+    of = len({r[0] for r in rows})
+    by = {}
+    for w, *k, price, unit in rows:
+        by.setdefault(tuple(k), []).append((w, price, unit))
+    for o in offers_:
+        past = by.get((o["name"], o["brand"], o["size"]), [])
+        now = unit_price(o["deal"])
+        same = sorted((p, w) for w, p, u in past if now and p is not None and u == now[1])
+        o["hist"] = {"weeks": len({w for w, _, _ in past}), "of": of, "now": now[0] if now else None,
+                     "unit": now[1] if now else None, "low": same[0][0] if same else None,
+                     "low_week": same[0][1] if same else None}
 
 
 # ---------- matching ----------
@@ -199,6 +253,7 @@ def tag(cfg, refresh=False):
         except Exception as e:  # one store failing must not hide the others
             out.append((s, [], str(e)[:200]))
             continue
+        annotate(s["chain"], s["id"], os_)
         for o in os_:
             o["item"] = next((i for i in cfg["items"] if matches(i, o)), None)
             o["skipped"] = any(matches(x, o) for x in cfg.get("skip", []))

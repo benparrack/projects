@@ -20,6 +20,10 @@ own after 2 h without use.
 - **Edit**: shopping list, skip list and stores (search any ICA/Willys/Hemköp by name or area). Saves
   automatically to `settings.json`, which the weekly push reads too. Each line shows how many offers it
   matches as you type.
+- **Price history**: every fetch records the week's offers in `history.db`. From the second week on, cards
+  say whether a deal is actually good: "Best price in 6 wks", "Was 89 kr/kg in W39", "on offer 5 of 6 wks"
+  (so you can skip deals that come back every other week). Prices compare per kg/st, so "2 för 40" = 20 kr/st.
+  The Monday push refetches, so a week gets recorded even if you never open the app.
 - **↻ Refresh** refetches from the stores. Otherwise offers are cached for 3 h in `cache/`.
 
 Install the menu entry (`.desktop` files don't expand `~`):

@@ -29,6 +29,7 @@ assert grocery.num("Spara 15,00-17,32 kr") == 15.0 and grocery.num(None) is None
 offers = {"1": [o("Kaffe", save=7), o("Kaffe", save=7), o("Hushållsost", save=39, member=True), o("Lakrits")],
           "2": [o("Kaffe", save=20)]}
 grocery.CACHE, grocery.CACHE_TTL = Path(tempfile.mkdtemp()), 0  # always refetch from the fake below
+grocery.HISTORY = grocery.CACHE / "h.db"
 grocery.fetch_offers = lambda chain, sid: offers[sid]
 cfg = {"items": ["kaffe", "ost"], "stores": [{"chain": "willys", "id": "1", "name": "A"},
                                              {"chain": "hemkop", "id": "2", "name": "B"}]}
@@ -90,3 +91,22 @@ for bad in ({"key": "x"}, [{"name": "no key"}], [{}] * 501):
     except (ValueError, KeyError, TypeError):
         pass
 print("ok 4")
+
+# price history: unit prices, weekly records, "is this a good price"
+up = grocery.unit_price
+assert up("2 för 40 kr") == (20.0, "st") and up("179 kr/kg") == (179.0, "kg") and up("349/kg") == (349.0, "kg")
+assert up("Handla för 300 kr 10/st") == (10.0, "st") and up("29,95 kr") == (29.95, "st") and up("") is None
+from datetime import date
+grocery.HISTORY = Path(tempfile.mkdtemp()) / "h.db"
+kaffe = lambda deal: {"name": "Kaffe", "brand": "Zoégas", "size": "450g", "deal": deal}
+grocery.record("ica", "1", [kaffe("2 för 80 kr")], date(2026, 9, 28))
+grocery.record("ica", "1", [kaffe("45 kr"), o("Ost")], date(2026, 10, 5))
+now = [kaffe("2 för 100 kr"), o("Ost"), o("Te")]
+grocery.record("ica", "1", now, date(2026, 10, 12))
+grocery.annotate("ica", "1", now)
+h = now[0]["hist"]
+assert (h["weeks"], h["of"], h["low"], h["low_week"], h["now"]) == (3, 3, 40.0, "2026-W40", 50.0), h
+assert now[1]["hist"]["weeks"] == 2 and now[2]["hist"]["weeks"] == 1
+grocery.annotate("ica", "2", now)  # another store: no history of its own
+assert now[0]["hist"]["of"] == 0
+print("ok 5")
