@@ -122,7 +122,7 @@ export const HOWTO = {
     ],
   },
   codemaster: {
-    about: 'Mastermind: crack a hidden code of 4 pegs in 6 colours within 10 guesses.',
+    about: 'Codebreaker: crack a hidden code of 4 pegs in 6 colours within 10 guesses.',
     rules: [
       'Each guess gets GREEN pegs (right colour, right spot) and YELLOW pegs (right colour, wrong spot).',
       'DUEL: each seat sets a code for the other; solving beats not solving, then fewer guesses, then speed.',
@@ -135,7 +135,7 @@ export const HOWTO = {
     ],
   },
   connect4: {
-    about: 'Connect 4 for two players on a 7-wide, 6-tall grid.',
+    about: 'Four in a Row for two players on a 7-wide, 6-tall grid.',
     rules: [
       'Players take turns dropping a disc into a column; it falls to the lowest empty row.',
       'First to get 4 in a row — across, down or diagonally — wins.',
@@ -235,12 +235,12 @@ export const HOWTO = {
     ],
   },
   gameboy: {
-    about: 'A real Game Boy / Game Boy Color emulator room: play bundled homebrew or your own ROM.',
+    about: 'A retro handheld emulator room (Game Boy and Game Boy Color compatible): play bundled homebrew or your own ROM.',
     rules: [
       'Pick a game from the bundled library, or OPEN ROM FILE to load your own .gb/.gbc.',
       'Everyone plays locally; the room list shows who is playing what.',
       'WATCH anyone playing a bundled game to spectate it live (custom ROMs stay private).',
-      'LINK with another player for a 2-player link-cable game (e.g. Link Tron); they must ACCEPT.',
+      'LINK with another player for a 2-player link-cable game (e.g. Link Cycles); they must ACCEPT.',
       'Battery saves are kept in your browser; SAVE ST / LOAD ST handle save states.',
     ],
     controls: [
@@ -363,7 +363,7 @@ export const HOWTO = {
     ],
   },
   pictionary: {
-    about: 'Pictionary: one player draws a secret word while everyone else races to guess it.',
+    about: 'Sketch & Guess: one player draws a secret word while everyone else races to guess it.',
     rules: [
       'The drawer rotates each round and picks a word (15 s, or one is picked for them).',
       'Rounds last 80 seconds; guesses go into the chat log.',
@@ -404,7 +404,7 @@ export const HOWTO = {
     ],
   },
   reversi: {
-    about: 'Reversi (Othello) for two on an 8x8 board.',
+    about: 'Reversi for two on an 8x8 board.',
     rules: [
       'Black moves first; each move must outflank at least one line of enemy discs, which flip.',
       'A player with no legal move passes automatically.',
@@ -416,7 +416,7 @@ export const HOWTO = {
     ],
   },
   scrabble: {
-    about: 'Scrabble for 2-4 players on the standard 15x15 premium board.',
+    about: 'Word Tiles for 2-4 players: build crossing words on a 15x15 board with bonus squares.',
     rules: [
       'Place tiles in one line to form words; every cross-word formed also scores.',
       'Premium squares count only for newly placed tiles; using all 7 tiles is a 50-point bingo.',
@@ -474,7 +474,7 @@ export const HOWTO = {
     ],
   },
   skeeball: {
-    about: 'Skee-Ball for two on one shared arcade lane.',
+    about: 'Alley Ball for two on one shared arcade lane.',
     rules: [
       'Each player rolls 9 balls in three rounds of three, alternating red then blue.',
       'Rings score 10-50, the two corner pockets 100, anything else 0.',
@@ -540,7 +540,7 @@ export const HOWTO = {
     ],
   },
   tron: {
-    about: 'TRON light cycles: your cycle leaves a solid trail — be the last one riding.',
+    about: 'Light cycles: your cycle leaves a solid trail — be the last one riding.',
     rules: [
       'A round starts once 2+ players are here.',
       'Cycles move constantly; crashing into a wall, any trail (yours too) or a player knocks you out.',
@@ -600,7 +600,7 @@ export const HOWTO = {
     ],
   },
   wordscapes: {
-    about: 'Wordscapes: spell words from a letter wheel to fill a small crossword.',
+    about: 'Word Wheel: spell words from a letter wheel to fill a small crossword.',
     rules: [
       'The wheel has 5-7 letters; the crossword holds 5-12 target words made from them.',
       'Target words fill the crossword and score their length; other real words are bonus words (+1).',

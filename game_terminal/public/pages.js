@@ -145,7 +145,7 @@ const ROMS = [
   ['Shock Lobster', '2021 Dave VanEe (tbsp)', 'zlib', 'https://github.com/tbsp/shock-lobster'],
   ['Adjustris v1.1', 'Dave VanEe (tbsp)', 'CC0 1.0', 'https://github.com/tbsp/Adjustris'],
   ['2048-gb', '2014 Sanqui', 'zlib', 'https://github.com/Sanqui/2048-gb'],
-  ['Link Tron', '2026 Ben Parrack', 'MIT', null],
+  ['Link Cycles', '2026 Ben Parrack', 'MIT', null],
 ];
 const creditList = (rows) => h('ul.credits', rows.map(([name, by, lic, src]) =>
   h('li', h('strong', name), ` — © ${by}. ${lic}.`, src && [' ', ext(src, 'Source')])));
@@ -154,7 +154,7 @@ const credits = () => page('CREDITS & LICENSES', 'Game Terminal stands on the wo
   sec('Libraries, fonts, and data', creditList(CREDITS)),
   sec('Game Boy homebrew', p('Bundled unmodified. Full license texts ship alongside the ROMs in ',
     ext('/games/gameboy/roms/README.txt', 'games/gameboy/roms/'), '.'), creditList(ROMS)),
-  sec('Classic games', p('Chess, checkers, backgammon, mancala and the other traditional games are in the public domain. Game names like Scrabble and Battleship belong to their owners; our versions are independent fan implementations not affiliated with them.')));
+  sec('Classic games', p('Chess, checkers, backgammon, mancala and the other traditional games are in the public domain. Our other games are original takes on common game mechanics and aren\'t affiliated with or endorsed by any game, toy or app maker. Game Boy is a trademark of Nintendo; the emulator plays freely licensed homebrew and isn\'t affiliated with Nintendo.')));
 
 export const INFO_PAGES = {
   '/terms': { title: 'Terms of Service', render: terms },

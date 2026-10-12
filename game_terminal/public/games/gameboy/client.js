@@ -18,7 +18,7 @@ const LIBRARY = [ // ids must match server/games/gameboy.js LIBRARY
   { id: 'geometrix', file: 'geometrix.gbc', name: 'GEOMETRIX', note: 'puzzle · GBC' },
   { id: 'adjustris', file: 'adjustris.gb', name: 'ADJUSTRIS', note: 'falling blocks · GB' },
   { id: '2048', file: '2048.gb', name: '2048', note: 'puzzle · GB' },
-  { id: 'linktron', file: 'linktron.gb', name: 'LINK TRON', note: '2 players · LINK someone in the room', link: true },
+  { id: 'linktron', file: 'linktron.gb', name: 'LINK CYCLES', note: '2 players · LINK someone in the room', link: true },
 ];
 const LINK_GAME = LIBRARY.find((e) => e.link);
 const PINGS = 3;

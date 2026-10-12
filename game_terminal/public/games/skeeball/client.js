@@ -206,7 +206,7 @@ function marqueeTexture(THREE) {
   g.shadowColor = '#39ff14';
   g.shadowBlur = 18;
   g.fillStyle = '#b8ffb0';
-  g.fillText('SKEE-BALL', 256, 66);
+  g.fillText('ALLEY BALL', 256, 66);
   return new THREE.CanvasTexture(c);
 }
 

@@ -82,9 +82,9 @@ const ACHIEVEMENTS = [
   gameWins('chess', 10, 'Checkmate Artist', 'Chess'),
   gameWins('poker', 10, 'Card Shark', 'Poker'),
   gameWins('slither', 10, 'Top Snake', 'Slither'),
-  gameWins('tron', 10, 'Light Cycle Ace', 'TRON'),
+  gameWins('tron', 10, 'Light Cycle Ace', 'Light Cycles'),
   gameWins('connect4', 10, 'Four Sight', 'Four in a Row'),
-  gameWins('scrabble', 10, 'Wordsmith', 'Scrabble'),
+  gameWins('scrabble', 10, 'Wordsmith', 'Word Tiles'),
   gameWins('pool', 10, 'Pool Shark', 'Pool'),
   gameWins('minesweeper', 10, 'Sweeper', 'Minesweeper'),
 ].map(([id, name, desc, test]) => ({ id, name, desc, test }));

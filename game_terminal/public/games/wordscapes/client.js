@@ -111,7 +111,7 @@ export function mount(container, api) {
 
   const root = el('div', 'ws-root');
   const top = el('div', 'ws-top');
-  const title = el('div', 'ws-title', 'WORDSCAPES');
+  const title = el('div', 'ws-title', 'WORD WHEEL');
   const modes = el('div', 'ws-modes');
   const coopBtn = el('button', '', 'CO-OP');
   const raceBtn = el('button', '', 'RACE');
@@ -476,7 +476,7 @@ export function mount(container, api) {
     sun.style.background = sc.sun;
     hillPath.setAttribute('fill', sc.hill);
     hillPath2.setAttribute('fill', sc.hill2);
-    title.textContent = `WORDSCAPES · LVL ${snap.level} · ${sc.name}`;
+    title.textContent = `WORD WHEEL · LVL ${snap.level} · ${sc.name}`;
   }
 
   function renderCountdown() {

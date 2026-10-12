@@ -162,7 +162,7 @@ module.exports = {
         me.link = from.clientId;
         for (const p of [from, me]) {
           p.lib = null; // not watchable while linked
-          p.title = 'LINK TRON (LINK)';
+          p.title = 'LINK CYCLES (LINK)';
           p.watching = null;
         }
         for (const p of st.players.values()) if (p.watching === from.clientId || p.watching === me.clientId) p.watching = null;

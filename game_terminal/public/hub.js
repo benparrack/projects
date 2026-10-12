@@ -76,13 +76,13 @@ const CATEGORIES = [
     games: [
       { type: 'checkers', label: 'CHECKERS' },
       { type: 'chess', label: 'CHESS' },
-      { type: 'connect4', label: 'CONNECT 4' },
+      { type: 'connect4', label: 'FOUR IN A ROW' },
       { type: 'backgammon', label: 'BACKGAMMON' },
-      { type: 'reversi', label: 'REVERSI (OTHELLO)' },
+      { type: 'reversi', label: 'REVERSI' },
       { type: 'gomoku', label: 'GOMOKU (FIVE IN A ROW)' },
       { type: 'mancala', label: 'MANCALA' },
       { type: 'dotsboxes', label: 'DOTS AND BOXES' },
-      { type: 'codemaster', label: 'CODEMASTER (MASTERMIND)' },
+      { type: 'codemaster', label: 'CODEBREAKER' },
       { type: 'minesweeper', label: 'MINESWEEPER (RACE)' },
       { type: 'blockade', label: 'BLOCKADE (BARRICADE)' },
     ],
@@ -91,7 +91,7 @@ const CATEGORIES = [
     name: 'ARENA & REAL-TIME',
     games: [
       { type: 'slither', label: 'SLITHER' },
-      { type: 'tron', label: 'TRON (LIGHT CYCLES)' },
+      { type: 'tron', label: 'LIGHT CYCLES' },
       { type: 'shooter', label: 'ARENA DUEL (1V1 FPS)' },
       { type: 'slope', label: 'SLOPE (3D RUNNER)' },
       { type: 'mazedash', label: 'MAZE DASH (SPEEDRUN)' },
@@ -100,8 +100,8 @@ const CATEGORIES = [
   {
     name: 'WORD GAMES',
     games: [
-      { type: 'scrabble', label: 'SCRABBLE' },
-      { type: 'wordscapes', label: 'WORDSCAPES' },
+      { type: 'scrabble', label: 'WORD TILES' },
+      { type: 'wordscapes', label: 'WORD WHEEL' },
       { type: 'wordsearch', label: 'WORD SEARCH' },
       { type: 'hangman', label: 'HANGMAN' },
       { type: 'anagrams', label: 'ANAGRAMS' },
@@ -113,7 +113,7 @@ const CATEGORIES = [
     ],
   },
   {
-    name: 'GAMEPIGEON',
+    name: 'POCKET CLASSICS',
     games: [
       { type: 'chess', label: 'CHESS' },
       { type: 'checkers', label: 'CHECKERS' },
@@ -128,7 +128,7 @@ const CATEGORIES = [
       { type: 'wordhunt', label: 'WORD HUNT' },
       { type: 'filler', label: 'FILLER' },
       { type: 'seabattle', label: 'SEA BATTLE' },
-      { type: 'pool', label: '8 BALL POOL' },
+      { type: 'pool', label: 'POOL' },
       { type: 'darts', label: 'DARTS' },
       { type: 'cuppong', label: 'CUP PONG' },
       { type: 'basketball', label: 'BASKETBALL' },
@@ -140,7 +140,7 @@ const CATEGORIES = [
       { type: 'bowling', label: 'BOWLING' },
       { type: 'knockout', label: 'KNOCKOUT' },
       { type: 'paintball', label: 'PAINTBALL' },
-      { type: 'skeeball', label: 'SKEE-BALL' },
+      { type: 'skeeball', label: 'ALLEY BALL' },
     ],
   },
   {
@@ -148,14 +148,14 @@ const CATEGORIES = [
     games: [
       { type: 'drawing', label: 'SHARED DRAWING CANVAS' },
       { type: 'hangman', label: 'HANGMAN' },
-      { type: 'pictionary', label: 'PICTIONARY' },
+      { type: 'pictionary', label: 'SKETCH & GUESS' },
       { type: 'garticphone', label: 'DRAWING PHONE' },
     ],
   },
   {
     name: 'RETRO',
     games: [
-      { type: 'gameboy', label: 'GAME BOY / COLOR (EMULATOR)' },
+      { type: 'gameboy', label: 'RETRO HANDHELD (EMULATOR)' },
     ],
   },
 ];
@@ -462,7 +462,7 @@ function handleServerMessage(type, payload) {
       if (state.inviteAfterJoin && !payload.isPublic) send(ClientMessage.ROOM_INVITE, { username: state.inviteAfterJoin });
       state.inviteAfterJoin = null;
       saveSession();
-      els.roomCodeLabel.textContent = payload.daily ? `◆ DAILY ${payload.daily}` : payload.ranked ? `${payload.code} (ranked ★)` : payload.isPublic ? `${payload.code} (public)` : payload.code;
+      els.roomCodeLabel.textContent = payload.daily ? `◆ DAILY ${payload.daily}` : payload.isPublic ? publicRoomLabel(payload) : payload.code;
       els.btnCopyLink.hidden = payload.isPublic || !!payload.daily;
       renderRoster(payload.roster);
       // Chat needs accounts (to post, report and moderate), so accounts-off deploys have none.
@@ -825,6 +825,11 @@ function route() {
 
 const friendNames = () => { const s = getSocial(); return s ? s.friends.map((f) => f.username) : []; };
 
+// Public codes embed the internal type id (PUBLIC-SCRABBLE-2); show the game's display name instead.
+function publicRoomLabel({ code, gameType, ranked }) {
+  const n = (code.match(/-(\d+)$/) || [])[1];
+  return `${gameLabel(gameType)} · ${ranked ? 'RANKED ★' : 'PUBLIC'}${n ? ` #${n}` : ''}`;
+}
 function gameLabel(t) { return (GAMES.find((g) => g.type === t) || {}).label || t; }
 
 function renderNotFound() {
