@@ -54,8 +54,8 @@ test('null or off-list LLM answers on required questions escalate; optional ones
   assert.match(fakeLLM.lastPrompt, /Virginia Tech/);
 });
 
-test('missing required transcript escalates', async () => {
-  const r = await answerAll([{ key: 'question_9', label: 'Upload unofficial transcript', type: 'file', required: true }], job, { llm: () => assert.fail() });
+test('missing required file escalates', async () => {
+  const r = await answerAll([{ key: 'question_9', label: 'Upload your portfolio', type: 'file', required: true }], job, { llm: () => assert.fail() });
   assert.equal(r.needs[0].key, 'question_9');
 });
 
@@ -65,4 +65,17 @@ test('no-AI certifications are never answered, even from the answer bank', async
   assert.match(r.manual, /certify no AI/);
   const ok = await answerAll([{ key: 'q', label: 'I certify the information provided is true and complete.', type: 'select', options: ['Yes'], required: true }], job, { llm: fakeLLM([{ key: 'q', answer: 'Yes' }]) });
   assert.equal(ok.manual, undefined);
+});
+
+test('queue: "12 answer" is learned, "skip 12" drops', async () => {
+  process.env.NO_NOTIFY = '1';
+  const { db } = await import('../src/db.js');
+  const { enqueue, handleReply } = await import('../src/queue.js');
+  const label = 'Test-only question ' + Date.now();
+  await enqueue({ company: 'T', url: 'https://x' }, [{ label, options: [] }]);
+  const q = db.prepare('SELECT * FROM questions WHERE label=?').get(label);
+  assert.equal(handleReply('hello'), null);
+  assert.equal(handleReply(`skip ${q.id}`), q.id);
+  assert.equal(db.prepare('SELECT status FROM questions WHERE id=?').get(q.id).status, 'skipped');
+  db.prepare('DELETE FROM questions WHERE id=?').run(q.id);
 });

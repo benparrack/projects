@@ -81,7 +81,7 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
     if (q.type === 'file') {
       const path = fileFor(q, resume);
       if (path) answers[q.key] = path;
-      else if (q.required) needs.push({ key: q.key, label: q.label, why: 'needs a file Ben has not provided' });
+      else if (q.required) needs.push({ key: q.key, label: q.label, why: 'needs a file Ben has not provided', file: true });
       continue;
     }
     const std = standard(q, facts);
@@ -113,7 +113,7 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
         if (!v.length) v = null;
       }
       if (v != null && v !== '') answers[q.key] = v;
-      else if (q.required) needs.push({ key: q.key, label: q.label, why: a?.need_human_reason || 'no valid answer' });
+      else if (q.required) needs.push({ key: q.key, label: q.label, options: q.options, why: a?.need_human_reason || 'no valid answer' });
     }
   }
   return { answers, needs, resume: resume.path };

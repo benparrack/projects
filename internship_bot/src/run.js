@@ -4,13 +4,22 @@
 //   --live        actually submit
 //   --id ID       just this job
 import { chromium } from 'playwright-core';
-import { db, upsert, setStatus } from './db.js';
+import { db, upsert, setStatus, meta } from './db.js';
 import { fetchAll } from './sources.js';
 import { skipReason } from './filter.js';
 import { apply, adapterFor } from './apply.js';
+import { syncReplies } from './queue.js';
+import { topics, send } from './notify.js';
 
 const argv = process.argv.slice(2);
 const opt = k => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] ?? true; };
+
+if (!meta.get('ntfy:shown')) {
+  console.log(`Phone setup: in the ntfy app subscribe to "${topics().alert}" (alerts) and "${topics().reply}" (where you type answers).`);
+  meta.set('ntfy:shown', '1');
+}
+const synced = await syncReplies();
+if (synced.answered) console.log(`${synced.answered} answer(s) from phone, ${synced.released} job(s) back in line.`);
 
 const jobs = await fetchAll({ force: !!opt('--force') });
 let fresh = 0;
@@ -46,4 +55,14 @@ if (n) {
         (res.why ? `\n          ${res.why}` : ''));
     }
   } finally { await browser.close(); }
+}
+
+// Evening digest, once a day.
+const today = new Date().toISOString().slice(0, 10);
+if (new Date().getHours() >= 20 && meta.get('digest') !== today) {
+  const since = Date.now() - 864e5;
+  const c = st => db.prepare('SELECT COUNT(*) n FROM jobs WHERE status=? AND updated>?').get(st, since).n;
+  const open = db.prepare("SELECT COUNT(*) n FROM questions WHERE status='open'").get().n;
+  await send('Internship bot: today', `Applied: ${c('applied')}\nApply yourself: ${c('manual')}\nOpen questions: ${open}\nWaiting in line: ${db.prepare("SELECT COUNT(*) n FROM jobs WHERE status='new'").get().n}`, { tags: ['clipboard'] });
+  meta.set('digest', today);
 }

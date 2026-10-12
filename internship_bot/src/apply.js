@@ -4,6 +4,8 @@ import * as greenhouse from './ats/greenhouse.js';
 import { answerAll } from './answer.js';
 import { loadProfile } from './profile.js';
 import { setStatus } from './db.js';
+import { enqueue } from './queue.js';
+import { send } from './notify.js';
 
 export const ADAPTERS = [greenhouse];
 export const adapterFor = url => ADAPTERS.find(a => a.handles(url));
@@ -16,9 +18,12 @@ export async function apply(browser, job, { dryRun = true } = {}) {
   const ats = adapterFor(job.url);
   const form = await ats.load(job.url);
   const { answers, needs, manual } = await answerAll(form.questions, { ...job, description: form.description });
-  if (manual) return record(job, 'manual', { reason: manual }, { why: manual });
+  if (manual) return handOff(job, manual);
   const audit = { answers, questions: form.questions.map(q => [q.key, q.label]) };
-  if (needs.length) return record(job, 'queued', { reason: JSON.stringify(needs), answers: audit }, { needs });
+  // A file only Ben can make (a coding assignment, a portfolio) can't be answered by text.
+  const file = needs.find(n => n.file);
+  if (file) return handOff(job, `wants a file upload: "${file.label.slice(0, 150)}"`);
+  if (needs.length) { await enqueue(job, needs); return record(job, 'queued', { reason: JSON.stringify(needs), answers: audit }, { needs }); }
 
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
   try {
@@ -26,12 +31,19 @@ export async function apply(browser, job, { dryRun = true } = {}) {
     const problems = await ats.fill(page, form.questions, answers, loadProfile().facts);
     const screenshot = `${SHOTS}${job.id}.png`;
     await page.screenshot({ path: screenshot, fullPage: true });
-    if (problems.length) return record(job, 'queued', { reason: JSON.stringify(problems), answers: audit, screenshot }, { needs: problems });
+    if (problems.length) return handOff(job, 'form problems: ' + problems.map(p => `${p.label} (${p.why})`).join('; '), screenshot);
     if (dryRun) return record(job, 'dryrun', { answers: audit, screenshot });
     const res = await ats.submit(page);
     await page.screenshot({ path: screenshot.replace('.png', '-after.png'), fullPage: true });
-    return record(job, res.ok ? 'applied' : 'failed', { reason: res.why, answers: audit, screenshot }, res);
+    if (!res.ok) return handOff(job, `submit blocked: ${res.why}`, screenshot);
+    return record(job, 'applied', { answers: audit, screenshot }, res);
   } finally { await page.close(); }
+}
+
+// Things the bot must not or cannot do: Ben gets a one-tap link to apply himself.
+async function handOff(job, why, screenshot) {
+  await send(`Apply yourself: ${job.company}`, `${job.title}\n${why}`, { click: job.url, tags: ['point_right'] });
+  return record(job, 'manual', { reason: why, screenshot }, { why });
 }
 
 function record(job, status, extra, out = {}) {
