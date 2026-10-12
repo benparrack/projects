@@ -344,6 +344,11 @@ export function mount(container, api) {
 
   render();
 
+  // Re-fit the board when the width changes (phone rotation); height-only resizes are the mobile URL bar.
+  let lastWidth = window.innerWidth;
+  const onResize = () => { if (window.innerWidth !== lastWidth && view) { lastWidth = window.innerWidth; render(); } };
+  window.addEventListener('resize', onResize);
+
   return {
     applySnapshot(snapshot) {
       view = snapshot;
@@ -369,6 +374,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      window.removeEventListener('resize', onResize);
       results.destroy();
       container.innerHTML = '';
     },
