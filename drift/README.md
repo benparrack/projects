@@ -1,7 +1,7 @@
 # Drift
 
 A single-file WebGL2 ambient piece. Up to a million glowing particles trace strange
-attractors and flow fields. Each scene holds for 75 s, then dissolves into stardust and
+attractors and flow fields, including a gravitationally lensed black hole. Each scene holds for 75 s, then dissolves into stardust and
 re-forms as the next one. There's optional generative ambient sound.
 
 ## Run
@@ -20,8 +20,10 @@ Opening `index.html` directly also works, since it has no build step and no depe
 | drag / wheel / pinch | orbit and zoom (it eases back into a slow auto-orbit) |
 | move the mouse | stir the particles |
 | click / tap | send a ripple |
+| press and hold | a gravity well gathers the dust (drag to move it); let go to burst it |
 | Space / → / ← | next / previous scene |
-| 1–8 | jump to a scene |
+| G / 1–9, 0 | scene gallery / jump to a scene |
+| B | breathe along (~5.5 breaths a minute, with the form swelling and a soft bell at each turn) |
 | L | lock the current scene |
 | P | pause the simulation |
 | M | sound on/off (off by default; the choice is remembered) |
@@ -32,7 +34,8 @@ Opening `index.html` directly also works, since it has no build step and no depe
 
 ## Scenes
 
-Thomas · Halvorsen · Lorenz · Maelstrom · Dadras · Plume · Rössler · Chen–Lee. The play
+Thomas · Halvorsen · Event Horizon · Lorenz · Maelstrom · Halo · Dadras · Plume · Silk ·
+Rössler · Chen–Lee. The play
 order is shuffled each cycle.
 
 ## How it works
@@ -45,6 +48,14 @@ order is shuffled each cycle.
 - **Maelstrom and Plume:** flow fields rather than attractors. Maelstrom is a differentially
   rotating disc with a 2D divergence-free noise swirl (3D curl flattened into a plane gathers
   dust into threads, so it isn't used there). Plume is rising curl-noise smoke.
+- **Event Horizon, Halo, Silk:** Event Horizon is a Keplerian accretion disc whose infall
+  leaves up helical polar jets. The compositor adds a screen-space point-mass lens (an
+  Einstein ring plus a shadow). Halo is poloidal circulation pulled onto a torus shell. Silk
+  is low-frequency curl around a wandering centre.
+- **Light waves:** every chime (bells, ripples, breaths, and bursts released from the well)
+  sends a shell of light outward through the particles. They ring even with the sound off.
+- **Starfield:** two hashed shells of stars at infinity, which parallax against the form as
+  the camera orbits.
 - **Rendering:** each particle is drawn as a motion-blurred capsule with energy-normalised
   brightness and depth of field. Trails accumulate in an HDR buffer. Post-processing is a
   7-mip dual-filter bloom, chromatic aberration, vignette, ACES tone mapping, and grain with

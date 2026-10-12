@@ -23,7 +23,7 @@
   canvas:active { cursor: grabbing; }
 
   .fade { transition: opacity 1.4s cubic-bezier(.4, 0, .2, 1), transform 1.4s cubic-bezier(.2, .7, .2, 1); }
-  body.idle .autohide, body.zen .autohide, body.zen #label { opacity: 0 !important; pointer-events: none; }
+  body:has(#help.show, #gallery.show) #dock, body.idle .autohide, body.zen .autohide, body.zen #label { opacity: 0 !important; pointer-events: none; }
 
   #title { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; opacity: 0; transform: translateY(8px); }
   #title.show { opacity: 1; transform: none; }
@@ -48,11 +48,21 @@
   #dock button[aria-pressed="false"] .on { display: none; }
   #dock button[aria-pressed="false"] .off { display: block; }
 
-  #help { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .25); opacity: 0; pointer-events: none; transition: opacity .6s; }
-  #help.show { opacity: 1; pointer-events: auto; }
-  #help .card { width: min(380px, calc(100vw - 32px)); box-sizing: border-box; padding: 30px 32px 26px; border-radius: 18px; background: rgba(12, 12, 18, .55); border: 1px solid rgba(255, 255, 255, .09); backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3); box-shadow: 0 30px 80px rgba(0, 0, 0, .45); transform: translateY(10px) scale(.985); transition: transform .6s cubic-bezier(.2, .7, .2, 1); }
-  #help.show .card { transform: none; }
-  #help h2 { margin: 0 0 18px; font: italic 300 30px/1 var(--serif); }
+  #help, #gallery { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .25); opacity: 0; pointer-events: none; transition: opacity .6s; }
+  #help.show, #gallery.show { opacity: 1; pointer-events: auto; }
+  #help .card, #gallery .card { width: min(380px, calc(100vw - 32px)); box-sizing: border-box; padding: 30px 32px 26px; border-radius: 18px; background: rgba(12, 12, 18, .55); border: 1px solid rgba(255, 255, 255, .09); backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3); box-shadow: 0 30px 80px rgba(0, 0, 0, .45); transform: translateY(10px) scale(.985); transition: transform .6s cubic-bezier(.2, .7, .2, 1); }
+  #help.show .card, #gallery.show .card { transform: none; }
+  #help h2, #gallery h2 { margin: 0 0 18px; font: italic 300 30px/1 var(--serif); }
+  #gallery .card { width: min(580px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; }
+  #gallery .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  #gallery button { all: unset; cursor: pointer; display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: baseline; padding: 12px 12px 11px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .07); background: rgba(255, 255, 255, .025); transition: background .3s, border-color .3s; }
+  #gallery button:hover, #gallery button:focus-visible { background: rgba(255, 255, 255, .07); border-color: rgba(255, 255, 255, .2); }
+  #gallery button.cur { border-color: rgba(255, 255, 255, .38); }
+  #gallery .sw { grid-column: 1 / -1; height: 3px; border-radius: 2px; margin-bottom: 11px; }
+  #gallery .n { font: 400 9px/1 var(--sans); letter-spacing: .3em; color: var(--dim); }
+  #gallery .t { font: italic 300 21px/1.1 var(--serif); }
+  #gallery .s { grid-column: 2; font: 300 9.5px/1.6 var(--sans); letter-spacing: .24em; text-transform: uppercase; color: var(--dim); }
+  #breath { position: fixed; left: 0; right: 0; top: 11vh; text-align: center; font: italic 300 clamp(22px, 3vw, 32px)/1 var(--serif); letter-spacing: .14em; opacity: 0; pointer-events: none; text-shadow: 0 0 30px rgba(0, 0, 0, .6); }
   #help dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 9px 18px; font: 300 13px/1.4 var(--sans); }
   #help dt { color: var(--fg); text-align: right; white-space: nowrap; }
   #help dd { margin: 0; color: var(--dim); }
@@ -61,7 +71,7 @@
 
   #fail { position: fixed; inset: 0; display: none; place-content: center; text-align: center; padding: 24px; font: 300 15px/1.7 var(--sans); color: var(--dim); }
   #fail b { display: block; font: italic 300 32px/1.3 var(--serif); color: var(--fg); margin-bottom: 8px; }
-  @media (max-width: 520px) { #label .sub { letter-spacing: .2em; } #progress { width: 96px; } }
+  @media (max-width: 520px) { #label .sub { letter-spacing: .2em; } #progress { width: 96px; } #dock { top: max(14px, env(safe-area-inset-top)); bottom: auto; right: 12px; gap: 6px; } #dock button { width: 36px; height: 36px; } }
 </style>
 </head>
 <body>
@@ -81,6 +91,12 @@
     <svg class="on" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
     <svg class="off" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M16 10l4 4M20 10l-4 4"/></svg>
   </button>
+  <button id="bBreath" aria-label="Breathe" aria-pressed="false" title="Breathe (B)">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7.5" opacity=".55"/></svg>
+  </button>
+  <button id="bScenes" aria-label="Scenes" title="Scenes (G)">
+    <svg viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6" height="6" rx="1.5"/><rect x="13.5" y="4.5" width="6" height="6" rx="1.5"/><rect x="4.5" y="13.5" width="6" height="6" rx="1.5"/><rect x="13.5" y="13.5" width="6" height="6" rx="1.5"/></svg>
+  </button>
   <button id="bNext" aria-label="Next scene" title="Next scene (Space)">
     <svg viewBox="0 0 24 24"><path d="M6 6l7 6-7 6M13 6l7 6-7 6"/></svg>
   </button>
@@ -92,6 +108,12 @@
   </button>
 </div>
 
+<div id="breath" aria-live="polite"></div>
+
+<div id="gallery" role="dialog" aria-modal="true" aria-label="Scenes">
+  <div class="card"><h2>Scenes</h2><div class="list"></div></div>
+</div>
+
 <div id="help" role="dialog" aria-modal="true" aria-label="Controls">
   <div class="card">
     <h2>Drift</h2>
@@ -99,9 +121,11 @@
       <dt>move</dt><dd>stir the current</dd>
       <dt>drag</dt><dd>turn the view</dd>
       <dt>click / tap</dt><dd>send a ripple</dd>
+      <dt>hold</dt><dd>gather the dust; let go to release it</dd>
       <dt>scroll / pinch</dt><dd>move closer</dd>
       <dt><kbd>Space</kbd> <kbd>←</kbd> <kbd>→</kbd></dt><dd>change scene</dd>
-      <dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>go to a scene</dd>
+      <dt><kbd>G</kbd> <kbd>1</kbd>–<kbd>9</kbd></dt><dd>pick a scene</dd>
+      <dt><kbd>B</kbd></dt><dd>breathe along</dd>
       <dt><kbd>L</kbd></dt><dd>stay on this scene</dd>
       <dt><kbd>P</kbd></dt><dd>freeze time</dd>
       <dt><kbd>M</kbd></dt><dd>sound</dd>
@@ -109,7 +133,7 @@
       <dt><kbd>H</kbd></dt><dd>hide everything</dd>
       <dt><kbd>S</kbd></dt><dd>save a still</dd>
     </dl>
-    <div class="foot">Scenes change by themselves every minute or so. Sound is generated live and never repeats.</div>
+    <div class="foot">Scenes change by themselves every minute or so. Sound is generated live and never repeats; each chime sends a wave of light through the form.</div>
   </div>
 </div>
 
@@ -122,15 +146,18 @@
 const SCENES = [
   { name: 'Thomas',    sub: 'lagoon',  f: 2, pal: ['#03100f', '#0b4a4c', '#22b597', '#aef0c6', '#ffffff'], speed: 1.0, fade: .84, ap: .022, gain: 1.0, bloom: .5,  turb: .00, dist: 3.4, root: 48 },
   { name: 'Halvorsen', sub: 'orchid',  f: 3, pal: ['#0d0516', '#3b1673', '#a23ad0', '#ff7fb8', '#ffe6f3'], speed: 1.0, fade: .86, ap: .020, gain: 1.0, bloom: .6,  turb: .00, dist: 4.0, root: 52 },
+  { name: 'Event Horizon', sub: 'singularity', f: 8, lens: 1, pal: ['#0a0502', '#4a1a06', '#e0641a', '#ffd38a', '#eef4ff'], speed: 1.0, fade: .88, ap: .016, gain: 1.2, bloom: .7, turb: .00, dist: 3.0, root: 41, pitch: .2 },
   { name: 'Lorenz',    sub: 'ember',   f: 1, pal: ['#140603', '#5c1607', '#d2441b', '#ffae45', '#fff0c8'], speed: 1.0, fade: .88, ap: .018, gain: .95, bloom: .6,  turb: .00, dist: 2.7, root: 45 },
   { name: 'Maelstrom', sub: 'spiral',    f: 7, pal: ['#08051a', '#26105a', '#6f33e8', '#ef5fae', '#ffe58a'], speed: 1.0, fade: .90, ap: .016, gain: 1.6, bloom: .7,  turb: .00, dist: 2.6, root: 43, pitch: .8 },
+  { name: 'Halo',      sub: 'smoke ring', f: 9, pal: ['#06080f', '#14306a', '#3f8fe0', '#9fe3ff', '#fffdf6'], speed: 1.0, fade: .88, ap: .018, gain: 1.0, bloom: .6, turb: .00, dist: 3.2, root: 49, pitch: .45 },
   { name: 'Dadras',    sub: 'aurora',  f: 4, pal: ['#020c10', '#0f3264', '#17a37a', '#a6e866', '#f4ffd8'], speed: 1.0, fade: .86, ap: .020, gain: 1.0, bloom: .55, turb: .00, dist: 2.6, root: 47 },
   { name: 'Plume',     sub: 'nacre',   f: 0, life: .3, spawn: .25, spawnY: -.75, fadeIn: .8, pal: ['#0b0a1e', '#3b4fc4', '#7cc6ec', '#f4c9e6', '#fffaf4'], speed: 1.0, fade: .90, ap: .020, gain: 1.0, bloom: .55, turb: .00, dist: 3.4, root: 50 },
+  { name: 'Silk',      sub: 'murmur', f: 10, pal: ['#0b0812', '#3b1d5e', '#9a4fd6', '#ff8a6a', '#ffe1c2'], speed: 1.0, fade: .92, ap: .02, gain: 1.25, bloom: .55, turb: .00, dist: 3.4, root: 44 },
   { name: 'Rössler',   sub: 'solar',   f: 5, pal: ['#120803', '#4d2808', '#c8780f', '#ffd067', '#fffaea'], speed: 1.0, fade: .88, ap: .018, gain: 1.0, bloom: .6,  turb: .00, dist: 4.5, root: 53 },
   { name: 'Chen–Lee',  sub: 'glacier', f: 6, life: .03, spawn: .4, pal: ['#050a14', '#1b2f63', '#5a8fd8', '#bfe0ff', '#ffffff'], speed: 1.0, fade: .86, ap: .020, gain: 1.0, bloom: .55, turb: .00, dist: 3.5, root: 46 },
 ];
 const SCENE_SECONDS = 75, TRANSITION_SECONDS = 10;
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 
 // ───────────────────────────── shaders ─────────────────────────────
 const HASH = `
@@ -147,7 +174,8 @@ uniform highp sampler2D uPos;
 uniform int uA, uB, uRows;
 uniform float uMix, uDt, uTime, uTurb, uSpeed, uPulse, uRespawn, uSpawnR, uSpawnY;
 uniform uint uFrame;
-uniform vec3 uRayO, uRayD, uStir, uPulseO;
+uniform vec3 uRayO, uRayD, uStir, uPulseO, uWellO, uWellAx;
+uniform float uWell;
 layout(location = 0) out vec4 oPos;
 layout(location = 1) out vec4 oVel;
 ${HASH}
@@ -212,7 +240,40 @@ vec3 plume(vec3 p){
   v += vec3(0.0, 0.18, 0.0) + p * 0.08;
   return v - p * smoothstep(0.9, 1.6, length(p)) * 1.2;
 }
+vec3 horizon(vec3 p){
+  // accretion disc: Keplerian swirl spiralling inward; whatever reaches the hole leaves up the polar jets
+  float r = length(p.xz) + 1e-3;
+  vec2 rad = p.xz / r, tg = vec2(-rad.y, rad.x);
+  vec2 h = tg * 0.3 * inversesqrt(r + 0.04) - rad * (0.04 + 0.025 / (r + 0.08));
+  vec3 g = sgrad(vec3(p.x * 3.0, uTime * 0.03, p.z * 3.0));
+  h += vec2(g.z, -g.x) * 0.025;
+  vec3 v = vec3(h.x, -p.y * 3.0, h.y);
+  vec3 jet = vec3(-p.x * 3.0 + tg.x * 0.5, (p.y >= 0.0 ? 1.0 : -1.0) * 1.5, -p.z * 3.0 + tg.y * 0.5);
+  return mix(v, jet, smoothstep(0.14, 0.05, r));
+}
+vec3 halo(vec3 p){
+  // a smoke ring: dust circulates around the ring's core while the whole ring slowly turns
+  float rho = length(p.xz) + 1e-3, th = atan(p.z, p.x);
+  vec2 rad = p.xz / rho, tg = vec2(-rad.y, rad.x);
+  vec2 d = vec2(rho - 0.62 - 0.06 * sin(3.0 * th + uTime * 0.2), p.y);
+  float dl = length(d) + 1e-3;
+  vec2 m = vec2(-d.y, d.x) * (1.1 / (0.25 + dl)) - d / dl * (dl - 0.28) * 1.4;   // poloidal swirl + pull onto a shell
+  vec3 v = vec3(rad.x * m.x, m.y, rad.y * m.x) + vec3(tg.x, 0.0, tg.y) * 0.22;
+  return v + curl(p * 1.6 + vec3(uTime * 0.03)) * 0.05;
+}
+vec3 starlings(vec3 p){
+  // a flock: coherent low-frequency curl folds the cloud into sheets while it chases a wandering centre
+  float t = uTime;
+  vec3 c = vec3(0.5 * sin(t * 0.21), 0.28 * sin(t * 0.33 + 1.0), 0.5 * sin(t * 0.16 + 2.0));
+  vec3 dc = vec3(0.105 * cos(t * 0.21), 0.092 * cos(t * 0.33 + 1.0), 0.08 * cos(t * 0.16 + 2.0));
+  vec3 q = p - c;
+  vec3 w = curl(q * vec3(0.7, 1.1, 0.7) + vec3(0.0, t * 0.05, t * 0.03));
+  return dc + w * 0.4 - q * vec3(0.55, 1.1, 0.55) * (0.6 + 0.6 * smoothstep(0.5, 1.2, length(q)));   // wide, shallow, with a soft edge
+}
 vec3 field(int i, vec3 p){
+  if (i == 8) return horizon(p);
+  if (i == 9) return halo(p);
+  if (i == 10) return starlings(p);
   if (i == 7) return nebula(p);
   if (i == 0) return plume(p);
   vec3 d = attractor(i, C[i] + S[i] * p.xzy);
@@ -241,6 +302,10 @@ void main(){
   vec3 v1 = vel(p);
   vec3 v = vel(p + v1 * uDt * 0.5);                                          // RK2 midpoint
   if (uTurb > 0.001) v += curl(p * 1.7 + vec3(uTime * 0.05)) * uTurb;
+  if (uWell > 0.001) {                                                       // held pointer: a gravity well that spins dust into it
+    vec3 d = uWellO - p; float r2 = dot(d, d);
+    v += (d * inversesqrt(r2 + 0.004) * 0.7 + cross(uWellAx, d) * 2.2) * uWell * exp(-r2 * 1.4);
+  }
   p += v * uDt;
   vec3 rel = p - uRayO; vec3 perp = rel - uRayD * dot(rel, uRayD);
   p += uStir * exp(-dot(perp, perp) * 28.0);
@@ -256,7 +321,7 @@ precision highp float; precision highp int;
 uniform highp sampler2D uPos, uVel;
 uniform mat4 uV, uP;
 uniform vec2 uRes;
-uniform float uFocus, uCoc, uMin, uEnergy, uSpeedRef, uBlur, uFadeIn;
+uniform float uFocus, uCoc, uMin, uEnergy, uSpeedRef, uBlur, uFadeIn, uChimeR, uChimeA;
 uniform vec3 uPal[4];
 out vec3 vC; out vec2 vL; out float vLen, vR;
 ${HASH}
@@ -280,10 +345,11 @@ void main(){
   gl_Position = vec4(px / (uRes * 0.5) * c1.w, c1.z, c1.w);
   vL = local; vLen = len; vR = r;
   uint h = hsh(uint(id) * 747796405u + 2891336453u);
-  float t = clamp(length(vel) / uSpeedRef * 0.5 + (float(h & 1023u) / 1023.0 - 0.5) * 0.3, 0.0, 1.0) * 3.0;
+  float sh = length(s.xyz) - uChimeR, wave = uChimeA * exp(-sh * sh * 30.0);   // a shell of light that rides out with each chime
+  float t = clamp(length(vel) / uSpeedRef * 0.5 + (float(h & 1023u) / 1023.0 - 0.5) * 0.3 + wave * 0.5, 0.0, 1.0) * 3.0;
   vec3 col = t < 1.0 ? mix(uPal[0], uPal[1], t) : t < 2.0 ? mix(uPal[1], uPal[2], t - 1.0) : mix(uPal[2], uPal[3], t - 2.0);
-  float spark = ((h >> 10) & 511u) < 3u ? 5.0 : 1.0;                          // a few brighter motes
-  vC = col * (uEnergy * spark / (0.504 * size * len + 0.25 * size * size)) * smoothstep(0.06, 0.4, z) * smoothstep(0.0, uFadeIn, s.w);
+  float spark = ((h >> 10) & 511u) < 3u ? 5.0 + 10.0 * wave : 1.0;          // a few brighter motes
+  vC = col * (uEnergy * spark * (1.0 + 2.5 * wave) / (0.504 * size * len + 0.25 * size * size)) * smoothstep(0.06, 0.4, z) * smoothstep(0.0, uFadeIn, s.w);
 }`;
 
 const FS_PTS = `#version 300 es
@@ -327,8 +393,8 @@ void main(){ o = vec4(0.0); }`;
 const FS_OUT = `#version 300 es
 precision highp float;
 uniform sampler2D uAcc, uBloom;
-uniform vec2 uRes; uniform float uTime, uBloomAmt, uExposure;
-uniform vec3 uBg;
+uniform vec2 uRes, uTanA; uniform float uTime, uBloomAmt, uExposure, uLens, uPix;
+uniform vec3 uBg, uCX, uCY, uCZ, uStar;
 in vec2 vUv; out vec4 o;
 ${HASH}
 vec3 aces(vec3 v){
@@ -336,13 +402,35 @@ vec3 aces(vec3 v){
   const mat3 O = mat3(1.60475, -0.10208, -0.00327, -0.53108, 1.10813, -0.07276, -0.07367, -0.00605, 1.07602);
   v = I * v; v = (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.4329510) + 0.238081); return clamp(O * v, 0.0, 1.0);
 }
+vec3 stars(vec3 dir){
+  // two shells of fixed stars at infinity: they parallax against the form as the camera turns
+  vec3 col = vec3(0.0);
+  for (int l = 0; l < 2; l++) {
+    float sc = l == 0 ? 70.0 : 160.0;
+    vec3 cell = floor(dir * sc);
+    uint s = hsh(uint(int(cell.x) + 4096) * 73856093u ^ uint(int(cell.y) + 4096) * 19349663u ^ uint(int(cell.z) + 4096) * 83492791u ^ uint(l) * 2654435761u);
+    if (rnd(s) > 0.22) continue;
+    vec3 sp = normalize(cell + vec3(rnd(s), rnd(s), rnd(s)));
+    float a = length(cross(dir, sp)) / uPix;                                // angular distance in pixels
+    float b = (0.012 + 0.22 * pow(rnd(s), 7.0)) * (0.7 + 0.3 * sin(uTime * (0.6 + 2.0 * rnd(s)) + 6.283 * rnd(s)));
+    col += mix(vec3(0.75, 0.85, 1.0), vec3(1.0, 0.82, 0.62), rnd(s)) * b * exp(-a * a * 1.3);
+  }
+  return col * uStar;
+}
 vec3 srgb(vec3 c){ return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 void main(){
-  vec2 dc = vUv - 0.5;
-  vec2 ca = dc * 0.0035;                                                     // faint lens fringing toward the edges
-  vec3 c = vec3(texture(uAcc, vUv - ca).r, texture(uAcc, vUv).g, texture(uAcc, vUv + ca).b);
-  c += texture(uBloom, vUv).rgb * uBloomAmt;
-  float r = length(dc * vec2(uRes.x / uRes.y, 1.0));
+  vec2 asp = vec2(uRes.x / uRes.y, 1.0), sc = (vUv - 0.5) * asp, uv = vUv;
+  float r = length(sc), hole = 1.0;
+  if (uLens > 1e-4) {                                                        // point-mass lens around the centre: Einstein ring + shadow
+    uv = (sc - sc * (uLens * uLens) / (r * r + 1e-6)) / asp + 0.5;
+    hole = smoothstep(0.45 * uLens, 0.62 * uLens, r);
+  }
+  vec2 dc = uv - 0.5;
+  vec2 ca = (vUv - 0.5) * 0.0035;                                            // faint lens fringing toward the edges
+  vec3 c = vec3(texture(uAcc, uv - ca).r, texture(uAcc, uv).g, texture(uAcc, uv + ca).b);
+  c += texture(uBloom, uv).rgb * uBloomAmt;
+  c += stars(normalize(-uCZ + uCX * (dc.x * 2.0 * uTanA.x) + uCY * (dc.y * 2.0 * uTanA.y)));
+  c *= hole;
   c += uBg * (3.2 - 2.6 * smoothstep(0.0, 1.0, r));                      // soft glow of the room behind
   c *= uExposure * (1.0 - 0.45 * smoothstep(0.35, 1.15, r));
   c = srgb(aces(c));
@@ -454,7 +542,7 @@ function camera(yaw, pitch, dist) {
 }
 
 // ───────────────────────────── scene state ─────────────────────────────
-const look = s => ({ life: s.life ?? .07, spawn: s.spawn ?? 1.1, spawnY: s.spawnY ?? 0, pitch: s.pitch ?? .3, fadeIn: s.fadeIn ?? 3, pal: s.pal.slice(1).map(hex), bg: hex(s.pal[0]), speed: s.speed, fade: s.fade, ap: s.ap, gain: s.gain, bloom: s.bloom, turb: s.turb, dist: s.dist });
+const look = s => ({ life: s.life ?? .07, spawn: s.spawn ?? 1.1, spawnY: s.spawnY ?? 0, pitch: s.pitch ?? .3, lens: s.lens ?? 0, fadeIn: s.fadeIn ?? 3, pal: s.pal.slice(1).map(hex), bg: hex(s.pal[0]), speed: s.speed, fade: s.fade, ap: s.ap, gain: s.gain, bloom: s.bloom, turb: s.turb, dist: s.dist });
 let cur = 0, from = look(SCENES[0]), to = from, fieldA = SCENES[0].f, fieldB = SCENES[0].f;
 let mixT = 1, sceneT = 0, locked = false, frozen = false;
 let order = SCENES.map((_, i) => i), pos = 0;
@@ -471,7 +559,7 @@ function step(dir) {
 const blended = () => {
   const m = ease(Math.min(mixT, 1)), L = (a, b) => lerp(a, b, m);
   return {
-    life: L(from.life, to.life), spawn: L(from.spawn, to.spawn), spawnY: L(from.spawnY, to.spawnY), pitch: L(from.pitch, to.pitch), fadeIn: L(from.fadeIn, to.fadeIn),
+    life: L(from.life, to.life), spawn: L(from.spawn, to.spawn), spawnY: L(from.spawnY, to.spawnY), pitch: L(from.pitch, to.pitch), lens: L(from.lens, to.lens), fadeIn: L(from.fadeIn, to.fadeIn),
     pal: from.pal.map((c, i) => c.map((v, j) => L(v, to.pal[i][j]))), bg: from.bg.map((v, j) => L(v, to.bg[j])),
     speed: L(from.speed, to.speed), fade: L(from.fade, to.fade), ap: L(from.ap, to.ap), gain: L(from.gain, to.gain),
     bloom: L(from.bloom, to.bloom), turb: L(from.turb, to.turb) + .055 * Math.sin(Math.PI * m), dist: L(from.dist, to.dist), m,
@@ -492,6 +580,7 @@ function go(i) {
 const cam = { yaw: .6, pitch: .32, dist: 2.7, zoom: 1, yawV: 0, pitchV: 0, auto: 1, idle: 99 };
 const ptr = { x: .5, y: .5, has: false, stir: [0, 0, 0], pulse: 0, pulseO: [0, 0, 0] };
 const touches = new Map();
+const well = { on: false, k: 0, held: 0, o: [0, 0, 0], ax: [0, 0, 1] };
 let down = null, pinch0 = 0;
 
 canvas.addEventListener('pointerdown', e => {
@@ -510,6 +599,7 @@ canvas.addEventListener('pointermove', e => {
     cam.zoom = Math.min(2.2, Math.max(.45, Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch0));
     return;
   }
+  if (well.on) { aim(px, py); return; }
   if (down && e.buttons) {
     const dx = px - down.lx, dy = py - down.ly;
     down.lx = px; down.ly = py; down.moved += Math.abs(dx) + Math.abs(dy);
@@ -528,7 +618,10 @@ canvas.addEventListener('pointermove', e => {
 });
 function endPointer(e) {
   touches.delete(e.pointerId);
-  if (down && e.type === 'pointerup' && down.moved < 8 && performance.now() - down.t < 400) ripple(e.clientX, e.clientY);
+  if (well.on) {                                                            // let go of the well: everything it gathered bursts out
+    well.on = false; Sound.well(false);
+    ptr.pulseO = well.o; ptr.pulse = Math.min(2.4, .6 + well.held * .7); Sound.ripple(); chime(1);
+  } else if (down && e.type === 'pointerup' && down.moved < 8 && performance.now() - down.t < 400) ripple(e.clientX, e.clientY);
   if (touches.size === 0) down = null;
 }
 canvas.addEventListener('pointerup', endPointer);
@@ -541,12 +634,20 @@ function ray(px, py) {
   const c = camera(cam.yaw, cam.pitch, cam.dist), t = Math.tan(FOV / 2), nx = (px / innerWidth * 2 - 1) * t * innerWidth / innerHeight, ny = (1 - py / innerHeight * 2) * t;
   return { o: c.eye, d: norm([0, 1, 2].map(j => -c.z[j] + c.x[j] * nx + c.y[j] * ny)) };
 }
+function aim(px, py) {
+  const r = ray(px, py), t = -dot(r.o, r.d);
+  well.o = r.o.map((v, j) => v + r.d[j] * t); well.ax = r.d;
+}
 function ripple(px, py) {
   const r = ray(px, py), t = -dot(r.o, r.d);
   ptr.pulseO = r.o.map((v, j) => v + r.d[j] * t);
   ptr.pulse = 1;
-  Sound.ripple();
+  Sound.ripple(); chime(.8);
 }
+
+// a chime sends a shell of light out through the form; bells, ripples and breaths all ring one
+const wave = { t: 99, a: 0 };
+function chime(a) { if (wave.t > .5 || a > wave.a * Math.exp(-wave.t * .9)) { wave.t = 0; wave.a = a; } }
 
 // ───────────────────────────── ui ─────────────────────────────
 const $ = id => document.getElementById(id);
@@ -554,7 +655,7 @@ let idleTimer = 0, labelTimer = 0;
 function wake() {
   document.body.classList.remove('idle');
   clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => { if (!$('help').classList.contains('show')) document.body.classList.add('idle'); }, 2600);
+  idleTimer = setTimeout(() => { if (!document.querySelector('#help.show, #gallery.show')) document.body.classList.add('idle'); }, 2600);
 }
 function showLabel() {
   const s = SCENES[cur];
@@ -571,14 +672,35 @@ function toggleFull() {
 }
 function toggleHelp(force) {
   const on = $('help').classList.toggle('show', force);
-  if (on) { document.body.classList.remove('idle', 'zen'); $('help').querySelector('.card').focus?.(); }
+  if (on) { document.body.classList.remove('idle', 'zen'); $('gallery').classList.remove('show'); }
   else wake();
+}
+function toggleGallery(force) {
+  const on = $('gallery').classList.toggle('show', force);
+  if (!on) return wake();
+  $('help').classList.remove('show'); document.body.classList.remove('idle', 'zen');
+  [...$('gallery').querySelector('.list').children].forEach((b, i) => b.classList.toggle('cur', i === cur));
+}
+SCENES.forEach((sc, i) => {
+  const b = document.createElement('button');
+  b.innerHTML = `<span class="sw" style="background:linear-gradient(90deg,${sc.pal.slice(1).join(',')})"></span><span class="n">${ROMAN[i]}</span><span class="t">${sc.name}</span><span class="s">${sc.sub}</span>`;
+  b.onclick = () => { pos = order.indexOf(i); go(i); toggleGallery(false); };
+  $('gallery').querySelector('.list').append(b);
+});
+// breathe along: ~5.5 breaths a minute; the form swells in, settles out, and a soft bell marks each turn
+const BREATH = 11, breath = { on: false, k: 0, t: 0, half: -1 };
+function toggleBreath() {
+  breath.on = !breath.on; breath.t = 0; breath.half = -1;
+  $('bBreath').setAttribute('aria-pressed', String(breath.on));
 }
 function save() { saveNext = true; }
 let saveNext = false;
 
 $('bSound').onclick = () => Sound.toggle();
 $('bNext').onclick = () => step(1);
+$('bBreath').onclick = toggleBreath;
+$('bScenes').onclick = () => toggleGallery();
+$('gallery').onclick = e => { if (e.target === $('gallery')) toggleGallery(false); };
 $('bFull').onclick = toggleFull;
 $('bHelp').onclick = () => toggleHelp();
 $('help').onclick = e => { if (e.target === $('help')) toggleHelp(false); };
@@ -587,15 +709,17 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === ' ' || k === 'arrowright') { e.preventDefault(); step(1); }
   else if (k === 'arrowleft') step(-1);
-  else if (k >= '1' && k <= String(SCENES.length)) { pos = order.indexOf(+k - 1); go(+k - 1); }
+  else if (/^[0-9]$/.test(k) && (+k || 10) <= SCENES.length) { const i = (+k || 10) - 1; pos = order.indexOf(i); go(i); }
+  else if (k === 'b') toggleBreath();
+  else if (k === 'g') toggleGallery();
   else if (k === 'm') Sound.toggle();
   else if (k === 'f') toggleFull();
   else if (k === 'p') frozen = !frozen;
   else if (k === 'l') { locked = !locked; showLabel(); }
   else if (k === 's') save();
-  else if (k === 'h') { document.body.classList.toggle('zen'); toggleHelp(false); return; }
+  else if (k === 'h') { document.body.classList.toggle('zen'); $('help').classList.remove('show'); $('gallery').classList.remove('show'); return; }
   else if (k === '?' || k === '/') toggleHelp();
-  else if (k === 'escape') toggleHelp(false);
+  else if (k === 'escape') { toggleHelp(false); toggleGallery(false); }
   else return;
   wake();
 });
@@ -604,7 +728,7 @@ document.addEventListener('mousemove', wake);
 // ───────────────────────────── sound ─────────────────────────────
 // Slow pad chords + wind + chimes, all synthesised. Off until the viewer turns it on.
 const Sound = (() => {
-  let ctx = null, out, bus, verb, on = false, want = false, chordIn = 0, bellIn = 4, lastStir = 0, voices = [], scene = SCENES[0], step = 0;
+  let ctx = null, out, bus, verb, on = false, want = false, chordIn = 0, bellIn = 4, lastStir = 0, voices = [], scene = SCENES[0], step = 0, drone = null;
   try { want = localStorage.getItem('drift.sound') === '1'; } catch {}
   const PROG = [[0, 7, 11, 16], [-3, 4, 7, 12], [-7, 5, 9, 16], [-5, 2, 11, 14], [0, 4, 9, 14], [-7, 0, 9, 19]];
   const PENTA = [0, 2, 4, 7, 9];
@@ -646,6 +770,8 @@ const Sound = (() => {
     });
   }
   function bell(vol = 1, oct = 2) {
+    chime(vol * .75);                                                        // the light-wave rings even with sound off
+    if (!on) return;
     const t = ctx.currentTime, m = scene.root + 12 * oct + PENTA[Math.random() * 5 | 0];
     const g = ctx.createGain(), pan = ctx.createStereoPanner(); pan.pan.value = Math.random() * 1.4 - .7;
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.045 * vol, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + 5);
@@ -669,14 +795,28 @@ const Sound = (() => {
   return {
     toggle: () => set(!on),
     unlock: () => { if (want && !on) set(true); },
-    scene(s) { scene = s; if (on) { chordIn = 1.5; setTimeout(() => on && bell(1.2, 1), 600); } },
+    scene(s) { scene = s; chordIn = 1.5; setTimeout(() => bell(1.2, 1), 600); },
     tick(dt) {
-      if (!on) return;
-      if ((chordIn -= dt) <= 0) { chord(); chordIn = 9 + Math.random() * 4; }
+      if (on && (chordIn -= dt) <= 0) { chord(); chordIn = 9 + Math.random() * 4; }
       if ((bellIn -= dt) <= 0) { bell(.5 + Math.random() * .5); bellIn = 2.5 + Math.random() * 6; }
     },
-    stir(speed) { const n = performance.now(); if (on && speed > 25 && n - lastStir > 420) { lastStir = n; bell(Math.min(1, speed / 120) * .55, 2 + (Math.random() < .4)); } },
-    ripple() { if (on) { bell(1, 1); bell(.6, 2); } },
+    stir(speed) { const n = performance.now(); if (speed > 25 && n - lastStir > 420) { lastStir = n; bell(Math.min(1, speed / 120) * .55, 2 + (Math.random() < .4)); } },
+    ripple() { bell(1, 1); bell(.6, 2); },
+    breath(inhale) { bell(.4, inhale ? 2 : 1); },
+    well(v) {
+      // holding: a resonant swell that opens up the longer you hold
+      if (v && on && !drone) {
+        const t = ctx.currentTime, g = ctx.createGain(), lp = ctx.createBiquadFilter();
+        g.gain.value = 0; g.gain.linearRampToValueAtTime(.05, t + 1.5);
+        lp.type = 'lowpass'; lp.Q.value = 7; lp.frequency.setValueAtTime(180, t); lp.frequency.exponentialRampToValueAtTime(2000, t + 5);
+        const os = [0, 7, 12].map((n, i) => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = hz(scene.root + n); o.detune.value = (i - 1) * 6; o.connect(lp); o.start(t); return o; });
+        lp.connect(g).connect(bus); drone = { g, os };
+      } else if (!v && drone) {
+        const t = ctx.currentTime;
+        drone.g.gain.cancelScheduledValues(t); drone.g.gain.setValueAtTime(drone.g.gain.value, t); drone.g.gain.linearRampToValueAtTime(0, t + 1.2);
+        drone.os.forEach(o => o.stop(t + 1.3)); drone = null;
+      }
+    },
   };
 })();
 
@@ -721,7 +861,12 @@ function render(now) {
   cam.yawV *= Math.exp(-dt * 2.5); cam.pitchV *= Math.exp(-dt * 2.5);
   cam.yaw += .045 * cam.auto * dt;
   cam.pitch = lerp(cam.pitch, L.pitch + .22 * Math.sin(time * .021), 1 - Math.exp(-dt * .25 * cam.auto));
-  cam.dist = L.dist / cam.zoom * Math.max(1, .8 * H / W) * (1 + .05 * Math.sin(time * .037));   // back off on portrait screens
+  breath.k = lerp(breath.k, breath.on ? 1 : 0, 1 - Math.exp(-dt * 1.5));
+  if (breath.on) breath.t += dt;
+  const ph = (breath.t % BREATH) / BREATH, bb = (.5 - .5 * Math.cos(2 * Math.PI * ph)) * breath.k;
+  if (breath.on && (ph < .5 ? 0 : 1) !== breath.half) { breath.half = ph < .5 ? 0 : 1; $('breath').textContent = breath.half ? 'breathe out' : 'breathe in'; Sound.breath(!breath.half); }
+  $('breath').style.opacity = (breath.k * Math.sin(Math.PI * (ph * 2 % 1)) ** .6 * .75).toFixed(3);
+  cam.dist = L.dist / cam.zoom * Math.max(1, .8 * H / W) * (1 + .05 * Math.sin(time * .037)) * (1 - .12 * bb);   // back off on portrait screens
   const C = camera(cam.yaw, cam.pitch, cam.dist);
   const rows = TIERS[tier][0], count = rows * SIDE;
 
@@ -732,6 +877,10 @@ function render(now) {
   const stir = ptr.has ? ptr.stir.map(v => v * sk) : [0, 0, 0];
   ptr.stir = ptr.stir.map((v, j) => v - stir[j]);
   ptr.pulse *= Math.exp(-dt * 2.2);
+  if (down && !well.on && touches.size === 1 && down.moved < 8 && performance.now() - down.t > 450) { well.on = true; well.held = 0; aim(down.lx, down.ly); Sound.well(true); }
+  if (well.on) well.held += dt;
+  well.k = lerp(well.k, well.on ? 1 : 0, 1 - Math.exp(-dt * (well.on ? 3 : 8)));
+  wave.t += dt;
   gl.disable(gl.BLEND);
   gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, SIDE, rows);
   gl.useProgram(P.sim.p);
@@ -742,6 +891,7 @@ function render(now) {
   gl.uniform1f(u.uTurb, L.turb); gl.uniform1f(u.uSpeed, L.speed); gl.uniform1f(u.uRespawn, 1 - Math.exp(-simDt * (L.life + 1.2 * Math.sin(Math.PI * L.m)))); gl.uniform1f(u.uSpawnR, L.spawn); gl.uniform1f(u.uSpawnY, L.spawnY);   // per-second rates
   gl.uniform1ui(u.uFrame, frame);
   gl.uniform3fv(u.uRayO, r.o); gl.uniform3fv(u.uRayD, r.d); gl.uniform3fv(u.uStir, stir);
+  gl.uniform1f(u.uWell, frozen ? 0 : well.k); gl.uniform3fv(u.uWellO, well.o); gl.uniform3fv(u.uWellAx, well.ax);
   gl.uniform3fv(u.uPulseO, ptr.pulseO); gl.uniform1f(u.uPulse, ptr.pulse > .01 && !frozen ? ptr.pulse * 2.4 : 0);
   quad();
 
@@ -762,6 +912,7 @@ function render(now) {
   gl.uniform1f(v.uEnergy, L.gain * .004 * W * H / count * (1 - fade) / (1 - .86));
   gl.uniform1f(v.uSpeedRef, .45 * L.speed); gl.uniform1f(v.uFadeIn, L.fadeIn); gl.uniform2f(v.uRes, W, H); gl.uniform1f(v.uBlur, simDt);
   gl.uniform3fv(v.uPal, L.pal.flat());
+  gl.uniform1f(v.uChimeR, wave.t * .75); gl.uniform1f(v.uChimeA, wave.a * Math.exp(-wave.t * .9));
   gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
 
   // 3 · bloom: dual-filter down then up the chain
@@ -793,7 +944,10 @@ function render(now) {
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bloom[0].t); gl.uniform1i(o.uBloom, 1);
   gl.activeTexture(gl.TEXTURE0);
   gl.uniform2f(o.uRes, W, H); gl.uniform1f(o.uTime, time + frame * .001);
-  gl.uniform1f(o.uBloomAmt, L.bloom / bloom.length); gl.uniform1f(o.uExposure, 1);
+  gl.uniform1f(o.uBloomAmt, L.bloom / bloom.length); gl.uniform1f(o.uExposure, 1 + .18 * bb);
+  gl.uniform3fv(o.uCX, C.x); gl.uniform3fv(o.uCY, C.y); gl.uniform3fv(o.uCZ, C.z);
+  gl.uniform2f(o.uTanA, Math.tan(FOV / 2) * W / H, Math.tan(FOV / 2)); gl.uniform1f(o.uPix, 2 * Math.tan(FOV / 2) / H);
+  gl.uniform1f(o.uLens, L.lens * .075 * 3 / cam.dist); gl.uniform3fv(o.uStar, L.pal[2].map(c => .7 + .3 * c));
   gl.uniform3fv(o.uBg, L.bg);
   quad();
 
@@ -813,7 +967,7 @@ Sound.scene(SCENES[0]);
 requestAnimationFrame(render);
 
 // debug hook for automated screenshots
-window.drift = { go, get state() { return { cur, mixT, tier, W, H, frame }; }, setTier(t) { tier = t; tierCeil = TIERS.length; perf.settle = 1e9; resize(); }, ripple };
+window.drift = { go, well, breath: toggleBreath, chime, get state() { return { cur, mixT, tier, W, H, frame }; }, setTier(t) { tier = t; tierCeil = TIERS.length; perf.settle = 1e9; resize(); }, ripple };
 </script>
 </body>
 </html>
