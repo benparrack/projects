@@ -224,6 +224,8 @@ function setStatus(text, cls) {
 }
 
 function showScreen(name) {
+  // A new screen starts at its top (joining a room from the bottom of the menu landed on the footer).
+  if (state.screen !== name) { state.screen = name; window.scrollTo(0, 0); }
   els.screenNickname.hidden = name !== 'nickname';
   els.screenMenu.hidden = name !== 'menu';
   if (name === 'menu') refreshHome();
@@ -910,7 +912,9 @@ if (document.fullscreenEnabled) {
   });
   document.addEventListener('fullscreenchange', () => {
     document.body.classList.toggle('gt-fullscreen', !!document.fullscreenElement);
-    fs.textContent = document.fullscreenElement ? '✕ EXIT FULLSCREEN' : '⛶ FULLSCREEN';
+    const on = !!document.fullscreenElement;
+    fs.replaceChildren(on ? '✕' : '⛶', h('span.btn-label', on ? ' EXIT FULLSCREEN' : ' FULLSCREEN'));
+    fs.setAttribute('aria-label', on ? 'Exit fullscreen' : 'Fullscreen');
   });
 }
 

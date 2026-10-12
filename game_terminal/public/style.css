@@ -157,6 +157,13 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 
 .room-actions { display: flex; gap: 8px; align-items: center; }
+.room-header button { white-space: nowrap; }
+@media (max-width: 480px) {
+  .room-header { flex-wrap: wrap; gap: 8px; }
+  #btn-fullscreen .btn-label { display: none; }
+  #btn-copy-link { margin-left: 4px; }
+  .room-actions { margin-left: auto; }
+}
 .info-wrap { position: relative; }
 .info-btn {
   width: 30px; height: 30px; padding: 0; border-radius: 50%;
