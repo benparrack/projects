@@ -67,6 +67,8 @@ export function mount(container, api) {
   body.style.display = 'flex';
   body.style.gap = '12px';
   body.style.alignItems = 'flex-start';
+  body.style.flexWrap = 'wrap'; // leaderboard drops below the canvas on phones
+  body.style.justifyContent = 'center';
 
   const canvas = document.createElement('canvas');
   canvas.style.background = '#05080a';

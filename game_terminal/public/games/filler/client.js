@@ -37,7 +37,7 @@ const CSS = `
 .fl-seat { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border: 1px solid #1f8f0c; border-radius: 6px; }
 .fl-seat.turn { border-color: #39ff14; box-shadow: 0 0 10px -2px #39ff14; }
 .fl-chip { width: 16px; height: 16px; border-radius: 4px; display: inline-block; flex: none; border: 1px solid rgba(255,255,255,.35); transition: background .35s; }
-.fl-score { display: flex; align-items: center; gap: 8px; width: min(420px, 92vw); font-weight: bold; }
+.fl-score { display: flex; align-items: center; gap: 8px; width: min(420px, calc(100vw - 40px)); font-weight: bold; }
 .fl-bar { position: relative; flex: 1; height: 14px; border-radius: 7px; overflow: hidden; display: flex; border: 1px solid #1f8f0c; background: #0a0f0a; }
 .fl-bar > div { transition: flex-grow .45s ease, background .35s; }
 .fl-bar .mid { flex-grow: 1; }
@@ -47,7 +47,7 @@ const CSS = `
 @keyframes fl-bump { 40% { transform: scale(1.35); color: #ffb000; } }
 .fl-boardwrap { position: relative; }
 .fl-board {
-  --cell: min(50px, calc((92vw - 30px) / 8));
+  --cell: min(50px, calc((100vw - 72px) / 8));
   display: grid; grid-template-columns: repeat(8, var(--cell)); grid-template-rows: repeat(7, var(--cell));
   gap: 2px; padding: 6px; border-radius: 10px; background: #050805;
   border: 3px solid #1f8f0c; box-shadow: inset 0 0 24px rgba(0,0,0,.8);

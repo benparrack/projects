@@ -63,7 +63,7 @@ const CSS = `
 .gt-scr .scr-seat button { font-size:11px; padding:1px 6px; }
 .gt-scr .scr-lobby { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center; }
 .gt-scr .scr-main { display:flex; flex-wrap:wrap; gap:14px; justify-content:center; align-items:flex-start; width:100%; }
-.gt-scr .scr-boardcol { display:flex; flex-direction:column; align-items:center; gap:8px; width:min(94vw, 600px); }
+.gt-scr .scr-boardcol { display:flex; flex-direction:column; align-items:center; gap:8px; width:min(calc(100vw - 34px), 600px); }
 .gt-scr .scr-board { display:grid; grid-template-columns:repeat(15, 1fr); grid-template-rows:repeat(15, 1fr); gap:2px; width:100%; aspect-ratio:1; padding:3px; box-sizing:border-box; background:#0f2a0a; border:2px solid #1f8f0c; border-radius:6px; touch-action:none; }
 .gt-scr .scr-board.myturn { border-color:#39ff14; box-shadow:0 0 14px rgba(57,255,20,0.35); }
 .gt-scr .scr-cell { position:relative; background:#071107; border-radius:2px; display:flex; align-items:center; justify-content:center; font-size:clamp(5px, 1.3vw, 9px); color:rgba(255,255,255,0.55); line-height:1; text-align:center; overflow:hidden; }
@@ -95,7 +95,7 @@ const CSS = `
 .gt-scr .scr-controls { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
 .gt-scr .scr-controls button.primary { border-color:#ffb000; color:#ffb000; }
 .gt-scr .scr-controls button.primary:not(:disabled):hover { background:#ffb000; color:#000; }
-.gt-scr .scr-side { display:flex; flex-direction:column; gap:8px; width:min(94vw, 300px); }
+.gt-scr .scr-side { display:flex; flex-direction:column; gap:8px; width:min(calc(100vw - 34px), 300px); }
 .gt-scr .scr-box { border:1px solid #1f8f0c; border-radius:6px; padding:8px 10px; background:#05080a; }
 .gt-scr .scr-box h4 { margin:0 0 6px; font-size:13px; color:#1f8f0c; letter-spacing:1px; }
 .gt-scr .scr-bag { font-size:15px; }

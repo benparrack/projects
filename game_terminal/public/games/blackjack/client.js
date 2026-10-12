@@ -127,6 +127,7 @@ const CSS = `
 
 .bj-board { width: 100%; border-collapse: collapse; font-size: .8em; }
 .bj-board th, .bj-board td { padding: 3px 6px; text-align: right; border-bottom: 1px solid rgba(57,255,20,.12); white-space: nowrap; }
+@media (max-width: 420px) { .bj-board th, .bj-board td { padding: 3px 3px; } }
 .bj-board th:first-child, .bj-board td:first-child { text-align: left; }
 .bj-board th { opacity: .65; font-weight: normal; }
 .bj-board tr.me td { color: #b8ffa8; }

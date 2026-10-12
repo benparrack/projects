@@ -89,6 +89,8 @@ export function mount(container, api) {
   canvas.height = CANVAS_HEIGHT;
   canvas.style.background = CANVAS_BG;
   canvas.style.touchAction = 'none';
+  canvas.style.maxWidth = '100%'; // pointer maths scales by the rendered rect, so phones can shrink it
+  canvas.style.height = 'auto';
   canvas.draggable = false;
   canvas.style.userSelect = 'none';
   canvas.style.webkitUserDrag = 'none';
@@ -196,6 +198,8 @@ export function mount(container, api) {
 
   const logEl = document.createElement('div');
   logEl.style.width = `${CANVAS_WIDTH}px`;
+  logEl.style.maxWidth = '100%';
+  logEl.style.boxSizing = 'border-box';
   logEl.style.maxHeight = '140px';
   logEl.style.overflowY = 'auto';
   logEl.style.border = '1px solid #333';
@@ -214,6 +218,7 @@ export function mount(container, api) {
 
   const timer = timerBar();
   timer.el.style.width = `${CANVAS_WIDTH}px`;
+  timer.el.style.maxWidth = '100%';
 
   root.appendChild(statusEl);
   root.appendChild(timer.el);

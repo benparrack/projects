@@ -409,7 +409,10 @@ export function mount(container, api) {
 
     const seatRow = document.createElement('div');
     seatRow.style.display = 'flex';
-    seatRow.style.gap = '12px';
+    seatRow.style.gap = '8px 12px';
+    seatRow.style.flexWrap = 'wrap';
+    seatRow.style.justifyContent = 'center';
+    seatRow.style.alignItems = 'center';
     const seat = mySeat();
     const flipped = manualFlip !== null ? manualFlip : seat === 'black';
 
@@ -486,10 +489,11 @@ export function mount(container, api) {
       root.appendChild(timeRow);
     }
 
+    const sq = Math.max(28, Math.min(CELL, Math.floor((window.innerWidth - 84) / 8))); // all 8 files fit a phone
     const board = document.createElement('div');
     board.style.display = 'grid';
-    board.style.gridTemplateColumns = `repeat(8, ${CELL}px)`;
-    board.style.gridTemplateRows = `repeat(8, ${CELL}px)`;
+    board.style.gridTemplateColumns = `repeat(8, ${sq}px)`;
+    board.style.gridTemplateRows = `repeat(8, ${sq}px)`;
     board.style.border = '1px solid #1f8f0c';
 
     const destMoves = legalDestinations();
@@ -509,15 +513,15 @@ export function mount(container, api) {
         cell.dataset.row = String(r);
         cell.dataset.col = String(c);
         const dark = (r + c) % 2 === 1;
-        cell.style.width = `${CELL}px`;
-        cell.style.height = `${CELL}px`;
+        cell.style.width = `${sq}px`;
+        cell.style.height = `${sq}px`;
         cell.style.background = dark ? '#2a2a2a' : '#0a0a0a';
         cell.style.position = 'relative';
         cell.style.display = 'flex';
         cell.style.alignItems = 'center';
         cell.style.justifyContent = 'center';
         cell.style.boxSizing = 'border-box';
-        cell.style.fontSize = `${CELL - 10}px`;
+        cell.style.fontSize = `${sq - 10}px`;
         cell.style.cursor = 'pointer';
         if (selected && selected.r === r && selected.c === c) {
           cell.style.border = '2px solid #ffb000';
@@ -550,8 +554,8 @@ export function mount(container, api) {
           marker.style.position = 'absolute';
           marker.style.boxSizing = 'border-box';
           if (piece) {
-            marker.style.width = `${CELL - 6}px`;
-            marker.style.height = `${CELL - 6}px`;
+            marker.style.width = `${sq - 6}px`;
+            marker.style.height = `${sq - 6}px`;
             marker.style.border = '3px solid rgba(57,255,20,0.65)';
             marker.style.borderRadius = '50%';
           } else {
@@ -587,7 +591,7 @@ export function mount(container, api) {
       const rank = document.createElement('div');
       rank.textContent = String(8 - r);
       rank.style.width = '16px';
-      rank.style.height = `${CELL}px`;
+      rank.style.height = `${sq}px`;
       rank.style.display = 'flex';
       rank.style.alignItems = 'center';
       rank.style.justifyContent = 'center';
@@ -602,7 +606,7 @@ export function mount(container, api) {
       const c = flipped ? 7 - vc : vc;
       const file = document.createElement('div');
       file.textContent = String.fromCharCode(97 + c);
-      file.style.width = `${CELL}px`;
+      file.style.width = `${sq}px`;
       file.style.textAlign = 'center';
       file.style.fontSize = '12px';
       file.style.opacity = '0.7';
@@ -622,11 +626,13 @@ export function mount(container, api) {
     boardRow.style.display = 'flex';
     boardRow.style.gap = '12px';
     boardRow.style.alignItems = 'flex-start';
+    boardRow.style.flexWrap = 'wrap'; // move history drops below the board on narrow screens
+    boardRow.style.justifyContent = 'center';
     boardRow.appendChild(boardWithLabels);
 
     const historyPanel = document.createElement('div');
     historyPanel.style.width = '150px';
-    historyPanel.style.maxHeight = `${CELL * 8}px`;
+    historyPanel.style.maxHeight = `${sq * 8}px`;
     historyPanel.style.overflowY = 'auto';
     historyPanel.style.border = '1px solid #1f8f0c';
     historyPanel.style.padding = '6px';

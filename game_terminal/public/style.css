@@ -200,6 +200,13 @@ button:disabled { opacity: 0.4; cursor: default; }
   justify-content: center;
 }
 
+/* below this the roster wraps under the game, so the game gets exactly the screen width and must
+   fit it, instead of stretching the page sideways */
+@media (max-width: 780px) {
+  .game-mount { min-width: 0; }
+  .game-mount > * { max-width: 100%; }
+}
+
 .roster {
   flex: 0 0 260px;
   min-width: 0;

@@ -35,11 +35,11 @@ const IDEAS = [
 
 const CSS = `
 .tq-root { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; --tq-c: #39ff14; }
-.tq-status { font-size: 18px; font-weight: bold; padding: 6px 14px; border-radius: 6px; border: 2px solid transparent; text-align: center; max-width: 94vw; }
+.tq-status { font-size: 18px; font-weight: bold; padding: 6px 14px; border-radius: 6px; border: 2px solid transparent; text-align: center; max-width: calc(100vw - 40px); }
 .tq-status.mine { background: rgba(57,255,20,.15); border-color: #39ff14; animation: tq-glow 1.6s ease-in-out infinite; }
 @keyframes tq-glow { 50% { box-shadow: 0 0 16px -2px #39ff14; } }
 .tq-err { color: #ff4d4d; min-height: 1.2em; font-size: 14px; }
-.tq-seats { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: stretch; width: min(760px, 96vw); }
+.tq-seats { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: stretch; width: min(760px, calc(100vw - 34px)); }
 .tq-seat { flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px; padding: 6px 10px; border: 1px solid #1f8f0c; border-radius: 8px; background: rgba(8,20,8,.6); transition: box-shadow .25s, border-color .25s; min-width: 0; }
 .tq-seat.turn { border-color: var(--c); box-shadow: 0 0 14px -3px var(--c); }
 .tq-seat .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -52,7 +52,7 @@ const CSS = `
 .tq-chip { width: 12px; height: 12px; border-radius: 50%; display: inline-block; background: var(--c); box-shadow: 0 0 6px var(--c); flex: none; }
 .tq-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 74px; font-size: 12px; color: #6fae5f; letter-spacing: 1px; text-align: center; }
 .tq-mid b { font-size: 18px; color: #c8ffc0; }
-.tq-main { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 14px; width: min(760px, 96vw); align-items: start; }
+.tq-main { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 14px; width: min(760px, calc(100vw - 34px)); align-items: start; }
 @media (max-width: 640px) { .tq-main { grid-template-columns: minmax(0, 1fr); } }
 .tq-left { display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .tq-card { width: 220px; height: 150px; perspective: 700px; position: relative; }

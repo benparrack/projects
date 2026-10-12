@@ -16,10 +16,12 @@ import { preferredLevel, levelSelect } from '../botLevel.js';
 import { slideFrom, LAST_MOVE_TINT } from '../boardFx.js';
 
 
-const POINT_W = 48;
-const POINT_H = 160;
-const DISC = 30;
-const BAR_W = 44;
+// shortcut: sized once at load to fit the screen (the board is ~640px at full size); upgrade to a resize listener if desktop users shrink windows
+const SCALE = Math.max(0.5, Math.min(1, (window.innerWidth - 48) / 640));
+const POINT_W = Math.round(48 * SCALE);
+const POINT_H = Math.round(160 * SCALE);
+const DISC = Math.round(30 * SCALE);
+const BAR_W = Math.round(44 * SCALE);
 
 const ACCENT = '#39ff14';
 const ACCENT_DIM = '#1f8f0c';

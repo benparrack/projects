@@ -6,7 +6,7 @@ import { createResults, duelResults } from '../resultsPanel.js';
 import { slideFrom, captureGhost } from '../boardFx.js';
 
 
-const CELL = 44;
+const cellPx = () => Math.max(28, Math.min(44, Math.floor((window.innerWidth - 64) / 8))); // all 8 files fit a phone
 
 // Client-side mirror of server/games/checkers.js's pure move-generation rules, used only to
 // highlight legal destinations after selecting a piece. Safe to duplicate here (unlike Hangman's
@@ -153,7 +153,10 @@ export function mount(container, api) {
 
     const seatRow = document.createElement('div');
     seatRow.style.display = 'flex';
-    seatRow.style.gap = '12px';
+    seatRow.style.gap = '8px 12px';
+    seatRow.style.flexWrap = 'wrap';
+    seatRow.style.justifyContent = 'center';
+    seatRow.style.alignItems = 'center';
     const seat = mySeat();
 
     for (const color of ['black', 'red']) {
@@ -224,8 +227,8 @@ export function mount(container, api) {
 
     const board = document.createElement('div');
     board.style.display = 'grid';
-    board.style.gridTemplateColumns = `repeat(8, ${CELL}px)`;
-    board.style.gridTemplateRows = `repeat(8, ${CELL}px)`;
+    board.style.gridTemplateColumns = `repeat(8, ${cellPx()}px)`;
+    board.style.gridTemplateRows = `repeat(8, ${cellPx()}px)`;
     board.style.border = '1px solid #1f8f0c';
 
     const legalTargets = selected ? legalDestinationsFrom(view.board, selected) : [];
@@ -247,8 +250,8 @@ export function mount(container, api) {
         const displayCol = flipped ? 7 - c : c;
         cell.style.gridRowStart = String(displayRow + 1);
         cell.style.gridColumnStart = String(displayCol + 1);
-        cell.style.width = `${CELL}px`;
-        cell.style.height = `${CELL}px`;
+        cell.style.width = `${cellPx()}px`;
+        cell.style.height = `${cellPx()}px`;
         cell.style.background = dark
           ? isLastMoveSquare(r, c) ? '#3a3a10' : '#2a2a2a'
           : isLastMoveSquare(r, c) ? '#151505' : '#0a0a0a';
@@ -275,8 +278,8 @@ export function mount(container, api) {
           const piece = view.board[r][c];
           if (piece) {
             const disc = document.createElement('div');
-            disc.style.width = `${CELL - 12}px`;
-            disc.style.height = `${CELL - 12}px`;
+            disc.style.width = `${cellPx() - 12}px`;
+            disc.style.height = `${cellPx() - 12}px`;
             disc.style.borderRadius = '50%';
             // Actual black (not the amber previously used here) so the disc color matches the
             // "BLACK"/"PLAY BLACK" seat label — needs a visible border since a truly flat black
@@ -332,7 +335,7 @@ export function mount(container, api) {
       if (!cap) return;
       const ghost = document.createElement('div');
       Object.assign(ghost.style, {
-        width: `${CELL - 12}px`, height: `${CELL - 12}px`, borderRadius: '50%', boxSizing: 'border-box',
+        width: `${cellPx() - 12}px`, height: `${cellPx() - 12}px`, borderRadius: '50%', boxSizing: 'border-box',
         background: moverBlack ? '#ff4d4d' : '#1a1a1a', border: moverBlack ? '2px solid #7a1414' : '2px solid #999',
       });
       captureGhost(at(cap), ghost, null, { delay: 180 * (i + 1) - 60 });

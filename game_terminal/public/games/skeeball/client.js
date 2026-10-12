@@ -42,7 +42,7 @@ const CSS = `
 .sk-status.mine { color: #39ff14; text-shadow: 0 0 8px #39ff14; }
 .sk-err { color: #ff5a5a; font-size: 12px; min-height: 14px; }
 .sk-seats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
-.sk-seat { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #1d5c1d; border-radius: 6px; background: #071107; font-size: 13px; }
+.sk-seat { display: flex; flex-wrap: wrap; justify-content: center; max-width: 100%; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #1d5c1d; border-radius: 6px; background: #071107; font-size: 13px; }
 .sk-seat.turn { border-color: #39ff14; box-shadow: 0 0 10px -2px #39ff14; }
 .sk-seat button { font: inherit; font-size: 12px; }
 .sk-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
@@ -74,7 +74,7 @@ const CSS = `
 @keyframes sk-call { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.4); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
   25% { transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -75%) scale(1); } }
 @keyframes sk-blink { 0% { filter: brightness(2.2); } 100% { filter: none; } }
-.sk-cards { display: flex; flex-direction: column; gap: 4px; align-items: center; font-size: 12px; }
+.sk-cards { display: flex; flex-direction: column; gap: 4px; align-items: safe center; font-size: 12px; max-width: 100%; overflow-x: auto; }
 .sk-card { display: flex; gap: 3px; align-items: center; }
 .sk-card .who { width: 52px; text-align: right; padding-right: 4px; font-weight: bold; }
 .sk-cell { width: 28px; height: 20px; line-height: 20px; text-align: center; border: 1px solid #1d3a1d; border-radius: 3px; background: #050c05; font-size: 11px; }

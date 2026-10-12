@@ -47,7 +47,7 @@ const CSS = `
 .bw-status.mine { color: #39ff14 !important; text-shadow: 0 0 8px #39ff14; }
 .bw-err { color: #ff5a5a; font-size: 12px; min-height: 14px; }
 .bw-seats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
-.bw-seat { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #1d5c1d; border-radius: 6px; background: #071107; font-size: 13px; }
+.bw-seat { display: flex; flex-wrap: wrap; justify-content: center; max-width: 100%; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #1d5c1d; border-radius: 6px; background: #071107; font-size: 13px; }
 .bw-seat.turn { border-color: #39ff14; box-shadow: 0 0 10px -2px #39ff14; }
 .bw-seat button, .bw-row button { font: inherit; font-size: 12px; }
 .bw-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px currentColor; }

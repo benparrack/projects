@@ -96,6 +96,8 @@ export function mount(container, api) {
   body.style.display = 'flex';
   body.style.gap = '12px';
   body.style.alignItems = 'flex-start';
+  body.style.flexWrap = 'wrap'; // leaderboard drops below the canvas on phones
+  body.style.justifyContent = 'center';
 
   const canvasWrap = document.createElement('div');
   canvasWrap.style.position = 'relative';
@@ -481,7 +483,7 @@ export function mount(container, api) {
     const rect = canvas.getBoundingClientRect();
     const px = ev.clientX - rect.left;
     const py = ev.clientY - rect.top;
-    return Math.atan2(py - CANVAS_HEIGHT / 2, px - CANVAS_WIDTH / 2);
+    return Math.atan2(py - rect.height / 2, px - rect.width / 2);
   }
 
   function sendBoost() {

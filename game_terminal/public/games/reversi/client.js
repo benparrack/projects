@@ -29,7 +29,7 @@ const CSS = `
 .rv-chip { width: 16px; height: 16px; border-radius: 50%; display: inline-block; flex: none; }
 .rv-chip.black { background: radial-gradient(circle at 35% 30%, #666, #111 60%); border: 1px solid #555; }
 .rv-chip.white { background: radial-gradient(circle at 35% 30%, #fff, #d8d8d8 60%, #aaa); border: 1px solid #ccc; }
-.rv-score { display: flex; align-items: center; gap: 8px; width: min(400px, 92vw); font-weight: bold; }
+.rv-score { display: flex; align-items: center; gap: 8px; width: min(400px, calc(100vw - 40px)); font-weight: bold; }
 .rv-bar { flex: 1; height: 12px; border-radius: 6px; overflow: hidden; display: flex; border: 1px solid #1f8f0c; background: #000; }
 .rv-bar .b { background: linear-gradient(#444, #111); transition: flex-grow .45s ease; }
 .rv-bar .w { background: linear-gradient(#fff, #bbb); transition: flex-grow .45s ease; }
@@ -38,7 +38,7 @@ const CSS = `
 @keyframes rv-bump { 40% { transform: scale(1.35); color: #ffb000; } }
 .rv-boardwrap { position: relative; }
 .rv-board {
-  --cell: min(48px, calc((92vw - 26px) / 8));
+  --cell: min(48px, calc((100vw - 72px) / 8));
   display: grid; grid-template-columns: repeat(8, var(--cell)); grid-template-rows: repeat(8, var(--cell));
   gap: 2px; padding: 6px; border-radius: 8px; background: #0b3d1e;
   border: 3px solid #1f8f0c; box-shadow: inset 0 0 24px rgba(0,0,0,.6);

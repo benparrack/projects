@@ -8,7 +8,7 @@ import { createResults, duelResults } from '../resultsPanel.js';
 import { dropIn, changeTracker } from '../boardFx.js';
 
 
-const CELL = 50;
+const CELL = 'min(50px, calc((100vw - 80px) / 7))'; // shrinks so all 7 columns fit a phone
 const COLS = 7;
 const ROWS = 6;
 
@@ -118,7 +118,10 @@ export function mount(container, api) {
 
     const seatRow = document.createElement('div');
     seatRow.style.display = 'flex';
-    seatRow.style.gap = '12px';
+    seatRow.style.gap = '8px 12px';
+    seatRow.style.flexWrap = 'wrap';
+    seatRow.style.justifyContent = 'center';
+    seatRow.style.alignItems = 'center';
 
     for (const color of ['red', 'yellow']) {
       const label = document.createElement('div');
@@ -164,7 +167,7 @@ export function mount(container, api) {
     const canDrop = seat && view.phase === 'playing' && view.turn === seat;
     const colRow = document.createElement('div');
     colRow.style.display = 'grid';
-    colRow.style.gridTemplateColumns = `repeat(${COLS}, ${CELL}px)`;
+    colRow.style.gridTemplateColumns = `repeat(${COLS}, ${CELL})`;
     colRow.style.gap = '4px';
     colRow.style.padding = '0 4px';
     colRow.style.boxSizing = 'content-box';
@@ -172,7 +175,7 @@ export function mount(container, api) {
       const btn = document.createElement('button');
       btn.textContent = '↓';
       btn.dataset.col = String(c);
-      btn.style.width = `${CELL}px`;
+      btn.style.width = CELL;
       btn.disabled = !canDrop || view.board[0][c] !== null;
       btn.addEventListener('click', () => onColumnClick(c));
       colRow.appendChild(btn);
@@ -181,8 +184,8 @@ export function mount(container, api) {
 
     const board = document.createElement('div');
     board.style.display = 'grid';
-    board.style.gridTemplateColumns = `repeat(${COLS}, ${CELL}px)`;
-    board.style.gridTemplateRows = `repeat(${ROWS}, ${CELL}px)`;
+    board.style.gridTemplateColumns = `repeat(${COLS}, ${CELL})`;
+    board.style.gridTemplateRows = `repeat(${ROWS}, ${CELL})`;
     board.style.background = '#0a2a5e';
     board.style.border = view.phase === 'playing'
       ? `3px solid ${view.turn === 'red' ? '#ff6b6b' : '#ffee58'}`
@@ -201,8 +204,8 @@ export function mount(container, api) {
         const cell = document.createElement('div');
         cell.dataset.row = String(r);
         cell.dataset.col = String(c);
-        cell.style.width = `${CELL - 4}px`;
-        cell.style.height = `${CELL - 4}px`;
+        cell.style.width = `calc(${CELL} - 4px)`;
+        cell.style.height = `calc(${CELL} - 4px)`;
         cell.style.borderRadius = '50%';
         cell.style.boxSizing = 'border-box';
         const piece = view.board[r][c];
@@ -225,7 +228,7 @@ export function mount(container, api) {
             disc.animate([{ filter: 'brightness(1)' }, { filter: 'brightness(1.6)' }],
               { duration: 500, iterations: Infinity, direction: 'alternate' });
           }
-          if (isLast && animateDrop) dropIn(disc, r, CELL);
+          if (isLast && animateDrop) dropIn(disc, r, Math.min(50, (innerWidth - 80) / 7));
           cell.appendChild(disc);
         }
         board.appendChild(cell);

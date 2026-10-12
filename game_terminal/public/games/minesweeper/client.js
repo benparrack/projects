@@ -31,7 +31,7 @@ const CSS = `
 .ms-seat { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border: 1px solid #1f8f0c; border-radius: 6px; }
 .ms-chip { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .ms-size.on, .ms-flagbtn.on { background: #39ff14; color: #000; }
-.ms-race { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; width: min(460px, 92vw); font-size: 13px; }
+.ms-race { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; width: min(460px, calc(100vw - 40px)); font-size: 13px; }
 .ms-bar { height: 12px; border-radius: 6px; border: 1px solid #1f8f0c; background: #0a0f0a; overflow: hidden; }
 .ms-bar > div { height: 100%; transition: width .25s ease-out; }
 .ms-bar.frozen > div { background: #ff4d4d !important; }

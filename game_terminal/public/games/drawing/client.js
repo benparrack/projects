@@ -121,6 +121,8 @@ export function mount(container, api) {
   canvas.height = CANVAS_HEIGHT;
   canvas.style.background = CANVAS_BG;
   canvas.style.touchAction = 'none';
+  canvas.style.maxWidth = '100%'; // pointer maths scales by the rendered rect, so phones can shrink it
+  canvas.style.height = 'auto';
   canvas.style.cursor = 'crosshair';
   // Canvas elements are natively drag-sources in some browsers (Firefox especially) — a
   // mousedown-and-move gesture starting on one can get hijacked into the browser's built-in

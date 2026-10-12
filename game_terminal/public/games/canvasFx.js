@@ -141,7 +141,9 @@ export function sharpCanvas(canvas, w, h) {
   canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
   canvas.style.width = `${w}px`;
-  canvas.style.height = `${h}px`;
+  canvas.style.height = 'auto'; // follows the aspect ratio, so max-width can shrink it on phones
+  canvas.style.aspectRatio = `${w} / ${h}`;
+  canvas.style.maxWidth = '100%';
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return ctx;

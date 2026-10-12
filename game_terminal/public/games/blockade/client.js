@@ -141,7 +141,7 @@ export function mount(container, api) {
   // ---- geometry ----
   const M = () => Math.round(s * 0.3); // outer margin
   function size() {
-    s = Math.max(26, Math.min(44, Math.floor((Math.min(window.innerWidth, 900) * 0.94 - 12) / COLS), Math.floor((window.innerHeight - 300) / ROWS)));
+    s = Math.max(26, Math.min(44, Math.floor((Math.min(window.innerWidth, 900) - 50) / COLS), Math.floor((window.innerHeight - 300) / ROWS)));
     const w = COLS * s + 2 * M();
     const h = ROWS * s + 2 * M();
     const dpr = window.devicePixelRatio || 1;
