@@ -1,0 +1,34 @@
+# Nightly encrypted Firestore backup for game_terminal (see game_terminal/scripts/backup.js).
+# Needs repo secrets FIREBASE_SERVICE_ACCOUNT (same JSON as Render) and BACKUP_PASSPHRASE.
+# Backups are kept as workflow artifacts for 90 days (the maximum for this repo).
+name: game-terminal backup
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: game_terminal
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: game_terminal
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci --omit=dev
+      - run: node scripts/backup.js dump "firestore-$(date -u +%F).bak"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firestore-backup-${{ github.run_id }}
+          path: game_terminal/firestore-*.bak
+          retention-days: 90
+          if-no-files-found: error

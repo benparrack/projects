@@ -120,3 +120,25 @@ Security headers (CSP, HSTS, `nosniff`, `frame-ancestors 'self'`, referrer polic
 `server/static.js`. The WebSocket server caps each IP at 20 sockets, gives each socket a
 200-messages/second budget (with a burst of 400; extra messages are dropped), and rejects
 payloads over 64 KB. Chat has its own rate limits and filters (`server/chat.js`).
+
+## Backups
+
+`.github/workflows/game-terminal-backup.yml` (repo root) runs `scripts/backup.js` every night at
+03:17 UTC: it copies every Firestore document into one gzipped JSON, encrypts it with
+AES-256-GCM, and keeps it as a workflow artifact for 90 days. The repo is public and anyone
+signed in to GitHub can download its artifacts, which is why the file is encrypted.
+
+Setup (once): in GitHub → Settings → Secrets and variables → Actions, add
+`FIREBASE_SERVICE_ACCOUNT` (the same JSON as on Render) and `BACKUP_PASSPHRASE` (a long random
+string; keep a copy in your password manager, since a backup can't be opened without it). Then
+run the workflow once from the Actions tab to check it.
+
+Restore: download the artifact, then from `game_terminal/`:
+
+```sh
+BACKUP_PASSPHRASE=... node scripts/backup.js inspect firestore-YYYY-MM-DD.bak   # counts only
+FIREBASE_SERVICE_ACCOUNT="$(cat key.json)" BACKUP_PASSPHRASE=... node scripts/backup.js restore firestore-YYYY-MM-DD.bak --yes
+```
+
+Restore overwrites the documents in the backup and leaves newer documents alone. Each backup
+reads every document once, which counts against Firestore's free 50,000 reads per day.
