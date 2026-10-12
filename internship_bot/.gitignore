@@ -1,0 +1,6 @@
+data/
+profile/profile.yaml
+profile/answers.yaml
+profile/stories.md
+profile/*.pdf
+node_modules/

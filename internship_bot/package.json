@@ -1,0 +1,11 @@
+{
+  "name": "internship-bot",
+  "private": true,
+  "type": "module",
+  "description": "Finds new CS internship postings on GitHub lists and applies to them",
+  "engines": { "node": ">=22.5.0" },
+  "scripts": {
+    "jobs": "node --no-warnings src/run.js --list",
+    "test": "node --no-warnings --test"
+  }
+}
