@@ -8,6 +8,11 @@ const MUTES = [['10 minutes', 10], ['1 hour', 60], ['24 hours', 1440], ['7 days'
 const BANS = [['1 day', 1440], ['7 days', 10080], ['30 days', 43200], ['1 year', 525600]];
 const ACTION_LABEL = { mute: 'Muted', unmute: 'Unmuted', ban: 'Banned', unban: 'Unbanned', resetStats: 'Reset stats', rename: 'Renamed', dismiss: 'Dismissed report', resolve: 'Resolved report', deleteMessage: 'Deleted message' };
 
+// Keep in sync with GROUNDS in server/moderation.js. Penalties must name one; the player is told it.
+const GROUNDS = [['harassment', 'Harassment, threats or hate speech'], ['sexual', 'Sexual content'], ['cheating', 'Cheating, scripts or exploiting bugs'],
+  ['spam', 'Spam, ads or scam links'], ['personal', 'Sharing personal information'], ['impersonation', 'Impersonating someone'],
+  ['name', 'Offensive username, avatar or drawing'], ['illegal', 'Illegal content'], ['other', 'Other rule break']];
+
 let view = null; // { send, els, status, user }
 
 const until = (ts) => `until ${fmtDate(ts)} ${new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -29,11 +34,25 @@ function lookup(username) {
 }
 function loadReports() { view.send(ClientMessage.ADMIN_REPORTS, { status: view.status }); }
 
-function durationButtons(label, options, action, username, reportId) {
+// "Which rule, and a note for the player" for one card. take() returns { ground, note } or null
+// (after pointing at the empty picker).
+function whyPicker() {
+  const ground = h('select', { 'aria-label': 'Rule broken' }, h('option', { value: '' }, 'Rule broken…'), GROUNDS.map(([v, t]) => h('option', { value: v }, t)));
+  const note = h('input', { type: 'text', maxlength: 200, placeholder: 'Note for the player (optional)', 'aria-label': 'Note for the player' });
+  const el = h('div.adm-why', ground, note);
+  return { el, take() {
+    if (!ground.value) { toast('Pick which rule was broken first. The player is told why.', { kind: 'error' }); ground.focus(); return null; }
+    return { ground: ground.value, note: note.value.trim() || undefined };
+  } };
+}
+
+function durationButtons(label, options, action, username, reportId, why) {
   const select = h('select', { 'aria-label': `${label} duration` }, options.map(([t, m]) => h('option', { value: m }, t)));
   return h('div.adm-dur', select, h(`button.btn-sm${action === 'ban' ? '.danger' : ''}`, { type: 'button', onclick: () => {
     const minutes = Number(select.value);
-    const go = () => act({ action, username, minutes, reportId });
+    const w = why.take();
+    if (!w) return;
+    const go = () => act({ action, username, minutes, reportId, ...w });
     if (action === 'ban') confirmAction(`BAN ${username.toUpperCase()}?`, `They'll be signed out everywhere and can't sign in for ${select.selectedOptions[0].textContent}. They can still play as a guest.`, 'BAN', go);
     else go();
   } }, label));
@@ -45,24 +64,28 @@ function userCard(u) {
   if (u.mutedUntil) status.push(h('span.adm-flag.mute', `MUTED ${until(u.mutedUntil)}`));
   if (!status.length) status.push(h('span.adm-flag.ok', 'IN GOOD STANDING'));
   const name = u.username;
+  const why = whyPicker();
+  const penalty = (action, title, text, label) => () => { const w = why.take(); if (w) confirmAction(title, text, label, () => act({ action, username: name, ...w })); };
   return h('article.adm-user',
     h('div.adm-user-head', avatarEl(u.avatar, 56),
       h('div',
         h('h2.adm-user-name', h('a', { href: `/u/${encodeURIComponent(name)}`, 'data-link': true }, name), u.role === 'admin' ? h('span.chat-mod', 'MOD') : null),
         h('p.muted', `Level ${u.level} · joined ${fmtDate(u.createdAt)} · ${u.reports} report${u.reports === 1 ? '' : 's'} against`),
         h('div.adm-flags', status))),
+    why.el,
     h('div.adm-actions',
-      u.mutedUntil ? h('button.btn-sm', { type: 'button', onclick: () => act({ action: 'unmute', username: name }) }, 'UNMUTE') : durationButtons('MUTE', MUTES, 'mute', name),
-      u.bannedUntil ? h('button.btn-sm', { type: 'button', onclick: () => act({ action: 'unban', username: name }) }, 'UNBAN') : durationButtons('BAN', BANS, 'ban', name),
-      h('button.btn-sm', { type: 'button', onclick: () => confirmAction(`RENAME ${name.toUpperCase()}?`, 'Their username becomes player_###### and they\'re free to pick a new one straight away. Use this for offensive names.', 'RENAME', () => act({ action: 'rename', username: name })) }, 'FORCE RENAME'),
-      h('button.btn-sm.danger', { type: 'button', onclick: () => confirmAction(`RESET ${name.toUpperCase()}'S STATS?`, 'Deletes their per-game stats (wins, streaks, best scores). Match history stays. This can\'t be undone.', 'RESET STATS', () => act({ action: 'resetStats', username: name })) }, 'RESET STATS')),
+      u.mutedUntil ? h('button.btn-sm', { type: 'button', onclick: () => act({ action: 'unmute', username: name }) }, 'UNMUTE') : durationButtons('MUTE', MUTES, 'mute', name, undefined, why),
+      u.bannedUntil ? h('button.btn-sm', { type: 'button', onclick: () => act({ action: 'unban', username: name }) }, 'UNBAN') : durationButtons('BAN', BANS, 'ban', name, undefined, why),
+      h('button.btn-sm', { type: 'button', onclick: penalty('rename', `RENAME ${name.toUpperCase()}?`, 'Their username becomes player_###### and they\'re free to pick a new one straight away. Use this for offensive names.', 'RENAME') }, 'FORCE RENAME'),
+      h('button.btn-sm.danger', { type: 'button', onclick: penalty('resetStats', `RESET ${name.toUpperCase()}'S STATS?`, 'Deletes their per-game stats (wins, streaks, best scores). Match history stays. This can\'t be undone.', 'RESET STATS') }, 'RESET STATS')),
     u.log.length ? h('details.adm-log', h('summary', `Moderation history (${u.log.length})`),
-      h('ul', u.log.map((l) => h('li', h('span', `${ACTION_LABEL[l.action] || l.action}${l.minutes ? ` ${fmtMins(l.minutes)}` : ''}`), h('span.muted', ` by ${l.by} · ${timeAgo(l.at)}`))))) : h('p.muted.adm-nolog', 'No moderation history.'));
+      h('ul', u.log.map((l) => h('li', h('span', `${ACTION_LABEL[l.action] || l.action}${l.minutes ? ` ${fmtMins(l.minutes)}` : ''}`), h('span.muted', ` by ${l.by} · ${timeAgo(l.at)}`), l.reason ? h('span.muted', ` · ${l.reason}`) : null, l.note ? h('span.muted', ` · "${l.note}"`) : null)))) : h('p.muted.adm-nolog', 'No moderation history.'));
 }
 
 function reportCard(r) {
   const open = r.status === 'open';
   const target = r.target.username;
+  const why = whyPicker();
   return h('li.adm-report',
     h('div.adm-report-head',
       h('button.link-btn.adm-target', { type: 'button', onclick: () => lookup(target) }, target),
@@ -72,10 +95,11 @@ function reportCard(r) {
     r.message ? h('blockquote.report-quote', r.message.text) : null,
     r.context && r.context.length > 1 ? h('details.adm-ctx', h('summary', 'Chat around it'),
       h('ol', r.context.map((c) => h(`li${r.message && c.text === r.message.text && c.username === target ? '.hit' : ''}`, h('b', `${c.username}: `), c.text)))) : null,
+    open ? why.el : null,
     open ? h('div.adm-actions',
-      r.message ? h('button.btn-sm.danger', { type: 'button', onclick: () => act({ action: 'deleteMessage', messageId: r.message.id, reportId: r.id }) }, 'DELETE MESSAGE') : null,
-      durationButtons('MUTE', MUTES, 'mute', target, r.id),
-      durationButtons('BAN', BANS, 'ban', target, r.id),
+      r.message ? h('button.btn-sm.danger', { type: 'button', onclick: () => { const w = why.take(); if (w) act({ action: 'deleteMessage', messageId: r.message.id, reportId: r.id, ...w }); } }, 'DELETE MESSAGE') : null,
+      durationButtons('MUTE', MUTES, 'mute', target, r.id, why),
+      durationButtons('BAN', BANS, 'ban', target, r.id, why),
       h('button.btn-sm', { type: 'button', onclick: () => act({ action: 'resolve', reportId: r.id }) }, 'RESOLVE'),
       h('button.btn-sm.btn-ghost', { type: 'button', onclick: () => act({ action: 'dismiss', reportId: r.id }) }, 'DISMISS'))
       : h('p.muted.adm-handled', `Handled by ${r.handledBy || '—'}${r.handledAt ? ` · ${timeAgo(r.handledAt)}` : ''}`));

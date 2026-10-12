@@ -9,7 +9,7 @@ const WebSocket = require('ws');
 const { createMemoryDb } = require('../server/db');
 const { createAccounts } = require('../server/accounts');
 const { createChat, toClient, clean, LINK_RE } = require('../server/chat');
-const { createModeration } = require('../server/moderation');
+const { createModeration, unseenNotices } = require('../server/moderation');
 
 async function units() {
   let t = 1e12;
@@ -77,23 +77,32 @@ async function units() {
   const mod = createModeration(db, acc, { chat, now });
   const admin = { uid: 'b', username: 'Bob' };
   assert.strictEqual((await mod.reports()).length, 1);
-  assert.ok((await mod.act(admin, { action: 'mute', username: 'Alice' })).error, 'mute needs a duration');
-  const m = await mod.act(admin, { action: 'mute', username: 'Alice', minutes: 10, reportId: rep.id });
+  assert.ok((await mod.act(admin, { action: 'mute', username: 'Alice', ground: 'harassment' })).error, 'mute needs a duration');
+  assert.strictEqual((await mod.act(admin, { action: 'mute', username: 'Alice', minutes: 10 })).error, 'Pick which rule was broken.');
+  const m = await mod.act(admin, { action: 'mute', username: 'Alice', minutes: 10, reportId: rep.id, ground: 'harassment', note: '  cool it  ' });
   assert.strictEqual(m.user.mutedUntil, t + 600000);
+  // Statement of reasons: the player is told what, why and until when, but not by whom.
+  const [n] = unseenNotices(m.user);
+  assert.deepStrictEqual([n.action, n.reason, n.note, n.until, n.by], ['mute', 'Harassment, threats or hate speech', 'cool it', t + 600000, undefined]);
+  assert.ok(/for: Harassment/.test((await chat.post('a', m.user, 'global', 'hi')).error), 'mute error names the rule');
+  assert.strictEqual((await mod.lookup('alice')).log[0].reason, 'Harassment, threats or hate speech');
   assert.strictEqual((await mod.reports()).length, 0, 'acting on a report resolves it');
   assert.strictEqual((await mod.lookup('alice')).mutedUntil, t + 600000);
   await mod.act(admin, { action: 'unmute', username: 'Alice' });
   assert.strictEqual((await mod.lookup('alice')).mutedUntil, null);
-  assert.ok((await mod.act(admin, { action: 'ban', username: 'Bob', minutes: 5 })).error, 'not yourself');
-  const del = await mod.act(admin, { action: 'deleteMessage', messageId: msg.id });
+  assert.ok((await mod.act(admin, { action: 'ban', username: 'Bob', minutes: 5, ground: 'spam' })).error, 'not yourself');
+  const del = await mod.act(admin, { action: 'deleteMessage', messageId: msg.id, ground: 'harassment' });
   assert.strictEqual(del.deleted, msg.id);
+  assert.strictEqual(unseenNotices(del.user).pop().text, 'you stink', 'the author is told which message went');
   assert.ok(!chat.find(msg.id));
   await db.set('stats/a_chess', { uid: 'a', played: 3 });
-  await mod.act(admin, { action: 'resetStats', username: 'Alice' });
+  await mod.act(admin, { action: 'resetStats', username: 'Alice', ground: 'cheating' });
   assert.strictEqual(await db.get('stats/a_chess'), null);
   await acc.claimUsername('a', { username: 'Alice2' }, t); // starts a rename cooldown
-  const rn = await mod.act(admin, { action: 'rename', username: 'Alice2' });
+  const rn = await mod.act(admin, { action: 'rename', username: 'Alice2', ground: 'name' });
   assert.ok(/^player_\d{6}$/.test(rn.user.username));
+  assert.strictEqual(unseenNotices(rn.user).pop().oldName, 'Alice2');
+  assert.ok(rn.user.modNotices.length <= 10, 'notices are capped');
   assert.strictEqual(await acc.uidForUsername('alice2'), null, 'old name freed');
   assert.ok((await acc.claimUsername('a', { username: 'Alice3' }, t)).user, 'user can pick a new name right away');
   assert.ok((await mod.lookup('alice3')).log.some((l) => l.action === 'rename'));
@@ -223,20 +232,28 @@ async function e2e() {
     const q = await admin.wait(S.ADMIN_DATA, (p) => p.reports);
     assert.strictEqual(q.reports.length, 1);
     admin.send(C.ADMIN_ACTION, { action: 'mute', username: 'bob', minutes: 5, reportId: q.reports[0].id });
+    assert.ok(/rule/.test((await admin.wait(S.ADMIN_DATA, (p) => p.error)).error), 'penalties must name a rule');
+    admin.send(C.ADMIN_ACTION, { action: 'mute', username: 'bob', minutes: 5, reportId: q.reports[0].id, ground: 'harassment' });
     assert.ok(/Muted/.test((await admin.wait(S.ADMIN_DATA, (p) => p.message)).message));
+    const told = await bob.wait(S.ACCOUNT_STATE, (p) => p.user && p.user.modNotices && p.user.modNotices.length);
+    assert.strictEqual(told.user.modNotices[0].action, 'mute', 'an online player sees the notice at once');
+    bob.send(C.ACCOUNT_NOTICES_SEEN, { ids: [told.user.modNotices[0].id] });
+    await bob.wait(S.ACCOUNT_STATE, (p) => p.user && p.user.modNotices && !p.user.modNotices.length);
     bob.send(C.CHAT_SEND, { channel: 'room', text: 'still here' });
     assert.ok(/muted/.test((await bob.wait(S.CHAT_ERROR)).message));
-    admin.send(C.ADMIN_ACTION, { action: 'deleteMessage', messageId: bad.id });
+    admin.send(C.ADMIN_ACTION, { action: 'deleteMessage', messageId: bad.id, ground: 'harassment' });
     for (const c of [alice, guest]) assert.strictEqual((await c.wait(S.CHAT_DELETED)).id, bad.id);
 
     // Ban kicks every socket and blocks sign-in; the guest is unaffected.
-    admin.send(C.ADMIN_ACTION, { action: 'ban', username: 'bob', minutes: 60 });
-    assert.ok((await bob.wait(S.ACCOUNT_ERROR, (p) => p.banned)).message.includes('suspended'));
+    admin.send(C.ADMIN_ACTION, { action: 'ban', username: 'bob', minutes: 60, ground: 'harassment', note: 'repeated insults' });
+    const banned = await bob.wait(S.ACCOUNT_ERROR, (p) => p.banned);
+    assert.ok(banned.message.includes('suspended'));
+    assert.deepStrictEqual([banned.notice.action, banned.notice.note], ['ban', 'repeated insults'], 'the ban carries its reason');
     assert.strictEqual(await bob.closed, 4003);
     const bob2 = client(port);
     await bob2.open;
     bob2.send(C.HELLO, { token: 'dev:bob', nickname: 'bob-as-guest' });
-    assert.ok((await bob2.wait(S.ACCOUNT_ERROR)).banned);
+    assert.ok((await bob2.wait(S.ACCOUNT_ERROR)).notice.reason, 'and so does every refused sign-in');
     await bob2.wait(S.WELCOME); // falls back to a guest session
     guest.send(C.ROOM_LEAVE);
     guest.send(C.ROOM_CREATE, { gameType: 'connect4' });

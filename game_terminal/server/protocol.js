@@ -12,6 +12,7 @@ const ClientMessage = {
   ACCOUNT_CLAIM: 'account.claim', // { username, avatar, acceptTerms } — first-time setup or rename
   ACCOUNT_UPDATE: 'account.update', // { avatar?, settings? }
   ACCOUNT_ACCEPT_TERMS: 'account.acceptTerms',
+  ACCOUNT_NOTICES_SEEN: 'account.noticesSeen', // { ids } — the player read these moderation notices
   ACCOUNT_EXPORT: 'account.export', // {} -> account.exportData
   ACCOUNT_DELETE: 'account.delete', // { confirm: <username> } -> account.deleted
   FRIEND_REQUEST: 'friend.request', // { username }
@@ -35,7 +36,7 @@ const ClientMessage = {
   CHAT_REPORT: 'chat.report', // { username, messageId?, reason? }
   ADMIN_REPORTS: 'admin.reports', // { status? } admins only -> ADMIN_DATA
   ADMIN_LOOKUP: 'admin.lookup', // { username } -> ADMIN_DATA { user }
-  ADMIN_ACTION: 'admin.action', // { action: 'mute'|'unmute'|'ban'|'unban'|'resetStats'|'rename'|'dismiss'|'resolve'|'deleteMessage', username?, minutes?, reportId?, messageId?, note? }
+  ADMIN_ACTION: 'admin.action', // { action: 'mute'|'unmute'|'ban'|'unban'|'resetStats'|'rename'|'dismiss'|'resolve'|'deleteMessage', username?, minutes?, reportId?, messageId?, ground? (required for penalties), note? }
 };
 
 const ServerMessage = {

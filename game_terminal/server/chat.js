@@ -80,7 +80,10 @@ function createChat(db, { now = () => Date.now() } = {}) {
     const text = clean(rawText);
     if (!text) return { error: null }; // empty: silently ignore
     if (text.length > MAX_LEN) return { error: `Messages are limited to ${MAX_LEN} characters.` };
-    if (user.mutedUntil && user.mutedUntil > now()) return { error: `You're muted until ${new Date(user.mutedUntil).toUTCString().replace(' GMT', ' UTC')}.` };
+    if (user.mutedUntil && user.mutedUntil > now()) {
+      const why = [...(user.modNotices || [])].reverse().find((n) => n.action === 'mute');
+      return { error: `You're muted until ${new Date(user.mutedUntil).toUTCString().replace(' GMT', ' UTC')}${why && why.reason ? ` for: ${why.reason}` : ''}.` };
+    }
     if (LINK_RE.test(text)) return { error: 'Links aren\'t allowed in chat.' };
     const r = await ring(channel);
     const err = throttle(uid, channel);

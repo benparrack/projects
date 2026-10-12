@@ -11,6 +11,7 @@ import { renderLeaderboards } from './leaderboards.js';
 import { renderDailyCard, renderDaily } from './daily.js';
 import { renderWeeklyCard } from './weekly.js';
 import { renderTurns } from './turns.js';
+import { showModNotices, showSuspended } from './notices.js';
 import { renderLive, renderActivity } from './home.js';
 import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, handleOnline, openOnline, openConversation, getSocial } from './friends.js';
 import { initChat, initGlobalDock, setDockAvailable, chatBox, reopenChats, handleChatHistory, handleChatMessage, handleChatDeleted, handleChatError } from './chat.js';
@@ -366,6 +367,7 @@ function handleAccountState(p) {
   }
   if (state.renaming && p.user && prev && prev.username !== p.user.username) toast(`You're now ${p.user.username}.`, { kind: 'ok' });
   state.renaming = false;
+  if (p.user && p.user.modNotices && p.user.modNotices.length) showModNotices(p.user.modNotices, (ids) => send(ClientMessage.ACCOUNT_NOTICES_SEEN, { ids }));
   if (location.pathname === '/settings' && state.settingsKey !== settingsKey()) renderSettingsPage();
   // Profiles show friend buttons and head-to-head only for a signed-in viewer.
   if (location.pathname.startsWith('/u/') && (prev && prev.username) !== (p.user && p.user.username)) onRoute();
@@ -564,7 +566,8 @@ function handleServerMessage(type, payload) {
       if (payload.for === 'delete' && state.closeDelete) { state.closeDelete(); state.closeDelete = null; }
       if (payload.for === 'claim') state.renaming = false;
       if (payload.for === 'claim' && state.setup) state.setup.showError(payload.message);
-      else toast(payload.message, { kind: 'error', ms: payload.banned ? 0 : 6000 });
+      else if (payload.banned) showSuspended(payload);
+      else toast(payload.message, { kind: 'error', ms: 6000 });
       if (payload.for === 'auth' && !state.nickname) showScreen('nickname');
       break;
     }

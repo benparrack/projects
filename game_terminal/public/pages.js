@@ -108,7 +108,9 @@ const rules = () => page('COMMUNITY GUIDELINES', 'Keep it fun for everyone.',
   sec('Reporting',
     p('Use the report button on a chat message or profile. Reports are reviewed by a person. False or spammy reports are themselves against the rules.')),
   sec('What happens',
-    p('Depending on how serious it is: a warning, a chat mute, a temporary ban, or a permanent ban. Severe cases (threats, sexual content involving minors) are permanent on the first offence. See the ', link('/terms', 'Terms of Service'), '.')));
+    p('Depending on how serious it is: a warning, a chat mute, a temporary ban, or a permanent ban. Severe cases (threats, sexual content involving minors) are permanent on the first offence. See the ', link('/terms', 'Terms of Service'), '.')),
+  sec('If we act on your account',
+    p('Decisions are made by a person, not automatically. You get a notice saying what we did, which rule it was for, and for how long. If you think we got it wrong, email ', mail(), ' within 6 months with your username and we\'ll review it again.')));
 
 const FAQ = [
   ['Is it free?', 'Yes. No ads, no payments, no premium tier.'],

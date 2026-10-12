@@ -16,7 +16,7 @@ const { createApi } = require('./api');
 const { createSocial } = require('./social');
 const { Parties } = require('./party');
 const { createChat, toClient } = require('./chat');
-const { createModeration, isAdmin } = require('./moderation');
+const { createModeration, isAdmin, unseenNotices } = require('./moderation');
 const { createWeekly } = require('./weekly');
 const { createAsyncGames, isAsyncCode } = require('./asyncGames');
 
@@ -251,9 +251,15 @@ function bringParty(session, room) {
 }
 
 // The signed-in user's own view of their account (includes settings; never sent to others).
+// A banned player can't sign in to read their statement of reasons, so it rides on the refusal.
+function suspended(user) {
+  const notice = [...(user.modNotices || [])].reverse().find((n) => n.action === 'ban') || null;
+  return { for: 'auth', banned: true, until: user.bannedUntil, notice, message: `This account is suspended until ${new Date(user.bannedUntil).toUTCString()}.` };
+}
+
 function ownAccount(user) {
   const games = user.dailyToday && user.dailyToday.date === daily.today() ? user.dailyToday.games : {};
-  return { ...publicUser(user), settings: user.settings || {}, achievements: user.achievements || {}, renamedAt: user.renamedAt || null,
+  return { ...publicUser(user), settings: user.settings || {}, achievements: user.achievements || {}, renamedAt: user.renamedAt || null, modNotices: unseenNotices(user),
     daily: { date: daily.today(), games, streak: daily.liveStreak(user), best: user.dailyBest || 0 } };
 }
 
@@ -386,7 +392,7 @@ wss.on('connection', (ws, req) => {
           } else {
             const user = await accounts.getUser(who.uid);
             if (user && user.bannedUntil && user.bannedUntil > Date.now()) {
-              send(ws, ServerMessage.ACCOUNT_ERROR, { for: 'auth', banned: true, message: `This account is suspended until ${new Date(user.bannedUntil).toUTCString()}.` });
+              send(ws, ServerMessage.ACCOUNT_ERROR, suspended(user));
             } else {
               session.uid = who.uid;
               session.user = user;
@@ -433,6 +439,16 @@ wss.on('connection', (ws, req) => {
         await accounts.acceptTerms(session.uid);
         session.user = await accounts.getUser(session.uid);
         sendAccountState(ws, session);
+        break;
+      }
+
+      case ClientMessage.ACCOUNT_NOTICES_SEEN: {
+        if (!session.uid || !session.user) return;
+        const ids = new Set(Array.isArray(payload && payload.ids) ? payload.ids.map(String) : []);
+        const user = await accounts.getUser(session.uid);
+        if (!user || !(user.modNotices || []).some((n) => ids.has(n.id) && !n.seen)) return;
+        await db.merge(`users/${session.uid}`, { modNotices: user.modNotices.map((n) => (ids.has(n.id) ? { ...n, seen: true } : n)) });
+        await refreshAccount(session.uid);
         break;
       }
 
@@ -615,7 +631,7 @@ wss.on('connection', (ws, req) => {
         if (res.uid && res.user) {
           if (p.action === 'ban') {
             for (const w of socketsOf(res.uid)) {
-              send(w, ServerMessage.ACCOUNT_ERROR, { for: 'auth', banned: true, message: `This account is suspended until ${new Date(res.user.bannedUntil).toUTCString()}.` });
+              send(w, ServerMessage.ACCOUNT_ERROR, suspended(res.user));
               w.close(4003, 'banned');
             }
           } else refreshSessions(res.uid, res.user);
