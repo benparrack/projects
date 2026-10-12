@@ -662,6 +662,13 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 .btn-ranked { color: var(--accent); border-color: var(--accent); }
 .btn-ranked:hover:not(:disabled) { background: var(--accent); color: #000; }
 .room-row > #btn-join-public { flex: 1; }
+.room-row-private { flex-wrap: wrap; }
+.room-row-private > #btn-create-private { flex: 1 1 auto; }
+.room-row-private > #join-code-input { flex: 0 1 180px; min-width: 0; }
+@media (max-width: 560px) {
+  .room-row-private > #btn-create-private { flex-basis: 100%; }
+  .room-row-private > #join-code-input { flex: 1 1 0; }
+}
 .tier { display: inline-block; font-size: 10px; letter-spacing: 1px; padding: 1px 6px; border: 1px solid currentColor; line-height: 1.5; vertical-align: 1px; white-space: nowrap; }
 .tier-bronze { color: #c8865a; }
 .tier-silver { color: #c9d1d9; }
