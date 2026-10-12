@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skill Wheel</title>
+<meta name="description" content="Spin the wheel, learn one new skill a week.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" class="logo" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M16 2v28M2 16h28M6 6l20 20M26 6 6 26" stroke="currentColor" stroke-width="1.6"/><circle cx="16" cy="16" r="4" fill="currentColor"/></svg>
+    <div><h1>Skill Wheel</h1><p class="tag">One new skill, every week.</p></div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="wheel" aria-selected="true">Wheel</button>
+    <button role="tab" data-view="week">This week</button>
+    <button role="tab" data-view="library">Library</button>
+    <button role="tab" data-view="journey">Journey</button>
+  </nav>
+  <div class="top-actions">
+    <button class="icon-btn" id="soundBtn" aria-label="Toggle sound" title="Sound (M)"></button>
+    <button class="icon-btn" id="settingsBtn" aria-label="Wheel settings" title="Wheel settings">⚙︎</button>
+  </div>
+</header>
+
+<main>
+  <!-- WHEEL -->
+  <section class="view" id="view-wheel">
+    <div class="status" id="status"></div>
+    <div class="stage">
+      <div class="wheel-wrap" id="wheelWrap">
+        <canvas id="wheel" aria-label="Skill wheel" role="img"></canvas>
+        <svg class="pointer" id="pointer" viewBox="0 0 60 80" aria-hidden="true">
+          <defs><linearGradient id="pg" x1="0" x2="1"><stop offset="0" stop-color="#fff6d5"/><stop offset=".5" stop-color="#ffd166"/><stop offset="1" stop-color="#c98a16"/></linearGradient></defs>
+          <path d="M30 78 L8 22 A24 24 0 1 1 52 22 Z" fill="url(#pg)" stroke="#5a3a00" stroke-width="2.5"/>
+          <circle cx="30" cy="24" r="8" fill="#5a3a00"/><circle cx="30" cy="24" r="4" fill="#ffe9a8"/>
+        </svg>
+        <button class="hub" id="spinBtn"><span class="hub-label">SPIN</span><span class="hub-sub" id="hubSub"></span></button>
+      </div>
+    </div>
+    <p class="hint" id="hint">Tap <b>Spin</b>, press <kbd>Space</kbd>, or grab the wheel and flick it.</p>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <!-- THIS WEEK -->
+  <section class="view" id="view-week" hidden></section>
+
+  <!-- LIBRARY -->
+  <section class="view" id="view-library" hidden>
+    <div class="lib-head">
+      <h2>Skill library</h2>
+      <input type="search" id="libSearch" placeholder="Search skills…" aria-label="Search skills">
+    </div>
+    <div class="chips" id="libChips"></div>
+    <div class="grid" id="libGrid"></div>
+  </section>
+
+  <!-- JOURNEY -->
+  <section class="view" id="view-journey" hidden></section>
+</main>
+
+<!-- Reveal modal -->
+<div class="modal" id="reveal" hidden>
+  <div class="modal-card reveal-card" role="dialog" aria-modal="true" aria-labelledby="revealName">
+    <div class="reveal-rays" aria-hidden="true"></div>
+    <p class="eyebrow" id="revealEyebrow"></p>
+    <div class="reveal-emoji" id="revealEmoji"></div>
+    <h2 id="revealName"></h2>
+    <p class="reveal-pitch" id="revealPitch"></p>
+    <div class="facts" id="revealFacts"></div>
+    <div class="reveal-actions" id="revealActions"></div>
+  </div>
+</div>
+
+<!-- Generic sheet (skill detail, settings, completion) -->
+<div class="modal" id="sheet" hidden>
+  <div class="modal-card sheet-card" role="dialog" aria-modal="true">
+    <button class="close" data-close aria-label="Close">✕</button>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<script src="skills.js"></script>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
