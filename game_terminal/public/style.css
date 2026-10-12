@@ -385,6 +385,12 @@ body.modal-open { overflow: hidden; }
   .stats-table th, .stats-table td { padding: 8px 8px; }
   .stats-table tbody th { white-space: normal; }
 }
+@media (max-width: 440px) {
+  /* W-L-D already says it; keeps RATING on screen at phone width */
+  .stats-table :is(th, td):nth-child(4) { display: none; }
+  .stats-table th, .stats-table td { padding: 8px 6px; }
+  .stats-table td:last-child, .stats-table .stat-rating { white-space: normal; text-align: right; line-height: 1.7; }
+}
 
 /* ---- Replay viewer ---- */
 .match-replay { color: var(--accent); text-decoration: none; font-size: 12px; letter-spacing: 1px; white-space: nowrap; }
@@ -464,6 +470,11 @@ body.modal-open { overflow: hidden; }
 .set-range::-moz-range-thumb { width: 14px; height: 14px; border: none; border-radius: 0; background: var(--fg); box-shadow: var(--glow); }
 .set-range::-webkit-slider-thumb { width: 14px; height: 14px; border: none; border-radius: 0; background: var(--fg); box-shadow: var(--glow); }
 .set-range:focus-visible { outline: 1px solid var(--fg); outline-offset: 4px; }
+.set-range { appearance: none; -webkit-appearance: none; height: 14px; background: transparent; }
+.set-range::-moz-range-track { height: 4px; background: var(--border); }
+.set-range::-moz-range-progress { height: 4px; background: var(--fg); }
+.set-range::-webkit-slider-runnable-track { height: 4px; background: var(--border); }
+.set-range::-webkit-slider-thumb { -webkit-appearance: none; margin-top: -5px; }
 
 /* ---- Friends drawer & social ---- */
 .btn-sm { font-size: 0.78em; padding: 4px 10px; letter-spacing: .5px; }
