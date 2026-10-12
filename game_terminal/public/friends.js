@@ -117,6 +117,13 @@ export function handleSocialNotice(p) {
       alertInvite(`${who} invited you`);
       toast(`${who} invited you to ${ctx.gameLabel(p.gameType)}.`, { ms: 20000, action: { label: 'JOIN', run: () => ctx.join(p.code) } });
       break;
+    case 'turn': {
+      const label = ctx.gameLabel(p.gameType);
+      if (ctx.currentRoom() && ctx.currentRoom().code === p.code) break;
+      alertInvite(p.started ? `${who} challenged you` : `Your move vs ${who}`);
+      toast(p.started ? `${who} started a ${label} game with you (by turns).` : `${who} moved. Your turn in ${label}.`, { ms: 20000, action: { label: 'PLAY', run: () => ctx.join(p.code) } });
+      break;
+    }
     case 'party':
       alertInvite(`${who} invited you`);
       toast(`${who} invited you to their party.`, { ms: 30000, action: { label: 'JOIN PARTY', run: () => send(ClientMessage.PARTY_ACCEPT, { id: p.id }) } });
@@ -164,7 +171,7 @@ function friendRow(f) {
   let primary = null;
   if (f.playing && (!room || room.code !== f.playing.code)) primary = h('button.btn-sm', { type: 'button', onclick: () => { toggle(false); ctx.join(f.playing.code); } }, 'JOIN');
   else if (room && f.online && !(f.playing && f.playing.code === room.code)) primary = h('button.btn-sm', { type: 'button', onclick: () => send(ClientMessage.ROOM_INVITE, { username: f.username }) }, 'INVITE');
-  else if (!room && f.online && !f.playing) primary = h('button.btn-sm', { type: 'button', title: 'Pick a game; we\'ll make a private room and invite them', onclick: () => openChallenge(f.username) }, 'CHALLENGE');
+  else if (!room && !f.playing) primary = h('button.btn-sm', { type: 'button', title: f.online ? 'Play now in a private room, or by turns' : 'Start a game by turns; they move when they\'re back', onclick: () => openChallenge(f.username, f.online) }, 'CHALLENGE');
   const dms = unreadCount(`dm|${f.username.toLowerCase()}`);
   return h('li.fr-row',
     avatarEl(f.avatar, 36),
@@ -183,22 +190,46 @@ function section(title, count, body, attrs = {}) {
   return h('section.fr-section', attrs, h('h3.fr-title', title, count != null ? h('span.muted', ` (${count})`) : null), body);
 }
 
-// Pick a game, then the hub makes a private room and invites this friend once it's joined.
-function openChallenge(username) {
+// Games that can be played by turns (server/asyncGames.js ASYNC_GAMES).
+const BY_TURNS = new Set(['chess', 'checkers', 'connect4', 'reversi', 'gomoku', 'mancala', 'backgammon']);
+
+// Pick a game and a mode: live (a private room plus an invite, friend must be online) or by turns
+// (a saved game each of you moves in whenever you're on).
+function openChallenge(username, online) {
   const m = modal(`CHALLENGE ${username.toUpperCase()}`);
+  let byTurns = !online;
   const seen = new Set();
-  const select = h('select', { 'aria-label': 'Game' }, ctx.games.map((cat) => h('optgroup', { label: cat.name },
-    cat.games.filter((g) => !seen.has(g.type) && seen.add(g.type)).map((g) => h('option', { value: g.type }, g.label)))));
+  const options = ctx.games.map((cat) => h('optgroup', { label: cat.name },
+    cat.games.filter((g) => !seen.has(g.type) && seen.add(g.type)).map((g) => h('option', { value: g.type }, g.label))));
+  const select = h('select', { 'aria-label': 'Game' }, options);
+  const hint = h('p.fr-hint');
+  const submit = h('button.btn-primary', { type: 'submit' });
+  const modeBtn = (turns, label) => h('button.btn-sm', { type: 'button', 'aria-pressed': String(byTurns === turns), disabled: !turns && !online, onclick: () => { byTurns = turns; sync(); } }, label);
+  const modes = h('div.fr-modes', { role: 'group', 'aria-label': 'Mode' }, modeBtn(false, 'LIVE NOW'), modeBtn(true, 'BY TURNS'));
+  function sync() {
+    modes.children[0].setAttribute('aria-pressed', String(!byTurns));
+    modes.children[1].setAttribute('aria-pressed', String(byTurns));
+    for (const o of select.querySelectorAll('option')) o.disabled = byTurns && !BY_TURNS.has(o.value);
+    for (const g of select.querySelectorAll('optgroup')) g.hidden = byTurns && ![...g.children].some((o) => !o.disabled);
+    if (select.selectedOptions[0] && select.selectedOptions[0].disabled) select.value = 'chess';
+    hint.textContent = byTurns
+      ? `A saved game you each move in whenever you're on. ${online ? 'We\'ll' : `${username} is offline, so we'll`} let them know when it's their move.`
+      : 'We\'ll open a private room and send them an invite.';
+    submit.textContent = byTurns ? 'START GAME BY TURNS' : 'CREATE ROOM & INVITE';
+  }
   select.value = ctx.selectedGame();
+  sync();
   m.body.append(h('form.fr-challenge', { onsubmit: (e) => {
     e.preventDefault();
     m.close();
     toggle(false);
-    ctx.challenge(username, select.value);
+    if (byTurns) ctx.challengeByTurns(username, select.value);
+    else ctx.challenge(username, select.value);
   } },
+  modes,
   h('label', 'GAME', select),
-  h('p.fr-hint', 'We\'ll open a private room and send them an invite.'),
-  h('button.btn-primary', { type: 'submit' }, 'CREATE ROOM & INVITE')));
+  hint,
+  submit));
 }
 
 function onlineRow(p) {

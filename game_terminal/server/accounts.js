@@ -158,12 +158,14 @@ function createAccounts(db) {
       if (m.replay && (await db.get(`matches/${m.id}`))) await db.merge(`matches/${m.id}`, { players });
       await db.del(`users/${uid}/matches/${m.id}`);
     }
-    const [stats, pairs, seasons] = await Promise.all([
+    const [stats, pairs, seasons, games] = await Promise.all([
       db.list('stats', { where: [['uid', '==', uid]] }),
       db.list('pairs', { where: [['uids', 'array-contains', uid]] }),
       db.list('seasonResults', { where: [['uid', '==', uid]] }),
+      db.list('async', { where: [['uids', 'array-contains', uid]] }),
     ]);
     await Promise.all([
+      ...games.map((g) => db.del(`async/${g.id}`)), // unfinished play-by-turns games end with the account
       ...stats.map((st) => db.del(`stats/${st.id}`)),
       ...seasons.map((st) => db.del(`seasonResults/${st.id}`)),
       ...pairs.map((pr) => db.del(`pairs/${pr.id}`)),

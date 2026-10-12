@@ -10,6 +10,7 @@ import { renderReplay } from './replay.js';
 import { renderLeaderboards } from './leaderboards.js';
 import { renderDailyCard, renderDaily } from './daily.js';
 import { renderWeeklyCard } from './weekly.js';
+import { renderTurns } from './turns.js';
 import { renderLive, renderActivity } from './home.js';
 import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, handleOnline, openOnline, openConversation, getSocial } from './friends.js';
 import { initChat, initGlobalDock, setDockAvailable, chatBox, reopenChats, handleChatHistory, handleChatMessage, handleChatDeleted, handleChatError } from './chat.js';
@@ -403,8 +404,13 @@ function refreshHome() {
   renderLive(document.getElementById('live-slot'), { gameLabel, pick: pickGame, openOnline: state.account ? openOnline : null });
   renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
   renderWeeklyCard(document.getElementById('weekly-slot'), { auth: state.auth, account: state.account, gameLabel, play: (type) => { pickGame(type); els.btnJoinPublic.click(); } });
-  if (state.account) send(ClientMessage.ACTIVITY_GET, {});
-  else document.getElementById('activity-slot').replaceChildren();
+  if (state.account) { send(ClientMessage.ACTIVITY_GET, {}); send(ClientMessage.ASYNC_LIST, {}); }
+  else { document.getElementById('activity-slot').replaceChildren(); document.getElementById('turns-slot').replaceChildren(); }
+}
+
+function joinCode(code) {
+  if (location.pathname !== '/') history.pushState(null, '', '/');
+  send(ClientMessage.ROOM_JOIN, { code });
 }
 
 // Select a game in the menu list (expanding its category) and bring it into view.
@@ -462,8 +468,9 @@ function handleServerMessage(type, payload) {
       if (state.inviteAfterJoin && !payload.isPublic) send(ClientMessage.ROOM_INVITE, { username: state.inviteAfterJoin });
       state.inviteAfterJoin = null;
       saveSession();
-      els.roomCodeLabel.textContent = payload.daily ? `◆ DAILY ${payload.daily}` : payload.isPublic ? publicRoomLabel(payload) : payload.code;
-      els.btnCopyLink.hidden = payload.isPublic || !!payload.daily;
+      els.roomCodeLabel.textContent = payload.daily ? `◆ DAILY ${payload.daily}` : payload.byTurns ? `${gameLabel(payload.gameType)} · BY TURNS vs ${payload.byTurns.opponent}` : payload.isPublic ? publicRoomLabel(payload) : payload.code;
+      els.btnCopyLink.hidden = payload.isPublic || !!payload.daily || !!payload.byTurns;
+      document.body.classList.toggle('gt-byturns', !!payload.byTurns);
       renderRoster(payload.roster);
       // Chat needs accounts (to post, report and moderate), so accounts-off deploys have none.
       document.getElementById('room-chat').replaceChildren(...(state.auth && state.auth.mode !== 'off'
@@ -490,6 +497,11 @@ function handleServerMessage(type, payload) {
       break;
     }
 
+    case ServerMessage.ROOM_SNAPSHOT: {
+      if (state.activeGameHandle && typeof state.activeGameHandle.applySnapshot === 'function') state.activeGameHandle.applySnapshot(payload.stateSnapshot);
+      break;
+    }
+
     case ServerMessage.GAME_EVENT: {
       if (state.activeGameHandle && typeof state.activeGameHandle.applyEvent === 'function') {
         state.activeGameHandle.applyEvent(payload.data);
@@ -508,6 +520,12 @@ function handleServerMessage(type, payload) {
 
     case ServerMessage.ACTIVITY: {
       if (state.account) renderActivity(document.getElementById('activity-slot'), payload, { gameLabel, openFriends: () => document.getElementById('btn-friends').click() });
+      break;
+    }
+
+    case ServerMessage.ASYNC_GAMES: {
+      state.asyncGames = payload.games;
+      if (state.account) renderTurns(document.getElementById('turns-slot'), payload.games, { gameLabel, join: joinCode, remove: (code) => send(ClientMessage.ASYNC_REMOVE, { code }) });
       break;
     }
 
@@ -630,7 +648,10 @@ function renderRoster(roster) {
   for (const entry of roster) {
     const li = document.createElement('li');
     const name = entry.clientId === state.clientId ? `${entry.nickname} (you)` : entry.nickname;
-    if (entry.account) {
+    if (entry.away) {
+      li.append(h('span.avatar.avatar-guest', { 'aria-hidden': 'true' }, 'z'), h('span.muted', `${entry.nickname} (away)`));
+      li.title = 'Not here right now. Their seat is kept until they\'re back.';
+    } else if (entry.account) {
       li.append(avatarEl(entry.account.avatar, 20, entry.account.cosmetics), h('a', { href: `/u/${encodeURIComponent(entry.account.username)}`, 'data-link': true, target: '_blank', class: nameColor(entry.account.cosmetics) }, name));
     } else {
       li.append(h('span.avatar.avatar-guest', { 'aria-hidden': 'true' }, '?'), h('span.guest', name));
@@ -743,6 +764,7 @@ function leaveRoom() {
   unmountGame();
   document.getElementById('room-chat').replaceChildren();
   state.currentRoom = null;
+  document.body.classList.remove('gt-byturns');
   saveSession();
   if (location.pathname !== '/') history.replaceState(null, '', '/');
   showScreen('menu');
@@ -920,10 +942,12 @@ if (document.fullscreenEnabled) {
       state.inviteAfterJoin = username;
       send(ClientMessage.ROOM_CREATE, { gameType, isPublic: false });
     },
-    join(code) {
+    challengeByTurns(username, gameType) {
       if (location.pathname !== '/') history.pushState(null, '', '/');
-      send(ClientMessage.ROOM_JOIN, { code });
+      state.selectedGameType = gameType;
+      send(ClientMessage.ASYNC_CREATE, { username, gameType });
     },
+    join: joinCode,
   });
   initChat({
     send,

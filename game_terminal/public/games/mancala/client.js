@@ -474,6 +474,7 @@ export function mount(container, api) {
     } else if (pid === api.getClientId()) {
       const leave = document.createElement('button');
       leave.textContent = 'LEAVE SEAT';
+      leave.classList.add('seat-leave'); // hidden in play-by-turns games (seats are fixed)
       leave.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
       el.appendChild(leave);
     }

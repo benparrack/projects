@@ -22,6 +22,9 @@ export const ClientMessage = {
   USER_BLOCK: 'user.block', // { username, on }
   ROOM_INVITE: 'room.invite', // { username } — invite a friend into your current room
   PARTY_INVITE: 'party.invite', // { username }
+  ASYNC_CREATE: 'async.create', // { username, gameType } — a play-by-turns game with a friend; you're joined into it
+  ASYNC_LIST: 'async.list', // {} -> ASYNC_GAMES
+  ASYNC_REMOVE: 'async.remove', // { code } — delete one of your play-by-turns games (for both players)
   PARTY_ACCEPT: 'party.accept', // { id }
   PARTY_LEAVE: 'party.leave',
   PARTY_KICK: 'party.kick', // { username }
@@ -40,6 +43,7 @@ export const ServerMessage = {
   ROOM_JOINED: 'room.joined',
   ROOM_ERROR: 'room.error',
   ROOM_PRESENCE: 'room.presence',
+  ROOM_SNAPSHOT: 'room.snapshot', // { stateSnapshot } — fresh game view (a play-by-turns player came or went)
   GAME_EVENT: 'game.event',
   SYSTEM_ERROR: 'system.error',
   ACCOUNT_STATE: 'account.state', // { user, needsUsername, needsTerms } — the signed-in user's own view
@@ -47,7 +51,7 @@ export const ServerMessage = {
   ACCOUNT_EXPORT_DATA: 'account.exportData', // { data } — everything stored about the account
   ACCOUNT_DELETED: 'account.deleted', // {} — the account is gone; client signs out
   SOCIAL_STATE: 'social.state', // { friends, incoming, outgoing, blocked, recent, party } — accounts only
-  SOCIAL_NOTICE: 'social.notice', // { kind: 'request'|'accepted'|'invite'|'party'|'follow'|'ok'|'error', from?, message?, gameType?, code?, id? }
+  SOCIAL_NOTICE: 'social.notice', // { kind: 'request'|'accepted'|'invite'|'party'|'follow'|'turn'|'ok'|'error', from?, message?, gameType?, code?, id? }
   ACTIVITY: 'activity', // { items: [{ at, kind, ..., user: { username, avatar, cosmetics } }], friends }
   ONLINE: 'online', // { players: [{ username, avatar, level, cosmetics, friend, playing?: { gameType, code? } }], guests }
   CHAT_MESSAGE: 'chat.message', // { channel, with?, msg: { id, at, from: { username, avatar, level, role? }, text } }
@@ -55,6 +59,7 @@ export const ServerMessage = {
   CHAT_DELETED: 'chat.deleted', // { id }
   CHAT_ERROR: 'chat.error', // { channel, with?, message }
   ADMIN_DATA: 'admin.data', // { reports? , user?, message? , error? }
+  ASYNC_GAMES: 'async.games', // { games: [{ code, gameType, opponent, yourTurn, over, updatedAt }] }
   RESULT_RECORDED: 'result.recorded', // { summary, saved } — sent to each human in a finished match
 };
 

@@ -41,11 +41,16 @@ class Room {
   }
 
   roster() {
-    return Array.from(this.clients.entries()).map(([clientId, c]) => ({
+    const here = Array.from(this.clients.entries()).map(([clientId, c]) => ({
       clientId,
       nickname: c.nickname,
       ...(c.profile ? { account: c.profile } : {}),
     }));
+    // A play-by-turns player who isn't connected still holds a seat under their placeholder id,
+    // so clients can name them.
+    if (!this.async) return here;
+    const away = this.async.uids.filter((uid) => ![...this.clients.values()].some((c) => c.uid === uid));
+    return here.concat(away.map((uid) => ({ clientId: `uid:${uid}`, nickname: this.async.names[uid], away: true })));
   }
 
   broadcast(envelope, excludeClientId) {
@@ -134,7 +139,8 @@ class RoomManager {
   leaveRoom(room, clientId) {
     const client = room.clients.get(clientId);
     room.clients.delete(clientId);
-    if (client && typeof room.plugin.onLeave === 'function') {
+    // A play-by-turns game keeps its seats while players are away (server/asyncGames.js).
+    if (client && !room.async && typeof room.plugin.onLeave === 'function') {
       room.plugin.onLeave(room, { clientId, ...client });
     }
     if (!room.isPublic && room.clients.size === 0) {

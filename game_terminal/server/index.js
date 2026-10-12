@@ -18,6 +18,7 @@ const { Parties } = require('./party');
 const { createChat, toClient } = require('./chat');
 const { createModeration, isAdmin } = require('./moderation');
 const { createWeekly } = require('./weekly');
+const { createAsyncGames, isAsyncCode } = require('./asyncGames');
 
 const PORT = process.env.PORT || 3000;
 const MAX_PAYLOAD = 64 * 1024;
@@ -77,6 +78,8 @@ function send(ws, type, payload) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(makeEnvelope(type, payload)));
 }
 
+const asyncGames = createAsyncGames({ db, roomManager, registry: gameRegistry });
+
 function currentRoom(session) {
   if (!session.roomCode) return null;
   return roomManager.getRoom(session.roomCode);
@@ -86,9 +89,11 @@ function leaveCurrentRoom(session, clientId) {
   const room = currentRoom(session);
   if (!room) return;
   roomManager.leaveRoom(room, clientId);
+  if (room.async && session.uid) asyncGames.unseat(room, session.uid, clientId);
   session.roomCode = null;
   if (!room.clients.size) chat.dropChannel(`room:${room.code}`);
   room.broadcast(makeEnvelope(ServerMessage.ROOM_PRESENCE, { roster: room.roster(), left: clientId }));
+  if (room.async) resyncSeats(room, null);
   if (session.uid) presenceChanged(session.uid);
 }
 
@@ -282,6 +287,29 @@ function greetAccount(ws, session) {
   goOnline(ws, session.uid);
 }
 
+// Play-by-turns games: only their two players (signed in) can open them; you take over your seat.
+async function joinAsync(ws, session, code) {
+  const fail = (detail) => send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.NOT_FOUND, detail, soft: true });
+  if (!(session.uid && session.user && session.user.username)) return fail('Sign in to play by turns.');
+  const r = await asyncGames.open(code, session.uid);
+  if (r.error) return fail(r.error);
+  leaveCurrentRoom(session, session.clientId);
+  asyncGames.seat(r.room, session.uid, session.clientId);
+  joinAndAck(ws, session, r.room);
+  resyncSeats(r.room, session.clientId);
+}
+
+// Seat ids in a play-by-turns game change as players come and go, so everyone else gets a fresh view.
+function resyncSeats(room, exceptClientId) {
+  for (const [clientId, c] of room.clients) {
+    if (clientId !== exceptClientId) send(c.ws, ServerMessage.ROOM_SNAPSHOT, { stateSnapshot: room.plugin.serializeSnapshot(room, { clientId, nickname: c.nickname }) });
+  }
+}
+
+async function sendAsyncList(ws, session) {
+  if (session.uid) send(ws, ServerMessage.ASYNC_GAMES, { games: await asyncGames.list(session.uid) });
+}
+
 function joinAndAck(ws, session, room) {
   const account = session.uid && session.user && session.user.username ? { uid: session.uid, profile: publicUser(session.user) } : null;
   roomManager.joinRoom(room, session.clientId, ws, session.nickname, account);
@@ -292,6 +320,7 @@ function joinAndAck(ws, session, room) {
     isPublic: room.isPublic,
     ranked: !!room.ranked,
     daily: room.daily ? room.daily.date : null,
+    byTurns: room.async ? { opponent: room.async.names[room.async.uids.find((u) => u !== session.uid)] } : null,
     roster: room.roster(),
     stateSnapshot: room.plugin.serializeSnapshot(room, { clientId: session.clientId, nickname: session.nickname }),
   });
@@ -615,6 +644,7 @@ wss.on('connection', (ws, req) => {
           send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.INVALID_CODE });
           return;
         }
+        if (isAsyncCode(code)) { await joinAsync(ws, session, code); return; }
         // The canonical public-room code always goes through matchmaking (not a plain lookup) so
         // that a full existing public instance routes the joiner into a fresh one instead of
         // handing them the same already-full room every time — see RoomManager.getOrCreatePublicRoom.
@@ -684,11 +714,56 @@ wss.on('connection', (ws, req) => {
           room.daily.started = true;
           refreshAccount(session.uid).catch((err) => console.error('account refresh failed', err));
         }
+        if (room.async && !asyncGames.allowed(d)) {
+          send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.GAME_MISMATCH, detail: 'Seats are fixed in a play-by-turns game.', soft: true });
+          return;
+        }
         room.plugin.onMessage(room, { clientId: session.clientId, nickname: session.nickname }, payload.data, {
           broadcast: (env, excludeId) => room.broadcast(env, excludeId),
           sendTo: (id, env) => room.sendTo(id, env),
           senderId: session.clientId,
         });
+        if (room.async) {
+          const { turn, changed } = await asyncGames.save(room);
+          // Nudge the player to move if they're online but not looking at this game.
+          if (changed && turn && turn !== session.uid && ![...room.clients.values()].some((c) => c.uid === turn)) {
+            notice(turn, { kind: 'turn', from: me(session), gameType: room.gameType, code: room.code });
+            for (const w of socketsOf(turn)) sendAsyncList(w, sessions.get(w)).catch(report);
+          }
+        }
+        break;
+      }
+
+      case ClientMessage.ASYNC_LIST: {
+        await sendAsyncList(ws, session);
+        break;
+      }
+
+      case ClientMessage.ASYNC_CREATE: {
+        if (!session.uid || !session.user) return;
+        const fail = (message) => send(ws, ServerMessage.SOCIAL_NOTICE, { kind: 'error', message });
+        const to = await accounts.uidForUsername(String((payload && payload.username) || ''));
+        if (!to || !(await social.areFriends(session.uid, to))) return fail('You can only challenge friends.');
+        if (await social.isBlocked(session.uid, to)) return fail('You can\'t challenge this player.');
+        const friend = await accounts.getUser(to);
+        if (!friend || !friend.username) return fail('That player is gone.');
+        const r = await asyncGames.create({ uid: session.uid, username: session.user.username }, { uid: to, username: friend.username }, payload.gameType);
+        if (r.error) return fail(r.error);
+        await joinAsync(ws, session, r.code);
+        notice(to, { kind: 'turn', started: true, from: me(session), gameType: payload.gameType, code: r.code });
+        for (const w of socketsOf(to)) sendAsyncList(w, sessions.get(w)).catch(report);
+        break;
+      }
+
+      case ClientMessage.ASYNC_REMOVE: {
+        if (!session.uid) return;
+        const code = String((payload && payload.code) || '');
+        if (!isAsyncCode(code)) return;
+        const room = roomManager.getRoom(code);
+        if (await asyncGames.remove(code, session.uid)) {
+          if (room) room.broadcast(makeEnvelope(ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.NOT_FOUND, detail: 'This game was removed.', soft: true }));
+        }
+        await sendAsyncList(ws, session);
         break;
       }
 

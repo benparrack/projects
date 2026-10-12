@@ -835,3 +835,28 @@ body.gt-fullscreen .crt { max-width: none; }
 .fr-challenge .btn-primary { width: 100%; margin-top: 8px; }
 .install-steps { margin: 0 0 12px; padding-left: 2.2em; line-height: 1.5; }
 .install-steps li + li { margin-top: 6px; }
+.fr-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.fr-modes button[aria-pressed="true"] { background: var(--fg); color: #000; }
+/* Play-by-turns games on the menu (turns.js). */
+.turns-card { border: 1px solid var(--accent); background: var(--panel); padding: 12px 14px; margin: 0 0 1em; box-shadow: inset 0 0 24px -12px rgba(255, 176, 0, .5); }
+.turns-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.turns-title { font-family: var(--display); font-weight: normal; font-size: 24px; margin: 0; color: var(--accent); letter-spacing: 1px; }
+.turns-badge { font-size: 12px; font-weight: bold; padding: 1px 6px; color: #000; background: var(--accent); letter-spacing: 1px; }
+.turns-hint { margin-left: auto; font-size: .85em; }
+.turns-rows { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
+.turns-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto auto auto; align-items: center; gap: 10px; padding: 4px 6px; border: 1px solid transparent; }
+.turns-row.mine { border-color: rgba(255, 176, 0, .35); }
+.turns-status { font-size: 12px; letter-spacing: 1px; color: var(--muted); }
+.turns-status.mine { color: var(--accent); }
+.turns-status.over { color: var(--fg-dim); }
+.turns-game { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turns-when { font-size: .85em; }
+.turns-remove { background: none; border: 1px solid transparent; color: var(--muted); padding: 2px 6px; cursor: pointer; font: inherit; }
+.turns-remove:hover, .turns-remove:focus-visible { color: var(--error); border-color: var(--error); }
+.turns-confirm { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 560px) {
+  .turns-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .turns-status { grid-column: 1 / -1; }
+  .turns-when { display: none; }
+}
+body.gt-byturns .seat-leave { display: none; }
