@@ -833,3 +833,5 @@ body.gt-fullscreen .crt { max-width: none; }
 .fr-challenge label { display: grid; gap: 6px; font-size: 12px; letter-spacing: 1px; color: var(--muted); }
 .fr-challenge select { width: 100%; padding: 8px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); font: inherit; font-size: 15px; }
 .fr-challenge .btn-primary { width: 100%; margin-top: 8px; }
+.install-steps { margin: 0 0 12px; padding-left: 2.2em; line-height: 1.5; }
+.install-steps li + li { margin-top: 6px; }

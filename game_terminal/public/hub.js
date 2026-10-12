@@ -3,7 +3,7 @@ import { sfx } from './games/sfx.js';
 import { HOWTO } from './games/howto.js';
 import { initAuth } from './auth.js';
 import { avatarEl, nameColor, setRoomRoster } from './avatars.js';
-import { h, toast } from './ui.js';
+import { h, toast, modal } from './ui.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
 import { renderReplay } from './replay.js';
@@ -21,15 +21,32 @@ const muteBtn = document.getElementById('btn-mute');
 const renderMute = (m) => { muteBtn.textContent = m ? 'SFX: OFF' : 'SFX: ON'; };
 renderMute(sfx.muted);
 
-// Installable app: Chrome/Edge (desktop and Android) offer an install prompt we surface as a button;
-// iOS Safari installs via Share -> Add to Home Screen, which needs no code.
+// Installable app. Chrome/Edge (desktop and Android) fire an install prompt we surface as a button.
+// Firefox and iOS have no prompt a page can trigger, so there the button opens the steps instead.
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 const installBtn = document.getElementById('btn-install');
 let installPrompt = null;
+const ua = navigator.userAgent;
+const manualInstall = /iPhone|iPad|iPod/.test(ua) ? 'ios' : /Firefox\//.test(ua) ? (/Android/.test(ua) ? 'ff-android' : /Windows/.test(ua) ? 'ff-windows' : 'ff-desktop') : null;
+if (manualInstall && !matchMedia('(display-mode: standalone)').matches && !navigator.standalone) installBtn.hidden = false;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; installBtn.hidden = false; });
 window.addEventListener('appinstalled', () => { installPrompt = null; installBtn.hidden = true; });
+const INSTALL_STEPS = {
+  ios: ['Tap the Share button (the square with an arrow).', 'Choose "Add to Home Screen", then "Add".'],
+  'ff-android': ['Open the ⋮ menu.', 'Tap "Add app to Home screen" (or "Install").'],
+  'ff-windows': ['Click the "Add to taskbar" icon at the right end of the address bar (Firefox 143+).', 'Game Terminal opens in its own window, pinned to your taskbar.'],
+  'ff-desktop': ['Open about:config, set browser.taskbarTabs.enabled to true and restart Firefox.',
+    'Then click the "Add to taskbar" icon at the right end of the address bar.',
+    'If that icon doesn\'t appear, the "PWAs for Firefox" add-on does the same job. Or pin this tab (right-click it → Pin Tab).'],
+};
 installBtn.addEventListener('click', async () => {
-  if (!installPrompt) return;
+  if (!installPrompt) {
+    const m = modal('INSTALL GAME TERMINAL');
+    if (manualInstall === 'ff-desktop' || !manualInstall) m.body.append(h('p', 'Firefox on Linux and Mac can\'t install sites as apps by default yet, but newer versions have it behind a setting:'));
+    m.body.append(h('ol.install-steps', ...INSTALL_STEPS[manualInstall || 'ff-desktop'].map((t) => h('li', t))));
+    if (manualInstall === 'ff-desktop') m.body.append(h('p', h('a', { href: 'https://addons.mozilla.org/firefox/addon/pwas-for-firefox/', target: '_blank', rel: 'noopener' }, 'Get "PWAs for Firefox" →')));
+    return;
+  }
   installPrompt.prompt();
   await installPrompt.userChoice.catch(() => {});
   installPrompt = null;
