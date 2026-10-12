@@ -78,8 +78,10 @@ export function mount(container, api) {
   root.style.width = '100%';
   // Bots can pick the word (solo play) or help guess.
   const botBar = createBotBar(api);
-  container.appendChild(botBar.el);
-  container.appendChild(root);
+  const outer = document.createElement('div'); // bot bar above the game, not squeezed beside it
+  Object.assign(outer.style, { display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' });
+  outer.append(botBar.el, root);
+  container.appendChild(outer);
 
   function nicknameFor(clientId) {
     const bot = view && view.bots && view.bots.find((b) => b.clientId === clientId);
