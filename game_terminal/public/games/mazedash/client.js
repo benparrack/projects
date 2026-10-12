@@ -37,7 +37,7 @@ export function mount(container, api) {
 
   const hint = document.createElement('p');
   hint.innerHTML =
-    '<strong>MOVE</strong> — arrow keys or WASD, one cell per press<br>' +
+    '<strong>MOVE</strong> — arrow keys or WASD (touchscreens get a pad below the maze); hold to keep going<br>' +
     '<strong>GOAL</strong> — reach the gold exit cell fastest; everyone races the same maze';
   hint.style.margin = '0';
   hint.style.maxWidth = `${CANVAS_WIDTH}px`;
@@ -352,6 +352,32 @@ export function mount(container, api) {
   }
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
+
+  // On-screen pad for phones (same layout as Tron's); press and hold repeats like a held key.
+  const dpad = document.createElement('div');
+  dpad.style.display = matchMedia('(any-pointer: coarse)').matches ? 'grid' : 'none';
+  dpad.style.gridTemplateColumns = 'repeat(3, 56px)';
+  dpad.style.gridTemplateRows = 'repeat(3, 56px)';
+  dpad.style.gap = '2px';
+  for (const [label, dir, col, row, name] of [['↑', 'up', 2, 1, 'Up'], ['←', 'left', 1, 2, 'Left'], ['→', 'right', 3, 2, 'Right'], ['↓', 'down', 2, 3, 'Down']]) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.setAttribute('aria-label', `Move ${name}`);
+    Object.assign(btn.style, { gridColumn: String(col), gridRow: String(row), touchAction: 'none', userSelect: 'none', fontSize: '22px', padding: '0' });
+    btn.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      stopRepeat();
+      heldDir = dir;
+      sendMove(dir);
+      repeatTimer = setInterval(() => sendMove(dir), MOVE_REPEAT_MS);
+    });
+    for (const end of ['pointerup', 'pointercancel', 'pointerleave']) btn.addEventListener(end, stopRepeat);
+    dpad.appendChild(btn);
+  }
+  dpad.style.flexBasis = '100%'; // own line, right under the maze
+  dpad.style.justifyContent = 'center';
+  body.insertBefore(dpad, side);
   window.addEventListener('blur', stopRepeat);
 
   return {
