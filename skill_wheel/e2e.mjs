@@ -1,9 +1,11 @@
-import { firefox } from '/home/ben/.npm/_npx/9833c18b2d85bc59/node_modules/playwright-core/index.mjs';
+import { firefox, chromium } from '/home/ben/.npm/_npx/9833c18b2d85bc59/node_modules/playwright-core/index.mjs';
 import assert from 'assert';
 import { tmpdir } from 'os';
 // Run: python3 -m http.server 5177 (in this folder), then node e2e.mjs [screenshot-dir]
 const out = process.argv[2] || tmpdir(), url = 'http://localhost:5177/';
-const b = await firefox.launch({ env: { ...process.env, MOZ_DISABLE_CONTENT_SANDBOX: '1' } });
+// BROWSER=chrome node e2e.mjs runs it in the installed Google Chrome instead of Firefox.
+const b = process.env.BROWSER === 'chrome' ? await chromium.launch({ executablePath: '/usr/bin/google-chrome' })
+  : await firefox.launch({ env: { ...process.env, MOZ_DISABLE_CONTENT_SANDBOX: '1' } });
 const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
 const errs = []; p.on('pageerror', e => errs.push(e.message));
 await p.goto(url); await p.evaluate(() => localStorage.clear()); await p.reload(); await p.waitForTimeout(500);
@@ -34,7 +36,7 @@ await p.screenshot({ path: out + '/10-journey-done.png' });
 await p.click('[data-view="wheel"]'); await p.waitForTimeout(300);
 const box = await p.locator('#wheel').boundingBox(), cx = box.x + box.width / 2, cy = box.y + box.height / 2;
 await p.mouse.move(cx + 200, cy - 100); await p.mouse.down();
-for (let i = 1; i <= 6; i++) { await p.mouse.move(cx + 200, cy - 100 + i * 40); await p.waitForTimeout(8); }
+for (let i = 1; i <= 4; i++) await p.mouse.move(cx + 200, cy - 100 + i * 70); // fast, so headless lag can't turn it into a slow drag
 await p.mouse.up(); await p.waitForTimeout(200);
 assert(await p.evaluate(() => skillWheel.spinning), 'flick should start a spin');
 await revealed(); await p.click('[data-act="accept"]'); assert.equal((await runs()).length, 2);

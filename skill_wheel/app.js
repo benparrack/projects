@@ -98,7 +98,7 @@ function pop() { const a = audio(); if (a) tone(a, a.currentTime, 520, .12, 'sin
 // ───────────────────────── Wheel ─────────────────────────
 const cv = $('#wheel'), ctx = cv.getContext('2d');
 let order = [], disc = null, frame = null, S = 0;
-let rot = 0, spinning = null, winner = -1, winT = 0, lastPeg = null;
+let rot = 0, spinning = null, settle = null, winner = -1, winT = 0, lastPeg = null;
 let flap = 0, flapV = 0, bulbT = 0, flashUntil = 0, idleAt = 0;
 const BULBS = 28;
 
@@ -146,8 +146,10 @@ function buildImages() {
   order.forEach((k, i) => {
     d.save(); d.rotate(-Math.PI / 2 + (i + .5) * seg);
     d.textBaseline = 'middle'; d.textAlign = 'center';
-    d.font = `${fs * 1.35}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-    d.fillText(k.emoji, RD * .9, 0);
+    d.save(); d.shadowColor = 'rgba(0,0,0,.35)'; d.shadowBlur = fs * .3; d.shadowOffsetY = fs * .06;
+    d.fillStyle = 'rgba(255,255,255,.88)'; d.beginPath(); d.arc(RD * .9, 0, fs * .98, 0, TAU); d.fill(); d.restore();
+    d.font = `${fs * 1.2}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    d.save(); d.translate(RD * .9, 0); d.rotate(Math.PI / 2); d.fillText(k.emoji, 0, fs * .06); d.restore();
     d.font = `700 ${fs}px Inter, system-ui, sans-serif`;
     d.textAlign = 'right';
     let f = fs; const maxW = RD * .56;
@@ -192,12 +194,20 @@ function draw(t) {
   const R = S / 2, RD = R * .875, n = order.length, seg = TAU / Math.max(n, 1);
   ctx.clearRect(0, 0, S, S);
   ctx.save(); ctx.translate(R, R); ctx.rotate(rot); ctx.drawImage(disc, -R, -R);
+  // motion blur: trail fading copies behind the disc, proportional to this frame's sweep
+  const sweep = Math.max(-.3, Math.min(.3, (spinning ? spinning.speed : drag ? drag.w || 0 : 0) / 60));
+  if (Math.abs(sweep) > .02 && !reduced) {
+    for (let j = 1; j <= 4; j++) { ctx.globalAlpha = .28; ctx.rotate(-sweep / 4); ctx.drawImage(disc, -R, -R); }
+    ctx.globalAlpha = 1; ctx.rotate(sweep);
+  }
   if (winner >= 0) { // spotlight the winner: dim everything else, pulse a glow on it
     const a0 = -Math.PI / 2 + winner * seg, k = Math.min(1, (t - winT) / 400), pulse = .5 + .5 * Math.sin(t / 220);
     ctx.fillStyle = `rgba(5,3,15,${.5 * k})`;
     ctx.beginPath(); ctx.arc(0, 0, RD, 0, TAU); ctx.moveTo(0, 0); ctx.arc(0, 0, RD, a0, a0 + seg); ctx.closePath(); ctx.fill('evenodd');
     ctx.fillStyle = `rgba(255,255,255,${(.08 + .14 * pulse) * k})`;
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, RD, a0, a0 + seg); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = `rgba(255,214,102,${k})`; ctx.lineWidth = S / 200; ctx.lineJoin = 'round';
+    ctx.shadowColor = '#ffd166'; ctx.shadowBlur = S / 60 * (.6 + .4 * pulse); ctx.stroke(); ctx.shadowBlur = 0;
   }
   ctx.restore();
   ctx.drawImage(frame, 0, 0);
@@ -240,6 +250,10 @@ function loop(t) {
     bulbT += Math.abs(s.speed) * dt * 1.2;
     pegCheck(s.speed);
     if (x >= 1) land(t);
+  } else if (settle) {
+    const x = Math.min(1, (t - settle.t0) / 380);
+    rot = settle.from + settle.by * Math.sin(x * Math.PI / 2);
+    if (x >= 1) settle = null;
   } else if (!drag && winner < 0 && !reduced && t > idleAt) {
     rot += dt * .05; // idle drift keeps the wheel alive
     lastPeg = Math.floor(rot / (TAU / Math.max(order.length, 1)));
@@ -256,7 +270,7 @@ function startSpin(D, T) {
   closeModal('#reveal');
   if (reduced) T = Math.min(T, 1.6);
   whoosh();
-  winner = -1;
+  winner = -1; settle = null;
   spinning = { from: rot, D, T, t0: performance.now(), speed: 0, fun: !!(cur() && !cur().pending) };
   updateHub();
 }
@@ -274,6 +288,10 @@ function land(t) {
   const s = spinning; spinning = null;
   rot = s.from + s.D;
   winner = indexAt(rot, order.length); winT = t; flashUntil = t + 1600; idleAt = Infinity;
+  // The flapper nudges the wheel back a touch, never far enough to leave the winning segment.
+  const seg = TAU / order.length, frac = ((-rot % TAU + TAU) % TAU) / seg - winner;
+  const room = s.D > 0 ? .95 - frac : frac - .05;
+  if (!reduced && room > .02) { settle = { from: rot, by: -Math.sign(s.D) * Math.min(.12, room) * seg, t0: t }; flap = Math.sign(s.D) * 14; flapV = 0; }
   chime();
   const k = order[winner];
   const rect = cv.getBoundingClientRect();
@@ -295,10 +313,10 @@ cv.addEventListener('pointerdown', e => {
   const r = cv.getBoundingClientRect(), dx = e.clientX - r.left - r.width / 2, dy = e.clientY - r.top - r.height / 2;
   if (Math.hypot(dx, dy) > r.width / 2) return;
   cv.setPointerCapture(e.pointerId); cv.classList.add('dragging');
-  winner = -1; audio();
+  winner = -1; settle = null; audio();
   drag = { a: angleAt(e), samples: [{ t: performance.now(), r: rot }] };
 });
-cv.addEventListener('pointermove', e => {
+const dragMove = e => {
   if (!drag) return;
   const a = angleAt(e); let da = a - drag.a;
   if (da > Math.PI) da -= TAU; if (da < -Math.PI) da += TAU;
@@ -306,15 +324,20 @@ cv.addEventListener('pointermove', e => {
   const t = performance.now();
   drag.samples.push({ t, r: rot }); drag.samples = drag.samples.filter(s => t - s.t < 120);
   const s0 = drag.samples[0];
-  pegCheck(t > s0.t ? (rot - s0.r) / ((t - s0.t) / 1000) : 0);
-});
-const endDrag = () => {
+  drag.w = t > s0.t ? (rot - s0.r) / ((t - s0.t) / 1000) : 0;
+  pegCheck(drag.w);
+};
+cv.addEventListener('pointermove', dragMove);
+const endDrag = e => {
   if (!drag) return;
+  if (e.type === 'pointerup') dragMove(e); // moves can be coalesced away under load; the release point is the truth
   cv.classList.remove('dragging');
-  const t = performance.now(), s = drag.samples.filter(x => t - x.t < 120), s0 = s[0];
+  // Velocity comes from the last moves themselves, so a late pointerup on a busy device still flicks;
+  // only a real pause before letting go (no moves for 180ms) counts as holding still.
+  const s = drag.samples, last = s[s.length - 1], s0 = s.find(x => last.t - x.t < 120);
   drag = null; idleAt = performance.now() + 3000;
-  if (!s0 || t - s0.t < 5) return;
-  const w = (rot - s0.r) / ((t - s0.t) / 1000);
+  if (performance.now() - last.t > 180 || last.t - s0.t < 5) return;
+  const w = (last.r - s0.r) / ((last.t - s0.t) / 1000);
   if (Math.abs(w) < 4) { if (Math.abs(w) > 1) toast('Give it a harder flick! 💪'); return; }
   // ease-out cubic starts at speed 3D/T, so pick D and T to match the flick's speed
   const D = Math.sign(w) * Math.max(Math.abs(w) * 2.2, 2.5 * TAU);

@@ -14,7 +14,7 @@ Spin a wheel once a week, learn one new skill. When the wheel stops you get the 
   - tips and resource links (YouTube and Google searches, so the links never go dead)
   - what to learn next
 - **The wheel:**
-  - A pegged wheel with a ticking flapper, chasing rim lights, sound and confetti.
+  - A pegged wheel with a ticking flapper, motion blur at speed, chasing rim lights, a settle-back against the flapper, a spotlight on the winner, sound and confetti.
   - Spin with the button or <kbd>Space</kbd>, or grab the wheel and flick it.
   - You get one re-spin per week.
   - While a skill is in progress, spins are "just for fun" and don't change your pick.
@@ -36,4 +36,4 @@ Progress is saved in `localStorage` in this browser only. Use **Journey → Expo
 
 ## Tests
 - `node test.js`: checks the skill data and the logic.
-- `node e2e.mjs`: full browser flows in Firefox through playwright-core, with the app served on port 5177. It covers a targeted spin, re-spin, a fun spin, 7-day expiry, finish and rate, flick-to-spin, and settings.
+- `node e2e.mjs`: full browser flows in Firefox through playwright-core, with the app served on port 5177. `BROWSER=chrome node e2e.mjs` runs the same flows in Google Chrome. It covers a targeted spin, re-spin, a fun spin, 7-day expiry, finish and rate, flick-to-spin, and settings.
