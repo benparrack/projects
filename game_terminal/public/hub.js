@@ -802,6 +802,27 @@ els.btnCopyLink.addEventListener('click', async () => {
 
 els.btnLandingSignin.addEventListener('click', () => openSignIn(state.auth));
 
+// Landing showcase: the whole catalog up front. Picking a game drops you into its public room once you connect.
+document.getElementById('landing-games').append(
+  h('h2.panel-title', `> ${CATEGORIES.reduce((n, c) => n + c.games.length, 0)} GAMES, ONE CLICK AWAY`),
+  ...CATEGORIES.map((cat) => h('div.landing-cat',
+    h('h3.landing-cat-name', cat.name),
+    h('div.landing-chips', ...cat.games.map((g) => h('button.landing-chip', {
+      type: 'button',
+      'aria-pressed': 'false',
+      onclick: (ev) => {
+        state.selectedGameType = g.type;
+        state.expandedCategories.add(cat.name);
+        state.pendingJoin = { kind: 'public' };
+        for (const b of document.querySelectorAll('.landing-chip[aria-pressed=true]')) b.setAttribute('aria-pressed', 'false');
+        ev.currentTarget.setAttribute('aria-pressed', 'true');
+        document.querySelector('.landing-guest .muted').textContent = `Pick a nickname and jump into ${g.label}. Nothing is saved.`;
+        els.nicknameInput.focus({ preventScroll: true });
+        els.nicknameInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      },
+    }, g.label))))),
+);
+
 // Client-side routes. Links marked data-link navigate without a page load.
 function route() {
   const path = location.pathname;

@@ -245,6 +245,13 @@ button:disabled { opacity: 0.4; cursor: default; }
 .panel p { margin: 0; }
 .landing-account .btn-primary { margin-top: auto; }
 #nickname-form input { flex: 1; min-width: 0; }
+.landing-games { margin-top: 28px; columns: 2 300px; column-gap: 24px; }
+.landing-games > .panel-title { column-span: all; font-size: 22px; margin-bottom: 12px; }
+.landing-cat { break-inside: avoid; padding-bottom: 14px; }
+.landing-cat-name { margin: 0 0 6px; font-size: 12px; font-weight: normal; letter-spacing: 2px; color: var(--muted); }
+.landing-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.landing-chip { padding: 3px 8px; font-size: 12px; min-height: 0; }
+.landing-chip[aria-pressed=true] { background: var(--fg); color: var(--bg); }
 
 .notfound { text-align: center; padding: 48px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .notfound-code { font-family: var(--display); font-size: 120px; line-height: 1; margin: 0; color: var(--accent); text-shadow: 0 0 14px rgba(255, 176, 0, .5); }
