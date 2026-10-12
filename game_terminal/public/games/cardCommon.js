@@ -87,6 +87,7 @@ body.gt-hand-large .gt-hand .gt-card:not(.small) { zoom: 1.5; }
 .gt-turn { outline: 2px solid #39ff14 !important; box-shadow: 0 0 14px rgba(57,255,20,.55); animation: gt-turn-pulse 1.2s ease-in-out infinite; }
 @keyframes gt-turn-pulse { 50% { box-shadow: 0 0 4px rgba(57,255,20,.2); } }
 .gt-order-arrow { align-self: center; opacity: .5; }
+@media (max-width: 560px) { .gt-order-arrow { display: none; } } /* seats wrap; arrows would dangle at line ends */
 .gt-your-turn { color: #041004; background: #39ff14; padding: 4px 14px; border-radius: 6px; font-size: 1.15em;
   animation: gt-turn-pulse 1.2s ease-in-out infinite; box-shadow: 0 0 16px rgba(57,255,20,.6); }
 @media (prefers-reduced-motion: reduce) {
