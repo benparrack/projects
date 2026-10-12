@@ -308,7 +308,8 @@ body.modal-open { overflow: hidden; }
 }
 .chip-menu a, .chip-menu button { border: none; text-align: left; padding: 8px 14px; color: var(--fg); text-decoration: none; font-size: 0.9em; background: none; }
 .chip-menu a:hover, .chip-menu button:hover, .chip-menu :focus-visible { background: var(--fg-dim); color: #000; outline: none; }
-@media (max-width: 640px) { .chip-name { max-width: 9ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+@media (max-width: 640px) { .chip-name { max-width: 7ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+@media (max-width: 480px) { #btn-install .btn-label { display: none; } }
 
 /* ---------- roster ---------- */
 .roster li { display: flex; align-items: center; gap: 8px; }
