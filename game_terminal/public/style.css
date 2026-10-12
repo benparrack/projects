@@ -71,6 +71,9 @@ a { color: var(--accent); }
   .chip-level { display: none; }
   .chip-name { max-width: 7ch; }
   .status { display: none; }
+  /* but a dropped connection must be visible: a slim banner across the top */
+  .status.status-error { display: block; position: fixed; top: 0; left: 0; right: 0; z-index: 900; padding: 4px 12px;
+    background: #2a0606; border-bottom: 1px solid var(--error); text-align: center; font-size: 12px; }
 }
 
 .screen { animation: none; }
@@ -810,7 +813,7 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 .weekly-badge { font-size: 12px; font-weight: bold; padding: 1px 6px; color: #000; background: #ff4fd8; letter-spacing: 1px; }
 .weekly-left { margin-left: auto; font-size: .85em; }
 .weekly-body { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 10px 0; }
-.weekly-rows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; }
+.weekly-rows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 32px; }
 .weekly-row { display: flex; align-items: center; gap: 8px; padding: 3px 4px; min-width: 0; }
 .weekly-rank { width: 28px; color: var(--muted); }
 .weekly-player { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -457,10 +457,17 @@ function handleServerMessage(type, payload) {
       state.clientId = payload.clientId;
       els.menuNickname.textContent = payload.nickname;
       renderGameList();
+      // The old room chat box would ask for history before the rejoin below lands; ROOM_JOINED rebuilds it.
+      if (state.currentRoom && !state.pendingJoin) document.getElementById('room-chat').replaceChildren();
       reopenChats();
       if (state.pendingJoin) {
         replayPendingJoin();
-      } else if (!state.currentRoom && !state.onPage) {
+      } else if (state.currentRoom) {
+        // Reconnected mid-room: the server dropped us from it with the old socket, so join again
+        // (or hear that it closed, e.g. after a deploy) instead of sitting on a dead screen.
+        state.rejoining = true;
+        send(ClientMessage.ROOM_JOIN, { code: state.currentRoom.code });
+      } else if (!state.onPage) {
         showScreen('menu');
       }
       break;
@@ -469,6 +476,7 @@ function handleServerMessage(type, payload) {
     case ServerMessage.ROOM_JOINED: {
       state.currentRoom = { code: payload.code, gameType: payload.gameType, isPublic: payload.isPublic, ranked: !!payload.ranked, daily: payload.daily || null };
       state.pendingJoin = null;
+      state.rejoining = false;
       if (state.inviteAfterJoin && !payload.isPublic) send(ClientMessage.ROOM_INVITE, { username: state.inviteAfterJoin });
       state.inviteAfterJoin = null;
       saveSession();
@@ -485,6 +493,13 @@ function handleServerMessage(type, payload) {
     }
 
     case ServerMessage.ROOM_ERROR: {
+      if (state.rejoining && !payload.soft) {
+        // A toast, since the menu error line sits below the fold on phones.
+        state.rejoining = false;
+        leaveRoom({ notify: false }); // the server already dropped us; just clean up locally
+        toast(payload.reason === RoomErrorReason.NOT_FOUND ? 'That room closed while you were disconnected.' : `Couldn't rejoin: ${payload.detail || payload.reason}`, { kind: 'error' });
+        break;
+      }
       if (payload.soft || payload.reason === RoomErrorReason.DAILY) { if (!payload.soft) state.pendingJoin = null; toast(payload.detail || payload.reason, { kind: 'error' }); break; }
       state.pendingJoin = null;
       els.menuError.hidden = false;
@@ -763,9 +778,9 @@ els.btnJoinCode.addEventListener('click', () => {
 
 // Factored out (not just an inline listener) so game modules that take over the full viewport
 // (hiding the normal LEAVE button) can still trigger it — passed into mount() as `api.leaveRoom`.
-function leaveRoom() {
+function leaveRoom({ notify = true } = {}) {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  send(ClientMessage.ROOM_LEAVE, {});
+  if (notify) send(ClientMessage.ROOM_LEAVE, {});
   unmountGame();
   document.getElementById('room-chat').replaceChildren();
   state.currentRoom = null;
