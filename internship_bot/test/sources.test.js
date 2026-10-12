@@ -37,3 +37,9 @@ test('filter', () => {
   assert.equal(skipReason(j({ degrees: ["Master's", 'PhD'] })), 'no bachelor eligibility');
   assert.equal(skipReason(j({ title: 'SWE Intern - Fall 2027' })), 'not a summer term');
 });
+
+test('graduate co-ops are skipped, undergraduate ones are not', () => {
+  const j = t => ({ title: t, degrees: [], locations: ['Boston, MA'] });
+  assert.equal(skipReason(j('Embedded Software Engineer Graduate Co-op')), 'grad-only title');
+  assert.equal(skipReason(j('Undergraduate Research Intern')), null);
+});

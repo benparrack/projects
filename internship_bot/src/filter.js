@@ -3,7 +3,7 @@ const US = /(,\s*(A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[DLNA]|K[SY]|LA|M[EDAINSOT]|N[E
 
 export function skipReason(j) {
   const t = j.title;
-  if (/\b(ph\.?d|doctoral|master'?s|mba|graduate student|post-?doc)\b/i.test(t)) return 'grad-only title';
+  if (/\b(ph\.?d|doctoral|master'?s|mba|graduate|post-?doc)\b/i.test(t)) return 'grad-only title';
   if (j.degrees.length && !j.degrees.some(d => /bachelor/i.test(d))) return 'no bachelor eligibility';
   if (/\b(fall|spring|winter|autumn)\b/i.test(t) && !/summer/i.test(t)) return 'not a summer term';
   if (/\b(2026|2028)\b/.test(t) && !/2027/.test(t)) return 'wrong year';
