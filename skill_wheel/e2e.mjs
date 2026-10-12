@@ -1,6 +1,8 @@
 import { firefox } from '/home/ben/.npm/_npx/9833c18b2d85bc59/node_modules/playwright-core/index.mjs';
 import assert from 'assert';
-const out = process.argv[2], url = 'http://localhost:5177/';
+import { tmpdir } from 'os';
+// Run: python3 -m http.server 5177 (in this folder), then node e2e.mjs [screenshot-dir]
+const out = process.argv[2] || tmpdir(), url = 'http://localhost:5177/';
 const b = await firefox.launch({ env: { ...process.env, MOZ_DISABLE_CONTENT_SANDBOX: '1' } });
 const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
 const errs = []; p.on('pageerror', e => errs.push(e.message));
@@ -39,7 +41,7 @@ await revealed(); await p.click('[data-act="accept"]'); assert.equal((await runs
 // settings: disabling categories shrinks the wheel
 await p.click('[data-view="wheel"]'); await p.click('#settingsBtn');
 const before = await p.evaluate(() => skillWheel.order.length);
-await p.click('[data-set="cat:music"] + span'); await p.waitForTimeout(100);
+await p.click('[data-set="cat:music"]'); await p.waitForTimeout(100);
 assert((await p.evaluate(() => skillWheel.order.length)) < before);
 await p.screenshot({ path: out + '/11-settings.png' });
 await p.keyboard.press('Escape');

@@ -325,7 +325,11 @@ input[type="search"] {
   .tabs button { padding: 7px 8px; font-size: 13px; flex: 1; }
   .two { grid-template-columns: 1fr; }
   .week-top { grid-template-columns: 1fr; }
-  .week-top .ring { width: 96px; justify-self: start; }
+  .week-top { position: relative; }
+  .week-top .ring { position: absolute; top: 14px; right: 14px; width: 68px; }
+  .week-top .ring::before { inset: 7px; }
+  .week-top .ring b { font-size: 17px; }
+  .week-top .ring small { display: none; }
   .skill-hero, .skill-body, .settings { padding-left: 18px; padding-right: 18px; }
   .wheel-wrap { width: min(600px, calc(100vw - 32px)); }
   .run { grid-template-columns: auto 1fr; }
