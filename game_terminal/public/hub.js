@@ -36,7 +36,7 @@ const INSTALL_STEPS = {
   'ff-android': ['Open the ⋮ menu.', 'Tap "Add app to Home screen" (or "Install").'],
   'ff-windows': ['Click the "Add to taskbar" icon at the right end of the address bar (Firefox 143+).', 'Game Terminal opens in its own window, pinned to your taskbar.'],
   'ff-desktop': ['Open about:config, set browser.taskbarTabs.enabled to true and restart Firefox.',
-    'Then click the "Add to taskbar" icon at the right end of the address bar.',
+    'Then click the "Add to taskbar" icon at the right end of the address bar. On Linux this opens Game Terminal in its own window but doesn\'t add a launcher yet.',
     'If that icon doesn\'t appear, the "PWAs for Firefox" add-on does the same job. Or pin this tab (right-click it → Pin Tab).'],
 };
 installBtn.addEventListener('click', async () => {
