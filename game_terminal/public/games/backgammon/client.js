@@ -16,12 +16,19 @@ import { preferredLevel, levelSelect } from '../botLevel.js';
 import { slideFrom, LAST_MOVE_TINT } from '../boardFx.js';
 
 
-// shortcut: sized once at load to fit the screen (the board is ~640px at full size); upgrade to a resize listener if desktop users shrink windows
-const SCALE = Math.max(0.5, Math.min(1, (window.innerWidth - 48) / 640));
-const POINT_W = Math.round(48 * SCALE);
-const POINT_H = Math.round(160 * SCALE);
-const DISC = Math.round(30 * SCALE);
-const BAR_W = Math.round(44 * SCALE);
+// Fit the ~640px board to the screen; recomputed on resize (phone rotation) by mount().
+let SCALE, POINT_W, POINT_H, DISC, BAR_W;
+function sizeBoard() {
+  const scale = Math.max(0.5, Math.min(1, (window.innerWidth - 48) / 640));
+  if (scale === SCALE) return false;
+  SCALE = scale;
+  POINT_W = Math.round(48 * SCALE);
+  POINT_H = Math.round(160 * SCALE);
+  DISC = Math.round(30 * SCALE);
+  BAR_W = Math.round(44 * SCALE);
+  return true;
+}
+sizeBoard();
 
 const ACCENT = '#39ff14';
 const ACCENT_DIM = '#1f8f0c';
@@ -513,6 +520,9 @@ export function mount(container, api) {
 
   render();
 
+  const onResize = () => { if (sizeBoard() && view) render(); };
+  window.addEventListener('resize', onResize);
+
   return {
     applySnapshot(snapshot) {
       view = snapshot;
@@ -544,6 +554,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
+      window.removeEventListener('resize', onResize);
       results.destroy();
       container.innerHTML = '';
     },
