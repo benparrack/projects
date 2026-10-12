@@ -19,7 +19,7 @@ Spin a wheel once a week, learn one new skill. When the wheel stops you get the 
   - You get one re-spin per week.
   - While a skill is in progress, spins are "just for fun" and don't change your pick.
 - **This week:**
-  - today's session and a progress ring
+  - today's session with a practice timer (pausable, shows in the tab title, ticks the day off when done) and a progress ring
   - tick-off plan, notes and print
   - "I've learned it!" with a rating, or skip
   - a "week" runs 7 days from your spin, not Monday to Sunday

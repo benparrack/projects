@@ -24,7 +24,15 @@ r = await runs(); assert(!r[0].pending);
 await p.click('[data-view="wheel"]'); await p.keyboard.press('Space'); await revealed();
 assert.match(await p.textContent('#revealEyebrow'), /fun/i);
 await p.keyboard.press('Escape'); assert.equal((await runs()).length, 1);
+// practice timer: start, pause, resume, finish ticks today off
+await p.click('[data-view="week"]'); await p.click('#timerBtn'); await p.waitForTimeout(400);
+assert.match(await p.textContent('#timerBtn'), /⏸ \d+:\d\d/); assert.match(await p.title(), /⏳/);
+await p.click('#timerBtn'); assert.match(await p.textContent('#timerBtn'), /Resume/);
+await p.click('[data-view="wheel"]'); await p.click('[data-view="week"]'); assert.match(await p.textContent('#timerBtn'), /Resume/);
+await p.click('#timerBtn'); await p.evaluate(() => { skillWheel.timer.end = Date.now(); }); await p.waitForTimeout(500);
+assert.equal((await runs())[0].checks[0], true); assert.equal(await p.$('#timerBtn'), null); assert.equal(await p.title(), 'Skill Wheel');
 // 8 days later: week over, prompt to mark learned
+await p.click('[data-view="wheel"]');
 await p.evaluate(() => skillWheel.setNowOffset(8 * 864e5)); await p.waitForTimeout(200);
 assert.match(await p.textContent('#status'), /Time's up/);
 await p.click('[data-finish]'); await p.click('[data-r="4"]'); await p.fill('#reflect', 'Harder than it looks');

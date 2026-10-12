@@ -526,7 +526,8 @@ function renderWeek() {
         <span class="cat-chip">${catOf(k).emoji} ${catOf(k).name}</span>
         <div style="display:flex;gap:14px;align-items:center;margin-top:12px"><div class="emoji">${k.emoji}</div>
           <div><h2>${k.name}</h2><div class="small" style="color:var(--muted)">Week ${state.runs.indexOf(c) + 1} · started ${fmtDate(c.start)} · ${live ? `${fmtLeft(c.start + RUN_DAYS * DAY - now())} left` : 'week over'}</div></div></div>
-        <div class="today-box"><small>${live ? `Today · Day ${di + 1}` : 'Final day'}</small><div><b>${tTitle}</b> — ${tDesc}</div></div>
+        <div class="today-box"><small>${live ? `Today · Day ${di + 1}` : 'Final day'}</small><div><b>${tTitle}</b> — ${tDesc}</div>
+          ${live && (!c.checks[di] || timer?.run === c) ? `<button class="btn primary timer" id="timerBtn">▶ Start today's ${parseInt(k.daily)}-min session</button>` : ''}</div>
         <div class="facts" style="justify-content:flex-start;margin-top:12px">${factsHTML(k)}</div>
       </div>
       <div class="ring" style="--p:${done / 7 * 100}"><div><b>${done}/7</b><small>sessions</small></div></div>
@@ -556,11 +557,37 @@ function renderWeek() {
     }
     updateHub(); updateTabDot();
   });
+  const tb = $('#timerBtn');
+  if (tb) tb.onclick = () => {
+    if (timer?.run !== c) timer = { run: c, day: di, total: parseInt(k.daily) * 6e4, end: Date.now() + parseInt(k.daily) * 6e4 };
+    else if (timer.paused != null) { timer.end = Date.now() + timer.paused; timer.paused = null; }
+    else timer.paused = Math.max(0, timer.end - Date.now());
+    tickTimer();
+  };
+  tickTimer();
   el.querySelector('[data-finish-cur]').onclick = () => finishRun(c);
   el.querySelector('[data-skip-cur]').onclick = () => confirmSheet(`Skip ${k.name}?`, 'It goes into your journey as skipped, and the wheel unlocks for a new spin.', 'Skip it', () => {
     c.status = 'skipped'; c.end = now(); save(); refreshPool(); renderAll(); go('wheel');
   });
 }
+
+// Practice timer: runs in real time (not now()), survives tab switches, ticks the day off when it ends.
+let timer = null;
+function tickTimer() {
+  const b = $('#timerBtn');
+  if (!timer) { document.title = 'Skill Wheel'; return; }
+  const left = timer.paused ?? Math.max(0, timer.end - Date.now()), sec = Math.ceil(left / 1000);
+  const clock = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  document.title = `${timer.paused != null ? '⏸' : '⏳'} ${clock} · Skill Wheel`;
+  if (b) { b.textContent = `${timer.paused != null ? '▶ Resume' : '⏸'} ${clock}`; b.classList.add('running'); b.style.setProperty('--t', 1 - left / timer.total); }
+  if (left > 0) return;
+  const { run, day } = timer; timer = null; document.title = 'Skill Wheel';
+  const cb = $(`#view-week [data-day="${day}"]`);
+  if (cb && !cb.checked && state.runs.includes(run)) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+  else if (!run.checks[day]) { run.checks[day] = true; save(); updateHub(); updateTabDot(); }
+  b?.remove(); chime(); toast(`⏰ Session done! Day ${day + 1} ticked off.`);
+}
+setInterval(tickTimer, 250);
 
 function finishRun(run) {
   const k = byId[run.id];
@@ -725,7 +752,7 @@ requestAnimationFrame(loop);
 
 // Debug/test hook.
 window.skillWheel = {
-  get state() { return state; }, get order() { return order; }, get rot() { return rot; }, get spinning() { return !!spinning; },
+  get state() { return state; }, get timer() { return timer; }, get order() { return order; }, get rot() { return rot; }, get spinning() { return !!spinning; },
   setNowOffset(ms) { nowOffset = ms; renderAll(); },
   spinTo(id) { const i = order.findIndex(k => k.id === id); if (i < 0) return false; const seg = TAU / order.length;
     startSpin(((-(i + .5) * seg - rot) % TAU + TAU) % TAU + 5 * TAU, 1); return true; },
