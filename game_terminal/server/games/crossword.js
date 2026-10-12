@@ -316,9 +316,9 @@ const boardDone = (st, board) => board.solved.size === st.puzzle.words.length;
 
 function startRound(room, size, mode) {
   const st = room.state;
-  st.size = SIZES[size] ? size : st.size;
+  st.size = room.daily ? DEFAULT_SIZE : SIZES[size] ? size : st.size; // daily: same size and grid for everyone
   st.mode = MODES.includes(mode) ? mode : st.mode;
-  st.puzzle = makePuzzle(st.size, (Math.random() * 2 ** 31) >>> 0);
+  st.puzzle = makePuzzle(st.size, room.daily ? room.daily.seed : (Math.random() * 2 ** 31) >>> 0);
   st.board = newBoard();
   st.roundId += 1;
   st.phase = 'playing';

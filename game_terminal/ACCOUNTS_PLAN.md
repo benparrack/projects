@@ -159,8 +159,8 @@ call with the right placements. This is the long, careful part of the project.
       `cosmetics.equipped` from the roster
 - [x] Daily challenge: a shared seed per day for Maze Dash, Word Hunt, Minesweeper (and
       Crossword/Wordscapes if easy). One scored attempt per account, a daily leaderboard,
-      and a streak counter. (Shipped for Maze Dash + Word Hunt; Minesweeper is a 2-seat race
-      with no solo mode, Crossword/Wordscapes have no score — left out.)
+      and a streak counter. (Maze Dash, Word Hunt, Crossword (MEDIUM, solve time) and Anagrams; Minesweeper is a
+      2-seat race with no solo mode, Wordscapes auto-starts levels — left out.)
 - [x] Activity feed on the home screen: friends' notable results, unlocks and streaks
 - [x] Homepage live stats: online now, games played today, most popular game this week
 

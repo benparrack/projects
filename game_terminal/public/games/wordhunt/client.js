@@ -402,7 +402,7 @@ export function mount(container, api) {
   function renderStatus() {
     if (!view) { statusEl.textContent = 'Loading…'; return; }
     const humans = view.players.filter((p) => !p.bot).length;
-    if (view.phase === 'waiting') statusEl.textContent = `${humans} player${humans === 1 ? '' : 's'} here — add a bot or wait for friends, then START.`;
+    if (view.phase === 'waiting') statusEl.textContent = api.daily ? 'Today\'s grid: one try. Press START.' : `${humans} player${humans === 1 ? '' : 's'} here — add a bot or wait for friends, then START.`;
     else if (view.phase === 'playing') statusEl.textContent = clock.now() < view.startedAt ? 'Get ready…' : 'Find as many words as you can!';
     else statusEl.textContent = `Round over — ${view.totalWords} words were hiding in this grid.`;
     startBtn.disabled = view.phase === 'playing';

@@ -425,7 +425,7 @@ function handleServerMessage(type, payload) {
     }
 
     case ServerMessage.ROOM_JOINED: {
-      state.currentRoom = { code: payload.code, gameType: payload.gameType, isPublic: payload.isPublic, ranked: !!payload.ranked };
+      state.currentRoom = { code: payload.code, gameType: payload.gameType, isPublic: payload.isPublic, ranked: !!payload.ranked, daily: payload.daily || null };
       state.pendingJoin = null;
       if (state.inviteAfterJoin && !payload.isPublic) send(ClientMessage.ROOM_INVITE, { username: state.inviteAfterJoin });
       state.inviteAfterJoin = null;
@@ -618,6 +618,7 @@ async function mountGame(gameType, snapshot, roster) {
       sendAction: (data) => send(ClientMessage.GAME_ACTION, { gameType, data }),
       getClientId: () => state.clientId,
       leaveRoom,
+      daily: !!(state.currentRoom && state.currentRoom.daily), // daily runs are solo with a fixed setup
     });
     if (snapshot && typeof handle.applySnapshot === 'function') handle.applySnapshot(snapshot);
     if (roster && typeof handle.applyRoster === 'function') handle.applyRoster(roster);

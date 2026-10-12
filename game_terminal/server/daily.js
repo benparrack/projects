@@ -12,6 +12,8 @@ const crypto = require('crypto');
 const DAILY_GAMES = {
   mazedash: { start: 'startRace', better: 'low', label: 'Maze Dash' },
   wordhunt: { start: 'start', better: 'high', label: 'Word Hunt' },
+  crossword: { start: 'start', better: 'low', label: 'Crossword' },
+  anagrams: { start: 'start', better: 'high', label: 'Anagrams' },
 };
 const DAY = 86400000;
 const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);

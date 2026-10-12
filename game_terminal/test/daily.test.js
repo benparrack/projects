@@ -27,6 +27,23 @@ const get = (api, url) => new Promise((resolve) => api({ url, method: 'GET' }, {
   assert.strictEqual(generateGrid(mulberry32(seedOf('2026-10-11', 'wordhunt'))).grid, generateGrid(mulberry32(seedOf('2026-10-11', 'wordhunt'))).grid);
   assert.notStrictEqual(generateGrid(mulberry32(seedOf('2026-10-11', 'wordhunt'))).grid, generateGrid(mulberry32(seedOf('2026-10-12', 'wordhunt'))).grid);
 
+  // Crossword and Anagrams: a daily room deals the same puzzle to everyone (crossword always MEDIUM).
+  const dealt = (gameType, date, size) => {
+    const plugin = require(`../server/games/${gameType}`);
+    const room = { gameType, clients: new Map([['A', {}]]), daily: { date, seed: seedOf(date, gameType) }, sendTo() {}, broadcast() {} };
+    room.state = plugin.createInitialState(room);
+    plugin.onJoin(room, { clientId: 'A', nickname: 'Alice' });
+    plugin.onMessage(room, room.clients.get('A'), { kind: 'start', size }, { senderId: 'A' });
+    for (const p of room.state.players.values()) clearTimeout(p.botTimer);
+    clearTimeout(room.state.roundTimer);
+    return JSON.stringify(gameType === 'crossword' ? [room.state.size, room.state.puzzle.solution] : room.state.letters);
+  };
+  for (const g of ['crossword', 'anagrams']) {
+    assert.strictEqual(dealt(g, '2026-10-11', 'mini'), dealt(g, '2026-10-11', 'large'), `${g}: same daily puzzle`);
+    assert.notStrictEqual(dealt(g, '2026-10-11'), dealt(g, '2026-10-12'), `${g}: new puzzle each day`);
+  }
+  assert.ok(dealt('crossword', '2026-10-11', 'mini').startsWith('["medium"'));
+
   const db = createMemoryDb();
   const accounts = createAccounts(db);
   for (const [name, uid] of [['Alice', 'u1'], ['Bob', 'u2'], ['Cyril', 'u3']]) await accounts.claimUsername(uid, { username: name, avatar: 'cat', acceptTerms: true });

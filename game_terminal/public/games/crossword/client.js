@@ -186,7 +186,7 @@ export function mount(container, api) {
     giveUpBtn.classList.remove('armed');
     api.sendAction({ kind: 'giveUp' });
   });
-  controls.append(modeSeg, sizeSeg, startBtn, hintBtn, giveUpBtn);
+  controls.append(...(api.daily ? [] : [modeSeg, sizeSeg]), startBtn, hintBtn, giveUpBtn);
   const botBar = createBotBar(api);
 
   const body = el('div', 'cw-body');
@@ -501,7 +501,7 @@ export function mount(container, api) {
   function renderStatus() {
     if (!view || view.phase === 'waiting' || !view.cols) {
       titleEl.textContent = 'CROSSWORD';
-      statusEl.textContent = '· pick a mode and size, then START';
+      statusEl.textContent = api.daily ? '· today\'s puzzle, press START' : '· pick a mode and size, then START';
       return;
     }
     titleEl.textContent = `CROSSWORD · ${(view.sizes[view.size] || '').toUpperCase()} · ${view.mode === 'coop' ? 'CO-OP' : 'RACE'}`;
@@ -635,7 +635,9 @@ export function mount(container, api) {
     if (!view || !view.cols) {
       overlay.hidden = false;
       overlay.className = 'cw-idle';
-      overlay.append(el('b', '', 'CROSSWORD'), el('span', '', 'CO-OP: fill one grid together · RACE: same puzzle, first to finish wins'), el('span', '', 'Add a bot if you are on your own.'));
+      overlay.append(el('b', '', 'CROSSWORD'), ...(api.daily
+        ? [el('span', '', 'Today\'s puzzle: one try, fastest solve tops the board. Press START.')]
+        : [el('span', '', 'CO-OP: fill one grid together · RACE: same puzzle, first to finish wins'), el('span', '', 'Add a bot if you are on your own.')]));
       if (!view || !view.cols) { gridEl.style.setProperty('--cw', '30px'); gridEl.style.gridTemplateColumns = 'repeat(9, var(--cw))'; if (!gridEl.childElementCount) for (let i = 0; i < 81; i++) gridEl.appendChild(el('div', (i * 7 + (i >> 2)) % 5 === 0 ? 'cw-block' : 'cw-cell')); }
       return;
     }

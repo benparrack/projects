@@ -32,5 +32,6 @@ export function createBotBar(api) {
       el.appendChild(btn(`✕ ${b.nickname}`, 'border:1px solid #ff5a5a;color:#ff8a8a;font-size:.85em', 'Remove this bot', () => api.sendAction({ kind: 'removeBot', clientId: b.clientId })));
     }
   }
+  if (api.daily) el.style.display = 'none'; // daily challenge runs are solo
   return { el, update };
 }

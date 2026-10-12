@@ -310,7 +310,7 @@ export function mount(container, api) {
     if (!view || view.phase === 'waiting' || !view.letters) {
       overlay.hidden = false;
       overlay.append(el('div', 'an-count', '🔤'), el('div', '', 'ANAGRAMS'),
-        el('div', 'an-help', 'Six letters, 60 seconds. Make as many words as you can — longer words score far more. Press START ROUND (add a bot to play against the computer).'));
+        el('div', 'an-help', 'Six letters, 60 seconds. Make as many words as you can — longer words score far more. Press START ROUND' + (api.daily ? ': one try at today\'s letters.' : ' (add a bot to play against the computer).')));
       return;
     }
     if (view.phase === 'playing' && now < view.startedAt) {

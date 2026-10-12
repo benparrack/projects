@@ -13,6 +13,7 @@
 const { COMMON, isWord, letterCounts, canSpell, wordsFromLetters } = require('./words');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
 const { reportRanked } = require('./wordResults');
+const { mulberry32 } = require('../daily');
 
 const TYPE = 'anagrams';
 const LETTERS = 6;
@@ -145,7 +146,7 @@ function endRound(room) {
 
 function startRound(room) {
   const st = room.state;
-  const pz = makePuzzle();
+  const pz = makePuzzle(room.daily ? mulberry32(room.daily.seed) : undefined); // daily: same letters for everyone
   st.base = pz.base;
   st.letters = pz.letters;
   st.answers = pz.answers;
