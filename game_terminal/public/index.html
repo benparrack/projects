@@ -12,6 +12,9 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:description" content="50+ free multiplayer browser games. Play with friends, climb the leaderboards.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Game Terminal">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
@@ -31,6 +34,7 @@
       <a href="/daily" data-link data-nav="daily">DAILY</a>
     </nav>
     <div class="topbar-right">
+      <button id="btn-install" class="btn-mute" type="button" title="Install Game Terminal as an app" hidden>⤓ INSTALL</button>
       <button id="btn-mute" class="btn-mute" type="button" title="Toggle sound">SFX: ON</button>
       <span id="status" class="status status-connecting" role="status">CONNECTING&hellip;</span>
       <button id="btn-friends" class="btn-friends" type="button" aria-expanded="false" hidden>FRIENDS<span class="btn-friends-count"></span></button>

@@ -20,6 +20,21 @@ import { openSignIn, openUsernameSetup, openTermsUpdate, renderAccountChip, open
 const muteBtn = document.getElementById('btn-mute');
 const renderMute = (m) => { muteBtn.textContent = m ? 'SFX: OFF' : 'SFX: ON'; };
 renderMute(sfx.muted);
+
+// Installable app: Chrome/Edge (desktop and Android) offer an install prompt we surface as a button;
+// iOS Safari installs via Share -> Add to Home Screen, which needs no code.
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+const installBtn = document.getElementById('btn-install');
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; installBtn.hidden = false; });
+window.addEventListener('appinstalled', () => { installPrompt = null; installBtn.hidden = true; });
+installBtn.addEventListener('click', async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice.catch(() => {});
+  installPrompt = null;
+  installBtn.hidden = true;
+});
 sfx.onChange(renderMute);
 muteBtn.addEventListener('click', () => { sfx.setMuted(!sfx.muted); sfx.play('click'); });
 
