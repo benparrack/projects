@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Drift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;1,300&family=Inter:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fg: rgba(255, 255, 255, .88);
+    --dim: rgba(255, 255, 255, .5);
+    --faint: rgba(255, 255, 255, .14);
+    --glass: rgba(14, 14, 20, .38);
+    --serif: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+    --sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none; }
+  body.idle, body.idle * { cursor: none !important; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+
+  .fade { transition: opacity 1.4s cubic-bezier(.4, 0, .2, 1), transform 1.4s cubic-bezier(.2, .7, .2, 1); }
+  body.idle .autohide, body.zen .autohide, body.zen #label { opacity: 0 !important; pointer-events: none; }
+
+  #title { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; opacity: 0; transform: translateY(8px); }
+  #title.show { opacity: 1; transform: none; }
+  #title h1 { margin: 0; font: 300 clamp(56px, 11vw, 132px)/1 var(--serif); letter-spacing: .32em; margin-right: -.32em; text-shadow: 0 0 40px rgba(0, 0, 0, .55); }
+  #title p { margin: 22px 0 0; font: 300 11px/1.9 var(--sans); letter-spacing: .38em; text-transform: uppercase; color: var(--dim); }
+
+  #label { position: fixed; left: max(16px, 4vw); bottom: max(18px, 4.5vh); pointer-events: none; opacity: 0; transform: translateY(6px); text-shadow: 0 0 24px rgba(0, 0, 0, .6); }
+  #label.show { opacity: 1; transform: none; }
+  #label .num { font: 400 10px/1 var(--sans); letter-spacing: .4em; color: var(--dim); }
+  #label .name { font: italic 300 clamp(30px, 4.2vw, 46px)/1.15 var(--serif); margin: 8px 0 2px; }
+  #label .sub { font: 300 10.5px/1.6 var(--sans); letter-spacing: .3em; text-transform: uppercase; color: var(--dim); }
+  #progress { margin-top: 14px; width: 132px; height: 1px; background: var(--faint); overflow: hidden; }
+  #progress i { display: block; height: 100%; width: 100%; background: rgba(255, 255, 255, .55); transform-origin: left; transform: scaleX(0); }
+
+  #dock { position: fixed; right: max(16px, 4vw); bottom: max(18px, 4.5vh); display: flex; gap: 8px; }
+  #dock button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .1); background: var(--glass); color: var(--fg); display: grid; place-items: center; cursor: pointer; padding: 0; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: background .3s, border-color .3s, transform .3s; }
+  #dock button:hover { background: rgba(40, 40, 52, .5); border-color: rgba(255, 255, 255, .24); }
+  #dock button:active { transform: scale(.94); }
+  #dock button:focus-visible, #help button:focus-visible { outline: 1px solid rgba(255, 255, 255, .7); outline-offset: 3px; }
+  #dock svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  #dock .off { display: none; }
+  #dock button[aria-pressed="false"] .on { display: none; }
+  #dock button[aria-pressed="false"] .off { display: block; }
+
+  #help { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .25); opacity: 0; pointer-events: none; transition: opacity .6s; }
+  #help.show { opacity: 1; pointer-events: auto; }
+  #help .card { width: min(380px, calc(100vw - 32px)); box-sizing: border-box; padding: 30px 32px 26px; border-radius: 18px; background: rgba(12, 12, 18, .55); border: 1px solid rgba(255, 255, 255, .09); backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3); box-shadow: 0 30px 80px rgba(0, 0, 0, .45); transform: translateY(10px) scale(.985); transition: transform .6s cubic-bezier(.2, .7, .2, 1); }
+  #help.show .card { transform: none; }
+  #help h2 { margin: 0 0 18px; font: italic 300 30px/1 var(--serif); }
+  #help dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 9px 18px; font: 300 13px/1.4 var(--sans); }
+  #help dt { color: var(--fg); text-align: right; white-space: nowrap; }
+  #help dd { margin: 0; color: var(--dim); }
+  #help kbd { font: 400 11px/1 var(--sans); padding: 3px 6px; border-radius: 5px; border: 1px solid rgba(255, 255, 255, .16); background: rgba(255, 255, 255, .05); }
+  #help .foot { margin-top: 20px; font: 300 11px/1.6 var(--sans); color: rgba(255, 255, 255, .35); letter-spacing: .04em; }
+
+  #fail { position: fixed; inset: 0; display: none; place-content: center; text-align: center; padding: 24px; font: 300 15px/1.7 var(--sans); color: var(--dim); }
+  #fail b { display: block; font: italic 300 32px/1.3 var(--serif); color: var(--fg); margin-bottom: 8px; }
+  @media (max-width: 520px) { #label .sub { letter-spacing: .2em; } #progress { width: 96px; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="title" class="fade"><h1>drift</h1><p>move to stir&ensp;·&ensp;drag to turn&ensp;·&ensp;tap to ripple</p></div>
+
+<div id="label" class="fade">
+  <div class="num"></div>
+  <div class="name"></div>
+  <div class="sub"></div>
+  <div id="progress" class="autohide fade"><i></i></div>
+</div>
+
+<div id="dock" class="autohide fade">
+  <button id="bSound" aria-label="Sound" aria-pressed="false" title="Sound (M)">
+    <svg class="on" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+    <svg class="off" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M16 10l4 4M20 10l-4 4"/></svg>
+  </button>
+  <button id="bNext" aria-label="Next scene" title="Next scene (Space)">
+    <svg viewBox="0 0 24 24"><path d="M6 6l7 6-7 6M13 6l7 6-7 6"/></svg>
+  </button>
+  <button id="bFull" aria-label="Fullscreen" title="Fullscreen (F)">
+    <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+  </button>
+  <button id="bHelp" aria-label="Help" title="Help (?)">
+    <svg viewBox="0 0 24 24"><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.8-2.5 2.2-2.5 3.9"/><circle cx="12" cy="17.6" r=".4"/></svg>
+  </button>
+</div>
+
+<div id="help" role="dialog" aria-modal="true" aria-label="Controls">
+  <div class="card">
+    <h2>Drift</h2>
+    <dl>
+      <dt>move</dt><dd>stir the current</dd>
+      <dt>drag</dt><dd>turn the view</dd>
+      <dt>click / tap</dt><dd>send a ripple</dd>
+      <dt>scroll / pinch</dt><dd>move closer</dd>
+      <dt><kbd>Space</kbd> <kbd>←</kbd> <kbd>→</kbd></dt><dd>change scene</dd>
+      <dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>go to a scene</dd>
+      <dt><kbd>L</kbd></dt><dd>stay on this scene</dd>
+      <dt><kbd>P</kbd></dt><dd>freeze time</dd>
+      <dt><kbd>M</kbd></dt><dd>sound</dd>
+      <dt><kbd>F</kbd></dt><dd>fullscreen</dd>
+      <dt><kbd>H</kbd></dt><dd>hide everything</dd>
+      <dt><kbd>S</kbd></dt><dd>save a still</dd>
+    </dl>
+    <div class="foot">Scenes change by themselves every minute or so. Sound is generated live and never repeats.</div>
+  </div>
+</div>
+
+<div id="fail"><b>Drift needs WebGL 2</b>with float render targets. Try a recent Chrome, Firefox or Safari with hardware acceleration on.</div>
+
+<script>
+'use strict';
+// ───────────────────────────── scenes ─────────────────────────────
+// f: flow field index (see field() in SIM). pal: [background, slow → fast gradient].
+const SCENES = [
+  { name: 'Thomas',    sub: 'lagoon',  f: 2, pal: ['#03100f', '#0b4a4c', '#22b597', '#aef0c6', '#ffffff'], speed: 1.0, fade: .84, ap: .022, gain: 1.0, bloom: .5,  turb: .00, dist: 3.4, root: 48 },
+  { name: 'Halvorsen', sub: 'orchid',  f: 3, pal: ['#0d0516', '#3b1673', '#a23ad0', '#ff7fb8', '#ffe6f3'], speed: 1.0, fade: .86, ap: .020, gain: 1.0, bloom: .6,  turb: .00, dist: 4.0, root: 52 },
+  { name: 'Lorenz',    sub: 'ember',   f: 1, pal: ['#140603', '#5c1607', '#d2441b', '#ffae45', '#fff0c8'], speed: 1.0, fade: .88, ap: .018, gain: .95, bloom: .6,  turb: .00, dist: 2.7, root: 45 },
+  { name: 'Maelstrom', sub: 'spiral',    f: 7, pal: ['#08051a', '#26105a', '#6f33e8', '#ef5fae', '#ffe58a'], speed: 1.0, fade: .90, ap: .016, gain: 1.6, bloom: .7,  turb: .00, dist: 2.6, root: 43, pitch: .8 },
+  { name: 'Dadras',    sub: 'aurora',  f: 4, pal: ['#020c10', '#0f3264', '#17a37a', '#a6e866', '#f4ffd8'], speed: 1.0, fade: .86, ap: .020, gain: 1.0, bloom: .55, turb: .00, dist: 2.6, root: 47 },
+  { name: 'Plume',     sub: 'nacre',   f: 0, life: .3, spawn: .25, spawnY: -.75, fadeIn: .8, pal: ['#0b0a1e', '#3b4fc4', '#7cc6ec', '#f4c9e6', '#fffaf4'], speed: 1.0, fade: .90, ap: .020, gain: 1.0, bloom: .55, turb: .00, dist: 3.4, root: 50 },
+  { name: 'Rössler',   sub: 'solar',   f: 5, pal: ['#120803', '#4d2808', '#c8780f', '#ffd067', '#fffaea'], speed: 1.0, fade: .88, ap: .018, gain: 1.0, bloom: .6,  turb: .00, dist: 4.5, root: 53 },
+  { name: 'Chen–Lee',  sub: 'glacier', f: 6, life: .03, spawn: .4, pal: ['#050a14', '#1b2f63', '#5a8fd8', '#bfe0ff', '#ffffff'], speed: 1.0, fade: .86, ap: .020, gain: 1.0, bloom: .55, turb: .00, dist: 3.5, root: 46 },
+];
+const SCENE_SECONDS = 75, TRANSITION_SECONDS = 10;
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+
+// ───────────────────────────── shaders ─────────────────────────────
+const HASH = `
+uint hsh(uint x){ x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16; return x; }
+float rnd(inout uint s){ s = hsh(s); return float(s >> 8) * (1.0 / 16777216.0); }`;
+
+const VS_QUAD = `#version 300 es
+out vec2 vUv;
+void main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
+
+const FS_SIM = `#version 300 es
+precision highp float; precision highp int;
+uniform highp sampler2D uPos;
+uniform int uA, uB, uRows;
+uniform float uMix, uDt, uTime, uTurb, uSpeed, uPulse, uRespawn, uSpawnR, uSpawnY;
+uniform uint uFrame;
+uniform vec3 uRayO, uRayD, uStir, uPulseO;
+layout(location = 0) out vec4 oPos;
+layout(location = 1) out vec4 oVel;
+${HASH}
+vec3 m289(vec3 x){ return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 m289(vec4 x){ return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 perm(vec4 x){ return m289(((x * 34.0) + 10.0) * x); }
+// Simplex noise gradient (Ashima / Stefan Gustavson, MIT)
+vec3 sgrad(vec3 v){
+  const vec2 C = vec2(1.0 / 6.0, 1.0 / 3.0); const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i = floor(v + dot(v, C.yyy)); vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g = step(x0.yzx, x0.xyz); vec3 l = 1.0 - g; vec3 i1 = min(g.xyz, l.zxy); vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx; vec3 x2 = x0 - i2 + C.yyy; vec3 x3 = x0 - D.yyy;
+  i = m289(i);
+  vec4 p = perm(perm(perm(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0)) + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  vec3 ns = 0.142857142857 * D.wyz - D.xzx;
+  vec4 j = p - 49.0 * floor(p * ns.z * ns.z); vec4 x_ = floor(j * ns.z); vec4 y_ = floor(j - 7.0 * x_);
+  vec4 x = x_ * ns.x + ns.yyyy; vec4 y = y_ * ns.x + ns.yyyy; vec4 h = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy); vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0) * 2.0 + 1.0; vec4 s1 = floor(b1) * 2.0 + 1.0; vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy; vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+  vec3 p0 = vec3(a0.xy, h.x); vec3 p1 = vec3(a0.zw, h.y); vec3 p2 = vec3(a1.xy, h.z); vec3 p3 = vec3(a1.zw, h.w);
+  vec4 nr = inversesqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
+  p0 *= nr.x; p1 *= nr.y; p2 *= nr.z; p3 *= nr.w;
+  vec4 m = max(0.5 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
+  vec4 m2 = m * m; vec4 m4 = m2 * m2;
+  vec4 pdx = vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)); vec4 t = m2 * m * pdx;
+  return 105.0 * (-8.0 * (t.x * x0 + t.y * x1 + t.z * x2 + t.w * x3) + m4.x * p0 + m4.y * p1 + m4.z * p2 + m4.w * p3);
+}
+vec3 curl(vec3 p){
+  vec3 a = sgrad(p), b = sgrad(p + vec3(31.416, -47.853, 12.793)), c = sgrad(p + vec3(-233.145, -113.408, -185.31));
+  return vec3(c.y - b.z, a.z - c.x, b.x - a.y);
+}
+// Attractor normalisation from tools/fit.mjs: q = C + S * p (attractor space), K = time scale.
+const vec3 C[7] = vec3[7](vec3(0.0), vec3(0.0, 0.0, 23.3), vec3(0.0), vec3(-2.666), vec3(1.05, -0.15, 0.35), vec3(-0.5, -1.3, 0.72), vec3(0.0, 0.0, 7.42));
+const float S[7] = float[7](1.0, 25.4, 4.086, 9.229, 9.5, 9.0, 14.87);
+const float K[7] = float[7](1.0, 0.119, 2.24, 0.108, 0.616, 0.587, 0.33);
+vec3 attractor(int i, vec3 q){
+  float x = q.x, y = q.y, z = q.z;
+  if (i == 1) return vec3(10.0 * (y - x), x * (28.0 - z) - y, x * y - 8.0 / 3.0 * z);
+  if (i == 2) return vec3(sin(y) - 0.19 * x, sin(z) - 0.19 * y, sin(x) - 0.19 * z);
+  if (i == 3) return vec3(-1.89 * x - 4.0 * y - 4.0 * z - y * y, -1.89 * y - 4.0 * z - 4.0 * x - z * z, -1.89 * z - 4.0 * x - 4.0 * y - x * x);
+  if (i == 4) return vec3(y - 3.0 * x + 2.7 * y * z, 1.7 * y - x * z + z, 2.0 * x * y - 9.0 * z);
+  if (i == 5) return vec3(-y - z, x + 0.2 * y, 0.2 + z * (x - 5.7));
+  return vec3(5.0 * x - y * z, -10.0 * y + x * z, -0.38 * z + x * y / 3.0);
+}
+vec3 nebula(vec3 p){
+  // a galaxy: differential rotation, plus a slowly turning two-arm density wave that gathers the dust into spirals
+  float r = length(p.xz) + 1e-3, th = atan(p.z, p.x);
+  vec2 rad = p.xz / r, tg = vec2(-rad.y, rad.x);
+  float arm = sin(2.0 * th - 5.5 * log(r) + uTime * 0.07);
+  vec2 h = tg * (0.6 * r / (0.45 + r)) * (1.0 + 0.6 * arm) + rad * -0.06 * r;   // arms are a speed wave (bunching, not a sink) + slow inward drift so the rim doesn't pile up
+  vec3 g = sgrad(vec3(p.x * 2.0, uTime * 0.02, p.z * 2.0));                   // 2D stream function in the disc plane:
+  h += vec2(g.z, -g.x) * 0.05;                                               // divergence-free, so it swirls without gathering into threads
+  vec3 v = vec3(h.x, 0.0, h.y);
+  v.y -= p.y * 2.5;                                                          // settle into a thin disc
+  v -= p * smoothstep(1.1, 1.5, length(p)) * 1.5;                            // soft outer edge
+  return v;
+}
+vec3 plume(vec3 p){
+  // smoke: slowly evolving curl noise, rising and swelling out of a small core
+  vec3 v = curl(p * 1.25 + vec3(0.0, -uTime * 0.06, uTime * 0.02)) * 0.16;
+  v += vec3(0.0, 0.18, 0.0) + p * 0.08;
+  return v - p * smoothstep(0.9, 1.6, length(p)) * 1.2;
+}
+vec3 field(int i, vec3 p){
+  if (i == 7) return nebula(p);
+  if (i == 0) return plume(p);
+  vec3 d = attractor(i, C[i] + S[i] * p.xzy);
+  return (d / S[i]).xzy * K[i];
+}
+vec3 vel(vec3 p){
+  vec3 v = field(uA, p);
+  if (uMix > 0.0) v = mix(v, field(uB, p), uMix);
+  v *= uSpeed;
+  float m = length(v);
+  return m > 3.0 ? v * (3.0 / m) : v;
+}
+void main(){
+  ivec2 ij = ivec2(gl_FragCoord.xy);
+  vec4 st = texelFetch(uPos, ij, 0);
+  vec3 p = st.xyz; float age = st.w + uDt;
+  uint seed = hsh(uint(ij.x) | (uint(ij.y) << 10) ^ (uFrame * 0x9E3779B9u));
+  if (!(dot(p, p) < 9.0)) {                                                  // escaped / NaN: reborn beside a random neighbour
+    p = texelFetch(uPos, ivec2(rnd(seed) * 1024.0, rnd(seed) * float(uRows)), 0).xyz + (vec3(rnd(seed), rnd(seed), rnd(seed)) - 0.5) * 0.02;
+    age = 0.0;
+  }
+  if (!(dot(p, p) < 9.0) || rnd(seed) < uRespawn) {                         // steady trickle of fresh dust from a ball
+    vec3 b; do b = vec3(rnd(seed), rnd(seed), rnd(seed)) * 2.0 - 1.0; while (dot(b, b) > 1.0);
+    p = b * uSpawnR + vec3(0.0, uSpawnY, 0.0); age = 0.0;
+  }
+  vec3 v1 = vel(p);
+  vec3 v = vel(p + v1 * uDt * 0.5);                                          // RK2 midpoint
+  if (uTurb > 0.001) v += curl(p * 1.7 + vec3(uTime * 0.05)) * uTurb;
+  p += v * uDt;
+  vec3 rel = p - uRayO; vec3 perp = rel - uRayD * dot(rel, uRayD);
+  p += uStir * exp(-dot(perp, perp) * 28.0);
+  if (uPulse > 0.0) { vec3 d = p - uPulseO; float r2 = dot(d, d); p += d * inversesqrt(r2 + 1e-4) * uPulse * exp(-r2 * 2.5) * uDt; }
+  oPos = vec4(p, age);
+  oVel = vec4(v, 0.0);
+}`;
+
+// Each particle is a motion-blurred capsule from last frame's position to this one, so fast
+// particles draw unbroken silk instead of dotted trails. Energy is spread over the capsule's area.
+const VS_PTS = `#version 300 es
+precision highp float; precision highp int;
+uniform highp sampler2D uPos, uVel;
+uniform mat4 uV, uP;
+uniform vec2 uRes;
+uniform float uFocus, uCoc, uMin, uEnergy, uSpeedRef, uBlur, uFadeIn;
+uniform vec3 uPal[4];
+out vec3 vC; out vec2 vL; out float vLen, vR;
+${HASH}
+void main(){
+  int id = gl_InstanceID;
+  ivec2 ij = ivec2(id & 1023, id >> 10);
+  vec4 s = texelFetch(uPos, ij, 0);
+  vec3 vel = texelFetch(uVel, ij, 0).xyz;
+  vec4 v1 = uV * vec4(s.xyz, 1.0), v0 = uV * vec4(s.xyz - vel * uBlur, 1.0);
+  float z = -v1.z;
+  if (z < 0.06 || -v0.z < 0.06) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  vec4 c1 = uP * v1, c0 = uP * v0;
+  vec2 a = c0.xy / c0.w * uRes * 0.5, b = c1.xy / c1.w * uRes * 0.5;     // pixels
+  float coc = uCoc * abs(z - uFocus) / z;
+  float size = min(sqrt(uMin * uMin + coc * coc), 32.0), r = size * 0.5;
+  vec2 d = b - a; float len = length(d);
+  vec2 ax = len > 1e-3 ? d / len : vec2(1.0, 0.0), ay = vec2(-ax.y, ax.x);
+  vec2 corner = vec2(gl_VertexID & 1, gl_VertexID >> 1);                    // 0..1 strip corners
+  vec2 local = vec2(mix(-r, len + r, corner.x), mix(-r, r, corner.y));
+  vec2 px = a + ax * local.x + ay * local.y;
+  gl_Position = vec4(px / (uRes * 0.5) * c1.w, c1.z, c1.w);
+  vL = local; vLen = len; vR = r;
+  uint h = hsh(uint(id) * 747796405u + 2891336453u);
+  float t = clamp(length(vel) / uSpeedRef * 0.5 + (float(h & 1023u) / 1023.0 - 0.5) * 0.3, 0.0, 1.0) * 3.0;
+  vec3 col = t < 1.0 ? mix(uPal[0], uPal[1], t) : t < 2.0 ? mix(uPal[1], uPal[2], t - 1.0) : mix(uPal[2], uPal[3], t - 2.0);
+  float spark = ((h >> 10) & 511u) < 3u ? 5.0 : 1.0;                          // a few brighter motes
+  vC = col * (uEnergy * spark / (0.504 * size * len + 0.25 * size * size)) * smoothstep(0.06, 0.4, z) * smoothstep(0.0, uFadeIn, s.w);
+}`;
+
+const FS_PTS = `#version 300 es
+precision highp float;
+in vec3 vC; in vec2 vL; in float vLen, vR; out vec4 o;
+void main(){
+  vec2 q = vec2(max(max(-vL.x, vL.x - vLen), 0.0), vL.y) / vR;
+  float r2 = dot(q, q); if (r2 > 1.0) discard;
+  o = vec4(vC * exp(-3.0 * r2), 1.0);
+}`;
+
+const FS_DOWN = `#version 300 es
+precision highp float;
+uniform sampler2D uSrc; uniform vec2 uTx; uniform bool uKaris;
+in vec2 vUv; out vec4 o;
+vec3 tap(vec2 uv){ vec3 c = texture(uSrc, uv).rgb; return uKaris ? c / (1.0 + dot(c, vec3(0.2126, 0.7152, 0.0722))) : c; }
+void main(){
+  vec3 c = tap(vUv) * 4.0 + tap(vUv - uTx) + tap(vUv + uTx) + tap(vUv + vec2(uTx.x, -uTx.y)) + tap(vUv - vec2(uTx.x, -uTx.y));
+  c /= 8.0;
+  if (uKaris) c /= max(1.0 - dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.05);
+  o = vec4(c, 1.0);
+}`;
+
+const FS_UP = `#version 300 es
+precision highp float;
+uniform sampler2D uSrc; uniform vec2 uTx;
+in vec2 vUv; out vec4 o;
+void main(){
+  vec2 h = uTx;
+  vec3 c = texture(uSrc, vUv + vec2(-2.0 * h.x, 0.0)).rgb + texture(uSrc, vUv + vec2(2.0 * h.x, 0.0)).rgb
+         + texture(uSrc, vUv + vec2(0.0, -2.0 * h.y)).rgb + texture(uSrc, vUv + vec2(0.0, 2.0 * h.y)).rgb
+         + (texture(uSrc, vUv + h).rgb + texture(uSrc, vUv - h).rgb + texture(uSrc, vUv + vec2(h.x, -h.y)).rgb + texture(uSrc, vUv + vec2(-h.x, h.y)).rgb) * 2.0;
+  o = vec4(c / 12.0, 1.0);
+}`;
+
+const FS_FADE = `#version 300 es
+precision mediump float;
+out vec4 o;
+void main(){ o = vec4(0.0); }`;
+
+const FS_OUT = `#version 300 es
+precision highp float;
+uniform sampler2D uAcc, uBloom;
+uniform vec2 uRes; uniform float uTime, uBloomAmt, uExposure;
+uniform vec3 uBg;
+in vec2 vUv; out vec4 o;
+${HASH}
+vec3 aces(vec3 v){
+  const mat3 I = mat3(0.59719, 0.07600, 0.02840, 0.35458, 0.90834, 0.13383, 0.04823, 0.01566, 0.83777);
+  const mat3 O = mat3(1.60475, -0.10208, -0.00327, -0.53108, 1.10813, -0.07276, -0.07367, -0.00605, 1.07602);
+  v = I * v; v = (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.4329510) + 0.238081); return clamp(O * v, 0.0, 1.0);
+}
+vec3 srgb(vec3 c){ return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+void main(){
+  vec2 dc = vUv - 0.5;
+  vec2 ca = dc * 0.0035;                                                     // faint lens fringing toward the edges
+  vec3 c = vec3(texture(uAcc, vUv - ca).r, texture(uAcc, vUv).g, texture(uAcc, vUv + ca).b);
+  c += texture(uBloom, vUv).rgb * uBloomAmt;
+  float r = length(dc * vec2(uRes.x / uRes.y, 1.0));
+  c += uBg * (3.2 - 2.6 * smoothstep(0.0, 1.0, r));                      // soft glow of the room behind
+  c *= uExposure * (1.0 - 0.45 * smoothstep(0.35, 1.15, r));
+  c = srgb(aces(c));
+  uint s = hsh(uint(gl_FragCoord.x) * 1973u + uint(gl_FragCoord.y) * 9277u + uint(uTime * 60.0) * 26699u);
+  float n = rnd(s) + rnd(s) - 1.0;                                           // triangular: grain + dither, kills banding
+  c += n * (0.012 + 0.018 * (1.0 - c.g));
+  o = vec4(c, 1.0);
+}`;
+
+// ───────────────────────────── gl setup ─────────────────────────────
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+if (!gl || !gl.getExtension('EXT_color_buffer_float')) {
+  document.getElementById('fail').style.display = 'grid';
+  throw new Error('WebGL2 + EXT_color_buffer_float required');
+}
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); setTimeout(() => location.reload(), 600); });
+
+function program(vs, fs) {
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + '\n' + src.split('\n').map((l, i) => i + 1 + ' ' + l).join('\n'));
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {};
+  for (let i = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); i--;) {
+    const name = gl.getActiveUniform(p, i).name.replace('[0]', '');
+    u[name] = gl.getUniformLocation(p, name);
+  }
+  return { p, u };
+}
+const P = {
+  sim: program(VS_QUAD, FS_SIM), pts: program(VS_PTS, FS_PTS), down: program(VS_QUAD, FS_DOWN),
+  up: program(VS_QUAD, FS_UP), fade: program(VS_QUAD, FS_FADE), out: program(VS_QUAD, FS_OUT),
+};
+gl.bindVertexArray(gl.createVertexArray());
+
+function target(w, h, internal, filter, data = null) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, internal === gl.RGBA32F ? gl.FLOAT : gl.HALF_FLOAT, data);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  return { t, fb, w, h };
+}
+function drop(rt) { if (rt) { gl.deleteTexture(rt.t); gl.deleteFramebuffer(rt.fb); } }
+
+// Particle state: 1024 × 1024 RGBA32F (xyz, speed). Only the first `rows` rows are live.
+const SIDE = 1024;
+const seed = new Float32Array(SIDE * SIDE * 4);
+for (let i = 0; i < SIDE * SIDE; i++) {
+  let x, y, z;
+  do { x = Math.random() * 2 - 1; y = Math.random() * 2 - 1; z = Math.random() * 2 - 1; } while (x * x + y * y + z * z > 1);
+  seed.set([x, y, z, Math.random() * 3], i * 4);
+}
+const state = [0, 1].map(() => {
+  const pos = target(SIDE, SIDE, gl.RGBA32F, gl.NEAREST, seed), vel = target(SIDE, SIDE, gl.RGBA16F, gl.NEAREST);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pos.fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, vel.t, 0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+  return { fb: pos.fb, t: pos.t, v: vel.t };
+});
+
+// Quality tiers: live rows (× 1024 particles) and render scale. Adapted to measured frame time.
+const TIERS = [[96, .55], [160, .65], [256, .75], [384, .85], [512, 1], [768, 1], [1024, 1]];
+let tier = 4, tierCeil = TIERS.length;
+let acc = null, bloom = [], W = 0, H = 0, pixelRatio = 1;
+
+function resize() {
+  pixelRatio = Math.min(devicePixelRatio || 1, 2) * TIERS[tier][1];
+  const w = Math.max(2, Math.round(innerWidth * pixelRatio)), h = Math.max(2, Math.round(innerHeight * pixelRatio));
+  if (w === W && h === H) return;
+  W = canvas.width = w; H = canvas.height = h;
+  drop(acc); bloom.forEach(drop);
+  acc = target(W, H, gl.RGBA16F, gl.LINEAR);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  bloom = [];
+  for (let bw = W >> 1, bh = H >> 1; bloom.length < 7 && bw >= 4 && bh >= 4; bw >>= 1, bh >>= 1) bloom.push(target(bw, bh, gl.RGBA16F, gl.LINEAR));
+}
+addEventListener('resize', resize);
+resize();
+
+// ───────────────────────────── math ─────────────────────────────
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm = a => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => t * t * t * (t * (t * 6 - 15) + 10);
+const hex = h => [1, 3, 5].map(i => { const c = parseInt(h.substr(i, 2), 16) / 255; return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; });
+
+const FOV = 40 * Math.PI / 180;
+function camera(yaw, pitch, dist) {
+  const eye = [dist * Math.cos(pitch) * Math.sin(yaw), dist * Math.sin(pitch), dist * Math.cos(pitch) * Math.cos(yaw)];
+  const z = norm(eye), x = norm(cross([0, 1, 0], z)), y = cross(z, x);
+  const view = [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1];
+  const t = 1 / Math.tan(FOV / 2), a = W / H, n = .05, f = 60;
+  const proj = [t / a, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0];
+  return { eye, x, y, z, view, proj };
+}
+
+// ───────────────────────────── scene state ─────────────────────────────
+const look = s => ({ life: s.life ?? .07, spawn: s.spawn ?? 1.1, spawnY: s.spawnY ?? 0, pitch: s.pitch ?? .3, fadeIn: s.fadeIn ?? 3, pal: s.pal.slice(1).map(hex), bg: hex(s.pal[0]), speed: s.speed, fade: s.fade, ap: s.ap, gain: s.gain, bloom: s.bloom, turb: s.turb, dist: s.dist });
+let cur = 0, from = look(SCENES[0]), to = from, fieldA = SCENES[0].f, fieldB = SCENES[0].f;
+let mixT = 1, sceneT = 0, locked = false, frozen = false;
+let order = SCENES.map((_, i) => i), pos = 0;
+function step(dir) {
+  // play order reshuffles after every full cycle, so hours of watching never loop the same way
+  pos += dir;
+  if (pos >= order.length) {
+    do order.sort(() => Math.random() - .5); while (order[0] === cur);
+    pos = 0;
+  }
+  if (pos < 0) pos = order.length - 1;
+  go(order[pos]);
+}
+const blended = () => {
+  const m = ease(Math.min(mixT, 1)), L = (a, b) => lerp(a, b, m);
+  return {
+    life: L(from.life, to.life), spawn: L(from.spawn, to.spawn), spawnY: L(from.spawnY, to.spawnY), pitch: L(from.pitch, to.pitch), fadeIn: L(from.fadeIn, to.fadeIn),
+    pal: from.pal.map((c, i) => c.map((v, j) => L(v, to.pal[i][j]))), bg: from.bg.map((v, j) => L(v, to.bg[j])),
+    speed: L(from.speed, to.speed), fade: L(from.fade, to.fade), ap: L(from.ap, to.ap), gain: L(from.gain, to.gain),
+    bloom: L(from.bloom, to.bloom), turb: L(from.turb, to.turb) + .055 * Math.sin(Math.PI * m), dist: L(from.dist, to.dist), m,
+  };
+}
+function go(i) {
+  i = (i + SCENES.length) % SCENES.length;
+  if (i === cur && mixT >= 1) return;
+  from = blended();
+  if (mixT < 1 && ease(mixT) > .5) fieldA = fieldB;                          // interrupting: keep the dominant field
+  fieldB = SCENES[i].f; to = look(SCENES[i]);
+  cur = i; mixT = 0; sceneT = 0;
+  showLabel();
+  Sound.scene(SCENES[i]);
+}
+
+// ───────────────────────────── camera & input ─────────────────────────────
+const cam = { yaw: .6, pitch: .32, dist: 2.7, zoom: 1, yawV: 0, pitchV: 0, auto: 1, idle: 99 };
+const ptr = { x: .5, y: .5, has: false, stir: [0, 0, 0], pulse: 0, pulseO: [0, 0, 0] };
+const touches = new Map();
+let down = null, pinch0 = 0;
+
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  touches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]) / cam.zoom; down = null; }
+  else down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now(), moved: 0 };
+  Sound.unlock();
+});
+canvas.addEventListener('pointermove', e => {
+  wake();
+  const px = e.clientX, py = e.clientY;
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, [px, py]);
+  if (touches.size === 2) {
+    const [a, b] = [...touches.values()];
+    cam.zoom = Math.min(2.2, Math.max(.45, Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch0));
+    return;
+  }
+  if (down && e.buttons) {
+    const dx = px - down.lx, dy = py - down.ly;
+    down.lx = px; down.ly = py; down.moved += Math.abs(dx) + Math.abs(dy);
+    const k = 3.2 / innerHeight;
+    cam.yawV = lerp(cam.yawV, -dx * k * 60, .5); cam.pitchV = lerp(cam.pitchV, dy * k * 60, .5);
+    cam.yaw -= dx * k; cam.pitch = Math.max(-1.35, Math.min(1.35, cam.pitch + dy * k));
+    cam.idle = 0;
+  } else if (e.pointerType === 'mouse') {
+    // hover stirs: push particles near the cursor ray along the mouse motion
+    const c = camera(cam.yaw, cam.pitch, cam.dist), s = 2 * cam.dist * Math.tan(FOV / 2) / innerHeight * .9;
+    const dx = ptr.has ? px - ptr.x * innerWidth : 0, dy = ptr.has ? py - ptr.y * innerHeight : 0;
+    for (let j = 0; j < 3; j++) ptr.stir[j] += (c.x[j] * dx - c.y[j] * dy) * s;
+    Sound.stir(Math.hypot(dx, dy));
+  }
+  ptr.x = px / innerWidth; ptr.y = py / innerHeight; ptr.has = true;
+});
+function endPointer(e) {
+  touches.delete(e.pointerId);
+  if (down && e.type === 'pointerup' && down.moved < 8 && performance.now() - down.t < 400) ripple(e.clientX, e.clientY);
+  if (touches.size === 0) down = null;
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') ptr.has = false; });
+canvas.addEventListener('wheel', e => { e.preventDefault(); cam.zoom = Math.min(2.2, Math.max(.45, cam.zoom * Math.exp(-e.deltaY * .0012))); wake(); }, { passive: false });
+canvas.addEventListener('dblclick', toggleFull);
+
+function ray(px, py) {
+  const c = camera(cam.yaw, cam.pitch, cam.dist), t = Math.tan(FOV / 2), nx = (px / innerWidth * 2 - 1) * t * innerWidth / innerHeight, ny = (1 - py / innerHeight * 2) * t;
+  return { o: c.eye, d: norm([0, 1, 2].map(j => -c.z[j] + c.x[j] * nx + c.y[j] * ny)) };
+}
+function ripple(px, py) {
+  const r = ray(px, py), t = -dot(r.o, r.d);
+  ptr.pulseO = r.o.map((v, j) => v + r.d[j] * t);
+  ptr.pulse = 1;
+  Sound.ripple();
+}
+
+// ───────────────────────────── ui ─────────────────────────────
+const $ = id => document.getElementById(id);
+let idleTimer = 0, labelTimer = 0;
+function wake() {
+  document.body.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => { if (!$('help').classList.contains('show')) document.body.classList.add('idle'); }, 2600);
+}
+function showLabel() {
+  const s = SCENES[cur];
+  $('label').querySelector('.num').textContent = ROMAN[cur] + (locked ? '  ·  held' : '');
+  $('label').querySelector('.name').textContent = s.name;
+  $('label').querySelector('.sub').textContent = s.sub;
+  $('label').classList.add('show');
+  clearTimeout(labelTimer);
+  labelTimer = setTimeout(() => $('label').classList.remove('show'), 6500);
+}
+function toggleFull() {
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+}
+function toggleHelp(force) {
+  const on = $('help').classList.toggle('show', force);
+  if (on) { document.body.classList.remove('idle', 'zen'); $('help').querySelector('.card').focus?.(); }
+  else wake();
+}
+function save() { saveNext = true; }
+let saveNext = false;
+
+$('bSound').onclick = () => Sound.toggle();
+$('bNext').onclick = () => step(1);
+$('bFull').onclick = toggleFull;
+$('bHelp').onclick = () => toggleHelp();
+$('help').onclick = e => { if (e.target === $('help')) toggleHelp(false); };
+addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === ' ' || k === 'arrowright') { e.preventDefault(); step(1); }
+  else if (k === 'arrowleft') step(-1);
+  else if (k >= '1' && k <= String(SCENES.length)) { pos = order.indexOf(+k - 1); go(+k - 1); }
+  else if (k === 'm') Sound.toggle();
+  else if (k === 'f') toggleFull();
+  else if (k === 'p') frozen = !frozen;
+  else if (k === 'l') { locked = !locked; showLabel(); }
+  else if (k === 's') save();
+  else if (k === 'h') { document.body.classList.toggle('zen'); toggleHelp(false); return; }
+  else if (k === '?' || k === '/') toggleHelp();
+  else if (k === 'escape') toggleHelp(false);
+  else return;
+  wake();
+});
+document.addEventListener('mousemove', wake);
+
+// ───────────────────────────── sound ─────────────────────────────
+// Slow pad chords + wind + chimes, all synthesised. Off until the viewer turns it on.
+const Sound = (() => {
+  let ctx = null, out, bus, verb, on = false, want = false, chordIn = 0, bellIn = 4, lastStir = 0, voices = [], scene = SCENES[0], step = 0;
+  try { want = localStorage.getItem('drift.sound') === '1'; } catch {}
+  const PROG = [[0, 7, 11, 16], [-3, 4, 7, 12], [-7, 5, 9, 16], [-5, 2, 11, 14], [0, 4, 9, 14], [-7, 0, 9, 19]];
+  const PENTA = [0, 2, 4, 7, 9];
+  const hz = m => 440 * 2 ** ((m - 69) / 12);
+  function build() {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    out = ctx.createGain(); out.gain.value = 0;
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 3;
+    out.connect(comp).connect(ctx.destination);
+    verb = ctx.createConvolver();
+    const len = ctx.sampleRate * 6, ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3.2; }
+    verb.buffer = ir;
+    const wet = ctx.createGain(); wet.gain.value = .7; verb.connect(wet).connect(out);
+    bus = ctx.createGain(); bus.gain.value = .5; bus.connect(out); bus.connect(verb);
+    // wind: brown noise through a slowly wandering band-pass
+    const nb = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate), nd = nb.getChannelData(0);
+    for (let i = 0, b = 0; i < nd.length; i++) { b = (b + .02 * (Math.random() * 2 - 1)) / 1.02; nd[i] = b * 3.5; }
+    const n = ctx.createBufferSource(); n.buffer = nb; n.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500; bp.Q.value = .6;
+    const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = .05; lg.gain.value = 260; lfo.connect(lg).connect(bp.frequency); lfo.start();
+    const ng = ctx.createGain(); ng.gain.value = .05;
+    n.connect(bp).connect(ng).connect(verb); n.start();
+  }
+  function chord() {
+    const t = ctx.currentTime, notes = PROG[step++ % PROG.length];
+    for (const v of voices) { v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(v.g.gain.value, t); v.g.gain.linearRampToValueAtTime(0, t + 7); v.o.forEach(o => o.stop(t + 7.2)); }
+    voices = [];
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900 + Math.random() * 500; lp.Q.value = .4; lp.connect(bus);
+    [...notes.map(n => scene.root + n), scene.root - 12].forEach((m, i) => {
+      const g = ctx.createGain(); g.gain.value = 0;
+      g.gain.linearRampToValueAtTime(i === 4 ? .05 : .028, t + 5);
+      const pan = ctx.createStereoPanner(); pan.pan.value = i === 4 ? 0 : (i / 3 - .5) * .9;
+      const o = [['triangle', 0], ['sine', 7], ['sine', -6]].map(([type, cents]) => {
+        const o = ctx.createOscillator(); o.type = type; o.frequency.value = hz(m); o.detune.value = cents; o.connect(g); o.start(t); return o;
+      });
+      g.connect(pan).connect(lp);
+      voices.push({ g, o });
+    });
+  }
+  function bell(vol = 1, oct = 2) {
+    const t = ctx.currentTime, m = scene.root + 12 * oct + PENTA[Math.random() * 5 | 0];
+    const g = ctx.createGain(), pan = ctx.createStereoPanner(); pan.pan.value = Math.random() * 1.4 - .7;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.045 * vol, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + 5);
+    for (const [r, a] of [[1, 1], [2.76, .25], [5.4, .08]]) {
+      const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = hz(m) * r; og.gain.value = a;
+      o.connect(og).connect(g); o.start(t); o.stop(t + 5.2);
+    }
+    g.connect(pan).connect(bus);
+  }
+  function set(v) {
+    on = v; want = v;
+    try { localStorage.setItem('drift.sound', v ? '1' : '0'); } catch {}
+    $('bSound').setAttribute('aria-pressed', String(v));
+    if (v && !ctx) build();
+    if (!ctx) return;
+    if (v) { ctx.resume(); chordIn = 0; }
+    const t = ctx.currentTime;
+    out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(v ? .9 : 0, t + (v ? 3 : 1));
+  }
+  document.addEventListener('visibilitychange', () => { if (ctx && on) document.hidden ? ctx.suspend() : ctx.resume(); });
+  return {
+    toggle: () => set(!on),
+    unlock: () => { if (want && !on) set(true); },
+    scene(s) { scene = s; if (on) { chordIn = 1.5; setTimeout(() => on && bell(1.2, 1), 600); } },
+    tick(dt) {
+      if (!on) return;
+      if ((chordIn -= dt) <= 0) { chord(); chordIn = 9 + Math.random() * 4; }
+      if ((bellIn -= dt) <= 0) { bell(.5 + Math.random() * .5); bellIn = 2.5 + Math.random() * 6; }
+    },
+    stir(speed) { const n = performance.now(); if (on && speed > 25 && n - lastStir > 420) { lastStir = n; bell(Math.min(1, speed / 120) * .55, 2 + (Math.random() < .4)); } },
+    ripple() { if (on) { bell(1, 1); bell(.6, 2); } },
+  };
+})();
+
+// ───────────────────────────── frame loop ─────────────────────────────
+let last = performance.now(), time = 0, frame = 0, ping = 0;
+const perf = { t: 0, n: 0, sum: 0, best: 1e9, settle: 1.2 };
+
+function adapt(dt) {
+  // Every 2 s: step quality down if frames run slow, up if there is headroom. Stops climbing past a failed tier.
+  if ((perf.settle -= dt) > 0) return;
+  perf.sum += dt; perf.n++;
+  if (perf.sum < 2) return;
+  const avg = perf.sum / perf.n * 1000, ref = Math.min(Math.max(perf.best, 6.5), 16.7);
+  perf.best = Math.min(perf.best, avg);
+  perf.sum = perf.n = 0; perf.settle = 1;
+  if (avg > Math.max(ref * 1.3, 19) && tier > 0) { tierCeil = tier; tier--; resize(); }
+  else if (avg < ref * 1.12 && tier + 1 < tierCeil) { tier++; resize(); }
+}
+
+function quad() { gl.drawArrays(gl.TRIANGLES, 0, 3); }
+
+function render(now) {
+  requestAnimationFrame(render);
+  let dt = Math.min((now - last) / 1000, 1 / 20); last = now;
+  if (dt <= 0) return;
+  adapt(dt);
+  frame++;
+  const simDt = frozen ? 0 : dt;
+  time += simDt;
+
+  if (!locked) sceneT += dt;
+  if (sceneT > SCENE_SECONDS && !locked) step(1);
+  if (mixT < 1) { mixT += dt / TRANSITION_SECONDS; if (mixT >= 1) { mixT = 1; fieldA = fieldB; from = to; } }
+  const L = blended();
+  $('progress').firstChild.style.transform = `scaleX(${locked ? 1 : Math.min(sceneT / SCENE_SECONDS, 1)})`;
+  Sound.tick(dt);
+
+  // camera: slow auto-orbit, which fades back in after the viewer lets go
+  cam.idle += dt;
+  cam.auto = lerp(cam.auto, cam.idle > 6 ? 1 : 0, 1 - Math.exp(-dt * (cam.idle > 6 ? .4 : 4)));
+  if (!down) { cam.yaw += cam.yawV * dt; cam.pitch = Math.max(-1.35, Math.min(1.35, cam.pitch + cam.pitchV * dt)); }
+  cam.yawV *= Math.exp(-dt * 2.5); cam.pitchV *= Math.exp(-dt * 2.5);
+  cam.yaw += .045 * cam.auto * dt;
+  cam.pitch = lerp(cam.pitch, L.pitch + .22 * Math.sin(time * .021), 1 - Math.exp(-dt * .25 * cam.auto));
+  cam.dist = L.dist / cam.zoom * Math.max(1, .8 * H / W) * (1 + .05 * Math.sin(time * .037));   // back off on portrait screens
+  const C = camera(cam.yaw, cam.pitch, cam.dist);
+  const rows = TIERS[tier][0], count = rows * SIDE;
+
+  // 1 · simulate
+  const src = state[ping], dst = state[ping ^ 1]; ping ^= 1;
+  const r = ptr.has ? ray(ptr.x * innerWidth, ptr.y * innerHeight) : { o: [0, 0, 0], d: [0, 0, 1] };
+  const sk = 1 - Math.exp(-dt * 12);
+  const stir = ptr.has ? ptr.stir.map(v => v * sk) : [0, 0, 0];
+  ptr.stir = ptr.stir.map((v, j) => v - stir[j]);
+  ptr.pulse *= Math.exp(-dt * 2.2);
+  gl.disable(gl.BLEND);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, SIDE, rows);
+  gl.useProgram(P.sim.p);
+  const u = P.sim.u;
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.t); gl.uniform1i(u.uPos, 0);
+  gl.uniform1i(u.uA, fieldA); gl.uniform1i(u.uB, fieldB); gl.uniform1i(u.uRows, rows);
+  gl.uniform1f(u.uMix, fieldA === fieldB ? 0 : L.m); gl.uniform1f(u.uDt, simDt); gl.uniform1f(u.uTime, time);
+  gl.uniform1f(u.uTurb, L.turb); gl.uniform1f(u.uSpeed, L.speed); gl.uniform1f(u.uRespawn, 1 - Math.exp(-simDt * (L.life + 1.2 * Math.sin(Math.PI * L.m)))); gl.uniform1f(u.uSpawnR, L.spawn); gl.uniform1f(u.uSpawnY, L.spawnY);   // per-second rates
+  gl.uniform1ui(u.uFrame, frame);
+  gl.uniform3fv(u.uRayO, r.o); gl.uniform3fv(u.uRayD, r.d); gl.uniform3fv(u.uStir, stir);
+  gl.uniform3fv(u.uPulseO, ptr.pulseO); gl.uniform1f(u.uPulse, ptr.pulse > .01 && !frozen ? ptr.pulse * 2.4 : 0);
+  quad();
+
+  // 2 · fade the trail buffer, then splat particles additively
+  gl.bindFramebuffer(gl.FRAMEBUFFER, acc.fb); gl.viewport(0, 0, W, H);
+  const fade = L.fade ** (dt * 60);
+  gl.enable(gl.BLEND);
+  gl.blendColor(0, 0, 0, fade); gl.blendFunc(gl.ZERO, gl.CONSTANT_ALPHA);
+  gl.useProgram(P.fade.p); quad();
+  gl.blendFunc(gl.ONE, gl.ONE);
+  gl.useProgram(P.pts.p);
+  const v = P.pts.u;
+  gl.bindTexture(gl.TEXTURE_2D, dst.t); gl.uniform1i(v.uPos, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, dst.v); gl.uniform1i(v.uVel, 1); gl.activeTexture(gl.TEXTURE0);
+  gl.uniformMatrix4fv(v.uV, false, C.view); gl.uniformMatrix4fv(v.uP, false, C.proj);
+  gl.uniform1f(v.uFocus, cam.dist); gl.uniform1f(v.uCoc, L.ap * H);
+  gl.uniform1f(v.uMin, Math.max(1.5, 1.2 * pixelRatio));
+  gl.uniform1f(v.uEnergy, L.gain * .004 * W * H / count * (1 - fade) / (1 - .86));
+  gl.uniform1f(v.uSpeedRef, .45 * L.speed); gl.uniform1f(v.uFadeIn, L.fadeIn); gl.uniform2f(v.uRes, W, H); gl.uniform1f(v.uBlur, simDt);
+  gl.uniform3fv(v.uPal, L.pal.flat());
+  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
+
+  // 3 · bloom: dual-filter down then up the chain
+  gl.disable(gl.BLEND);
+  gl.useProgram(P.down.p);
+  let prev = acc;
+  bloom.forEach((b, i) => {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, b.fb); gl.viewport(0, 0, b.w, b.h);
+    gl.bindTexture(gl.TEXTURE_2D, prev.t);
+    gl.uniform1i(P.down.u.uSrc, 0); gl.uniform2f(P.down.u.uTx, 1 / prev.w, 1 / prev.h); gl.uniform1i(P.down.u.uKaris, i === 0);
+    quad(); prev = b;
+  });
+  gl.useProgram(P.up.p);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  for (let i = bloom.length - 1; i > 0; i--) {
+    const s = bloom[i], d = bloom[i - 1];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, d.fb); gl.viewport(0, 0, d.w, d.h);
+    gl.bindTexture(gl.TEXTURE_2D, s.t);
+    gl.uniform1i(P.up.u.uSrc, 0); gl.uniform2f(P.up.u.uTx, .5 / s.w, .5 / s.h);
+    quad();
+  }
+  gl.disable(gl.BLEND);
+
+  // 4 · composite to screen
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+  gl.useProgram(P.out.p);
+  const o = P.out.u;
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, acc.t); gl.uniform1i(o.uAcc, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bloom[0].t); gl.uniform1i(o.uBloom, 1);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.uniform2f(o.uRes, W, H); gl.uniform1f(o.uTime, time + frame * .001);
+  gl.uniform1f(o.uBloomAmt, L.bloom / bloom.length); gl.uniform1f(o.uExposure, 1);
+  gl.uniform3fv(o.uBg, L.bg);
+  quad();
+
+  if (saveNext) {
+    saveNext = false;
+    canvas.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `drift-${SCENES[cur].name.toLowerCase()}-${Date.now()}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); });
+  }
+}
+
+// opening: title breathes in, then the first scene's name
+document.body.classList.add('idle');
+requestAnimationFrame(() => $('title').classList.add('show'));
+setTimeout(() => $('title').classList.remove('show'), 5200);
+setTimeout(showLabel, 6000);
+$('bSound').setAttribute('aria-pressed', 'false');
+Sound.scene(SCENES[0]);
+requestAnimationFrame(render);
+
+// debug hook for automated screenshots
+window.drift = { go, get state() { return { cur, mixT, tier, W, H, frame }; }, setTier(t) { tier = t; tierCeil = TIERS.length; perf.settle = 1e9; resize(); }, ripple };
+</script>
+</body>
+</html>
