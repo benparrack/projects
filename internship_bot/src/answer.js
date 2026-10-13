@@ -21,6 +21,7 @@ Rules:
 - Written questions ("why this company", "tell us about a project"): write in Ben's first-person voice,
   specific to this job and company, using only true material from STORIES and RESUME. Plain, direct,
   warm, no cliches, no em dashes. 60-150 words unless the question sets a limit.
+- Date questions: answer as MM/DD/YYYY.
 - Select questions: answer must be exactly one of the listed options. Multiselect: options joined by " | ".
 - Consent, acknowledgement and "I certify the information is accurate" checkboxes: answer "Yes".
 - "How did you hear about us": Simplify/GitHub if listed, else a generic "job board"/"online"/"website" option,

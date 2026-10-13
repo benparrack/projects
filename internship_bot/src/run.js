@@ -71,7 +71,12 @@ const run = async (job, dryRun) => {
   browser ??= await chromium.launch({ channel: 'chrome', headless: true });
   meta.set('run:current', `${job.company}: ${job.title}`);
   const res = await apply(browser, job, { dryRun })
-    .catch(e => (setStatus(job.id, 'failed', { reason: e.message }), { status: 'failed', why: e.message }));
+    .catch(e => {
+      // The lists lag behind: a 404 from the board means the posting was taken down.
+      const status = /\b404\b|closed/i.test(e.message) ? 'skipped' : 'failed';
+      setStatus(job.id, status, { reason: status === 'skipped' ? 'posting closed' : e.message });
+      return { status, why: e.message };
+    });
   console.log(`${res.status.padEnd(7)} ${job.company} | ${job.title}` +
     (res.needs ? '\n          needs: ' + res.needs.map(x => `${x.label} (${x.why})`).join('\n                 ') : '') +
     (res.why ? `\n          ${res.why}` : ''));

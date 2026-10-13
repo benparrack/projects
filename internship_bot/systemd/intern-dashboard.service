@@ -1,0 +1,12 @@
+# Dashboard at http://127.0.0.1:8377 (localhost only).
+[Unit]
+Description=Internship bot dashboard
+
+[Service]
+WorkingDirectory=%h/projects/internship_bot
+Environment=PATH=/home/ben/AppDev/Tools/nvm/versions/node/v22.23.2/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/ben/AppDev/Tools/nvm/versions/node/v22.23.2/bin/node --no-warnings src/dashboard.js
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

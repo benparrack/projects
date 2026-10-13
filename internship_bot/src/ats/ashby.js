@@ -10,7 +10,7 @@ const QUERY = `query ApiJobPosting($organizationHostedJobsPageName: String!, $jo
     surveyForms { sections { fieldEntries { ... on FormFieldEntry { field isRequired } } } }
   } }`;
 
-const TYPES = { String: 'text', Email: 'text', Phone: 'text', Number: 'text', Url: 'text', LongText: 'textarea', File: 'file',
+const TYPES = { String: 'text', Email: 'text', Phone: 'text', Number: 'text', Url: 'text', LongText: 'textarea', File: 'file', Date: 'date',
   Boolean: 'select', ValueSelect: 'select', MultiValueSelect: 'multiselect', Location: 'location', EducationHistory: 'education' };
 
 // Ashby system paths → the standard keys answer.js knows.
@@ -83,6 +83,7 @@ export async function fill(page, questions, answers, facts) {
     let ok = true;
     if (q.type === 'file') await box.locator('input[type=file]').setInputFiles(v);
     else if (q.type === 'text' || q.type === 'textarea') await box.locator('input, textarea').first().fill(String(v));
+    else if (q.type === 'date') { const d = box.locator('input').first(); await d.fill(String(v)); await d.press('Escape'); }   // react-datepicker takes typed MM/DD/YYYY
     else if (q.type === 'location') {
       ok = await combo(page, box.locator('input').first(), `${facts.address.city}, ${facts.address.state}`, t => t.startsWith(facts.address.city));
     } else if (q.type === 'education') {

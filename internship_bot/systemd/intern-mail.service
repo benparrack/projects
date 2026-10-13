@@ -1,0 +1,12 @@
+# Reads replies from companies (only once Gmail is set up in the dashboard's Settings).
+[Unit]
+Description=Internship bot: check mail for outcomes
+After=network-online.target
+ConditionPathExists=%h/projects/internship_bot/data/mail.json
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/internship_bot
+Environment=PATH=%h/.local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 src/mail.py
+TimeoutStartSec=20min
