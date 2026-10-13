@@ -28,9 +28,14 @@ the standard library, and the viewer is plain ES modules with no build step.
 - **Ask.** On any page you can ask a follow-up question. Claude answers from the actual source, citing
   `file:line`, and the answers are kept under *Your questions*.
 
-The viewer remembers which chapters you've marked as understood and how you answered each quiz.
-Press `/` to search chapters, files, functions and terms, and use the arrow keys to move between
-chapters.
+- **Flashcards.** Every glossary term, design decision and big idea becomes a card. Cards you know
+  come round less often (Leitner boxes), and missed ones come back within the same round.
+
+The viewer remembers which chapters you've marked as understood, how you answered each quiz, your
+flashcard progress and where you stopped reading; the bookshelf links straight back there. If the
+project's files change after a build, the shelf and the overview say so and give you the rebuild
+command. Press `?` for the keyboard shortcuts: `/` searches chapters, files, functions and terms, the
+arrow keys move between chapters, `m` marks a chapter understood and `a` asks about the page.
 
 ## How a build works
 

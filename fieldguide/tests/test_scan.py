@@ -92,6 +92,15 @@ class GlueTest(unittest.TestCase):
         self.assertEqual(out['improvements'][0]['file'], 'src/b.py')
         self.assertEqual(out['quiz'][0]['answer'], 1)
 
+    def test_changed_spots_edits_and_deletions(self):
+        from fieldguide.server import changed
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / 'a.py').write_text('x = 1\n')
+            (root / 'b.py').write_text('y = 2\n')
+            g = {'project': {'root': d}, 'sources': {'a.py': 'x = 1\n', 'b.py': 'y = 1\n', 'gone.py': ''}}
+            self.assertEqual(changed(g), ['b.py', 'gone.py'])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import llm
 from .course import VOICE, source_block
+from .scan import read_text
 
 ASK_SCHEMA = {'type': 'object', 'required': ['answer', 'files'],
               'properties': {'answer': {'type': 'string', 'description': 'Markdown answer.'},
@@ -25,6 +26,19 @@ def load(guides: Path, name: str) -> dict | None:
     if name not in _guides or _guides[name]['_mtime'] != mtime:
         _guides[name] = json.loads(f.read_text()) | {'_mtime': mtime}
     return _guides[name]
+
+
+def changed(g) -> list[str]:
+    """Files whose source differs from what the guide was built from (edited or deleted)."""
+    # shortcut: files added since the build aren't noticed; a rescan would catch them but costs a full walk
+    root, out = Path(g['project']['root']), []
+    for path, text in g['sources'].items():
+        try:
+            if read_text(root / path) != text:
+                out.append(path)
+        except OSError:
+            out.append(path)
+    return out
 
 
 def pick_files(g, question, focus):
@@ -95,7 +109,7 @@ def serve(guides: Path, web: Path, port: int, open_guide=None, ask_model='sonnet
                     g = load(guides, f.parent.name)
                     shelf.append({'slug': g['slug'], 'title': g['course']['title'], 'tagline': g['course']['tagline'],
                                   'built': g['built'], 'stats': g['project']['stats'],
-                                  'chapters': len(g['course']['chapters'])})
+                                  'chapters': len(g['course']['chapters']), 'stale': len(changed(g))})
                 return self.send_json(shelf)
             m = re.fullmatch(r'/api/guide/([a-z0-9-]+)', path)
             if m:
@@ -104,7 +118,7 @@ def serve(guides: Path, web: Path, port: int, open_guide=None, ask_model='sonnet
                     return self.send_json({'error': 'no such guide'}, 404)
                 qa = guides / m.group(1) / 'qa.json'
                 return self.send_json({k: v for k, v in g.items() if k != '_mtime'} |
-                                      {'qa': json.loads(qa.read_text()) if qa.exists() else []})
+                                      {'qa': json.loads(qa.read_text()) if qa.exists() else [], 'stale': changed(g)})
             if re.fullmatch(r'/g/[a-z0-9-]+/?', path):
                 self.path = '/index.html'
             return super().do_GET()

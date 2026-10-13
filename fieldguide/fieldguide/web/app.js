@@ -27,16 +27,16 @@ async function shelf() {
   document.title = 'Field Guide';
   let list = [];
   try { list = await (await fetch('/api/guides')).json(); } catch {}
-  const prog = s => { try { const p = JSON.parse(localStorage.getItem('fg:' + s.slug)) || {}; return Object.keys(p.read || {}).length; } catch { return 0; } };
+  const progress = s => { try { return JSON.parse(localStorage.getItem('fg:' + s.slug)) || {}; } catch { return {}; } };
   app.innerHTML = `<div class="shelf">
     <div class="mast"><div><div class="label">Codebase study guides</div><h1>Field Guide</h1>
       <p>Every project you've built, explained back to you.</p></div>
       <div class="label">${plural(list.length, 'guide')}</div></div>
     ${list.length ? `<div class="books">${list.map(g => {
-      const done = prog(g);
-      return `<a href="/g/${g.slug}/"><div class="label">${esc(g.stats.languages.slice(0, 2).map(l => l[0]).join(' · '))}</div>
+      const p = progress(g), done = Object.keys(p.read || {}).length;
+      return `<a href="/g/${g.slug}/${p.last && p.last !== '#/' ? p.last : ''}"><div class="label">${esc(g.stats.languages.slice(0, 2).map(l => l[0]).join(' · '))}</div>
         <h2>${esc(g.title)}</h2><p>${esc(g.tagline)}</p>
-        <div class="stats"><span>${g.stats.loc.toLocaleString()} lines</span><span>${g.chapters} chapters</span><span>${done ? `${done} read` : 'unread'}</span><span>built ${esc(g.built.slice(0, 10))}</span></div>
+        <div class="stats"><span>${g.stats.loc.toLocaleString()} lines</span><span>${g.chapters} chapters</span><span>${done ? `${done} read` : 'unread'}</span><span>built ${esc(g.built.slice(0, 10))}</span>${g.stale ? `<span class="stale" title="${plural(g.stale, 'file')} changed since the build">needs a rebuild</span>` : ''}</div>
         <div class="prog"><i style="width:${Math.round((done / g.chapters) * 100)}%"></i></div></a>`;
     }).join('')}</div>` : `<p class="empty-state">No guides yet. Build your first one below.</p>`}
     <div class="howto"><div class="label">Add a project</div>
@@ -108,15 +108,36 @@ function frame() {
   </div>
   <button class="fab" id="fab" hidden><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 3.5h11v7h-6l-3 3v-3h-2z"/></svg>Ask about this</button>
   <div class="drawer" id="drawer" aria-hidden="true"><header><div><div class="label">Ask</div><div id="dr-where" style="font:13px var(--sans);color:var(--muted)"></div></div><button id="dr-close" aria-label="Close">×</button></header><div class="body" id="dr-body"></div></div>
-  <div class="palette-bg" id="pal"><div class="palette" role="dialog" aria-label="Search"><input id="pal-in" placeholder="Jump to a chapter, file, function or term" autocomplete="off"><ul id="pal-list"></ul></div></div>`;
+  <div class="palette-bg" id="pal"><div class="palette" role="dialog" aria-label="Search"><input id="pal-in" placeholder="Jump to a chapter, file, function or term" autocomplete="off"><ul id="pal-list"></ul></div></div>
+  <div class="palette-bg" id="keys"><div class="palette keys" role="dialog" aria-label="Keyboard shortcuts"><div class="label">Keyboard</div><dl>
+    <dt><kbd>/</kbd></dt><dd>Search chapters, files, functions and terms</dd>
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous and next chapter</dd>
+    <dt><kbd>m</kbd></dt><dd>Mark the chapter as understood</dd>
+    <dt><kbd>a</kbd></dt><dd>Ask a question about this page</dd>
+    <dt><kbd>Space</kbd></dt><dd>Flashcards: show the answer</dd>
+    <dt><kbd>1</kbd> <kbd>2</kbd></dt><dd>Flashcards: again, or knew it</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Close whatever is open</dd>
+    <dt><kbd>?</kbd></dt><dd>This list</dd></dl></div></div>
+  <div class="readbar" id="readbar"><i></i></div>`;
   $('#menu').onclick = () => $('#side').classList.toggle('open');
   $('#fab').onclick = openDrawer;
   $('#dr-close').onclick = closeDrawer;
   setupPalette();
+  addEventListener('scroll', () => {
+    const h = document.documentElement.scrollHeight - innerHeight;
+    $('#readbar i').style.width = (h > 0 ? Math.min(1, scrollY / h) * 100 : 0) + '%';
+    ctx.onScroll?.();
+  }, { passive: true });
+  $('#keys').onclick = () => $('#keys').classList.remove('open');
   document.addEventListener('keydown', e => {
     if (e.key === '/' && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); openPalette(); }
-    if (e.key === 'Escape') { closePalette(); closeDrawer(); }
-    if (/INPUT|TEXTAREA/.test(document.activeElement.tagName) || e.metaKey || e.ctrlKey) return;
+    if (e.key === 'Escape') { closePalette(); closeDrawer(); $('#keys').classList.remove('open'); }
+    if (/INPUT|TEXTAREA/.test(document.activeElement.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if ($('#pal').classList.contains('open')) return;
+    if (e.key === '?') $('#keys').classList.toggle('open');
+    if (e.key === 'm') $('[data-read]')?.click();
+    if (e.key === 'a' && ctx.focus) { e.preventDefault(); openDrawer(); }
+    if (ctx.cardKey?.(e)) return;
     const r = location.hash.match(/^#\/ch\/(\d+)/);
     if (r && e.key === 'ArrowRight') { const n = +r[1]; location.hash = n < G.course.chapters.length ? `#/ch/${n + 1}` : '#/review'; }
     if (r && e.key === 'ArrowLeft') { const n = +r[1]; location.hash = n > 1 ? `#/ch/${n - 1}` : '#/'; }
@@ -139,11 +160,13 @@ function side(active) {
       ${link('#/map', '', 'Map of the code', active === 'map')}
       ${link('#/files', '', 'Files', active === 'files')}
       ${link('#/glossary', '', 'Glossary', active === 'glossary')}
+      ${link('#/cards', '', 'Flashcards', active === 'cards')}
       ${link('#/improve', '', 'Improvements', active === 'improve')}
       ${link('#/ask', '', 'Your questions', active === 'ask')}
     </nav>
-    <div class="tools"><button id="srch">Search <kbd>/</kbd></button><button id="theme">${document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches) ? 'Light' : 'Dark'}</button></div>`;
+    <div class="tools"><button id="srch">Search <kbd>/</kbd></button><button id="help" aria-label="Keyboard shortcuts">?</button><button id="theme">${document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches) ? 'Light' : 'Dark'}</button></div>`;
   $('#srch').onclick = openPalette;
+  $('#help').onclick = () => $('#keys').classList.add('open');
   $('#theme').onclick = () => {
     const dark = $('#theme').textContent === 'Dark';
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
@@ -157,17 +180,19 @@ function route() {
   const h = decodeURI(location.hash.slice(1) || '/');
   const main = $('#main');
   let r, active = '';
-  ctx.focus = null;
+  ctx.focus = null; ctx.cardKey = null;
   if ((r = h.match(/^\/ch\/(\d+)/))) { active = 'ch' + r[1]; main.innerHTML = chapterView(+r[1] - 1); }
   else if (h === '/review') { active = 'review'; main.innerHTML = reviewView(); }
   else if (h.startsWith('/map')) { active = 'map'; main.innerHTML = mapView(); }
   else if ((r = h.match(/^\/files\/?(.*)$/))) { active = 'files'; main.innerHTML = filesView(r[1]); }
   else if (h === '/glossary') { active = 'glossary'; main.innerHTML = glossaryView(); }
   else if (h === '/improve') { active = 'improve'; main.innerHTML = improveView(); }
+  else if (h === '/cards') { active = 'cards'; main.innerHTML = cardsView(); }
   else if (h === '/ask') { active = 'ask'; main.innerHTML = askView(); }
   else { active = 'cover'; main.innerHTML = coverView(); }
   side(active);
   wire(active);
+  document.body.classList.toggle('reading', /^ch|^review$/.test(active));
   $('#fab').hidden = !ctx.focus;
   if (!ctx.keepScroll) window.scrollTo(0, 0);
   ctx.keepScroll = false;
@@ -254,6 +279,7 @@ function coverView() {
       <div class="langkey">${S.languages.slice(0, 7).map(([l, n]) => `<span style="--c:${ctx.langColor[l]}">${l} ${Math.round((n / totalLoc) * 100)}%</span>`).join('')}</div>
       <a class="begin" href="${next < 0 ? '#/review' : `#/ch/${next + 1}`}">${!started ? 'Begin with chapter 1' : next < 0 ? 'Read the closing chapter' : `Continue with chapter ${next + 1}`} <span aria-hidden="true">→</span></a>
     </header>
+    ${G.stale.length ? `<div class="stale-note"><b>The code has moved on.</b> ${plural(G.stale.length, 'file')} changed since this guide was built on ${esc(G.built.slice(0, 10))}${G.stale.length <= 4 ? `: ${G.stale.map(p => `<a href="${fileHref(p)}"><code>${esc(p)}</code></a>`).join(', ')}` : ''}. Rebuild to bring it up to date; only the changed parts are rewritten.<pre>python3 -m fieldguide build ${esc(G.project.root)}</pre></div>` : ''}
     <div class="prose">${md(C.overview)}</div>
     <h2>How it runs</h2>
     <div class="prose">${md(C.how_it_runs)}</div>
@@ -281,21 +307,36 @@ function chapterView(i) {
   if (!b) return `<article class="page"><header class="ch-head"><div class="label">Chapter ${pad2(n)}</div><h1 class="title">${ti(c.title)}</h1><p class="dek">${inline(c.goal)}</p></header>
     <div class="missing">This chapter failed to generate. Run the build command again and it will be filled in; finished chapters are cached.</div><nav class="ch-foot"><div>${prev}</div><div class="mid"></div><div class="next">${next}</div></nav></article>`;
   let fig = 0, lst = 0;
-  return `<article class="page">
+  const extra = [['design_notes', 'Why it\'s built this way', 'a-why'], ['improvements', 'Where it could be better', 'a-imp'], ['quiz', 'Check yourself', 'a-quiz'], ['exercises', 'Try it in the code', 'a-try']].filter(([k]) => b[k]?.length);
+  return `<nav class="otp" aria-label="On this page"><div class="label">On this page</div>${b.sections.map((s, k) => `<a href="#s${k + 1}" data-to="s${k + 1}"><span>${n}.${k + 1}</span>${ti(s.heading)}</a>`).join('')}${extra.map(([, t, id]) => `<a href="#${id}" data-to="${id}" class="x">${t}</a>`).join('')}</nav>
+  <article class="page">
     <header class="ch-head"><div class="label">Chapter ${pad2(n)}</div><h1 class="title">${ti(c.title)}</h1><p class="dek">${inline(c.goal)}</p>
       <div class="ch-files">${c.files.map(p => `<a class="chip" href="${fileHref(p)}">${esc(p)}</a>`).join('')}</div></header>
     ${b.sections.map((s, k) => `<section class="section" id="s${k + 1}"><h2><span class="sec-num">${n}.${k + 1}</span>${ti(s.heading)}</h2>
       <div class="prose">${md(s.body)}</div>
       ${s.diagram ? diagramFigure(s.diagram, `Fig. ${n}.${++fig}`) : ''}
       ${(s.code || []).map(x => codeFigure(x, `Listing ${n}.${++lst}`)).join('')}</section>`).join('')}
-    ${b.design_notes?.length ? `<section class="aside"><h2>Why it's built this way</h2><div class="decisions">${b.design_notes.map(d => `<div class="decision"><h4>${inline(d.decision)}</h4>
+    ${b.design_notes?.length ? `<section class="aside" id="a-why"><h2>Why it's built this way</h2><div class="decisions">${b.design_notes.map(d => `<div class="decision"><h4>${inline(d.decision)}</h4>
       <div class="k">Reason</div><div class="v prose">${md(d.why)}</div><div class="k">Alternative</div><div class="v prose">${md(d.alternative)}</div></div>`).join('')}</div></section>` : ''}
-    ${b.improvements?.length ? `<section class="aside"><h2>Where it could be better</h2>${b.improvements.map(x => impHTML(x)).join('')}</section>` : ''}
-    ${b.quiz?.length ? `<section class="aside"><h2>Check yourself</h2>${quizHTML(b.quiz, 'c' + i)}</section>` : ''}
-    ${b.exercises?.length ? `<section class="aside"><h2>Try it in the code</h2>${b.exercises.map((x, k) => `<div class="exercise"><span class="n">${k + 1}</span><div><div class="prose">${md(x.task)}</div><details><summary>Hint</summary><div class="prose">${md(x.hint)}</div></details></div></div>`).join('')}</section>` : ''}
+    ${b.improvements?.length ? `<section class="aside" id="a-imp"><h2>Where it could be better</h2>${b.improvements.map(x => impHTML(x)).join('')}</section>` : ''}
+    ${b.quiz?.length ? `<section class="aside" id="a-quiz"><h2>Check yourself</h2>${quizHTML(b.quiz, 'c' + i)}</section>` : ''}
+    ${b.exercises?.length ? `<section class="aside" id="a-try"><h2>Try it in the code</h2>${b.exercises.map((x, k) => `<div class="exercise"><span class="n">${k + 1}</span><div><div class="prose">${md(x.task)}</div><details><summary>Hint</summary><div class="prose">${md(x.hint)}</div></details></div></div>`).join('')}</section>` : ''}
     ${b.takeaways?.length ? `<div class="takeaways"><div class="label">Keep in mind</div><ol>${b.takeaways.map(t => `<li>${md(t).replace(/^<p>|<\/p>$/g, '')}</li>`).join('')}</ol></div>` : ''}
     <nav class="ch-foot"><div>${prev}</div><div class="mid"><button class="done-btn${P.read[i] ? ' on' : ''}" data-read="${i}">${P.read[i] ? '✓ Understood' : 'Mark as understood'}</button></div><div class="next">${next}</div></nav>
   </article>`;
+}
+
+// the outline links are in-page anchors, but the router owns the hash, so scroll instead of navigating
+function wireOutline() {
+  const links = $$('.otp a');
+  links.forEach(a => (a.onclick = e => { e.preventDefault(); $('#' + a.dataset.to)?.scrollIntoView({ behavior: 'smooth' }); }));
+  const spy = () => {
+    let cur = links[0];
+    for (const a of links) if ($('#' + a.dataset.to)?.getBoundingClientRect().top < innerHeight * 0.3) cur = a;
+    links.forEach(a => a.classList.toggle('on', a === cur));
+  };
+  ctx.onScroll = spy;
+  spy();
 }
 
 // ---------- closing chapter ----------
@@ -308,12 +349,13 @@ function reviewView() {
     <div class="prose">${md(K.recap)}</div>
     <h2>The mental model</h2><p style="color:var(--ink-2)">If you can explain each of these from memory, you understand the project.</p>
     <ol class="mm">${K.mental_model.map((m, i) => `<li><span class="n">${i + 1}</span><div><b>${inline(m.idea)}</b><span class="prose">${md(m.detail).replace(/^<p>|<\/p>$/g, '')}</span></div></li>`).join('')}</ol>
+    <p style="color:var(--ink-2)">To make it stick, run through the <a href="#/cards">flashcards</a> a few times over the next week.</p>
     <h2>Final quiz</h2>${quizHTML(K.final_quiz, 'final')}
     <h2>What to improve, in order</h2><p style="color:var(--ink-2)">The full list, with every chapter's findings, is under <a href="#/improve">Improvements</a>.</p>
     ${roadmapHTML(K.roadmap)}
     <h2>Where to go from here</h2><div class="prose"><ul>${K.next_steps.map(s => `<li>${md(s).replace(/^<p>|<\/p>$/g, '')}</li>`).join('')}</ul></div>
     <nav class="ch-foot"><div><a href="#/ch/${G.course.chapters.length}"><small>← Chapter ${G.course.chapters.length}</small>${ti(G.course.chapters.at(-1).title)}</a></div>
-      <div class="mid"><button class="done-btn${P.read.review ? ' on' : ''}" data-read="review">${P.read.review ? '✓ Understood' : 'Mark as understood'}</button></div><div class="next"><a href="#/"><small>Back to →</small>Overview</a></div></nav>
+      <div class="mid"><button class="done-btn${P.read.review ? ' on' : ''}" data-read="review">${P.read.review ? '✓ Understood' : 'Mark as understood'}</button></div><div class="next"><a href="#/cards"><small>Next →</small>Flashcards</a></div></nav>
   </article>`;
 }
 const roadmapHTML = rm => `<ol class="roadmap">${rm.map(r => `<li><div><h4>${inline(r.title)}</h4>
@@ -381,6 +423,7 @@ function filesView(spec) {
   return `<article class="page wide"><div class="files-grid"><div class="ftree" id="ftree">${tree}</div><div style="min-width:0">
     <div class="fhead"><div class="label" style="color:${compColor(path)}">${esc(G.course.components[ctx.comp[path]]?.name || f.lang)}</div><h1>${esc(path)}</h1>
       ${d.purpose ? `<p class="dek">${esc(d.purpose)}</p>` : ''}</div>
+    ${G.stale.includes(path) ? `<div class="stale-note"><b>Changed since the build.</b> The notes and source below are from ${esc(G.built.slice(0, 10))}; the file on disk is different now.</div>` : ''}
     ${d.summary ? `<div class="prose">${md(d.summary)}</div>` : ''}
     <div class="fmeta">
       <div><div class="label">Imports</div>${fl(f.imports)}</div>
@@ -440,6 +483,79 @@ function glossaryView() {
   return `<article class="page"><header class="ch-head"><div class="label">Reference</div><h1 class="title">Glossary</h1>
     <p class="dek">${plural(sorted.length, 'term')} used in this guide, from this project's own vocabulary to the general ideas it relies on.</p></header>
     <dl class="gloss">${html}</dl></article>`;
+}
+
+// ---------- flashcards ----------
+const KINDS = { term: 'Terms', why: 'Design decisions', idea: 'Big ideas' };
+function deck() {
+  const cards = [], seen = new Set();
+  const add = (kind, front, back, ch) => {
+    const id = kind + ':' + front.toLowerCase();
+    if (!seen.has(id)) { seen.add(id); cards.push({ id, kind, front, back, ch }); }
+  };
+  G.chapters.forEach((ch, i) => {
+    ch?.terms?.forEach(t => add('term', t.term, t.definition, i));
+    ch?.design_notes?.forEach(d => add('why', d.decision, `${d.why}\n\n**Instead:** ${d.alternative}`, i));
+  });
+  G.capstone?.mental_model?.forEach(m => add('idea', m.idea, m.detail));
+  return cards;
+}
+// Leitner boxes: a card you know moves up a box and comes round less often; a miss sends it back to box 0
+function cardQueue(cards, boxes, n = 20) {
+  return [...cards].sort((a, b) => (boxes[a.id] || 0) - (boxes[b.id] || 0) || a.r - b.r).slice(0, n);
+}
+function cardsView() {
+  P.cards ||= {};
+  const f = ctx.cardFilter || 'all', all = deck();
+  const known = all.filter(c => (P.cards[c.id] || 0) >= 2).length;
+  return `<article class="page"><header class="ch-head"><div class="label">Reference</div><h1 class="title">Flashcards</h1>
+    <p class="dek">The guide's vocabulary, its design decisions and its big ideas, one at a time. Say the answer out loud before you turn the card.</p></header>
+    <div class="filters">${[['all', `All ${all.length}`], ...Object.entries(KINDS).map(([k, t]) => [k, `${t} ${all.filter(c => c.kind === k).length}`])].map(([k, t]) => `<button data-f="${k}" class="${f === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <div class="deck-stats"><span>${known} of ${all.length} known</span><div class="bar"><i style="width:${all.length ? (known / all.length) * 100 : 0}%"></i></div></div>
+    <div id="card"></div></article>`;
+}
+function wireCards() {
+  const f = ctx.cardFilter || 'all';
+  const cards = deck().filter(c => f === 'all' || c.kind === f).map(c => ({ ...c, r: Math.random() }));
+  let queue = cardQueue(cards, P.cards), shown = false, right = 0, seen = 0;
+  const el = $('#card');
+  const draw = () => {
+    const c = queue[0];
+    if (!c) {
+      el.innerHTML = `<div class="flash end"><div class="label">Round done</div><p class="front">${seen ? `You knew ${right} of ${seen}.` : 'No cards here yet.'}</p>
+        ${seen ? `<p>Cards you missed come up first next time. A few short rounds over several days beat one long one.</p><div class="acts"><button class="primary" id="again-round">Another round</button></div>` : ''}</div>`;
+      $('#again-round')?.addEventListener('click', () => { ctx.keepScroll = true; route(); });
+      return;
+    }
+    const box = P.cards[c.id] || 0;
+    el.innerHTML = `<div class="flash${shown ? ' shown' : ''}"><div class="label">${KINDS[c.kind].replace(/s$/, '')}${c.ch != null ? ` · <a href="#/ch/${c.ch + 1}">chapter ${c.ch + 1}</a>` : ''}<span class="pips" title="Box ${box} of 4">${[0, 1, 2, 3].map(k => `<i class="${k < box ? 'on' : ''}"></i>`).join('')}</span></div>
+      <p class="front">${inline(c.front)}</p>${c.kind === 'why' ? '<p class="cue">Why was it built this way, and what was the alternative?</p>' : c.kind === 'term' ? '<p class="cue">What does it mean here?</p>' : '<p class="cue">Explain it in your own words.</p>'}
+      ${shown ? `<div class="back prose">${md(c.back)}</div><div class="acts"><button id="miss"><kbd>1</kbd> Again</button><button class="primary" id="hit"><kbd>2</kbd> Knew it</button></div>`
+        : `<div class="acts"><button class="primary" id="flip"><kbd>Space</kbd> Show answer</button></div>`}
+      <div class="left">${plural(queue.length, 'card')} left in this round</div></div>`;
+    $('#flip')?.addEventListener('click', flip);
+    $('#miss')?.addEventListener('click', () => grade(false));
+    $('#hit')?.addEventListener('click', () => grade(true));
+  };
+  const flip = () => { shown = true; draw(); };
+  const grade = ok => {
+    const c = queue.shift();
+    seen++; if (ok) right++;
+    P.cards[c.id] = ok ? Math.min(4, (P.cards[c.id] || 0) + 1) : 0;
+    if (!ok) queue.splice(Math.min(3, queue.length), 0, c); // see it again in a few cards
+    save(); shown = false; draw();
+    const all = deck(), known = all.filter(x => (P.cards[x.id] || 0) >= 2).length;
+    $('.deck-stats span').textContent = `${known} of ${all.length} known`;
+    $('.deck-stats i').style.width = (known / all.length) * 100 + '%';
+  };
+  ctx.cardKey = e => {
+    if (!queue[0]) return false;
+    if (!shown && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); flip(); return true; }
+    if (shown && (e.key === '1' || e.key === '2')) { grade(e.key === '2'); return true; }
+    return false;
+  };
+  $$('.filters button').forEach(b => (b.onclick = () => { ctx.cardFilter = b.dataset.f; ctx.keepScroll = true; route(); }));
+  draw();
 }
 
 // ---------- improvements ----------
@@ -521,6 +637,7 @@ function setupPalette() {
     ...G.project.files.flatMap(f => f.symbols.filter(s => !['heading', 'selector'].includes(s.kind)).map(s => ({ k: s.kind === 'class' ? 'Class' : 'Function', t: (s.parent ? s.parent + '.' : '') + s.name, s: f.path, h: `${fileHref(f.path)}:L${s.line}-${s.end || s.line}` }))),
     ...G.chapters.flatMap((ch, i) => (ch?.terms || []).map(t => ({ k: 'Term', t: t.term, s: t.definition, h: '#/glossary', term: t.term }))),
     { k: 'Page', t: 'Map of the code', s: 'Parts, import graph, size', h: '#/map' },
+    { k: 'Page', t: 'Flashcards', s: 'Terms, design decisions and big ideas', h: '#/cards' },
     { k: 'Page', t: 'Improvements', s: 'Roadmap and every finding', h: '#/improve' },
     { k: 'Page', t: 'Putting it together', s: 'Recap, mental model, final quiz', h: '#/review' },
   ];
@@ -560,7 +677,7 @@ function closePalette() { $('#pal')?.classList.remove('open'); }
 
 // ---------- per-view wiring ----------
 function wire(active) {
-  ctx.onResize = null;
+  ctx.onResize = null; ctx.onScroll = null;
   wireQuiz($('#main'));
   $$('[data-read]').forEach(b => (b.onclick = () => {
     const k = b.dataset.read;
@@ -577,6 +694,8 @@ function wire(active) {
   if (active === 'map') wireMap();
   if (active === 'files') wireFiles();
   if (active === 'improve') $$('.filters button').forEach(b => (b.onclick = () => { ctx.impFilter = b.dataset.f; ctx.keepScroll = true; route(); }));
+  if (active === 'cards') wireCards();
+  if ($('.otp')) wireOutline();
   if (active === 'ask') wireAskForm($('#ask-main'), () => ({ files: [], where: '' }), $('#qa-list'), true);
 }
 let rt;
