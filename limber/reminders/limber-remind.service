@@ -1,0 +1,6 @@
+[Unit]
+Description=Limber stretch reminder check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/projects/limber/reminders/remind.py

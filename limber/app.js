@@ -305,7 +305,7 @@
     const st = curStep(), s = stretchById[P.items[st.item].id];
     P.el = 0; P.half = false; P.ticked = 0; P.last = performance.now();
     if (st.type === 'prep') { if (!first) sound('end'); say(`${first ? '' : 'Next: '}${s.name}.${st.side ? ' First side.' : ''}`); }
-    else if (st.type === 'hold') { sound('start'); if (st.side === 2) say('Other side. Hold.'); else say('Hold. ' + s.cue); }
+    else if (st.type === 'hold') { sound('start'); const go = s.kind === 'warm' ? 'Go.' : 'Hold.'; say(st.side === 2 ? 'Other side. ' + go : go + ' ' + s.cue); }
     else if (st.type === 'switch') { sound('end'); say('Switch sides.'); }
     renderPlayer();
   }
@@ -340,7 +340,7 @@
 
   function renderPlayer() {
     const st = curStep(), it = P.items[st.item], s = stretchById[it.id], el = $('#player');
-    const phaseLabel = { prep: 'Get into position', hold: 'Hold', switch: 'Switch sides' }[st.type];
+    const phaseLabel = { prep: 'Get into position', hold: s.kind === 'warm' ? 'Keep moving' : 'Hold', switch: 'Switch sides' }[st.type];
     const side = st.side ? (st.side === 1 ? 'First side' : 'Other side') : '';
     const nextItem = P.items[st.item + 1];
     el.classList.toggle('p-paused', P.paused);
@@ -364,7 +364,7 @@
         <button class="round main" data-p="pause" aria-label="${P.paused ? 'Resume' : 'Pause'}" title="Pause (Space)">${P.paused ? I.play : I.pause}</button>
         <button class="round" data-p="next" aria-label="Skip ahead" title="Skip (→)">${I.next}</button>
       </div>
-      <div class="p-next">${st.type === 'hold' ? `<button class="btn ghost small" data-p="more">+15 seconds</button> · ` : ''}${nextItem ? `Up next: <b>${esc(stretchById[nextItem.id].name)}</b>` : 'Last one'}</div>`;
+      <div class="p-next">${st.type === 'hold' ? `<button class="btn ghost small" data-p="more">+15 seconds</button>` : ''}<span>${nextItem ? `Up next: <b>${esc(stretchById[nextItem.id].name)}</b>` : 'Last one'}</span></div>`;
     updateClock();
   }
 
@@ -542,9 +542,13 @@
         <div><b class="num">${totalSec >= 6000 ? (totalSec / 3600).toFixed(1) : Math.round(totalSec / 60)}</b><span>${totalSec >= 6000 ? 'hours' : 'minutes'} held</span></div>
       </div>
       <div class="prog-grid">
-        <section class="card wide"><div class="section-head"><h3>The last 18 weeks</h3><span class="muted" style="font-size:13px">Darker = longer</span></div>
+        <section class="card"><div class="section-head"><h3>The last 18 weeks</h3><span class="muted" style="font-size:13px">Darker = longer</span></div>
           <div class="heat-wrap"><div class="heat">${heat}</div></div>
           <div class="heat-key">Less <span class="c" style="background:var(--heat-0)"></span><span class="c" style="background:var(--heat-1)"></span><span class="c" style="background:var(--heat-2)"></span><span class="c" style="background:var(--heat-3)"></span><span class="c" style="background:var(--heat-4)"></span> More</div>
+        </section>
+        <section class="card"><div class="section-head"><h3>How it's felt</h3><span class="muted" style="font-size:13px">Last ${feels.length || ''} sessions</span></div>
+          ${feels.length ? `<div class="feel-chart">${feels.map(s => `<i class="f${s.feel}" style="height:${s.feel * 20}%" title="${esc(fmtDay(s.date))}: ${FEEL[s.feel]}"></i>`).join('')}</div>
+            <p class="muted" style="font-size:13px;margin:12px 0 0">Average ${(feels.reduce((a, s) => a + s.feel, 0) / feels.length).toFixed(1)} of 5. Taller is looser.</p>` : '<p class="empty">Rate how you feel after each session and the trend shows up here.</p>'}
         </section>
         <section class="card wide"><div class="section-head"><h3>Range check-ins</h3><button class="link" data-act="checkin">${state.checks.length ? 'New check-in' : 'Take your baseline'}</button></div>
           <div class="measures">${CHECKS.map(c => { const tr = L.trend(state.checks, c.key, c.up);
@@ -560,11 +564,7 @@
             <span class="track"><span class="fill" style="width:${((area[a] || 0) / maxA * 100).toFixed(1)}%;display:block"></span></span><span class="val">${L.fmtMin(area[a] || 0).replace(' min', 'm').replace('<1m', '–')}</span></div>`).join('')}</div>
             <p class="muted" style="font-size:13px;margin:14px 0 0"><span style="color:var(--clay)">■</span> your priority areas</p>` : '<p class="empty">Stretch for a few days and this fills in.</p>'}
         </section>
-        <section class="card"><div class="section-head"><h3>How it's felt</h3><span class="muted" style="font-size:13px">Last ${feels.length || ''} sessions</span></div>
-          ${feels.length ? `<div class="feel-chart">${feels.map(s => `<i class="f${s.feel}" style="height:${s.feel * 20}%" title="${esc(fmtDay(s.date))}: ${FEEL[s.feel]}"></i>`).join('')}</div>
-            <p class="muted" style="font-size:13px;margin:12px 0 0">Average ${(feels.reduce((a, s) => a + s.feel, 0) / feels.length).toFixed(1)} of 5. Taller is looser.</p>` : '<p class="empty">Rate how you feel after each session and the trend shows up here.</p>'}
-        </section>
-        <section class="card wide"><div class="section-head"><h3>Recent sessions</h3></div>
+        <section class="card"><div class="section-head"><h3>Recent sessions</h3></div>
           ${recent.length ? `<ul class="log">${recent.map(s => `<li><span class="when">${esc(fmtDay(s.date))}</span>
             <span>${esc(s.label || L.MODES[s.mode].name)}${s.completed ? '' : ' <span class="muted">(ended early)</span>'}${s.feel ? ` · <span class="muted">${FEEL[s.feel]}</span>` : ''}${s.note ? `<span class="note">“${esc(s.note)}”</span>` : ''}</span>
             <span class="mins">${L.fmtMin(s.sec)}</span></li>`).join('')}</ul>` : '<p class="empty">Your sessions will be listed here.</p>'}
