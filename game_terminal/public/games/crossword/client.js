@@ -485,6 +485,7 @@ export function mount(container, api) {
   // --- rendering ----------------------------------------------------------------------------
   function renderControls() {
     const live = playing();
+    modeSeg.hidden = sizeSeg.hidden = !!(view && view.ranked); // ranked is always a mini race
     for (const [m, b] of Object.entries(modeBtns)) { b.classList.toggle('on', (live ? view.mode : prefs.mode) === m); b.disabled = live; }
     for (const [s, b] of Object.entries(sizeBtns)) { b.classList.toggle('on', (live ? view.size : prefs.size) === s); b.disabled = live; }
     startBtn.hidden = live;

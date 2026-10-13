@@ -132,6 +132,16 @@ test('race: boards are separate, first to finish wins', () => {
   assert.strictEqual(st.players.get('B').wins, 0);
 });
 
+test('ranked rooms are always a mini race, whatever the client asks for', () => {
+  const room = makeRoom();
+  room.ranked = true;
+  act(room, 'A', { kind: 'start', size: 'large', mode: 'coop' });
+  const v = view(room, 'A');
+  assert.strictEqual(v.mode, 'race');
+  assert.strictEqual(v.size, 'mini');
+  assert.strictEqual(v.ranked, true);
+});
+
 test('race: giving up waits for every human, then reveals', () => {
   const room = makeRoom();
   act(room, 'A', { kind: 'start', size: 'mini', mode: 'race' });

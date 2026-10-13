@@ -316,8 +316,8 @@ const boardDone = (st, board) => board.solved.size === st.puzzle.words.length;
 
 function startRound(room, size, mode) {
   const st = room.state;
-  st.size = room.daily ? DEFAULT_SIZE : SIZES[size] ? size : st.size; // daily: same size and grid for everyone
-  st.mode = MODES.includes(mode) ? mode : st.mode;
+  st.size = room.daily ? DEFAULT_SIZE : room.ranked ? 'mini' : SIZES[size] ? size : st.size; // daily: same size and grid for everyone
+  st.mode = room.ranked ? 'race' : MODES.includes(mode) ? mode : st.mode; // ranked: a head-to-head mini race
   st.puzzle = makePuzzle(st.size, room.daily ? room.daily.seed : (Math.random() * 2 ** 31) >>> 0);
   st.board = newBoard();
   st.roundId += 1;
@@ -457,6 +457,7 @@ function buildView(room, forId) {
     phase: st.phase,
     mode: st.mode,
     size: st.size,
+    ranked: !!room.ranked,
     sizes: Object.fromEntries(Object.entries(SIZES).map(([k, v]) => [k, v.label])),
     roundId: st.roundId,
     startedAt: st.startedAt,
