@@ -92,3 +92,22 @@ test('learned multiselect answers come back as option lists', async () => {
     assert.deepEqual(r.answers.m, ['1 - Personal Projects', '2 - Classwork']);
   } finally { writeFileSync(bankFile, saved); }
 });
+
+test('huge dropdowns are trimmed to profile-related options', async () => {
+  const { shortList } = await import('../src/answer.js');
+  const opts = [...Array(500)].map((_, i) => `Some College ${i}`).concat(['Virginia Tech', 'Other (School Not Listed)']);
+  assert.deepEqual(shortList(opts, { education: { school: 'Virginia Tech' } }), ['Virginia Tech', 'Other (School Not Listed)']);
+});
+
+test('lever parser reads cards and standard fields', async () => {
+  const { parse } = await import('../src/ats/lever.js');
+  const card = JSON.stringify({ text: 'Q', fields: [{ type: 'multiple-choice', required: true, text: 'Authorized?', options: [{ text: 'Yes' }, { text: 'No' }] }] }).replace(/"/g, '&quot;');
+  const html = `<input type="hidden" value="${card}" name="cards[abc][baseTemplate]">
+    <li class="application-question"><div class="application-label">Full name<span class="required">✱</span></div><input type="text" name="name" required></li>
+    <div class="application-label">LinkedIn URL</div><input type="text" name="urls[LinkedIn]">
+    <div class="application-label">Gender</div><select name="eeo[gender]"><option value="">Select ...</option><option value="Male">Male</option></select>`;
+  const q = parse(html);
+  assert.deepEqual(q.map(x => [x.key, x.type, x.required]), [['cards[abc][field0]', 'select', true], ['full_name', 'text', true], ['urls[LinkedIn]', 'text', false], ['gender', 'select', false]]);
+  assert.equal(q[0].widget, 'radio');
+  assert.deepEqual(q[3].options, ['Male']);
+});

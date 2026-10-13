@@ -2,13 +2,14 @@
 import { mkdirSync } from 'node:fs';
 import * as greenhouse from './ats/greenhouse.js';
 import * as ashby from './ats/ashby.js';
+import * as lever from './ats/lever.js';
 import { answerAll } from './answer.js';
 import { loadProfile } from './profile.js';
 import { setStatus } from './db.js';
 import { enqueue } from './queue.js';
 import { send } from './notify.js';
 
-export const ADAPTERS = [greenhouse, ashby];
+export const ADAPTERS = [greenhouse, ashby, lever];
 export const adapterFor = url => ADAPTERS.find(a => a.handles(url));
 
 const SHOTS = new URL('../data/shots/', import.meta.url).pathname;
@@ -31,7 +32,8 @@ export async function apply(browser, job, { dryRun = true } = {}) {
 
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
   try {
-    await page.goto(form.applyUrl, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.goto(form.applyUrl, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});   // some boards never go idle
     const problems = await ats.fill(page, form.questions, answers, loadProfile().facts);
     const screenshot = `${SHOTS}${job.id}.png`;
     await page.screenshot({ path: screenshot, fullPage: true });

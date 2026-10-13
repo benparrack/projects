@@ -23,7 +23,8 @@ Rules:
   warm, no cliches, no em dashes. 60-150 words unless the question sets a limit.
 - Select questions: answer must be exactly one of the listed options. Multiselect: options joined by " | ".
 - Consent, acknowledgement and "I certify the information is accurate" checkboxes: answer "Yes".
-- "How did you hear about us": pick the option closest to an online job board, else "Other".
+- "How did you hear about us": Simplify/GitHub if listed, else a generic "job board"/"online"/"website" option,
+  else "Other". Never a specific site Ben didn't use (Indeed, LinkedIn, Handshake, Glassdoor).
 - A question that asks Ben to do outside work (visit a link and answer questions there, take a test,
   solve a coding problem): answer null with need_human_reason "external task".
 - Optional questions you can't answer from the sources: answer null with need_human_reason "optional".`;
@@ -44,6 +45,19 @@ export function matchOption(options, ans) {
     ?? options.find(o => normQ(o).includes(a) || (a.length > 2 && a.includes(normQ(o)) && normQ(o).length > 1)) ?? null;
 }
 
+// Dropdowns with thousands of entries (every university): only send the options that share a
+// distinctive word with Ben's profile, plus any "Other".
+export function shortList(options, facts) {
+  if (options.length <= 80) return options;
+  const n = {};
+  for (const o of options) for (const w of new Set(normQ(o).split(' '))) n[w] = (n[w] || 0) + 1;
+  // Rare shared words count most ("virginia" beats "university"); education facts are what these lists are about.
+  const mine = new Set(normQ(YAML.stringify(facts.education ?? facts)).split(' '));
+  const score = o => normQ(o).split(' ').reduce((t, w) => t + (mine.has(w) && n[w] ? 1 / n[w] : 0), 0);
+  const top = options.map(o => [o, score(o)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 40).map(x => x[0]);
+  return [...top, ...options.filter(o => /^other\b/i.test(o) && !top.includes(o))];
+}
+
 // "a | b" → the matching options, or null if none match.
 const pickMany = (options, ans) => {
   const v = String(ans).split('|').map(s => matchOption(options, s.trim())).filter(Boolean);
@@ -55,14 +69,16 @@ function standard(q, facts) {
   const f = facts, eeo = f.eeo || {};
   const byKey = {
     first_name: f.name.first, last_name: f.name.last, preferred_name: f.name.first, full_name: f.name.full, name: f.name.full,
-    email: f.email, phone: f.phone,
+    email: f.email, phone: f.phone, today: new Date().toLocaleDateString('en-US'),
     gender: eeo.gender, race: eeo.race, hispanic_ethnicity: eeo.hispanic_or_latino ? 'Yes' : 'No',
     veteran_status: /not/i.test(eeo.veteran) ? 'I am not a protected veteran' : eeo.veteran,
     disability_status: /^no/i.test(eeo.disability) ? "No, I don't have a disability" : eeo.disability,
   };
   const byLabel = { phone: f.phone, 'phone number': f.phone, linkedin: f.links.linkedin, 'linkedin profile': f.links.linkedin,
     'linkedin url': f.links.linkedin, github: f.links.github, 'github url': f.links.github, website: f.links.website,
-    portfolio: f.links.website, 'personal website': f.links.website, name: f.name.full, 'full name': f.name.full };
+    portfolio: f.links.website, 'portfolio url': f.links.website, 'website url': f.links.website, 'personal website': f.links.website, name: f.name.full, 'full name': f.name.full,
+    // Lever's "Current company": he's a full-time student now, not still at last summer's internship.
+    'current company': f.education.school, 'current employer': f.education.school };
   if (q.type === 'education') return 'from profile';
   if (q.type === 'location') return `${f.address.city}, ${f.address.state}`;
   const v = byKey[q.key] ?? (q.type === 'text' ? byLabel[normQ(q.label)] : undefined);
@@ -135,7 +151,7 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
       ].filter(Boolean); })(),
       `# JOB\n${job.company}: ${job.title}\n${(job.description || '').slice(0, 6000)}`,
       '# QUESTIONS\n' + JSON.stringify(ask.map(({ key, label, type, options, required, description }) =>
-        ({ key, label, type, required, ...(description ? { description } : {}), ...(options?.length ? { options } : {}) })), null, 1),
+        ({ key, label, type, required, ...(description ? { description } : {}), ...(options?.length ? { options: shortList(options, facts) } : {}) })), null, 1),
     ].join('\n\n');
     const out = await llm(SYSTEM, prompt, SCHEMA);
     const got = new Map(out.answers.map(a => [a.key, a]));

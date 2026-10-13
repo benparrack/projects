@@ -3,7 +3,8 @@
 //   node src/queue.js          answer open questions in the terminal
 import { createInterface } from 'node:readline/promises';
 import { db } from './db.js';
-import { learn, normQ } from './profile.js';
+import { learn, normQ, loadProfile } from './profile.js';
+import { shortList } from './answer.js';
 import { send, replyButton, pollReplies } from './notify.js';
 
 db.exec(`CREATE TABLE IF NOT EXISTS questions (
@@ -11,11 +12,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS questions (
 
 // Records a queued job's needs; notifies Ben only about questions he hasn't been asked yet.
 export async function enqueue(job, needs) {
+  const { facts } = loadProfile();
   for (const n of needs) {
+    const opts = shortList(n.options || [], facts);   // a 3000-school list is useless on a phone
     const r = db.prepare('INSERT OR IGNORE INTO questions (norm,label,options,created) VALUES (?,?,?,?)')
-      .run(normQ(n.label), n.label, JSON.stringify(n.options || []), Date.now());
+      .run(normQ(n.label), n.label, JSON.stringify(opts), Date.now());
     if (!r.changes) continue;
-    const id = Number(r.lastInsertRowid), opts = n.options || [];
+    const id = Number(r.lastInsertRowid);
     await send(`#${id} ${job.company} needs an answer`,
       `${n.label.slice(0, 600)}\n\n${opts.length ? 'Options: ' + opts.join(' / ') + '\n' : ''}Reply: ${id} <answer>   (or: skip ${id})`,
       { click: job.url, tags: ['question'], actions: opts.length <= 3 ? opts.map(o => replyButton(o, `${id} ${o}`)) : [] });
