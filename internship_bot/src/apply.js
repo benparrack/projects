@@ -1,13 +1,14 @@
 // Applies to one job: load questions → answer → fill in a real browser → (unless dry run) submit.
 import { mkdirSync } from 'node:fs';
 import * as greenhouse from './ats/greenhouse.js';
+import * as ashby from './ats/ashby.js';
 import { answerAll } from './answer.js';
 import { loadProfile } from './profile.js';
 import { setStatus } from './db.js';
 import { enqueue } from './queue.js';
 import { send } from './notify.js';
 
-export const ADAPTERS = [greenhouse];
+export const ADAPTERS = [greenhouse, ashby];
 export const adapterFor = url => ADAPTERS.find(a => a.handles(url));
 
 const SHOTS = new URL('../data/shots/', import.meta.url).pathname;
@@ -21,8 +22,8 @@ export async function apply(browser, job, { dryRun = true } = {}) {
   if (manual) return handOff(job, manual);
   const audit = { answers, questions: form.questions.map(q => [q.key, q.label]) };
   // A file only Ben can make (a coding assignment, a portfolio) can't be answered by text.
-  const file = needs.find(n => n.file);
-  if (file) return handOff(job, `wants a file upload: "${file.label.slice(0, 150)}"`);
+  const file = needs.find(n => n.file || /external task/i.test(n.why));
+  if (file) return handOff(job, `${n2why(file)}: "${file.label.slice(0, 150)}"`);
   if (needs.length) { await enqueue(job, needs); return record(job, 'queued', { reason: JSON.stringify(needs), answers: audit }, { needs }); }
 
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
@@ -39,6 +40,8 @@ export async function apply(browser, job, { dryRun = true } = {}) {
     return record(job, 'applied', { answers: audit, screenshot }, res);
   } finally { await page.close(); }
 }
+
+const n2why = n => /external task/i.test(n.why) ? 'asks for outside work' : /field type/.test(n.why) ? 'has a field the bot can\'t fill' : 'wants a file upload';
 
 // Things the bot must not or cannot do: Ben gets a one-tap link to apply himself.
 async function handOff(job, why, screenshot) {

@@ -23,6 +23,8 @@ Rules:
 - Select questions: answer must be exactly one of the listed options. Multiselect: options joined by " | ".
 - Consent, acknowledgement and "I certify the information is accurate" checkboxes: answer "Yes".
 - "How did you hear about us": pick the option closest to an online job board, else "Other".
+- A question that asks Ben to do outside work (visit a link and answer questions there, take a test,
+  solve a coding problem): answer null with need_human_reason "external task".
 - Optional questions you can't answer from the sources: answer null with need_human_reason "optional".`;
 
 const SCHEMA = {
@@ -51,7 +53,12 @@ function standard(q, facts) {
     veteran_status: /not/i.test(eeo.veteran) ? 'I am not a protected veteran' : eeo.veteran,
     disability_status: /^no/i.test(eeo.disability) ? "No, I don't have a disability" : eeo.disability,
   };
-  const v = byKey[q.key];
+  const byLabel = { phone: f.phone, 'phone number': f.phone, linkedin: f.links.linkedin, 'linkedin profile': f.links.linkedin,
+    'linkedin url': f.links.linkedin, github: f.links.github, 'github url': f.links.github, website: f.links.website,
+    portfolio: f.links.website, 'personal website': f.links.website, name: f.name.full, 'full name': f.name.full };
+  if (q.type === 'education') return 'from profile';
+  if (q.type === 'location') return `${f.address.city}, ${f.address.state}`;
+  const v = byKey[q.key] ?? (q.type === 'text' ? byLabel[normQ(q.label)] : undefined);
   if (v == null) return undefined;
   if (q.type !== 'select') return v;
   // EEO option wording varies a lot ("I am not a protected veteran" vs "No, I am not ..."): match on gist.
@@ -78,6 +85,10 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
   const answers = {}, needs = [], ask = [];
 
   for (const q of questions) {
+    if (q.type === 'unsupported') {
+      if (q.required) needs.push({ key: q.key, label: q.label, why: 'field type the bot cannot fill yet', file: true });
+      continue;
+    }
     if (q.type === 'file') {
       const path = fileFor(q, resume);
       if (path) answers[q.key] = path;
@@ -99,8 +110,8 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
       '# RESUME\n' + resume.text,
       '# STORIES\n' + stories,
       `# JOB\n${job.company}: ${job.title}\n${(job.description || '').slice(0, 6000)}`,
-      '# QUESTIONS\n' + JSON.stringify(ask.map(({ key, label, type, options, required }) =>
-        ({ key, label, type, required, ...(options?.length ? { options } : {}) })), null, 1),
+      '# QUESTIONS\n' + JSON.stringify(ask.map(({ key, label, type, options, required, description }) =>
+        ({ key, label, type, required, ...(description ? { description } : {}), ...(options?.length ? { options } : {}) })), null, 1),
     ].join('\n\n');
     const out = await llm(SYSTEM, prompt, SCHEMA);
     const got = new Map(out.answers.map(a => [a.key, a]));
