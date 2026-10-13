@@ -14,12 +14,20 @@ const revealed = () => p.waitForSelector('#reveal:not([hidden])', { timeout: 150
 // targeted spin lands on the requested skill
 await p.evaluate(() => skillWheel.spinTo('origami')); await revealed();
 assert.equal(await p.textContent('#revealName'), (await p.evaluate(() => SKILLS.find(k => k.id === 'origami').name)));
-// re-spin replaces the pending pick, and only once
+// re-spin replaces the pending pick, twice at most
 await p.click('[data-act="reroll"]'); await revealed(); await p.waitForTimeout(300);
 let r = await runs(); assert.equal(r.length, 1); assert.equal(r[0].rerolls, 1); assert.notEqual(r[0].id, 'origami');
+await p.click('[data-act="reroll"]'); await revealed(); await p.waitForTimeout(300);
+r = await runs(); assert.equal(r.length, 1); assert.equal(r[0].rerolls, 2);
 assert(await p.isDisabled('[data-act="reroll"]'));
 await p.click('[data-act="accept"]'); await p.waitForTimeout(300);
 r = await runs(); assert(!r[0].pending);
+// undo the pick: run gone, fresh spin with all re-spins
+await p.click('[data-view="week"]'); await p.click('[data-undo-cur]'); await p.click('#sheet .btn.primary'); await p.waitForTimeout(300);
+assert.equal((await runs()).length, 0);
+await p.keyboard.press('Space'); await revealed(); await p.waitForTimeout(300);
+assert.doesNotMatch(await p.textContent('#revealEyebrow'), /fun/i); assert.match(await p.textContent('[data-act="reroll"]'), /2 left/);
+await p.click('[data-act="accept"]'); await p.waitForTimeout(300);
 // spin while locked = fun, no new run
 await p.click('[data-view="wheel"]'); await p.keyboard.press('Space'); await revealed();
 assert.match(await p.textContent('#revealEyebrow'), /fun/i);

@@ -16,12 +16,13 @@ Spin a wheel once a week, learn one new skill. When the wheel stops you get the 
 - **The wheel:**
   - A pegged wheel with a ticking flapper, motion blur at speed, chasing rim lights, a settle-back against the flapper, a spotlight on the winner, sound and confetti.
   - Spin with the button or <kbd>Space</kbd>, or grab the wheel and flick it.
-  - You get one re-spin per week.
+  - You get three spins per week (two re-spins).
   - While a skill is in progress, spins are "just for fun" and don't change your pick.
 - **This week:**
   - today's session with a practice timer (pausable, shows in the tab title, ticks the day off when done) and a progress ring
   - tick-off plan, notes and print
   - "I've learned it!" with a rating, or skip
+  - "Undo this pick" removes a mistaken spin entirely, until you tick off a session
   - a "week" runs 7 days from your spin, not Monday to Sunday
 - **Library:** browse or search every skill, take a skill off the wheel, or start one directly.
 - **Journey:** stats, streak, a collection of learned skills, a timeline, and JSON export/import.

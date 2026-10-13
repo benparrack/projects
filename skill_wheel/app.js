@@ -5,6 +5,7 @@ const byId = Object.fromEntries(SKILLS.map(k => [k.id, k]));
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let nowOffset = 0;
 const now = () => Date.now() + nowOffset;
+const REROLLS = 2; // re-spins per week, so 3 spins in all
 
 // ───────────────────────── State ─────────────────────────
 const KEY = 'skillwheel.v1';
@@ -401,7 +402,7 @@ function showReveal(k, fun) {
   $('#revealActions').innerHTML = fun
     ? `<button class="btn primary" data-act="view" data-autofocus>See the full rundown</button><button class="btn ghost" data-close>Close</button>`
     : `<button class="btn primary" data-act="accept" data-autofocus>Let's do it! →</button>
-       <button class="btn" data-act="reroll" ${r.rerolls >= 1 || order.length < 2 ? 'disabled' : ''}>↻ Re-spin <small>(${1 - r.rerolls} left)</small></button>`;
+       <button class="btn" data-act="reroll" ${r.rerolls >= REROLLS || order.length < 2 ? 'disabled' : ''}>↻ Re-spin <small>(${REROLLS - r.rerolls} left)</small></button>`;
   $('#revealActions').onclick = e => {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'accept') { closeModal('#reveal'); go('week'); toast(`Locked in: ${k.name}. Day 1 starts now!`); }
@@ -454,7 +455,7 @@ function openSkill(id) {
   };
   const st = $('#startThis');
   if (st) st.onclick = () => {
-    state.runs.push({ id, start: now(), checks: Array(RUN_DAYS).fill(false), notes: '', status: 'active', rating: 0, rerolls: 1 });
+    state.runs.push({ id, start: now(), checks: Array(RUN_DAYS).fill(false), notes: '', status: 'active', rating: 0, rerolls: REROLLS });
     save(); closeModal('#sheet'); refreshPool(); renderAll(); go('week'); toast(`Locked in: ${k.name}. Day 1 starts now!`);
   };
   $('#sheet .modal-card').scrollTop = 0;
@@ -539,6 +540,7 @@ function renderWeek() {
       <div class="week-actions">
         <button class="btn primary" data-finish-cur>🎉 I've learned it!</button>
         <button class="btn ghost" onclick="window.print()">🖨 Print plan</button>
+        ${live && !done ? '<button class="btn ghost" data-undo-cur>↩ Undo this pick</button>' : ''}
         <button class="btn ghost danger" data-skip-cur>Skip this skill</button>
       </div>
     </div></div>`;
@@ -566,6 +568,10 @@ function renderWeek() {
   };
   tickTimer();
   el.querySelector('[data-finish-cur]').onclick = () => finishRun(c);
+  const undo = el.querySelector('[data-undo-cur]');
+  if (undo) undo.onclick = () => confirmSheet(`Undo ${k.name}?`, 'It\'s removed as if you never spun it, and you get a fresh spin with all your re-spins back.', 'Undo it', () => {
+    state.runs.pop(); save(); refreshPool(); renderAll(); go('wheel');
+  });
   el.querySelector('[data-skip-cur]').onclick = () => confirmSheet(`Skip ${k.name}?`, 'It goes into your journey as skipped, and the wheel unlocks for a new spin.', 'Skip it', () => {
     c.status = 'skipped'; c.end = now(); save(); refreshPool(); renderAll(); go('wheel');
   });
