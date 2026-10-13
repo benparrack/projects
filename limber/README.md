@@ -14,7 +14,13 @@ inflexible in the hamstrings, abductors and adductors and wants to actually stic
   priority areas (Settings → Focus areas).
 - **Progress**: streaks, an 18-week heatmap, how sessions felt, time per body area, and range check-ins
   (sit and reach, butterfly knee height, straddle width) every two weeks.
-- **Reminders**: phone notifications via ntfy, only on days you haven't stretched. See `reminders/README.md`.
+- **Milestones**: 18 to earn (days stretched, streaks, hours held, measurably looser check-ins), the next one
+  shown on Today, new ones celebrated when you finish.
+- **Favourites**: heart a stretch and it comes up more often; hide ones you hate.
+- **Log it elsewhere**: a yoga class, physio or your own routine (today or yesterday) counts toward the streak.
+- **Breathing pacer**: during holds the ring glows on a slow 4-in, 6-out breath.
+- **Reminders**: phone notifications via ntfy, only on days you haven't stretched, plus a Sunday recap of
+  the week. See `reminders/README.md`.
 
 ## Run
 

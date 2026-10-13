@@ -36,6 +36,7 @@ assert.match(await p.textContent('.p-phase'), /position/i);
 await p.evaluate(() => { const P = limber.player; P.el = P.steps[0].sec - 0.3; });
 await p.waitForTimeout(700);
 assert.match(await p.textContent('.p-phase'), /hold/i);
+if (await p.evaluate(() => stretchById[limber.player.items[0].id].kind !== 'warm')) assert(await p.isVisible('.p-halo'));
 await p.keyboard.press('Space'); assert.match(await p.textContent('.p-phase'), /paused/i); await p.keyboard.press('Space');
 await p.evaluate(() => { const P = limber.player; P.held = P.held.map(() => 90); });
 for (let i = 0; i < 60 && await p.evaluate(() => !limber.player.finished); i++) await p.keyboard.press('ArrowRight');
@@ -69,6 +70,24 @@ await p.fill('[name="reach"]', '-14'); await p.fill('[name="butterfly"]', '22,5'
 s = await st(); assert.deepEqual([s.checks[0].reach, s.checks[0].butterfly, s.checks[0].straddle], [-14, 22.5, undefined]);
 assert.match(await p.textContent('.measures'), /-14/);
 
+// log stretching done elsewhere, yesterday: counts toward the streak
+await p.click('.tabs [data-view="today"]'); await p.click('[data-act="other"]');
+await p.click('[data-k="what"][data-v="Physio"]'); await p.click('[data-k="min"][data-v="20"]'); await p.click('[data-k="date"] >> nth=1'); await p.click('[data-log]');
+s = await st(); const o = s.sessions.find(x => x.mode === 'other');
+assert(o && o.label === 'Physio' && o.sec === 1200 && o.date === await p.evaluate(() => Logic.addDays(Logic.dayKey(), -1)));
+assert.equal(await p.textContent('.streak-n'), '2');
+assert.match(await p.textContent('.next-ms'), /Next milestone/);
+
+// favourite a stretch: marked in the library, filterable
+await p.click('.tabs [data-view="library"]'); await p.click('#view-library [data-info="butterfly"]'); await p.click('[data-fav]');
+assert((await st()).settings.favs.includes('butterfly'));
+assert(await p.isVisible('[data-info="butterfly"] .fav-mark'));
+await p.click('[data-area="fav"]'); assert.equal(await p.locator('.lib-card').count(), 1, String(await p.evaluate(() => [...document.querySelectorAll('.lib-card')].map(c => c.dataset.info + ':' + c.closest('section').id)))); await p.click('[data-area="all"]');
+
+// milestones on the progress page
+await p.click('.tabs [data-view="progress"]');
+assert((await p.locator('.ms.got').count()) >= 1);
+
 // settings: focus, ntfy topic
 await p.click('.tabs [data-view="settings"]');
 await p.click('[data-set="focus.calves"][data-v="0"]'); assert.equal((await st()).settings.focus.calves, 0);
@@ -82,15 +101,15 @@ if (shots) {
     const L = Logic, t = L.dayKey(), sessions = [], ids = STRETCHES.map(s => s.id);
     for (let d = 52; d >= 1; d--) {
       if ([40, 39, 31, 22, 17, 16, 15, 9].includes(d)) continue;
-      const date = L.addDays(t, -d), mode = ['mat', 'couch', 'quick', 'couch', 'mat'][d % 5], sec = { mat: 1250, couch: 1100, quick: 330 }[mode] + (d * 37 % 240);
-      sessions.push({ id: 'x' + d, date, at: date, mode, planned: sec, sec, completed: d % 11 !== 0, feel: Math.min(5, 2 + Math.floor((52 - d) / 14) + (d % 3 === 0 ? -1 : 0)), note: d === 3 ? 'Frog felt way easier tonight' : '',
+      const date = L.addDays(t, -d), mode = d === 4 ? 'other' : ['mat', 'couch', 'quick', 'couch', 'mat'][d % 5], sec = { mat: 1250, couch: 1100, quick: 330, other: 2700 }[mode] + (d * 37 % 240);
+      sessions.push({ id: 'x' + d, date, at: date, mode, planned: sec, sec, completed: d % 11 !== 0, feel: Math.min(5, 2 + Math.floor((52 - d) / 14) + (d % 3 === 0 ? -1 : 0)), note: d === 3 ? 'Frog felt way easier tonight' : '', label: mode === 'other' ? 'Yoga class' : undefined,
         items: ids.slice(d % 20, d % 20 + 8).map(id => ({ id, sec: Math.round(sec / 8) })) });
     }
     limber.state = { ...limber.state, sessions, plan: null, shuffle: { date: '', salt: 0 }, settings: { ...limber.state.settings, excluded: [], focus: { ...L.DEFAULT_FOCUS }, mode: 'mat' },
       checks: [{ date: L.addDays(t, -45), reach: -18, butterfly: 27, straddle: 84 }, { date: L.addDays(t, -30), reach: -15.5, butterfly: 25, straddle: 90 },
         { date: L.addDays(t, -16), reach: -12, butterfly: 23.5, straddle: 93 }, { date: L.addDays(t, -2), reach: -9.5, butterfly: 21, straddle: 98 }] };
   });
-  const snap = async (name, view) => { await p.evaluate(v => { location.hash = v; }, view); await p.waitForTimeout(300); await p.screenshot({ path: `${shots}/${name}.png`, fullPage: true }); };
+  const snap = async (name, view) => { await p.evaluate(v => { location.hash = v; document.querySelector('#toast').classList.remove('show'); }, view); await p.waitForTimeout(300); await p.screenshot({ path: `${shots}/${name}.png`, fullPage: true }); };
   for (const [scheme, w, h] of [['light', 1280, 900], ['dark', 1280, 900], ['light', 390, 844]]) {
     await p.emulateMedia({ colorScheme: scheme }); await p.setViewportSize({ width: w, height: h });
     for (const v of ['today', 'progress', 'library', 'settings']) await snap(`${v}-${scheme}-${w}`, v);
@@ -107,7 +126,13 @@ if (shots) {
   await p.keyboard.press('Escape'); await p.click('[data-stop]'); await p.waitForTimeout(300);
   await p.click('#view-today [data-info] >> nth=1'); await p.waitForTimeout(400); await p.screenshot({ path: `${shots}/detail.png` });
   await p.keyboard.press('Escape'); await p.click('.tabs [data-view="progress"]'); await p.click('#view-progress [data-act="checkin"]'); await p.waitForTimeout(400); await p.screenshot({ path: `${shots}/checkin.png` });
+  await p.keyboard.press('Escape'); await p.click('.tabs [data-view="today"]'); await p.click('[data-act="other"]'); await p.waitForTimeout(400); await p.screenshot({ path: `${shots}/other.png` });
   await p.keyboard.press('Escape');
+  // finish a session that earns a milestone (50 days)
+  await p.evaluate(() => { const st = limber.state; st.sessions = st.sessions.filter(x => x.date !== Logic.dayKey()).concat([1, 2, 3, 4, 5].map(i => ({ id: 'y' + i, date: Logic.addDays(Logic.dayKey(), -60 - i), mode: 'mat', sec: 600, items: [], completed: true }))); limber.state = st; });
+  await p.setViewportSize({ width: 390, height: 844 }); await p.click('[data-act="start"]');
+  await p.evaluate(() => { limber.player.held = limber.player.held.map(() => 150); limber.finish(); }); await p.waitForTimeout(1300); await p.screenshot({ path: `${shots}/finish-ms.png` });
+  await p.click('[data-p="save"]'); await p.setViewportSize({ width: 1280, height: 900 });
   await p.evaluate(() => { localStorage.clear(); }); await p.reload(); await p.waitForTimeout(500); await p.screenshot({ path: `${shots}/onboard.png` });
   await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(300); await p.screenshot({ path: `${shots}/onboard-mobile.png` });
   assert.deepEqual(errs, []);

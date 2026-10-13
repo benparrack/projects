@@ -14,7 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 NTFY = "https://ntfy.sh"
-DEFAULTS = {"times": ["19:30", "22:00"], "desktop": True, "app_url": ""}
+DEFAULTS = {"times": ["19:30", "22:00"], "recap": "20:45", "desktop": True, "app_url": ""}
 
 
 def load(name, default):
@@ -48,6 +48,22 @@ def message(slot, times, n):
         return title, body + "Ten minutes of couch mode in bed counts. Go on."
     title = f"Keep your {n}-day streak going" if n > 1 else "Time to stretch"
     return title, "Hips and hamstrings are waiting. Pick mat, couch or a 5-minute quick reset."
+
+
+def recap(now, done, at, last_week):
+    """Sunday evening summary of the week (Mon-Sun), once per ISO week. Returns (title, body) or None."""
+    week = "%d-W%02d" % now.isocalendar()[:2]
+    if not at or now.weekday() != 6 or now.strftime("%H:%M") < at or last_week == week:
+        return None
+    monday = now.date() - timedelta(days=6)
+    n = sum((monday + timedelta(days=i)).isoformat() in done for i in range(7))
+    s = streak(done, now.date() + timedelta(days=1))
+    title = "7 for 7. Perfect week." if n == 7 else f"This week: {n} of 7 days"
+    if n == 0:
+        body = "A quiet week. Monday is a clean start, and ten minutes counts."
+    else:
+        body = (f"{s}-day streak going into Monday. " if s > 1 else "") + ("Keep it rolling." if n >= 5 else "Aim for one more day next week.")
+    return week, title, body
 
 
 def poll_done(topic, since):
@@ -95,6 +111,10 @@ def main():
             subprocess.run(["notify-send", "-a", "Limber", title, body], check=False)
         sent = [t for t in cfg["times"] if t <= slot]
     st["sent"] = {today.isoformat(): sent}
+    r = recap(datetime.now(), done, cfg["recap"], st.get("recap"))
+    if r:
+        st["recap"], title, body = r
+        send(cfg["topic"], title, body, cfg["app_url"], tags="calendar")
     (HERE / "state.json").write_text(json.dumps(st, indent=1))
 
 

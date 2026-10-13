@@ -88,11 +88,11 @@
     const cap = Math.max(30, Math.floor(budget / (opts.minutes <= 10 ? 5 : 7) / 1.6 / 15) * 15);
     const mk = s => ({ id: s.id, hold: Math.min(cap, holdFor(s, phase, opts.mode)), sides: s.sides ? 2 : 1 });
     const fresh = s => { const l = opts.last && opts.last[s.id]; return l ? Math.min(7, daysBetween(l, opts.today)) : 7; };
-    const weight = { ...focus };
+    const weight = { ...focus }, favs = new Set(opts.favs || []);
     const score = s => {
       const f = s.areas.reduce((t, a, i) => t + (weight[a] || 0) * (i === 0 ? 1 : 0.4), 0);
       const effort = phase.index === 0 && s.effort === 3 ? 0.5 : 1; // go easy on the deep ones at first
-      return f * (0.55 + fresh(s) * 0.07) * effort * (0.7 + rand() * 0.6);
+      return f * (0.55 + fresh(s) * 0.07) * effort * (favs.has(s.id) ? 1.45 : 1) * (0.7 + rand() * 0.6);
     };
 
     // warm-ups first
@@ -181,10 +181,29 @@
       improved: pts.length > 1 && (higherIsBetter ? delta > 0 : delta < 0) };
   }
 
+  // ---------- milestones ----------
+  // [metric, target, name]. Metrics: days stretched, best streak, hours held, check-in measures that improved.
+  const MILESTONES = [
+    ['days', 1, 'First session'], ['streak', 3, 'Three in a row'], ['days', 10, '10 days stretched'], ['streak', 7, 'A full week'],
+    ['hours', 5, '5 hours held'], ['looser', 1, 'Measurably looser'], ['days', 25, '25 days stretched'], ['streak', 14, 'Two weeks straight'],
+    ['days', 50, '50 days stretched'], ['hours', 20, '20 hours held'], ['streak', 30, 'A month straight'], ['looser', 3, 'Looser everywhere'],
+    ['days', 100, '100 days stretched'], ['streak', 60, 'Two months straight'], ['hours', 50, '50 hours held'], ['days', 200, '200 days stretched'],
+    ['streak', 100, '100-day streak'], ['days', 365, 'A year of stretching'],
+  ];
+  // m: { days, streak (best), current (streak now), hours, looser }. Streak milestones count progress from the current streak.
+  function milestones(m) {
+    return MILESTONES.map(([k, n, name]) => {
+      const got = (m[k] || 0) >= n, have = k === 'streak' ? m.current || 0 : m[k] || 0;
+      return { key: `${k}-${n}`, kind: k, n, name, got, have, progress: got ? 1 : Math.min(0.99, have / n), left: got ? 0 : Math.ceil(n - have) };
+    });
+  }
+  // The not-yet-earned milestone you're closest to.
+  const nextMilestone = list => list.filter(x => !x.got).sort((a, b) => b.progress - a.progress)[0] || null;
+
   const fmtTime = sec => { sec = Math.max(0, Math.round(sec)); const m = Math.floor(sec / 60), s = sec % 60; return `${m}:${pad(s)}`; };
   const fmtMin = sec => { const m = Math.round(sec / 60); return m < 1 ? '<1 min' : `${m} min`; };
 
   root.Logic = { DAY, MODES, PHASES, WARM_SEC, SWITCH_SEC, DEFAULT_FOCUS, dayKey, fromKey, addDays, daysBetween, hash, rng,
     streak, week, phaseFor, holdFor, itemSeconds, totalSeconds, buildRoutine, swapOptions, steps, sessionDays,
-    areaSeconds, trend, fmtTime, fmtMin };
+    areaSeconds, trend, milestones, nextMilestone, fmtTime, fmtMin };
 })(typeof window !== 'undefined' ? window : globalThis);

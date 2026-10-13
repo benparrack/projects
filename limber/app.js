@@ -24,13 +24,15 @@
     next: '<svg viewBox="0 0 24 24"><path d="m6 6 8 6-8 6z"/><path d="M18 6v12"/></svg>',
     shuffle: '<svg viewBox="0 0 24 24"><path d="M3 7h3.5c4.5 0 6.5 10 11 10H21"/><path d="M3 17h3.5c1.8 0 3-1.6 4.1-3.6M13.4 9.6C14.5 8 15.7 7 17.5 7H21"/><path d="m18.5 4.5 2.5 2.5-2.5 2.5M18.5 14.5l2.5 2.5-2.5 2.5"/></svg>',
     check: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+    heart: '<svg viewBox="0 0 24 24"><path d="M12 19.5s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10z"/></svg>',
+    plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
   };
 
   // ---------- state ----------
   const fresh = () => ({
     sessions: [], checks: [], onboarded: false, plan: null, shuffle: { date: '', salt: 0 }, notified: '',
     settings: { name: '', focus: { ...L.DEFAULT_FOCUS }, goal: 6, voice: true, sound: true, theme: 'auto', mode: 'mat',
-      minutes: { mat: 20, couch: 20, quick: 5 }, excluded: [], ntfy: '', remindAt: '19:30', browserNotify: false },
+      minutes: { mat: 20, couch: 20, quick: 5 }, excluded: [], favs: [], ntfy: '', remindAt: '19:30', browserNotify: false },
   });
   function load() {
     const d = fresh();
@@ -49,12 +51,19 @@
   const phase = () => L.phaseFor(daysDone());
   const lastDone = () => { const m = {}; for (const s of state.sessions) for (const it of s.items || []) if (!m[it.id] || m[it.id] < s.date) m[it.id] = s.date; return m; };
   const set = () => state.settings;
+  const ms = () => {
+    const days = daySet(), st = L.streak(days, today()), hours = state.sessions.reduce((a, x) => a + x.sec, 0) / 3600;
+    const looser = CHECKS.filter(c => { const tr = L.trend(state.checks, c.key, c.up); return tr && tr.improved; }).length;
+    return L.milestones({ days: days.size, streak: st.best, current: st.current, hours, looser });
+  };
+  const msLeft = m => m.kind === 'hours' ? `${(m.n - m.have).toFixed(1).replace(/\.0$/, '')} more hours` : m.kind === 'looser'
+    ? 'Improve on a check-in' : m.kind === 'streak' ? `${plural(m.left, 'more day')} in a row` : `${plural(m.left, 'more day')}`;
   const salt = () => state.shuffle.date === today() ? state.shuffle.salt : 0;
 
   function plan() {
     const mode = set().mode, minutes = set().minutes[mode], key = `${today()}|${mode}|${minutes}|${salt()}`;
     if (!state.plan || state.plan.key !== key || !state.plan.items.every(i => stretchById[i.id])) {
-      state.plan = { key, items: L.buildRoutine(STRETCHES, { mode, minutes, focus: set().focus, last: lastDone(), excluded: set().excluded,
+      state.plan = { key, items: L.buildRoutine(STRETCHES, { mode, minutes, focus: set().focus, last: lastDone(), excluded: set().excluded, favs: set().favs,
         today: today(), daysDone: daysDone(), salt: salt() }) };
       save();
     }
@@ -75,7 +84,8 @@
 
   let sheetDone = null;
   function openSheet(html, onClose) {
-    const w = $('#sheet'), s = $('.sheet', w);
+    // Fresh element each time: callers attach click handlers, and old sheets' handlers must not keep firing.
+    const w = $('#sheet'), old = $('.sheet', w), s = old.cloneNode(false); old.replaceWith(s);
     s.innerHTML = `<button class="icon-btn sheet-close" data-close aria-label="Close">${I.close}</button>${html}`;
     w.hidden = false; sheetDone = onClose || null; s.scrollTop = 0; s.focus();
     return s;
@@ -129,6 +139,7 @@
     }
     const wk = L.week(days, t), weekDone = wk.filter(d => d.done).length, goal = set().goal;
     const lastCheck = state.checks.map(c => c.date).sort().pop();
+    const nm = L.nextMilestone(ms());
     const checkDue = !lastCheck ? state.sessions.length > 0 : L.daysBetween(lastCheck, t) >= CHECK_EVERY;
 
     $('#view-today').innerHTML = `
@@ -158,6 +169,8 @@
             <p>${ph.note}</p>
             <p class="small">${ph.next ? `${plural(ph.toNext, 'more day')} of stretching to ${ph.next.name}, where holds go up to ${ph.next.hold}s.` : 'Final phase. Holds stay long; just keep showing up.'}</p>
           </div>
+          ${nm ? `<div class="next-ms"><div class="ms-dial" style="--p:${Math.round(nm.progress * 100)}">${msGlyph(nm)}</div>
+            <div><p class="eyebrow" style="margin:0 0 3px">Next milestone</p><b>${esc(nm.name)}</b><span>${esc(msLeft(nm))}</span></div></div>` : ''}
         </div>
 
         <div>
@@ -183,9 +196,11 @@
               <button class="btn ${st.doneToday ? '' : 'clay'} big" data-act="start">${st.doneToday ? 'Go again' : 'Start'} · ${L.fmtMin(total)}</button>
             </div>
           </section>
+          <p class="elsewhere">Stretched somewhere else, like a yoga class or physio? <button class="link" data-act="other">Log it</button></p>
         </div>
       </div>`;
   }
+  const msGlyph = m => `<span>${m.kind === 'hours' ? m.n + 'h' : m.kind === 'looser' ? m.n + '<i>cm</i>' : m.n}</span>`;
 
   $('#view-today').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -196,6 +211,7 @@
     else if (b.dataset.act === 'shuffle') { state.shuffle = { date: today(), salt: salt() + 1 }; save(); renderToday(); toast('New routine, same focus.'); }
     else if (b.dataset.act === 'start') startPlayer(plan(), set().mode);
     else if (b.dataset.act === 'checkin') showCheckin();
+    else if (b.dataset.act === 'other') showLogOther();
   });
 
   function showSwap(index) {
@@ -212,11 +228,36 @@
     });
   }
 
+  function showLogOther() {
+    const pick = { what: 'Yoga class', min: 30, date: today() };
+    const chips = (k, opts) => opts.map(([v, l]) => `<button type="button" class="chip" data-k="${k}" data-v="${esc(v)}" aria-pressed="${pick[k] === v}">${l}</button>`).join('');
+    const sh = openSheet(`<div class="sheet-body"><p class="eyebrow">Log a session</p><h2>Stretched somewhere else</h2>
+      <p class="lede" style="font-size:15px">A class, physio, your own routine. It counts toward your streak and your program, the same as a session here.</p>
+      <div class="field"><label>What was it?</label><div class="chips">${chips('what', [['Yoga class', 'Yoga class'], ['Physio', 'Physio'], ['My own routine', 'My own routine'], ['Pilates', 'Pilates'], ['Other stretching', 'Other']])}</div></div>
+      <div class="field"><label>How long?</label><div class="chips">${chips('min', [[5, '5 min'], [10, '10 min'], [20, '20 min'], [30, '30 min'], [45, '45 min'], [60, '1 hour']])}</div></div>
+      <div class="field"><label>When?</label><div class="chips">${chips('date', [[today(), 'Today'], [L.addDays(today(), -1), 'Yesterday']])}</div></div>
+      <div class="sheet-actions"><button class="btn clay" data-log>Log it</button><button class="btn ghost" data-close>Cancel</button></div></div>`);
+    sh.addEventListener('click', e => {
+      const c = e.target.closest('[data-k]');
+      if (c) { const k = c.dataset.k; pick[k] = k === 'min' ? +c.dataset.v : c.dataset.v; $$(`[data-k="${k}"]`, sh).forEach(b => b.setAttribute('aria-pressed', b === c)); }
+      if (!e.target.closest('[data-log]')) return;
+      const before = ms(), wasDone = daySet().has(pick.date);
+      const ses = { id: Date.now().toString(36), date: pick.date, at: new Date().toISOString(), mode: 'other', label: pick.what,
+        planned: pick.min * 60, sec: pick.min * 60, items: [], completed: true, feel: null, note: '' };
+      state.sessions.push(ses); state.sessions.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0); save();
+      if (!wasDone && pick.date === today()) pingDone(ses);
+      const got = newMilestones(before);
+      closeSheet(); render();
+      toast(got.length ? `Milestone: ${got[0].name}.` : `Logged ${pick.min} min of ${pick.what.toLowerCase()}.`);
+    });
+  }
+  const newMilestones = before => { const had = new Set(before.filter(m => m.got).map(m => m.key)); return ms().filter(m => m.got && !had.has(m.key)); };
+
   // ======================================================================
   // STRETCH DETAIL
   // ======================================================================
   function showStretch(id) {
-    const s = stretchById[id], off = set().excluded.includes(id);
+    const s = stretchById[id], off = set().excluded.includes(id), fav = set().favs.includes(id);
     const where = { mat: 'Mat', bed: 'Bed or sofa', stand: 'Standing' };
     const sh = openSheet(`
       <div class="fig-hero">${fig(id)}</div>
@@ -240,6 +281,7 @@
         </div>
         <div class="sheet-actions">
           <button class="btn primary" data-try>${I.play.replace('<svg', '<svg style="fill:currentColor;stroke:none"')} Try it now</button>
+          <button class="btn ${fav ? 'fav-on' : ''}" data-fav aria-pressed="${fav}">${I.heart} ${fav ? 'Favourite' : 'Add to favourites'}</button>
           <button class="btn ghost" data-excl>${off ? 'Allow in routines again' : 'Don\'t put this in my routines'}</button>
         </div>
       </div>`);
@@ -248,9 +290,15 @@
         closeSheet();
         const mode = s.spots.includes('mat') ? 'mat' : s.spots.includes('bed') ? 'couch' : 'quick';
         startPlayer([{ id, hold: L.holdFor(s, phase(), mode), sides: s.sides ? 2 : 1 }], mode, 'Single stretch');
+      } else if (e.target.closest('[data-fav]')) {
+        const f = set().favs;
+        set().favs = fav ? f.filter(x => x !== id) : [...f, id];
+        if (!fav) set().excluded = set().excluded.filter(x => x !== id);
+        replan(); closeSheet(); render(); toast(fav ? `${s.name} removed from favourites.` : `${s.name} will come up more often.`);
       } else if (e.target.closest('[data-excl]')) {
         const ex = set().excluded;
         set().excluded = off ? ex.filter(x => x !== id) : [...ex, id];
+        if (!off) set().favs = set().favs.filter(x => x !== id);
         replan(); closeSheet(); render(); toast(off ? `${s.name} is back in the mix.` : `${s.name} won't come up again.`);
       }
     });
@@ -260,7 +308,7 @@
   // PLAYER
   // ======================================================================
   let P = null, audio = null, wake = null;
-  const C = 2 * Math.PI * 47;
+  const C = 2 * Math.PI * 47, BREATH = 10; // a slow 4-in, 6-out breath during holds
 
   function sound(kind) {
     if (!set().sound) return;
@@ -330,6 +378,12 @@
     const c = $('.p-clock', el); if (!c) return;
     c.textContent = L.fmtTime(Math.ceil(st.sec - P.el));
     $('.arc', el).style.strokeDashoffset = (C * Math.min(1, P.el / st.sec)).toFixed(1);
+    const halo = $('.p-halo', el);
+    if (halo) {
+      const b = P.el % BREATH, inhale = b < 4, k = inhale ? b / 4 : 1 - (b - 4) / (BREATH - 4);
+      halo.style.transform = `scale(${(0.8 + 0.2 * k).toFixed(3)})`;
+      if (!P.paused) $('.p-phase', el).textContent = `Hold · breathe ${inhale ? 'in' : 'out'}`;
+    }
     const cur = $('.p-bar i.cur', el);
     if (cur) {
       const item = P.items[curStep().item], tot = L.itemSeconds(item, P.mode);
@@ -349,7 +403,7 @@
         <button class="icon-btn" data-p="quit" aria-label="End session" title="End session (Esc)">${I.close}</button></div>
       <div class="p-bar">${P.items.map((_, i) => `<i class="${i < st.item ? 'done' : i === st.item ? 'cur' : ''}"></i>`).join('')}</div>
       <div class="p-stage">
-        <div class="p-ring ${st.type === 'hold' ? '' : 'prep'}">
+        <div class="p-ring ${st.type === 'hold' ? '' : 'prep'}">${st.type === 'hold' && s.kind !== 'warm' ? '<div class="p-halo" aria-hidden="true"></div>' : ''}
           <svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="47"/><circle class="arc" cx="50" cy="50" r="47" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="0"/></svg>
           ${fig(it.id).replace('class="fig"', `class="fig${st.side === 2 ? ' mirror' : ''}"`)}
           <div class="p-clock" aria-live="off">${L.fmtTime(st.sec)}</div>
@@ -401,13 +455,13 @@
     const sec = Math.round(P.held.reduce((a, b) => a + b, 0));
     const items = P.items.map((it, i) => ({ id: it.id, sec: Math.round(P.held[i]) })).filter(i => i.sec > 0);
     if (sec < COUNTS_SEC) { /* skipping straight through doesn't count either */ closePlayer(); toast('Not logged. Under two minutes of holds.'); return; }
-    const wasDone = daySet().has(today());
+    const wasDone = daySet().has(today()), before = ms();
     const ses = { id: Date.now().toString(36), date: today(), at: new Date().toISOString(), mode: P.mode, label: P.label,
       planned: L.totalSeconds(P.items, P.mode), sec, items, completed, feel: null, note: '' };
     state.sessions.push(ses); save();
     if (!wasDone) pingDone(ses);
     sound('done'); say(completed ? 'Session done. Nice work.' : 'Logged. Nice work.');
-    const st = L.streak(daySet(), today()), ph = phase();
+    const st = L.streak(daySet(), today()), ph = phase(), got = newMilestones(before);
     const el = $('#player');
     el.innerHTML = `<div class="finish">
       <div class="big-mark">${I.check}</div>
@@ -416,7 +470,8 @@
       ${ph.from === daySet().size && ph.index > 0 && !wasDone ? `<p class="lede" style="margin:10px auto 0">You've reached <b>${ph.name}</b>. Holds get longer from tomorrow.</p>` : ''}
       <div class="stats"><div><b class="num">${Math.max(1, Math.round(sec / 60))}</b><span>minutes held</span></div>
         <div><b class="num">${items.length}</b><span>stretches</span></div><div><b class="num">${st.current}</b><span>day streak</span></div></div>
-      <p class="eyebrow">How do your hips feel?</p>
+      ${got.map(m => `<div class="ms-earned"><div class="ms-dial got">${msGlyph(m)}</div><div><small>New milestone</small><b>${esc(m.name)}</b></div></div>`).join('')}
+      <p class="eyebrow" style="margin-top:${got.length ? 26 : 0}px">How do your hips feel?</p>
       <div class="feel" role="group" aria-label="How it felt">${[1, 2, 3, 4, 5].map(n => `<button data-feel="${n}" aria-pressed="false"><b>${n}</b>${FEEL[n]}</button>`).join('')}</div>
       <textarea id="f-note" placeholder="Anything to remember? (optional)" rows="2"></textarea>
       <div class="sheet-actions" style="justify-content:center"><button class="btn clay big" data-p="save">Save and close</button></div>
@@ -530,7 +585,7 @@
     const topF = Math.max(...Object.values(set().focus));
     const feels = state.sessions.filter(s => s.feel).slice(-30);
     const recent = state.sessions.slice(-8).reverse();
-    const sessionsWord = state.sessions.length;
+    const sessionsWord = state.sessions.length, mlist = ms();
 
     $('#view-progress').innerHTML = `
       <p class="eyebrow">Progress</p>
@@ -559,6 +614,10 @@
               ${spark(tr.pts, c.up)}</div>`; }).join('')}</div>
           <p class="muted" style="font-size:13px;margin:16px 0 0">${CHECKS.map(c => `${c.name}: ${c.up ? 'higher' : 'lower'} is better`).join(' · ')}.</p>
         </section>
+        <section class="card wide"><div class="section-head"><h3>Milestones</h3><span class="muted" style="font-size:13px">${mlist.filter(m => m.got).length} of ${mlist.length}</span></div>
+          <div class="ms-grid">${mlist.map(m => `<div class="ms ${m.got ? 'got' : ''}" title="${esc(m.got ? 'Earned' : msLeft(m))}"><div class="ms-dial ${m.got ? 'got' : ''}" style="--p:${Math.round(m.progress * 100)}">${msGlyph(m)}</div>
+            <b>${esc(m.name)}</b><small>${m.got ? 'Earned' : esc(msLeft(m))}</small></div>`).join('')}</div>
+        </section>
         <section class="card"><div class="section-head"><h3>Where the time went</h3><span class="muted" style="font-size:13px">Last 14 days</span></div>
           ${Object.keys(area).length ? `<div class="bars">${Object.keys(AREAS).map(a => `<div class="bar ${set().focus[a] === topF ? 'focus' : ''}"><span>${AREAS[a].name}</span>
             <span class="track"><span class="fill" style="width:${((area[a] || 0) / maxA * 100).toFixed(1)}%;display:block"></span></span><span class="val">${L.fmtMin(area[a] || 0).replace(' min', 'm').replace('<1m', '–')}</span></div>`).join('')}</div>
@@ -566,7 +625,7 @@
         </section>
         <section class="card"><div class="section-head"><h3>Recent sessions</h3></div>
           ${recent.length ? `<ul class="log">${recent.map(s => `<li><span class="when">${esc(fmtDay(s.date))}</span>
-            <span>${esc(s.label || L.MODES[s.mode].name)}${s.completed ? '' : ' <span class="muted">(ended early)</span>'}${s.feel ? ` · <span class="muted">${FEEL[s.feel]}</span>` : ''}${s.note ? `<span class="note">“${esc(s.note)}”</span>` : ''}</span>
+            <span>${esc(s.label || (L.MODES[s.mode] || { name: 'Session' }).name)}${s.completed ? '' : ' <span class="muted">(ended early)</span>'}${s.feel ? ` · <span class="muted">${FEEL[s.feel]}</span>` : ''}${s.note ? `<span class="note">“${esc(s.note)}”</span>` : ''}</span>
             <span class="mins">${L.fmtMin(s.sec)}</span></li>`).join('')}</ul>` : '<p class="empty">Your sessions will be listed here.</p>'}
         </section>
       </div>`;
@@ -578,7 +637,8 @@
   // ======================================================================
   const lib = { area: 'all', spot: 'all' };
   function renderLibrary() {
-    const list = STRETCHES.filter(s => (lib.area === 'all' || s.areas.includes(lib.area)) && (lib.spot === 'all' || s.spots.includes(lib.spot)))
+    const favs = set().favs;
+    const list = STRETCHES.filter(s => (lib.area === 'all' || (lib.area === 'fav' ? favs.includes(s.id) : s.areas.includes(lib.area))) && (lib.spot === 'all' || s.spots.includes(lib.spot)))
       .sort((a, b) => (a.kind === 'warm') - (b.kind === 'warm') || (lib.area === 'all' ? 0 : (b.areas[0] === lib.area) - (a.areas[0] === lib.area)));
     const chip = (k, v, label) => `<button class="chip" data-${k}="${v}" aria-pressed="${lib[k] === v}">${label}</button>`;
     $('#view-library').innerHTML = `
@@ -586,12 +646,12 @@
       <h1 class="display">${STRETCHES.length} stretches, <em>explained.</em></h1>
       <p class="lede">Every stretch in your routines, with how to do it, what you should feel, and how to make it easier or harder.</p>
       <div class="filters" role="group" aria-label="Filter">
-        ${chip('area', 'all', 'Everything')}${Object.entries(AREAS).map(([k, a]) => chip('area', k, a.name)).join('')}
+        ${chip('area', 'all', 'Everything')}${Object.entries(AREAS).map(([k, a]) => chip('area', k, a.name)).join('')}${favs.length ? chip('area', 'fav', `${I.heart} Favourites`) : ''}
         <span class="sep"></span>${chip('spot', 'all', 'Anywhere')}${chip('spot', 'mat', 'Mat')}${chip('spot', 'bed', 'Bed or sofa')}${chip('spot', 'stand', 'Standing')}
       </div>
-      <div class="lib">${list.map(s => `<button class="lib-card ${set().excluded.includes(s.id) ? 'off' : ''}" data-info="${s.id}">${fig(s.id)}
+      <div class="lib">${list.map(s => `<button class="lib-card ${set().excluded.includes(s.id) ? 'off' : ''}" data-info="${s.id}">${fig(s.id)}${favs.includes(s.id) ? `<span class="fav-mark" title="Favourite">${I.heart}</span>` : ''}
         <span class="body"><b>${esc(s.name)}</b><small>${s.kind === 'warm' ? 'Warm-up · ' : ''}${esc(areaNames(s).slice(0, 2).join(', '))} ${effortDots(s.effort)}</small>
-        ${set().excluded.includes(s.id) ? '<span class="off-tag">Not in routines</span>' : ''}</span></button>`).join('') || '<p class="empty">No stretches match both filters.</p>'}</div>`;
+        ${set().excluded.includes(s.id) ? '<span class="off-tag">Not in routines</span>' : ''}</span></button>`).join('') || `<p class="empty">${lib.area === 'fav' ? 'No favourites yet. Open a stretch and tap Add to favourites.' : 'No stretches match both filters.'}</p>`}</div>`;
   }
   $('#view-library').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;

@@ -82,4 +82,16 @@ assert.deepEqual([t.first, t.last, t.delta, t.improved, t.pts.length], [-12, -9.
 assert.equal(L.trend([], 'reach', true), null);
 assert.equal(L.fmtTime(75), '1:15');
 
+// Favourites come up more often across a month of routines
+const count = favs => Array.from({ length: 30 }, (_, d) => L.buildRoutine(STRETCHES, { ...base, today: L.addDays('2026-10-01', d), mode: 'mat', minutes: 20, favs }))
+  .filter(r => r.some(i => i.id === 'wall-calf')).length;
+assert(count(['wall-calf']) > count([]), 'favourite shows up more');
+
+// Milestones: earned, progress toward the next, streaks measured from the current streak
+const ms = L.milestones({ days: 12, streak: 8, current: 2, hours: 3.2, looser: 0 });
+assert(ms.find(m => m.key === 'days-10').got && ms.find(m => m.key === 'streak-7').got && !ms.find(m => m.key === 'hours-5').got);
+assert.equal(ms.find(m => m.key === 'streak-14').left, 12);
+assert.equal(L.nextMilestone(ms).key, 'hours-5');
+assert.equal(L.nextMilestone(L.milestones({ days: 999, streak: 999, current: 999, hours: 999, looser: 3 })), null);
+
 console.log('ok:', STRETCHES.length, 'stretches');
