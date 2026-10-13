@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Limber</title>
+<meta name="description" content="A daily stretching coach for tight legs, hips and groin.">
+<meta name="theme-color" content="#f4f0e8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16130f" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..700,50;1,9..144,300..700,50&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="masthead">
+    <a class="wordmark" href="#today" data-view="today" aria-label="Limber, today">limber<span class="dot">.</span></a>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#today" data-view="today"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg><span>Today</span></a>
+      <a href="#progress" data-view="progress"><svg viewBox="0 0 24 24"><path d="M3.5 19.5h17"/><path d="M5 15.5l4.5-4.8 3.6 3.1L19 7"/><path d="M15 7h4v4"/></svg><span>Progress</span></a>
+      <a href="#library" data-view="library"><svg viewBox="0 0 24 24"><path d="M4.5 5.5c2.6-1 5-.8 7.5.8v13c-2.5-1.6-4.9-1.8-7.5-.8z"/><path d="M19.5 5.5c-2.6-1-5-.8-7.5.8v13c2.5-1.6 4.9-1.8 7.5-.8z"/></svg><span>Stretches</span></a>
+      <a href="#settings" data-view="settings"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg><span>Settings</span></a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="view" id="view-today" aria-label="Today"></section>
+    <section class="view" id="view-progress" aria-label="Progress" hidden></section>
+    <section class="view" id="view-library" aria-label="Stretches" hidden></section>
+    <section class="view" id="view-settings" aria-label="Settings" hidden></section>
+  </main>
+</div>
+
+<div class="player" id="player" hidden role="dialog" aria-modal="true" aria-label="Stretch session"></div>
+
+<div class="sheet-wrap" id="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="stretches.js"></script>
+<script src="figure.js"></script>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
