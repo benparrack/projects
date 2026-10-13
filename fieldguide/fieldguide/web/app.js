@@ -279,7 +279,7 @@ function coverView() {
       <div class="langkey">${S.languages.slice(0, 7).map(([l, n]) => `<span style="--c:${ctx.langColor[l]}">${l} ${Math.round((n / totalLoc) * 100)}%</span>`).join('')}</div>
       <a class="begin" href="${next < 0 ? '#/review' : `#/ch/${next + 1}`}">${!started ? 'Begin with chapter 1' : next < 0 ? 'Read the closing chapter' : `Continue with chapter ${next + 1}`} <span aria-hidden="true">→</span></a>
     </header>
-    ${G.stale.length ? `<div class="stale-note"><b>The code has moved on.</b> ${plural(G.stale.length, 'file')} changed since this guide was built on ${esc(G.built.slice(0, 10))}${G.stale.length <= 4 ? `: ${G.stale.map(p => `<a href="${fileHref(p)}"><code>${esc(p)}</code></a>`).join(', ')}` : ''}. Rebuild to bring it up to date; only the changed parts are rewritten.<pre>python3 -m fieldguide build ${esc(G.project.root)}</pre></div>` : ''}
+    ${G.stale.length ? `<div class="stale-note"><b>The code has moved on.</b> ${plural(G.stale.length, 'file')} changed since this guide was built on ${esc(G.built.slice(0, 10))}${G.stale.length <= 4 ? `: ${G.stale.map(p => `<a href="${fileHref(p)}"><code>${esc(p)}</code></a>`).join(', ')}` : ''}. Rebuild to bring it up to date; only the changed parts are rewritten.<pre>python3 -m fieldguide build ${esc(G.project.root)}${G.slug !== G.project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ? ` --name ${G.slug}` : ''}</pre></div>` : ''}
     <div class="prose">${md(C.overview)}</div>
     <h2>How it runs</h2>
     <div class="prose">${md(C.how_it_runs)}</div>
