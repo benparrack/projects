@@ -127,7 +127,9 @@ function state() {
     insights: insights(rows),
     settings: { auto_submit: meta.get('auto_submit') === '1', daily_cap: +(meta.get('daily_cap') || 25),
       mail: existsSync(ROOT + 'data/mail.json') ? JSON.parse(readFileSync(ROOT + 'data/mail.json', 'utf8')).user : '',
-      mail_checked: +(meta.get('mail:checked') || 0), ntfy: topics(), last_fetch: +(meta.get('fetch:at') || 0) },
+      mail_checked: +(meta.get('mail:checked') || 0), ntfy: topics(), last_fetch: +(meta.get('fetch:at') || 0),
+      workday: meta.get('workday_accounts') === '1',
+      workday_accounts: existsSync(ROOT + 'data/workday.json') ? Object.keys(JSON.parse(readFileSync(ROOT + 'data/workday.json', 'utf8'))).length : 0 },
     runner: runner(),
   };
 }
@@ -168,8 +170,9 @@ const routes = {
     db.prepare('UPDATE jobs SET outcome=?, outcome_at=?, notes=? WHERE id=?').run(outcome, Date.now(), notes ?? null, id);
   },
   'POST /api/run': ({ apply = 5, live = false }) => ({ started: startRun(['--apply', String(+apply || 5), ...(live ? ['--live'] : [])]) }),
-  'POST /api/settings': ({ auto_submit, daily_cap }) => {
+  'POST /api/settings': ({ auto_submit, daily_cap, workday }) => {
     if (auto_submit != null) meta.set('auto_submit', auto_submit ? '1' : '0');
+    if (workday != null) meta.set('workday_accounts', workday ? '1' : '0');
     if (daily_cap != null) meta.set('daily_cap', String(Math.max(0, Math.min(200, +daily_cap || 0))));
   },
   'POST /api/mail': ({ user, password }) => {

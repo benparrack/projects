@@ -1,69 +1,124 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Internship Bot</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📮</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%231f4d3a'/><text x='16' y='22' text-anchor='middle' font-family='Georgia,serif' font-size='17' font-style='italic' fill='%23f3f0e8'>ib</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
 <style>
-:root { --bg:#f6f7f9; --card:#fff; --ink:#1b1f24; --muted:#64707d; --line:#e2e6ea; --accent:#2f6fde; --accent-ink:#fff;
-  --good:#1f8a4c; --warn:#b7791f; --bad:#c53030; --chip:#eef1f5; --shadow:0 1px 2px rgba(0,0,0,.06); }
-@media (prefers-color-scheme: dark) { :root { --bg:#111418; --card:#1a1f25; --ink:#e6e9ed; --muted:#93a0ad; --line:#2a3139;
-  --accent:#5b8ff0; --chip:#242b33; --good:#43b06f; --warn:#d69e2e; --bad:#f06464; --shadow:none; } }
-* { box-sizing: border-box; }
-a { color:var(--accent); }
-body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-header { position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line); }
-.bar { max-width:1150px; margin:auto; padding:10px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-h1 { font-size:17px; margin:0; margin-right:auto; }
-nav { max-width:1150px; margin:auto; padding:0 12px; display:flex; gap:2px; overflow-x:auto; }
-nav button { border:0; background:none; color:var(--muted); padding:9px 12px; font:inherit; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
-nav button.on { color:var(--ink); border-color:var(--accent); }
-.badge { display:inline-block; min-width:18px; padding:0 5px; border-radius:9px; background:var(--bad); color:#fff; font-size:11px; text-align:center; margin-left:4px; }
-main { max-width:1150px; margin:auto; padding:16px; }
-h2 { font-size:15px; margin:22px 0 8px; display:flex; gap:10px; align-items:center; }
-h2:first-child { margin-top:4px; }
-.card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:10px; box-shadow:var(--shadow); }
-.muted { color:var(--muted); } .small { font-size:12px; }
+:root { --bg:#f3f0e8; --card:#fbfaf6; --ink:#1c1a16; --muted:#6b665c; --line:#ddd7ca; --line-2:#c9c1b0; --chip:#ebe6da;
+  --accent:#1f4d3a; --accent-ink:#f7f4ec; --signal:#b4471c; --good:#2f6b3f; --warn:#94650f; --bad:#a3321f;
+  --serif:"Newsreader", "Iowan Old Style", Georgia, serif; --sans:"IBM Plex Sans", system-ui, sans-serif; --mono:"IBM Plex Mono", ui-monospace, monospace; }
+@media (prefers-color-scheme: dark) { :root { --bg:#15140f; --card:#1c1b16; --ink:#ece7db; --muted:#9b9486; --line:#2e2c25; --line-2:#433f35;
+  --chip:#25231d; --accent:#8fbf9f; --accent-ink:#13130f; --signal:#e0794a; --good:#8fbf9f; --warn:#d9a74a; --bad:#e07a64; } }
+* { box-sizing:border-box; }
+html { -webkit-text-size-adjust:100%; }
+body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 var(--sans); }
+a { color:var(--accent); text-underline-offset:2px; }
+::selection { background:var(--accent); color:var(--accent-ink); }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line-2); }
+.bar { max-width:1080px; margin:auto; padding:16px 16px 10px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+.brand { margin-right:auto; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+h1 { font:500 25px/1 var(--serif); letter-spacing:-.01em; margin:0; }
+h1 i { color:var(--accent); }
+.sub { color:var(--muted); font-size:12.5px; }
+.status { font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:7px; max-width:46ch; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.status::before { content:""; flex:none; width:7px; height:7px; border-radius:50%; background:var(--line-2); }
+.status.run { color:var(--ink); } .status.run::before { background:var(--good); animation:pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity:.25; } }
+nav { max-width:1080px; margin:auto; padding:0 10px; display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; }
+nav button { border:0; background:none; color:var(--muted); padding:8px 6px 9px; margin:0 6px -1px; font:500 13.5px var(--sans); cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
+nav button:hover { color:var(--ink); }
+nav button.on { color:var(--ink); border-color:var(--ink); }
+nav .count { font:500 11.5px var(--mono); color:var(--muted); margin-left:5px; }
+nav .count.hot { color:var(--signal); }
+
+main { max-width:1080px; margin:auto; padding:8px 16px 64px; }
+h2 { font:500 20px/1.25 var(--serif); margin:34px 0 12px; padding-bottom:7px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+main > h2:first-child, main > .tiles:first-child + h2 { margin-top:22px; }
+h2 .chip { background:none; padding:0; margin:0; font:400 13px var(--mono); color:var(--muted); }
+h2 .b, h2 input { margin-left:auto; font:400 13px/1.3 var(--sans); }
+h2 input { width:min(260px, 100%); }
+h2 .b + .b { margin-left:0; }
+.lede { color:var(--muted); font-size:13px; margin:-4px 0 12px; max-width:72ch; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:4px; padding:16px 18px; margin-bottom:10px; }
+.muted { color:var(--muted); } .small { font-size:12.5px; }
 .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .grow { flex:1; min-width:0; }
-.chip { display:inline-block; background:var(--chip); border-radius:999px; padding:1px 9px; font-size:12px; margin:2px 4px 2px 0; }
-button.b, a.b { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
-button.b:hover, a.b:hover { border-color:var(--accent); }
-button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
-button.good { background:var(--good); color:#fff; border-color:var(--good); }
-button:disabled { opacity:.5; cursor:default; }
-input, textarea, select { font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:7px; padding:6px 8px; }
-textarea { width:100%; resize:vertical; }
+.chip { display:inline-block; background:var(--chip); border-radius:3px; padding:1px 7px; font-size:12px; margin:2px 4px 2px 0; }
+.co { font-weight:600; } .role { color:var(--ink); }
+.meta { color:var(--muted); font-size:12.5px; margin-top:2px; }
+.qid { font:500 12px var(--mono); color:var(--muted); margin-right:6px; }
+.qtext { font:400 17px/1.35 var(--serif); }
+
+button.b, a.b { border:1px solid var(--line-2); background:var(--card); color:var(--ink); border-radius:3px; padding:6px 12px; font:500 13px/1.3 var(--sans); cursor:pointer; text-decoration:none; display:inline-block; transition:border-color .12s, background .12s; }
+button.b:hover, a.b:hover { border-color:var(--ink); }
+button.primary, button.good { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+button.primary:hover, button.good:hover { border-color:var(--accent); filter:brightness(1.12); }
+button.opt { background:var(--bg); }
+button.quiet { border-color:transparent; background:none; color:var(--muted); }
+button.quiet:hover { color:var(--ink); border-color:transparent; text-decoration:underline; }
+button:disabled { opacity:.45; cursor:default; }
+input, textarea, select { font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line-2); border-radius:3px; padding:6px 9px; }
+input:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+textarea { width:100%; resize:vertical; line-height:1.5; }
 input.text { width:100%; }
-.qa { display:grid; grid-template-columns:minmax(140px, 32%) 1fr; gap:6px 12px; margin:10px 0; }
-.qa .l { color:var(--muted); font-size:13px; }
-@media (max-width:640px) { .qa { grid-template-columns:1fr; } .qa .l { margin-top:6px; } }
-.tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; }
-.tile { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
-.tile b { display:block; font-size:24px; }
-table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
-th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
-th { font-size:12px; color:var(--muted); font-weight:600; background:var(--chip); }
+input[type=checkbox] { accent-color:var(--accent); }
+
+.qa { display:grid; grid-template-columns:minmax(150px, 30%) 1fr; gap:0 16px; margin:14px 0 4px; border-top:1px solid var(--line); }
+.qa > div { padding:8px 0; border-bottom:1px solid var(--line); min-width:0; }
+.qa .l { color:var(--muted); font-size:12.5px; padding-top:10px; }
+.qa .v { overflow-wrap:anywhere; }
+@media (max-width:640px) { .qa { grid-template-columns:1fr; } .qa .l { border-bottom:0; padding-bottom:0; } }
+
+.tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); border:1px solid var(--line); border-radius:4px; overflow:hidden; background:var(--card); margin-top:22px; }
+.tile { display:flex; flex-direction:column; justify-content:space-between; padding:12px 14px 13px; border-left:1px solid var(--line); border-top:1px solid var(--line); margin:-1px 0 0 -1px; }
+.tile span { display:block; font-size:11.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+.tile b { display:block; font:400 30px/1.15 var(--serif); font-variant-numeric:tabular-nums; margin-top:2px; }
+.tile.click { cursor:pointer; } .tile.click:hover { background:var(--bg); }
+.tile.on { background:var(--chip); }
+.tile.on span { color:var(--ink); }
+
+table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:4px; }
+th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:500; }
 tr:last-child td { border-bottom:0; }
+td.num { font-variant-numeric:tabular-nums; white-space:nowrap; }
 .scroll { overflow-x:auto; }
 .o-interview, .o-offer { color:var(--good); font-weight:600; } .o-oa { color:var(--warn); font-weight:600; } .o-rejected { color:var(--bad); }
-.empty { text-align:center; color:var(--muted); padding:22px; }
-img.shot { max-width:100%; border:1px solid var(--line); border-radius:8px; margin-top:8px; }
-details summary { cursor:pointer; color:var(--accent); }
-pre { background:var(--chip); padding:10px; border-radius:8px; overflow:auto; max-height:320px; font-size:12px; white-space:pre-wrap; }
-.bars { display:flex; align-items:flex-end; gap:3px; height:110px; padding-top:8px; }
-.bars div { flex:1; background:var(--accent); border-radius:3px 3px 0 0; min-height:2px; position:relative; }
-.bars div:hover::after { content:attr(data-t); position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); font-size:11px; padding:2px 5px; border-radius:4px; white-space:nowrap; }
-.funnel div { display:flex; align-items:center; gap:10px; margin:4px 0; }
-.funnel span.f { height:20px; background:var(--accent); border-radius:4px; min-width:2px; }
-.pill { font-size:12px; padding:3px 10px; border-radius:999px; background:var(--chip); }
-.pill.run { background:var(--good); color:#fff; }
-#toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:8px 14px; border-radius:8px; display:none; z-index:9; max-width:90vw; }
-.switch { display:flex; gap:10px; align-items:flex-start; }
-.switch input { margin-top:3px; width:18px; height:18px; }
+.chip.o-interview, .chip.o-offer, .chip.o-oa, .chip.o-rejected { font-weight:500; }
+.card.empty, .empty { color:var(--muted); font:italic 400 15.5px var(--serif); padding:18px; }
+.why { font-size:13px; margin:10px 0 12px; padding-left:10px; border-left:2px solid var(--signal); }
+.err { color:var(--bad); }
+img.shot { max-width:100%; border:1px solid var(--line); border-radius:3px; margin-top:10px; }
+details summary { cursor:pointer; color:var(--muted); font-size:12.5px; }
+details summary:hover { color:var(--ink); }
+pre { background:var(--chip); padding:12px; border-radius:3px; overflow:auto; max-height:340px; font:12px/1.5 var(--mono); white-space:pre-wrap; }
+code { font:12.5px var(--mono); background:var(--chip); padding:0 4px; border-radius:2px; }
+.bars { display:flex; align-items:flex-end; gap:3px; height:120px; padding-top:8px; border-bottom:1px solid var(--line-2); }
+.bars div { flex:1; background:var(--accent); min-height:1px; position:relative; opacity:.85; }
+.bars div:hover { opacity:1; }
+.bars div:hover::after { content:attr(data-t); position:absolute; bottom:100%; left:50%; transform:translate(-50%, -4px); background:var(--ink); color:var(--bg); font:11px var(--mono); padding:2px 6px; border-radius:2px; white-space:nowrap; }
+.funnel div { display:grid; grid-template-columns:170px 1fr 44px 44px; align-items:center; gap:12px; padding:6px 0; border-bottom:1px solid var(--line); }
+.funnel div:last-child { border-bottom:0; }
+.funnel .track { height:8px; background:var(--chip); border-radius:1px; }
+.funnel span.f { display:block; height:100%; background:var(--accent); min-width:1px; }
+.funnel b, .funnel .pct { font-variant-numeric:tabular-nums; text-align:right; font-weight:500; }
+@media (max-width:520px) { .funnel div { grid-template-columns:110px 1fr 34px 40px; gap:8px; } }
+#toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:9px 16px; border-radius:3px; display:none; z-index:9; max-width:90vw; font-size:13px; }
+.switch { display:flex; gap:12px; align-items:flex-start; cursor:pointer; }
+.switch input { margin-top:3px; width:17px; height:17px; flex:none; }
+.switch b { font-weight:600; }
+.setting + .setting { margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
+.topic { font:13px var(--mono); background:var(--chip); padding:2px 7px; border-radius:3px; user-select:all; }
+@media (max-width:520px) { .bar { padding:12px 16px 6px; gap:6px 12px; } .sub { display:none; } h1 { font-size:22px; } .status { order:3; width:100%; max-width:none; } .card { padding:14px; } .tile b { font-size:25px; } }
 </style></head>
 <body>
 <header>
-  <div class="bar"><h1>📮 Internship Bot</h1><span id="runpill" class="pill">idle</span>
-    <button class="b" onclick="runNow()">Find + apply now</button></div>
+  <div class="bar"><div class="brand"><h1>Internship <i>Bot</i></h1><span class="sub">Summer 2027 applications</span></div>
+    <span id="runpill" class="status">Loading</span>
+    <button class="b" onclick="runNow()">Run now</button></div>
   <nav id="tabs"></nav>
 </header>
 <main id="main"><div class="empty">Loading…</div></main>
@@ -81,7 +136,7 @@ const toast = m => { const t = document.getElementById('toast'); t.textContent =
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json', 'x-dashboard': '1' }, body: JSON.stringify(body) } : {});
   const j = await r.json();
-  if (j.error) { toast('⚠ ' + j.error); throw new Error(j.error); }
+  if (j.error) { toast(j.error); throw new Error(j.error); }
   return j;
 }
 async function refresh() { S = await api('/api/state'); dirty = false; render(); }
@@ -90,129 +145,138 @@ const act = async (path, body, msg) => { await api(path, body); if (msg) toast(m
 function render() {
   const needs = S.questions.length + S.approvals.length + S.manual.length;
   document.getElementById('tabs').innerHTML = TABS.map(([k, l]) =>
-    `<button class="${k === tab ? 'on' : ''}" onclick="go('${k}')">${l}${k === 'needs' && needs ? `<span class="badge">${needs}</span>` : ''}</button>`).join('');
+    `<button class="${k === tab ? 'on' : ''}" onclick="go('${k}')">${l}${k === 'needs' && needs ? `<span class="count hot">${needs}</span>` : ''}</button>`).join('');
   const r = S.runner, pill = document.getElementById('runpill');
-  pill.className = 'pill' + (r.running ? ' run' : '');
-  pill.textContent = r.running ? 'working: ' + (r.current || 'fetching') : 'idle';
+  pill.className = 'status' + (r.running ? ' run' : '');
+  pill.textContent = r.running ? (r.current ? 'Applying: ' + r.current : 'Checking the lists') : 'Idle' + (S.settings.last_fetch ? ` · lists checked ${ago(S.settings.last_fetch)}` : '');
+  pill.title = pill.textContent;
   document.getElementById('main').innerHTML = VIEWS[tab]();
 }
 function go(k) { tab = k; try { localStorage.setItem('tab', k); } catch {} render(); if (k === 'profile') loadProfile(); }
 
-const jobHead = j => `<div class="row"><div class="grow"><b>${esc(j.company)}</b> · ${esc(j.title)}
-  <div class="small muted">${esc(j.ats)}${j.locations?.length ? ' · ' + esc(j.locations.join(', ')) : ''}${j.category ? ' · ' + esc(j.category) : ''}</div></div>
+const where = j => [j.ats, j.locations?.length ? (j.locations.length > 2 ? `${j.locations.slice(0, 2).join(', ')} +${j.locations.length - 2}` : j.locations.join(', ')) : '', j.category].filter(Boolean).map(esc).join(' · ');
+const jobHead = j => `<div class="row"><div class="grow"><span class="co">${esc(j.company)}</span> <span class="muted">·</span> <span class="role">${esc(j.title)}</span>
+  <div class="meta">${where(j)}</div></div>
   <a class="b" href="${esc(j.url)}" target="_blank" rel="noopener">Posting ↗</a></div>`;
 
 const VIEWS = {
   needs() {
-    const q = S.questions.map(q => `<div class="card"><div><b>#${q.id}</b> ${esc(q.label)}</div>
-      ${q.jobs.length ? `<div class="small muted" style="margin:4px 0">Waiting: ${q.jobs.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div>` : ''}
+    const q = S.questions.map(q => `<div class="card"><div><span class="qid">${q.id}</span><span class="qtext">${esc(q.label)}</span></div>
+      ${q.jobs.length ? `<div class="meta" style="margin:6px 0 2px">Holding up ${q.jobs.length === 1 ? '' : q.jobs.length + ' jobs: '}${q.jobs.map(esc).join(', ')}</div>` : ''}
       ${q.multi ? `<div style="margin-top:8px">${q.options.map(o => `<label style="display:block;margin:3px 0"><input type="checkbox" class="m${q.id}" value="${esc(o)}"> ${esc(o)}</label>`).join('')}
         <button class="b primary" style="margin-top:4px" onclick="answer(${q.id}, [...document.querySelectorAll('.m${q.id}:checked')].map(c => c.value).join(' | ') || null)">Save picks</button></div>`
-      : q.options.length ? `<div class="row" style="margin-top:8px">${q.options.map(o => `<button class="b" onclick='answer(${q.id}, ${esc(JSON.stringify(o))})'>${esc(o)}</button>`).join('')}</div>` : ''}
-      <div class="row" style="margin-top:8px"><textarea id="ans${q.id}" rows="2" class="grow" placeholder="${q.options.length ? 'Or type an answer…' : 'Your answer (saved and reused for every future form that asks this)'}" oninput="dirty=true"></textarea></div>
+      : q.options.length ? `<div class="row" style="margin-top:8px">${q.options.map(o => `<button class="b opt" onclick='answer(${q.id}, ${esc(JSON.stringify(o))})'>${esc(o)}</button>`).join('')}</div>` : ''}
+      <div class="row" style="margin-top:8px"><textarea id="ans${q.id}" rows="2" class="grow" placeholder="${q.options.length ? 'Or type your own answer' : 'Your answer. It is saved and reused whenever a form asks this.'}" oninput="dirty=true"></textarea></div>
       <div class="row" style="margin-top:6px"><button class="b primary" onclick="answer(${q.id})">Save answer</button>
-      <button class="b" onclick="act('/api/answer', {id:${q.id}, skip:true}, 'Skipped: jobs that require it are dropped')">Skip (drop those jobs)</button></div></div>`).join('');
+      <button class="b quiet" onclick="act('/api/answer', {id:${q.id}, skip:true}, 'Skipped. Jobs that require it were dropped.')">Skip and drop those jobs</button></div></div>`).join('');
     const a = S.approvals.map(j => `<div class="card" id="ap-${j.id}">${jobHead(j)}
-      <div class="qa">${j.items.map(it => `<div class="l">${esc(it.label)}</div><div>${it.type === 'file' ? `<span class="chip">📎 ${esc(it.value)}</span>`
+      <div class="qa">${j.items.map(it => `<div class="l">${esc(it.label)}</div><div class="v">${it.type === 'file' ? `<span class="chip" title="Uploaded file">${esc(it.value)}</span>`
         : it.type === 'textarea' || it.value.length > 90 ? `<textarea rows="${Math.min(10, 2 + Math.ceil(it.value.length / 90))}" data-k="${esc(it.key)}" oninput="dirty=true">${esc(it.value)}</textarea>`
         : ['select', 'multiselect', 'location', 'education'].includes(it.type) ? `<span class="chip" title="Picked from the form's own list">${esc(it.type === 'education' ? 'Virginia Tech, CS, Aug 2024 to May 2028' : it.value)}</span>`
         : `<input class="text" data-k="${esc(it.key)}" value="${esc(it.value)}" oninput="dirty=true">`}</div>`).join('')}</div>
       ${j.shot ? `<details><summary>Screenshot of the filled form</summary><img class="shot" loading="lazy" src="/shots/${j.id}.png"></details>` : ''}
-      <div class="row" style="margin-top:10px"><button class="b good" onclick="approve('${j.id}')">Approve + submit</button>
+      <div class="row" style="margin-top:10px"><button class="b good" onclick="approve('${j.id}')">Approve and submit</button>
       <button class="b" onclick="act('/api/reject', {id:'${j.id}'}, 'Passed')">Pass</button>
-      <span class="small muted">Edits are saved and reused. Filled ${ago(j.updated)}.</span></div></div>`).join('');
-    const m = S.manual.map(j => `<div class="card">${jobHead(j)}<div class="small" style="margin:6px 0">${esc(j.reason)}</div>
+      <span class="small muted" style="margin-left:auto">Filled ${ago(j.updated)}. Your edits are saved and reused.</span></div></div>`).join('');
+    const m = S.manual.map(j => `<div class="card">${jobHead(j)}<div class="why">${esc(j.reason)}</div>
       <div class="row"><button class="b good" onclick="act('/api/manual-done', {id:'${j.id}', applied:true}, 'Logged as applied')">I applied</button>
       <button class="b" onclick="act('/api/manual-done', {id:'${j.id}', applied:false}, 'Removed')">Not for me</button>
-      <button class="b" onclick="act('/api/redo', {id:'${j.id}'}, 'Back in line for the bot')">Let the bot retry</button></div></div>`).join('');
-    return `<h2>Questions only you can answer <span class="chip">${S.questions.length}</span></h2>${q || '<div class="card empty">No open questions 🎉</div>'}
-      <h2>Ready to submit: review + approve <span class="chip">${S.approvals.length}</span>${S.approvals.length > 1 ? `<button class="b" onclick="approveAll()">Approve all</button>` : ''}</h2>
-      ${S.settings.auto_submit ? '<div class="small muted" style="margin-bottom:8px">Auto-submit is on, so new jobs skip this step.</div>' : ''}
-      ${a || '<div class="card empty">Nothing waiting for approval</div>'}
+      <button class="b quiet" onclick="act('/api/redo', {id:'${j.id}'}, 'Back in line for the bot')">Let the bot retry</button></div></div>`).join('');
+    return `<h2>Questions only you can answer <span class="chip">${S.questions.length}</span></h2>${q || '<div class="card empty">No open questions. The bot has everything it needs.</div>'}
+      <h2>Ready to submit <span class="chip">${S.approvals.length}</span>${S.approvals.length > 1 ? `<button class="b" onclick="approveAll()">Approve all</button>` : ''}</h2>
+      <p class="lede">${S.settings.auto_submit ? 'Auto-submit is on, so new jobs skip this step.' : 'Each form is filled in and screenshotted, then waits here. Read it, fix anything, approve.'}</p>
+      ${a || '<div class="card empty">Nothing waiting for approval.</div>'}
       <h2>Apply yourself <span class="chip">${S.manual.length}</span></h2>
-      <div class="small muted" style="margin-bottom:8px">The bot can't or shouldn't do these (no-AI certifications, coding tasks, uploads it doesn't have, blocked submits).</div>
-      ${m || '<div class="card empty">Nothing here</div>'}`;
+      <p class="lede">Ones the bot can't or shouldn't finish: no-AI certifications, coding tasks, uploads it doesn't have, blocked submits.</p>
+      ${m || '<div class="card empty">Nothing here.</div>'}`;
   },
   apps() {
     const f = S.insights.funnel;
     let rows = S.history.filter(h => (!appFilter || (appFilter === 'none' ? !h.outcome || h.outcome === 'confirmed' : h.outcome === appFilter))
       && (!appSearch || (h.company + ' ' + h.title).toLowerCase().includes(appSearch.toLowerCase())));
     const tiles = [['Applied', f.applied, ''], ['Responses', f.responded, ''], ['Assessments', f.oa, 'oa'], ['Interviews', f.interview, 'interview'], ['Offers', f.offer, 'offer'], ['Rejected', f.rejected, 'rejected'], ['No reply 3+ wks', f.silent, 'none']];
-    return `<div class="tiles">${tiles.map(([l, n, k]) => `<div class="tile" style="cursor:pointer${appFilter === k && k ? ';border-color:var(--accent)' : ''}" onclick="appFilter=appFilter==='${k}'?'':'${k}';render()"><span class="muted small">${l}</span><b>${n}</b></div>`).join('')}</div>
-      <h2>Where you've applied <input placeholder="Search company or role" value="${esc(appSearch)}" oninput="appSearch=this.value;clearTimeout(window.st);window.st=setTimeout(()=>{render();const i=document.querySelector('h2 input');i.focus();i.setSelectionRange(99,99)},250)">
+    return `<div class="tiles">${tiles.map(([l, n, k]) => `<div class="tile${k ? ' click' : ''}${appFilter === k && k ? ' on' : ''}" ${k ? `onclick="appFilter=appFilter==='${k}'?'':'${k}';render()"` : ''}><span>${l}</span><b>${n}</b></div>`).join('')}</div>
+      <h2>Applications <input type="search" placeholder="Search company or role" value="${esc(appSearch)}" oninput="appSearch=this.value;clearTimeout(window.st);window.st=setTimeout(()=>{render();const i=document.querySelector('h2 input');i.focus();i.setSelectionRange(99,99)},250)">
       ${appFilter ? `<button class="b" onclick="appFilter='';render()">Clear filter</button>` : ''}</h2>
       ${rows.length ? `<div class="scroll"><table><tr><th>Applied</th><th>Company / role</th><th>By</th><th>Outcome</th><th>Notes</th></tr>${rows.map(h => `<tr>
-        <td class="small">${date(h.applied_at)}</td>
-        <td><b>${esc(h.company)}</b><br><span class="small">${esc(h.title)}</span>
+        <td class="small num">${date(h.applied_at)}</td>
+        <td><span class="co">${esc(h.company)}</span><div class="small">${esc(h.title)}</div>
           <details class="small"><summary>details</summary>
             ${h.emails.map(e => `<div style="margin:6px 0"><span class="chip o-${e.kind}">${esc(e.kind)}</span> ${date(e.received)} <b>${esc(e.subject)}</b><div class="muted">${esc(e.snippet)}</div></div>`).join('') || '<div class="muted">No emails matched yet.</div>'}
-            ${h.items.length ? `<div class="qa">${h.items.map(i => `<div class="l">${esc(i.label)}</div><div>${esc(i.value)}</div>`).join('')}</div>` : ''}
-            <a href="${esc(h.url)}" target="_blank" rel="noopener">posting ↗</a>${h.shot ? ` · <a href="/shots/${h.id}.png" target="_blank">screenshot</a>` : ''}
+            ${h.items.length ? `<div class="qa">${h.items.map(i => `<div class="l">${esc(i.label)}</div><div class="v">${esc(i.value)}</div>`).join('')}</div>` : ''}
+            <a href="${esc(h.url)}" target="_blank" rel="noopener">Posting ↗</a>${h.shot ? ` · <a href="/shots/${h.id}.png" target="_blank">Screenshot</a>` : ''}
           </details></td>
         <td class="small">${h.reason === 'applied by Ben' ? 'You' : 'Bot'}</td>
         <td><select class="o-${esc(h.outcome)}" onchange="setOutcome('${h.id}', this.value)">${OUT.map(([k, l]) => `<option value="${k}" ${k === (h.outcome || '') ? 'selected' : ''}>${l}</option>`).join('')}</select>
           ${h.outcome_at ? `<div class="small muted">${date(h.outcome_at)}</div>` : ''}</td>
-        <td><input class="text" value="${esc(h.notes)}" placeholder="add a note" oninput="dirty=true" onchange="setNotes('${h.id}', this.value)"></td></tr>`).join('')}</table></div>`
-        : `<div class="card empty">${S.history.length ? 'No matches' : 'No applications yet. Approve some in "Needs you".'}</div>`}`;
+        <td><input class="text" value="${esc(h.notes)}" placeholder="Add a note" oninput="dirty=true" onchange="setNotes('${h.id}', this.value)"></td></tr>`).join('')}</table></div>`
+        : `<div class="card empty">${S.history.length ? 'No matches' : 'No applications yet. Approve some in Needs you.'}</div>`}`;
   },
   pipeline() {
     const p = S.pipeline, c = S.counts;
     const lab = { new: 'Waiting in line', dryrun: 'Awaiting approval', approved: 'Submitting', queued: 'Waiting on a question', applied: 'Applied', manual: 'Apply yourself', failed: 'Failed', skipped: 'Filtered out' };
-    const list = (rows, extra = () => '') => rows.length ? `<div class="scroll"><table>${rows.map(j => `<tr><td><b>${esc(j.company)}</b> · ${esc(j.title)}<div class="small muted">${esc(j.ats)}${j.locations.length ? ' · ' + esc(j.locations.join(', ')) : ''}</div>${extra(j)}</td><td style="width:1%"><a class="b" href="${esc(j.url)}" target="_blank" rel="noopener">↗</a></td></tr>`).join('')}</table></div>` : '<div class="card empty">None</div>';
+    const list = (rows, extra = () => '') => rows.length ? `<div class="scroll"><table>${rows.map(j => `<tr><td><span class="co">${esc(j.company)}</span> <span class="muted">·</span> ${esc(j.title)}<div class="meta">${where(j)}</div>${extra(j)}</td><td style="width:1%"><a class="b" href="${esc(j.url)}" target="_blank" rel="noopener">↗</a></td></tr>`).join('')}</table></div>` : '<div class="card empty">None.</div>';
     const needs = j => { try { return '<div class="small">Needs: ' + JSON.parse(j.reason).map(n => esc(n.label)).join('; ') + '</div>'; } catch { return ''; } };
-    return `<div class="tiles">${Object.entries(lab).map(([k, l]) => `<div class="tile"><span class="muted small">${l}</span><b>${c[k] || 0}</b></div>`).join('')}</div>
-      <h2>Bot</h2><div class="card"><div class="row"><span>Apply to the next</span><input id="napply" type="number" value="5" min="1" max="50" style="width:70px"><span>jobs</span>
+    return `<div class="tiles">${Object.entries(lab).map(([k, l]) => `<div class="tile"><span>${l}</span><b>${(c[k] || 0).toLocaleString()}</b></div>`).join('')}</div>
+      <h2>Run the bot</h2><div class="card"><div class="row"><span>Fill the next</span><input id="napply" type="number" value="5" min="1" max="50" style="width:70px"><span>jobs</span>
         <button class="b primary" onclick="runNow(+document.getElementById('napply').value)">Run now</button>
-        <span class="small muted">${S.settings.auto_submit ? 'Auto-submit is on: these will be submitted.' : 'They get filled and wait for your approval.'} The timer also runs this every 30 min (cap ${S.settings.daily_cap}/day).</span></div>
+        <span class="small muted">${S.settings.auto_submit ? 'Auto-submit is on, so these will be sent.' : 'They wait for your approval.'} It also runs on its own every 30 minutes, up to ${S.settings.daily_cap} a day.</span></div>
         ${S.runner.log ? `<details ${S.runner.running ? 'open' : ''}><summary>Last run log</summary><pre>${esc(S.runner.log)}</pre></details>` : ''}</div>
       ${p.approved.length ? `<h2>Submitting now</h2>${list(p.approved)}` : ''}
       <h2>Waiting on your answers <span class="chip">${p.queued.length}</span></h2>${list(p.queued, needs)}
-      <h2>Failed <span class="chip">${p.failed.length}</span></h2>${list(p.failed, j => `<div class="small" style="color:var(--bad)">${esc(j.reason)}</div><button class="b small" style="margin-top:4px" onclick="act('/api/redo',{id:'${j.id}'},'Back in line')">Retry</button>`)}
-      <h2>Next in line for the bot (newest first) <span class="chip">${p.nextCount}</span></h2>${list(p.next)}
+      <h2>Failed <span class="chip">${p.failed.length}</span></h2>${list(p.failed, j => `<div class="small err">${esc(j.reason)}</div><button class="b" style="margin-top:6px" onclick="act('/api/redo',{id:'${j.id}'},'Back in line')">Retry</button>`)}
+      <h2>Next in line <span class="chip">${p.nextCount}</span></h2>${list(p.next)}
       <h2>Not automated yet <span class="chip">${p.unsupportedCount}</span></h2>
-      <div class="small muted" style="margin-bottom:8px">${p.unsupportedBy.map(u => `${esc(u.ats)}: ${u.n}`).join(' · ')}. These forms aren't automated yet, so apply by hand if one looks good. Newest first:</div>
-      ${list(p.unsupported, j => `<button class="b small" style="margin-top:4px" onclick="act('/api/manual-done',{id:'${j.id}',applied:true},'Logged as applied')">I applied</button>`)}
-      <h2>Filtered out</h2><div class="scroll"><table><tr><th>Reason</th><th>Jobs</th></tr>${p.skipped.map(s => `<tr><td>${esc(s.reason)}</td><td>${s.n}</td></tr>`).join('')}</table></div>
-      <h2>Sources</h2><div class="card small">${p.bySource.map(s => `<span class="chip">${esc(s.source)}: ${s.n}</span>`).join('')}
-        <div class="muted" style="margin-top:6px">Daily-updated GitHub internship lists (SimplifyJobs, speedyapply). Only Greenhouse + Ashby forms are automated for now; other postings stay in the list.</div></div>`;
+      <p class="lede">${p.unsupportedBy.map(u => `${esc(u.ats)} ${u.n.toLocaleString()}`).join(' · ')}. The bot can't fill these forms${S.settings.workday ? '' : ' (Workday turns on in Settings)'}, so apply by hand if one looks good. Newest first.</p>
+      ${list(p.unsupported, j => `<button class="b" style="margin-top:6px" onclick="act('/api/manual-done',{id:'${j.id}',applied:true},'Logged as applied')">I applied</button>`)}
+      <h2>Filtered out</h2><div class="scroll"><table><tr><th>Reason</th><th>Jobs</th></tr>${p.skipped.map(s => `<tr><td>${esc(s.reason)}</td><td class="num">${s.n.toLocaleString()}</td></tr>`).join('')}</table></div>
+      <h2>Sources</h2><div class="card small">${p.bySource.map(s => `<span class="chip">${esc(s.source)} ${s.n.toLocaleString()}</span>`).join('')}
+        <div class="muted" style="margin-top:8px">Daily-updated GitHub internship lists. Greenhouse, Ashby and Lever forms are filled automatically${S.settings.workday ? ', plus Workday' : ''}. The rest show above under Not automated yet.</div></div>`;
   },
   insights() {
     const I = S.insights, f = I.funnel, max = Math.max(1, ...I.perDay.map(d => d.n));
     const fun = [['Applied', f.applied], ['Any response', f.responded], ['Assessment or better', f.oa + f.interview + f.offer], ['Interview or offer', f.interview + f.offer], ['Offer', f.offer]];
     const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '–';
-    return `<h2>Funnel</h2><div class="card funnel">${fun.map(([l, n]) => `<div><span style="width:150px" class="small">${l}</span><span class="f" style="width:${f.applied ? n / f.applied * 60 : 0}%"></span><b>${n}</b><span class="small muted">${pct(n, f.applied)}</span></div>`).join('')}</div>
-      <h2>Applications per day (last 30)</h2><div class="card"><div class="bars">${I.perDay.map(d => `<div style="height:${d.n / max * 100}%" data-t="${d.day}: ${d.n}"></div>`).join('')}</div></div>
-      <h2>What's working</h2><div class="card">${I.findings.length ? I.findings.map(x => `<div>• ${esc(x)}</div>`).join('') : '<span class="muted">Not enough results yet. Findings appear once a split has 5+ applications on each side. Mark outcomes in Applications (or connect Gmail in Settings) to feed this.</span>'}</div>
-      ${I.split.map(s => `<h2>${esc(s.name)}</h2>${s.groups.length ? `<div class="scroll"><table><tr><th>Group</th><th>Applied</th><th>Responded</th><th>OA / interview / offer</th></tr>${s.groups.map(g => `<tr><td>${esc(g.group)}</td><td>${g.n}</td><td>${g.responses} (${pct(g.responses, g.n)})</td><td>${g.advanced} (${pct(g.advanced, g.n)})</td></tr>`).join('')}</table></div>` : '<div class="card empty">No applications yet</div>'}`).join('')}
-      <h2>Answers that got you interviews</h2><div class="small muted" style="margin-bottom:8px">The bot reads these before writing new essays, plus your edits below.</div>
-      ${I.wins.length ? I.wins.map(w => `<div class="card"><span class="chip o-${w.outcome}">${w.outcome}</span> <b>${esc(w.company)}</b>: ${esc(w.question)}<p>${esc(w.answer)}</p></div>`).join('') : '<div class="card empty">None yet</div>'}
+    return `<h2>Funnel</h2><div class="card funnel">${fun.map(([l, n]) => `<div><span class="small">${l}</span><span class="track"><span class="f" style="width:${f.applied ? n / f.applied * 100 : 0}%"></span></span><b>${n}</b><span class="small muted pct">${pct(n, f.applied)}</span></div>`).join('')}</div>
+      <h2>Applications per day <span class="chip">last 30 days</span></h2>${I.perDay.some(d => d.n) ? `<div class="card"><div class="bars">${I.perDay.map(d => `<div style="height:${d.n / max * 100}%" data-t="${d.day}: ${d.n}"></div>`).join('')}</div></div>` : '<div class="card empty">Nothing sent yet.</div>'}
+      <h2>What's working</h2><div class="card">${I.findings.length ? I.findings.map(x => `<div style="padding:4px 0">${esc(x)}</div>`).join('') : '<span class="empty" style="padding:0">Not enough results yet. Findings show up once each side of a comparison has five or more applications. Mark outcomes in Applications, or connect Gmail in Settings, to feed this.</span>'}</div>
+      ${I.split.map(s => `<h2>${esc(s.name)}</h2>${s.groups.length ? `<div class="scroll"><table><tr><th>Group</th><th>Applied</th><th>Responded</th><th>OA / interview / offer</th></tr>${s.groups.map(g => `<tr><td>${esc(g.group)}</td><td class="num">${g.n}</td><td class="num">${g.responses} <span class="muted">${pct(g.responses, g.n)}</span></td><td class="num">${g.advanced} <span class="muted">${pct(g.advanced, g.n)}</span></td></tr>`).join('')}</table></div>` : '<div class="card empty">No applications yet.</div>'}`).join('')}
+      <h2>Answers that got you interviews</h2><p class="lede">The bot reads these, and your edits below, before it writes anything new.</p>
+      ${I.wins.length ? I.wins.map(w => `<div class="card"><span class="chip o-${w.outcome}">${w.outcome}</span> <b>${esc(w.company)}</b>: ${esc(w.question)}<p>${esc(w.answer)}</p></div>`).join('') : '<div class="card empty">None yet.</div>'}
       <h2>Your edits to the bot's drafts</h2>
-      ${I.edits.length ? I.edits.map(e => `<div class="card"><b>${esc(e.question)}</b><div class="qa"><div class="l">Bot draft</div><div class="muted">${esc(e.draft)}</div><div class="l">Your version</div><div>${esc(e.ben)}</div></div></div>`).join('') : '<div class="card empty">None yet. Edit an answer before approving and the bot learns from it.</div>'}`;
+      ${I.edits.length ? I.edits.map(e => `<div class="card"><b>${esc(e.question)}</b><div class="qa"><div class="l">Bot draft</div><div class="v muted">${esc(e.draft)}</div><div class="l">Your version</div><div class="v">${esc(e.ben)}</div></div></div>`).join('') : '<div class="card empty">None yet. Edit an answer before approving and the bot learns from it.</div>'}`;
   },
   profile() {
     const help = { 'profile.yaml': 'Hard facts the bot answers from. It never makes these up, so anything missing becomes a question for you.',
       'stories.md': 'Material for written answers (why CS, projects, strengths). Essays only use what is true here and on your resume.',
       'answers.yaml': 'Every answer you have given the bot (questions, edits). It reuses them word-for-word when a form asks the same thing.' };
-    return `<div class="row">${Object.keys(help).map(f => `<button class="b ${f === profFile ? 'primary' : ''}" onclick="profFile='${f}';render();loadProfile()">${f}</button>`).join('')}</div>
-      <p class="small muted">${help[profFile]}</p>
-      <textarea id="prof" rows="28" style="font-family:ui-monospace,monospace;font-size:13px" oninput="dirty=true" placeholder="loading…"></textarea>
-      <div class="row" style="margin-top:8px"><button class="b primary" onclick="saveProfile()">Save</button><span class="small muted">Takes effect on the next application. Resumes: edit profile/resume.html, then re-render the PDFs (see README).</span></div>`;
+    return `<h2>Profile</h2><div class="row">${Object.keys(help).map(f => `<button class="b ${f === profFile ? 'primary' : ''}" onclick="profFile='${f}';render();loadProfile()">${f}</button>`).join('')}</div>
+      <p class="lede" style="margin-top:12px">${help[profFile]}</p>
+      <textarea id="prof" rows="28" style="font:13px/1.55 var(--mono);background:var(--card)" oninput="dirty=true" placeholder="loading…"></textarea>
+      <div class="row" style="margin-top:8px"><button class="b primary" onclick="saveProfile()">Save</button><span class="small muted">Used from the next application on. To change your resume, edit <code>profile/resume.html</code> and re-render the PDFs (see the README).</span></div>`;
   },
   settings() {
     const s = S.settings;
-    return `<h2>Submitting</h2><div class="card"><label class="switch"><input type="checkbox" ${s.auto_submit ? 'checked' : ''} onchange="setAuto(this)">
-      <span><b>Auto-submit</b><br><span class="small muted">Off: every filled form waits in "Needs you" for your approval. On: forms whose answers all come from your facts are submitted right away (fastest, since being early matters). Questions it can't answer still come to you either way.</span></span></label>
-      <div class="row" style="margin-top:12px"><span>Max applications per day</span><input type="number" value="${s.daily_cap}" min="0" max="200" style="width:80px" onchange="act('/api/settings',{daily_cap:+this.value},'Saved')"></div></div>
-      <h2>Response tracking (Gmail)</h2><div class="card">
-      <p class="small muted" style="margin-top:0">Reads your inbox for emails from companies you applied to and sets the outcome (confirmation, assessment, interview, offer, rejection). Only matching emails are kept, and only the subject plus a short snippet. Needs a Gmail <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">app password</a> (Google Account → Security → 2-Step Verification → App passwords). It's saved only on this computer (data/mail.json).</p>
+    return `<h2>Submitting</h2><div class="card">
+      <div class="setting"><label class="switch"><input type="checkbox" ${s.auto_submit ? 'checked' : ''} onchange="setAuto(this)">
+        <span><b>Auto-submit</b><br><span class="small muted">Off: every filled form waits in Needs you for your approval. On: forms whose answers all come from your facts go out right away, which is fastest. Questions it can't answer still come to you either way.</span></span></label></div>
+      <div class="setting row"><span>Most applications per day</span><input type="number" value="${s.daily_cap}" min="0" max="200" style="width:80px" onchange="act('/api/settings',{daily_cap:+this.value},'Saved')">
+        <span class="small muted">Dry runs count too.</span></div></div>
+      <h2>Workday</h2><div class="card">
+      <div class="setting"><label class="switch"><input type="checkbox" ${s.workday ? 'checked' : ''} onchange="setWorkday(this)">
+        <span><b>Fill Workday applications</b><br><span class="small muted">Workday makes you sign in to every company separately. With this on, the bot creates a candidate account at each company with ${esc(S.settings.mail || 'your email')} and a long random password, then walks the form a page at a time: My Information, My Experience (from your resume), the questions, the disclosures. It stops at Review, like every other form, until you approve.</span></span></label></div>
+      <div class="setting small muted">${s.workday_accounts ? `${s.workday_accounts} account${s.workday_accounts > 1 ? 's' : ''} so far. Passwords are in <code>data/workday.json</code> on this computer only, if you ever want to sign in yourself.` : 'No accounts yet.'}
+        If a company emails a verification link, the bot reads it from Gmail when that's connected below. If not, the job comes to you.</div></div>
+      <h2>Response tracking</h2><div class="card">
+      <p class="small muted" style="margin-top:0">Reads your Gmail for messages from companies you applied to and sets the outcome: confirmation, assessment, interview, offer, rejection. It keeps only matching emails, and only the subject and a short snippet. It needs a Gmail <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">app password</a> (Google Account, Security, 2-Step Verification, App passwords), stored only on this computer in <code>data/mail.json</code>.</p>
       <div class="row"><input id="mu" placeholder="you@gmail.com" value="${esc(s.mail)}"><input id="mp" type="password" placeholder="16-letter app password">
       <button class="b primary" onclick="saveMail()">Save</button><button class="b" onclick="checkMail(this)" ${s.mail ? '' : 'disabled'}>Check mail now</button></div>
-      <div class="small muted" style="margin-top:6px">${s.mail ? `Connected: ${esc(s.mail)}. ${s.mail_checked ? 'Last checked ' + ago(s.mail_checked) + '.' : 'Not checked yet.'} The timer checks hourly.` : 'Not connected.'}</div>
+      <div class="small muted" style="margin-top:8px">${s.mail ? `Connected as ${esc(s.mail)}. ${s.mail_checked ? 'Last checked ' + ago(s.mail_checked) + '.' : 'Not checked yet.'} It checks every hour.` : 'Not connected.'}</div>
       <pre id="mailout" style="display:none"></pre></div>
-      <h2>Phone alerts (ntfy)</h2><div class="card small">Install the <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app and subscribe to two topics:<br>
-      <span class="chip">${esc(s.ntfy.alert)}</span> alerts (questions, apply-yourself, interviews, daily digest)<br>
-      <span class="chip">${esc(s.ntfy.reply)}</span> type answers here as <code>12 my answer</code> or <code>skip 12</code><br>
-      <span class="muted">Treat these names like passwords: anyone with them can read your alerts.</span></div>`;
+      <h2>Phone alerts</h2><div class="card small">Install the <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app and subscribe to two topics.
+      <div class="qa"><div class="l">Alerts</div><div class="v"><span class="topic">${esc(s.ntfy.alert)}</span><div class="muted" style="margin-top:4px">Questions, jobs to apply to yourself, interviews, the evening digest.</div></div>
+      <div class="l">Replies</div><div class="v"><span class="topic">${esc(s.ntfy.reply)}</span><div class="muted" style="margin-top:4px">Answer a question by sending <code>12 my answer</code>, or <code>skip 12</code>.</div></div></div>
+      <div class="muted" style="margin-top:10px">Treat these names like passwords: anyone who knows them can read your alerts.</div></div>`;
   },
 };
 
@@ -237,6 +301,10 @@ async function runNow(n = 5) { const r = await api('/api/run', { apply: n }); to
 async function setAuto(el) {
   if (el.checked && !confirm('Turn on auto-submit? New applications will be sent without your review.')) { el.checked = false; return; }
   await act('/api/settings', { auto_submit: el.checked }, el.checked ? 'Auto-submit on' : 'Auto-submit off');
+}
+async function setWorkday(el) {
+  if (el.checked && !confirm('Let the bot create a Workday candidate account at each company, in your name?')) { el.checked = false; return; }
+  await act('/api/settings', { workday: el.checked }, el.checked ? 'Workday on: those jobs join the line' : 'Workday off');
 }
 async function loadProfile() { const r = await api('/api/profile?file=' + profFile); const t = document.getElementById('prof'); if (t) { t.value = r.text; dirty = false; } }
 async function saveProfile() { await api('/api/profile', { file: profFile, text: document.getElementById('prof').value }); dirty = false; toast('Saved ' + profFile); }

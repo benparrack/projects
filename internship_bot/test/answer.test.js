@@ -111,3 +111,17 @@ test('lever parser reads cards and standard fields', async () => {
   assert.equal(q[0].widget, 'radio');
   assert.deepEqual(q[3].options, ['Male']);
 });
+
+test('workday: job URL → API path and apply URL; fields → stable question keys', async () => {
+  const wd = await import('../src/ats/workday.js');
+  const u = wd.parseUrl('https://snc.wd1.myworkdayjobs.com/en-US/snc_external_career_site/job/Plano-TX/Software-Engineering-Intern--Summer-2027-_R0030758');
+  assert.equal(u.host, 'snc.wd1.myworkdayjobs.com');
+  assert.equal(u.tenant, 'snc'); assert.equal(u.site, 'snc_external_career_site');
+  assert.equal(u.path, 'Plano-TX/Software-Engineering-Intern--Summer-2027-_R0030758');
+  assert.match(u.apply, /_R0030758\/apply\/applyManually$/);
+  assert.ok(!wd.handles('https://jobs.lever.co/x/123'));
+  const q = wd.toQuestion({ ref: '0', id: 'school', section: 'Education 1', label: 'School or University', type: 'prompt', options: [], required: true }, 'My Experience');
+  assert.equal(q.label, 'Education 1: School or University');
+  assert.equal(q.type, 'text'); assert.equal(q.widget, 'prompt');
+  assert.equal(wd.toQuestion({ ref: '1', id: 'x', section: '', label: 'I agree', type: 'check', options: ['Yes', 'No'], required: true }, 'Review').type, 'select');
+});

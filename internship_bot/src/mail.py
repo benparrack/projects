@@ -141,6 +141,27 @@ def check():
     print(f'{len(uids)} new email(s), {found} about applications')
 
 
+def verify(host, wait=150):
+    """Workday account verification: print the newest link to `host` from the last 15 minutes of mail."""
+    if not CREDS.exists():
+        sys.exit(1)
+    creds = json.loads(CREDS.read_text())
+    imap = imaplib.IMAP4_SSL(creds.get('host', 'imap.gmail.com'))
+    imap.login(creds['user'], creds['password'])
+    link = re.compile(r'https://' + re.escape(host) + r'/[^\s"\'<>]*(?:verif|activat|confirm)[^\s"\'<>]*', re.I)
+    for _ in range(wait // 10):
+        imap.select('INBOX', readonly=True)
+        for uid in reversed(imap.uid('search', None, 'SINCE', time.strftime('%d-%b-%Y'))[1][0].split()[-20:]):
+            msg = email.message_from_bytes(imap.uid('fetch', uid, '(BODY.PEEK[])')[1][0][1])
+            sent = email.utils.parsedate_to_datetime(msg['Date']).timestamp() if msg['Date'] else 0
+            raw = ' '.join((p.get_payload(decode=True) or b'').decode('utf-8', 'replace') for p in msg.walk() if p.get_content_maintype() == 'text')
+            m = link.search(raw.replace('&amp;', '&'))
+            if m and time.time() - sent < 900:
+                return print(m.group(0))
+        time.sleep(10)
+    sys.exit(1)
+
+
 def selftest():
     assert classify_rules('Unfortunately, we have decided to move forward with other candidates.') == 'rejected'
     assert classify_rules('Thank you for applying to Acme! We received your application.') == 'confirmed'
@@ -157,4 +178,7 @@ def selftest():
 
 
 if __name__ == '__main__':
-    selftest() if '--selftest' in sys.argv else check()
+    if '--verify' in sys.argv:
+        verify(sys.argv[sys.argv.index('--verify') + 1])
+    else:
+        selftest() if '--selftest' in sys.argv else check()

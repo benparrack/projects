@@ -3,14 +3,16 @@ import { mkdirSync } from 'node:fs';
 import * as greenhouse from './ats/greenhouse.js';
 import * as ashby from './ats/ashby.js';
 import * as lever from './ats/lever.js';
+import * as workday from './ats/workday.js';
 import { answerAll } from './answer.js';
-import { loadProfile } from './profile.js';
-import { setStatus } from './db.js';
+import { loadProfile, resumeFor } from './profile.js';
+import { setStatus, meta } from './db.js';
 import { enqueue } from './queue.js';
 import { send } from './notify.js';
 
-export const ADAPTERS = [greenhouse, ashby, lever];
-export const adapterFor = url => ADAPTERS.find(a => a.handles(url));
+export const ADAPTERS = [greenhouse, ashby, lever, workday];
+// Workday needs a candidate account per company; until Ben allows that, its postings stay "not automated".
+export const adapterFor = url => ADAPTERS.find(a => a.handles(url) && (!a.wizard || meta.get('workday_accounts') === '1'));
 
 const SHOTS = new URL('../data/shots/', import.meta.url).pathname;
 mkdirSync(SHOTS, { recursive: true });
@@ -21,6 +23,7 @@ export async function apply(browser, job, { dryRun = true } = {}) {
   const form = await ats.load(job.url);
   // Approved in the dashboard: submit exactly the answers Ben reviewed (and maybe edited).
   const reviewed = job.status === 'approved' && job.answers ? JSON.parse(job.answers).answers : null;
+  if (ats.wizard) return wizard(browser, ats, job, form, reviewed, dryRun || !!process.env.INTERN_NO_SUBMIT);
   const { answers, needs, manual } = reviewed ? { answers: reviewed, needs: [] }
     : await answerAll(form.questions, { ...job, description: form.description });
   if (manual) return handOff(job, manual);
@@ -45,6 +48,23 @@ export async function apply(browser, job, { dryRun = true } = {}) {
     await page.screenshot({ path: screenshot.replace('.png', '-after.png'), fullPage: true });
     if (!res.ok) return handOff(job, `submit blocked: ${res.why}`, screenshot);
     return record(job, 'applied', { answers: audit, screenshot }, res);
+  } finally { await page.close(); }
+}
+
+// Multi-page forms (Workday): the adapter walks the pages itself and asks the answer engine page by page.
+async function wizard(browser, ats, job, form, reviewed, dryRun) {
+  const { facts } = loadProfile();
+  const screenshot = `${SHOTS}${job.id}.png`;
+  const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+  try {
+    const r = await ats.run(page, job, form, { dryRun, reviewed, email: facts.email, resume: resumeFor(job).path,
+      allowCreate: meta.get('workday_accounts') === '1', shot: () => screenshot,
+      answer: qs => answerAll(qs, { ...job, description: form.description }) });
+    if (r.status === 'closed') return record(job, 'skipped', { reason: 'posting closed' });
+    if (r.status === 'needs') { await enqueue(job, r.needs); return record(job, 'queued', { reason: JSON.stringify(r.needs), answers: r.audit }, { needs: r.needs }); }
+    if (r.status === 'handoff') return handOff(job, r.why, r.screenshot);
+    if (r.status === 'review') return record(job, 'dryrun', { answers: r.audit, screenshot, ...(process.env.INTERN_NO_SUBMIT ? { reason: 'INTERN_NO_SUBMIT: stopped before submit' } : {}) });
+    return record(job, 'applied', { answers: r.audit, screenshot }, { ok: true });
   } finally { await page.close(); }
 }
 

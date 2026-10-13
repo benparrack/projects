@@ -14,7 +14,7 @@ turns on auto-submit.
   - **Pipeline:** what's next, failures, what isn't automated yet.
   - **Insights:** what got responses: answers, resume version, speed after posting.
   - **Profile:** edit the profile files.
-  - **Settings:** auto-submit, daily cap, Gmail.
+  - **Settings:** auto-submit, daily cap, Workday, Gmail.
 - **Phone (ntfy app):** subscribe to the two topics shown in Settings. Alerts arrive on the first.
   To answer, reply on the second with `<number> <answer>` (or `skip <number>`), or tap a button.
 - Answers you give or edit are saved to `profile/answers.yaml` and reused. Edits to written answers
@@ -50,7 +50,8 @@ INTERN_NO_SUBMIT=1 ...            # run the live path but stop before the submit
   `answers.yaml` learned answers, `resume.html` → `resume-swe.pdf` / `resume-emb.pdf`. To rebuild
   the PDFs after editing: `cd profile && for v in swe emb; do google-chrome --headless=new --disable-gpu --no-pdf-header-footer --print-to-pdf=resume-$v.pdf "file://$PWD/resume.html#$v"; done`.
 - `data/` (git-ignored): `jobs.sqlite`, screenshots, `mail.json` (Gmail app password, mode 600).
-- `src/ats/`: one adapter per application system: Greenhouse, Ashby, Lever.
+- `src/ats/`: one adapter per application system: Greenhouse, Ashby, Lever, Workday.
+- `data/workday.json` (mode 600): the Workday account per company (email, generated password).
 
 ## Rules the bot follows
 
@@ -59,8 +60,24 @@ INTERN_NO_SUBMIT=1 ...            # run the live path but stop before the submit
   does outside work like assessments or take-home tasks. Those jobs go to "apply yourself".
 - Daily cap (default 25), counting dry runs and applications.
 
+## Workday
+
+Off until Ben turns it on in Settings, because it creates a candidate account in his name at each
+company. When it's on, `src/ats/workday.js`:
+1. reads the posting from Workday's public job API (closed postings are skipped),
+2. signs in, or creates the account (random password saved to `data/workday.json` first). A verification
+   email is read from Gmail with `mail.py --verify <host>`; without Gmail the job goes to "apply yourself",
+3. walks the wizard one page at a time. It reads every field from Workday's `data-automation-id` markup
+   (text, dropdowns, search pickers, radios, checkboxes, dates), answers it with the same engine as the
+   other forms, fills it, and clicks Save and Continue. On My Experience it uploads the resume and keeps
+   whatever Workday parses from it,
+4. stops at Review with a screenshot and waits for approval. Assessments, CAPTCHAs and pages it can't get
+   past go to "apply yourself".
+
+Tested against the live job API (30/30 postings) and a fixture of Workday's markup. The signed-in pages
+haven't run live yet, so the first few Workday dry runs are worth a closer look.
+
 ## Not automated yet
 
-Workday (~960 postings), iCIMS, Oracle, TikTok/ByteDance, SmartRecruiters. Workday needs an account per
-company, and creating accounts in Ben's name needs his explicit OK. Those postings show in Pipeline →
-"Not automated yet", with an "I applied" button.
+iCIMS, Oracle, TikTok/ByteDance, SmartRecruiters (and Workday while it's off). Those postings show in
+Pipeline under "Not automated yet", with an "I applied" button.
