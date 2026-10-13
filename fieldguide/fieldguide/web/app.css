@@ -523,3 +523,4 @@ body.reading .readbar { display: block; }
   .frame { display: block; }
   main { padding: 0; }
 }
+@media (hover: none) { .flash .acts kbd { display: none; } }
