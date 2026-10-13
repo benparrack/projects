@@ -692,6 +692,7 @@ async function mountGame(gameType, snapshot, roster) {
       getClientId: () => state.clientId,
       leaveRoom,
       daily: !!(state.currentRoom && state.currentRoom.daily), // daily runs are solo with a fixed setup
+      ranked: !!(state.currentRoom && state.currentRoom.ranked),
     });
     if (snapshot && typeof handle.applySnapshot === 'function') handle.applySnapshot(snapshot);
     if (roster && typeof handle.applyRoster === 'function') handle.applyRoster(roster);

@@ -200,6 +200,32 @@ test('last human leaving stops the round and drops bots', () => {
   assert.strictEqual(room.state.roundTimer, null);
 });
 
+test('find-every-word mode: no clock, ends when everyone finds all or gives up', () => {
+  const room = makeRoom();
+  join(room, 'a'); join(room, 'b');
+  act(room, 'a', { kind: 'start', mode: 'complete' });
+  room.state.startedAt = Date.now() - 1;
+  const st = room.state;
+  assert.strictEqual(st.mode, 'complete');
+  assert.strictEqual(st.endsAt, null);
+  assert.strictEqual(st.roundTimer, null);
+  for (const w of st.answers) act(room, 'a', { kind: 'submit', word: w });
+  assert.strictEqual(st.phase, 'playing', 'b is still searching');
+  act(room, 'b', { kind: 'giveUp' });
+  assert.strictEqual(st.phase, 'results');
+  assert.ok(lastOf(room, 'a', 'state').answers.length > 0, 'answers revealed');
+  act(room, 'a', { kind: 'start' }); // no mode → back to timed
+  assert.strictEqual(st.mode, 'timed');
+  assert.ok(st.endsAt);
+  stop(room);
+  const ranked = makeRoom();
+  ranked.ranked = true;
+  join(ranked, 'a');
+  act(ranked, 'a', { kind: 'start', mode: 'complete' });
+  assert.strictEqual(ranked.state.mode, 'timed', 'ranked stays timed');
+  stop(ranked);
+});
+
 test('garbage messages are ignored', () => {
   const room = makeRoom();
   join(room, 'a');

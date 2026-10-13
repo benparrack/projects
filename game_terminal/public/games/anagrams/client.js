@@ -134,7 +134,12 @@ export function mount(container, api) {
   const controls = el('div', 'an-controls');
   const startBtn = el('button', 'an-start', 'START ROUND');
   startBtn.addEventListener('click', () => { sfx.play('select'); api.sendAction({ kind: 'start' }); });
-  controls.append(startBtn, botBar.el);
+  const allBtn = el('button', 'an-start', 'FIND EVERY WORD');
+  allBtn.title = 'No clock: keep going until you have found every word these letters make';
+  allBtn.addEventListener('click', () => { sfx.play('select'); api.sendAction({ kind: 'start', mode: 'complete' }); });
+  const giveUpBtn = el('button', '', 'GIVE UP & REVEAL');
+  giveUpBtn.addEventListener('click', () => { sfx.play('click'); api.sendAction({ kind: 'giveUp' }); });
+  controls.append(startBtn, allBtn, giveUpBtn, botBar.el);
 
   const body = el('div', 'an-body');
   const stage = el('div', 'an-stage');
@@ -184,7 +189,9 @@ export function mount(container, api) {
   const myId = () => api.getClientId();
   const letters = () => (view && view.letters) || '';
   const canPlay = () => view && view.phase === 'playing' && view.letters
-    && clock.now() >= view.startedAt && clock.now() < view.endsAt;
+    && clock.now() >= view.startedAt && (!view.endsAt || clock.now() < view.endsAt) && !(meP() && meP().gaveUp);
+  const meP = () => view && view.players.find((p) => p.clientId === myId());
+  const complete = () => view && view.mode === 'complete';
   const currentWord = () => picked.map((i) => letters()[i]).join('');
 
   function toast(text, color = '#ffb000') {
@@ -310,7 +317,7 @@ export function mount(container, api) {
     if (!view || view.phase === 'waiting' || !view.letters) {
       overlay.hidden = false;
       overlay.append(el('div', 'an-count', '🔤'), el('div', '', 'ANAGRAMS'),
-        el('div', 'an-help', 'Six letters, 60 seconds. Make as many words as you can — longer words score far more. Press START ROUND' + (api.daily ? ': one try at today\'s letters.' : ' (add a bot to play against the computer).')));
+        el('div', 'an-help', 'Six letters, 60 seconds. Make as many words as you can — longer words score far more. Press START ROUND' + (api.daily ? ': one try at today\'s letters.' : ' (add a bot to play against the computer), or FIND EVERY WORD to play with no clock until you have them all.')));
       return;
     }
     if (view.phase === 'playing' && now < view.startedAt) {
@@ -326,8 +333,12 @@ export function mount(container, api) {
     const now = clock.now();
     startBtn.hidden = view.phase === 'playing';
     startBtn.textContent = view.phase === 'results' ? 'NEW ROUND' : 'START ROUND';
+    allBtn.hidden = view.phase === 'playing' || api.daily || api.ranked;
+    giveUpBtn.hidden = !(view.phase === 'playing' && complete() && now >= view.startedAt && meP() && meP().inRound && !meP().gaveUp);
     if (view.phase === 'waiting') statusEl.textContent = 'Waiting to start…';
-    else if (view.phase === 'playing') statusEl.textContent = now < view.startedAt ? 'Get ready…' : `${view.totalWords} words hide in these letters`;
+    else if (view.phase === 'playing') statusEl.textContent = now < view.startedAt ? 'Get ready…'
+      : complete() ? (meP() && meP().gaveUp ? 'Waiting for the others to finish…' : `${view.myWords.length} / ${view.totalWords} found, keep going!`)
+      : `${view.totalWords} words hide in these letters`;
     else statusEl.textContent = `Round over — the 6-letter word was ${String(view.base || '').toUpperCase()}`;
     const me = view.players.find((p) => p.clientId === myId());
     const score = me ? me.score : 0;
@@ -393,6 +404,17 @@ export function mount(container, api) {
     const solo = players.length <= 1;
     let outcome = 'over';
     let title = "TIME'S UP";
+    if (complete()) {
+      const all = mine && mine.count === view.totalWords;
+      results.update({
+        title: all ? 'EVERY WORD FOUND!' : 'ANSWERS REVEALED',
+        subtitle: `${String(view.base || '').toUpperCase()} · ${view.totalWords} words · ${fmtClock(view.endedAt - view.startedAt)}`,
+        outcome: all ? 'win' : 'over',
+        rows: players.sort((a, b) => b.count - a.count).map((p) => ({ name: p.nickname, value: `${p.count}/${view.totalWords} words`, win: p.count === view.totalWords, you: p.clientId === me })),
+        rematch: { label: 'NEW PUZZLE', onClick: () => api.sendAction({ kind: 'start', mode: 'complete' }) },
+      });
+      return;
+    }
     if (mine && !solo) {
       const iWon = topScore > 0 && mine.score === topScore;
       outcome = iWon ? 'win' : 'lose';
@@ -421,7 +443,11 @@ export function mount(container, api) {
     rafId = requestAnimationFrame(frame);
     if (!view) return;
     const now = clock.now();
-    if (view.phase === 'playing') {
+    if (view.phase === 'playing' && complete() && now >= view.startedAt) {
+      timerEl.textContent = fmtClock(now - view.startedAt); // counts up: no time limit
+      timerEl.classList.remove('low');
+      if (lastSecond && lastSecond[0] === 'c') { lastSecond = 'up'; sfx.play('go'); renderAll(); }
+    } else if (view.phase === 'playing') {
       const counting = now < view.startedAt;
       const left = counting ? view.roundMs : view.endsAt - now;
       timerEl.textContent = fmtClock(left);

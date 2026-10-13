@@ -7,6 +7,10 @@
 // The letters always come from a shuffled everyday six-letter word, so there is at least one
 // 6-letter answer. Other players' words and the full answer list stay server-side until the
 // round is over — during play clients only see everyone's score and word count.
+//
+// "Find every word" mode (mode: 'complete') drops the clock: the round runs until every human has
+// found every answer or given up, then reveals the list. It isn't recorded (no timer, so the
+// points aren't comparable to timed rounds); ranked and daily rooms are always timed.
 
 'use strict';
 
@@ -120,7 +124,7 @@ function scoreWord(st, p, word) {
 
 // Checks a submission against the round's letters and dictionary. Returns { outcome, word, points }.
 function judge(st, p, raw) {
-  if (st.phase !== 'playing' || Date.now() < st.startedAt || Date.now() >= st.endsAt) return { outcome: 'closed' };
+  if (st.phase !== 'playing' || Date.now() < st.startedAt || (st.endsAt && Date.now() >= st.endsAt) || p.gaveUp) return { outcome: 'closed' };
   const word = typeof raw === 'string' ? raw.toLowerCase().trim() : '';
   if (!/^[a-z]+$/.test(word) || word.length > LETTERS || !canSpell(word, letterCounts(st.letters))) return { outcome: 'invalid', word };
   if (word.length < MIN_LEN) return { outcome: 'short', word };
@@ -138,14 +142,23 @@ function endRound(room) {
   st.roundTimer = null;
   clearBotTimers(st);
   const ranked = [...st.players.values()].filter((p) => p.inRound).sort((a, b) => b.score - a.score);
-  if (ranked.length) reportRanked(room, ranked.map((p) => ({ id: p.clientId, rank: p.score, score: p.score, level: p.bot })));
+  if (ranked.length && st.mode === 'timed') reportRanked(room, ranked.map((p) => ({ id: p.clientId, rank: p.score, score: p.score, level: p.bot })));
   if (ranked.length && ranked[0].score > 0) {
     for (const p of ranked) if (p.score === ranked[0].score) p.wins += 1;
   }
 }
 
-function startRound(room) {
+// Complete mode: over once every human in the round has found everything or given up.
+function maybeFinish(room) {
   const st = room.state;
+  if (st.mode !== 'complete') return;
+  const humans = [...st.players.values()].filter((p) => !p.bot && p.inRound);
+  if (humans.length && humans.every((p) => p.gaveUp || p.found.length === st.answers.length)) endRound(room);
+}
+
+function startRound(room, mode) {
+  const st = room.state;
+  st.mode = mode === 'complete' && !room.ranked && !room.daily ? 'complete' : 'timed';
   const pz = makePuzzle(room.daily ? mulberry32(room.daily.seed) : undefined); // daily: same letters for everyone
   st.base = pz.base;
   st.letters = pz.letters;
@@ -155,12 +168,13 @@ function startRound(room) {
   st.roundId += 1;
   st.phase = 'playing';
   st.startedAt = Date.now() + COUNTDOWN_MS;
-  st.endsAt = st.startedAt + ROUND_MS;
+  st.endsAt = st.mode === 'timed' ? st.startedAt + ROUND_MS : null;
   st.endedAt = null;
-  for (const p of st.players.values()) { p.score = 0; p.found = []; p.inRound = true; p.botPool = null; }
+  for (const p of st.players.values()) { p.score = 0; p.found = []; p.inRound = true; p.botPool = null; p.gaveUp = false; }
   clearTimeout(st.roundTimer);
+  st.roundTimer = null;
   const roundId = st.roundId;
-  st.roundTimer = setTimeout(() => {
+  if (st.endsAt) st.roundTimer = setTimeout(() => {
     if (st.roundId !== roundId) return;
     endRound(room);
     broadcastState(room);
@@ -176,6 +190,7 @@ function buildView(room, forId) {
   return {
     kind: 'state',
     phase: st.phase,
+    mode: st.mode,
     roundId: st.roundId,
     letters: st.letters,
     startedAt: st.startedAt,
@@ -190,7 +205,7 @@ function buildView(room, forId) {
     myWords: me ? me.found : [],
     players: [...st.players.values()].map((p) => ({
       clientId: p.clientId, nickname: p.nickname, color: p.color, bot: p.bot || undefined,
-      score: p.score, count: p.found.length, wins: p.wins, inRound: !!p.inRound,
+      score: p.score, count: p.found.length, wins: p.wins, inRound: !!p.inRound, gaveUp: !!p.gaveUp,
       words: over || p.clientId === forId ? p.found : undefined,
     })),
   };
@@ -213,6 +228,7 @@ module.exports = {
   createInitialState() {
     return {
       phase: 'waiting', // 'waiting' | 'playing' | 'results'
+      mode: 'timed', // 'timed' | 'complete'
       roundId: 0,
       base: null,
       letters: null,
@@ -248,6 +264,7 @@ module.exports = {
     if (p && p.botTimer) clearTimeout(p.botTimer);
     st.players.delete(client.clientId);
     dropBotsIfAlone(st.players);
+    if (st.phase === 'playing') maybeFinish(room); // the last one still searching may have left
     if (![...st.players.keys()].some((id) => !isBotId(id))) {
       // Nobody human left: stop the round so no timers keep running for an empty room.
       clearBotTimers(st);
@@ -267,7 +284,14 @@ module.exports = {
 
     if (data.kind === 'start') {
       if (st.phase === 'playing') return;
-      startRound(room);
+      startRound(room, data.mode);
+      broadcastState(room);
+      return;
+    }
+    if (data.kind === 'giveUp') {
+      if (st.phase !== 'playing' || st.mode !== 'complete' || !me.inRound) return;
+      me.gaveUp = true;
+      maybeFinish(room);
       broadcastState(room);
       return;
     }
@@ -290,7 +314,7 @@ module.exports = {
     if (data.kind === 'submit') {
       const res = judge(st, me, data.word);
       reply(ctx, { kind: 'result', ...res });
-      if (res.outcome === 'found') broadcastState(room);
+      if (res.outcome === 'found') { maybeFinish(room); broadcastState(room); }
     }
   },
 
