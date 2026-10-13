@@ -867,7 +867,12 @@ button.danger, .fr-menu button.danger { color: var(--error); }
 .live-hot { background: none; border: none; padding: 0; color: var(--accent); font-size: inherit; text-decoration: underline dotted; }
 .live-hot:hover:not(:disabled) { background: none; color: #ffd27a; }
 .activity { border: 1px solid var(--border); padding: 10px 14px; margin: 0 0 1em; }
-.activity-title { font-family: var(--display); font-weight: normal; font-size: 20px; margin: 0 0 6px; color: var(--accent); letter-spacing: 1px; }
+.activity-title { font-family: var(--display); font-weight: normal; font-size: 20px; color: var(--accent); letter-spacing: 1px; cursor: pointer; list-style: none; }
+.activity-title::-webkit-details-marker { display: none; }
+.activity-title::after { content: ' ▾'; color: var(--muted); font-size: 14px; }
+.activity:not([open]) > .activity-title::after { content: ' ▸'; }
+.activity[open] > .activity-title { margin-bottom: 6px; }
+.activity-count { font-family: var(--mono, monospace); font-size: 13px; }
 .activity-list { list-style: none; margin: 0; padding: 0; }
 .activity-item { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 4px 0; font-size: .9em; }
 .activity-item + .activity-item { border-top: 1px solid rgba(31, 143, 12, .3); }

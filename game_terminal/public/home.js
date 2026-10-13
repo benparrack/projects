@@ -35,8 +35,13 @@ const LINE = {
 // payload: { items, friends } from the server's ACTIVITY message.
 export function renderActivity(mount, payload, { gameLabel, openFriends }) {
   const items = payload.items.filter((it) => LINE[it.kind]).slice(0, 6);
-  mount.replaceChildren(h('section.activity', { 'aria-labelledby': 'activity-title' },
-    h('h2#activity-title.activity-title', '> FRIENDS\' ACTIVITY'),
+  let open = true;
+  try { open = localStorage.getItem('gt.activityOpen') !== '0'; } catch {}
+  mount.replaceChildren(h('details.activity', {
+    open,
+    ontoggle: (e) => { try { localStorage.setItem('gt.activityOpen', e.currentTarget.open ? '1' : '0'); } catch {} },
+  },
+    h('summary.activity-title', '> FRIENDS\' ACTIVITY', items.length ? h('span.muted.activity-count', ` (${items.length})`) : null),
     items.length
       ? h('ul.activity-list', items.map((it) => h('li.activity-item',
         avatarEl(it.user.avatar, 20, it.user.cosmetics),
