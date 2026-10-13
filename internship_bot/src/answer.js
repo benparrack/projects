@@ -6,6 +6,7 @@
 import YAML from 'yaml';
 import { loadProfile, resumeFor, filePath, normQ } from './profile.js';
 import { askClaude } from './llm.js';
+import { db } from './db.js';
 
 const SYSTEM = `You fill out internship applications on behalf of Ben Parrack. You are given his
 PROFILE (hard facts), LEARNED ANSWERS (answers he gave before), RESUME, STORIES (essay material) and the JOB.
@@ -43,6 +44,12 @@ export function matchOption(options, ans) {
     ?? options.find(o => normQ(o).includes(a) || (a.length > 2 && a.includes(normQ(o)) && normQ(o).length > 1)) ?? null;
 }
 
+// "a | b" → the matching options, or null if none match.
+const pickMany = (options, ans) => {
+  const v = String(ans).split('|').map(s => matchOption(options, s.trim())).filter(Boolean);
+  return v.length ? v : null;
+};
+
 // Fixed answers by field key, for fields every ATS shares.
 function standard(q, facts) {
   const f = facts, eeo = f.eeo || {};
@@ -77,6 +84,18 @@ function fileFor(q, resume) {
 // Forms that make you swear no AI helped. Ben applies to these himself; the bot never signs them.
 export const NO_AI = /(artificial intelligence|\bAI\b|chat ?gpt|language model)[^.]{0,80}(on my behalf|assist|fill|complet|generat|written)|(not|without)[^.]{0,60}(filled|completed|written)[^.]{0,60}(\bAI\b|artificial intelligence)/i;
 
+// Learning from results: written answers from applications that got a response past rejection,
+// plus Ben's own edits to drafts in the dashboard (before → after), become style examples.
+export function lessons() {
+  const wins = db.prepare("SELECT company, outcome, answers FROM jobs WHERE outcome IN ('offer','interview','oa') ORDER BY outcome_at DESC LIMIT 20").all()
+    .flatMap(j => { const a = JSON.parse(j.answers || '{}');
+      return (a.questions || []).filter(([k, , t]) => t === 'textarea' && String(a.answers?.[k] || '').length > 150)
+        .map(([k, label]) => ({ outcome: j.outcome, company: j.company, question: label, answer: a.answers[k] })); })
+    .slice(0, 4);
+  const edits = JSON.parse(db.prepare("SELECT v FROM meta WHERE k='edits'").get()?.v || '[]').slice(-5);
+  return { wins, edits };
+}
+
 export async function answerAll(questions, job, { llm = askClaude } = {}) {
   const banned = questions.find(q => NO_AI.test(q.label));
   if (banned) return { answers: {}, needs: [], manual: `asks you to certify no AI was used: "${banned.label.slice(0, 120)}..."` };
@@ -98,7 +117,8 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
     const std = standard(q, facts);
     if (std !== undefined) { answers[q.key] = std; continue; }
     const learned = bank.find(b => normQ(b.q) === normQ(q.label));
-    const val = learned && (q.type === 'select' ? matchOption(q.options, learned.a) : learned.a);
+    const val = learned && (q.type === 'select' ? matchOption(q.options, learned.a)
+      : q.type === 'multiselect' ? pickMany(q.options, learned.a) : learned.a);
     if (val) answers[q.key] = val;
     else ask.push(q);
   }
@@ -109,6 +129,10 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
       '# LEARNED ANSWERS\n' + YAML.stringify(bank),
       '# RESUME\n' + resume.text,
       '# STORIES\n' + stories,
+      ...(() => { const { wins, edits } = lessons(); return [
+        wins.length ? '# WRITTEN ANSWERS THAT GOT BEN AN INTERVIEW OR OFFER (reuse what worked: tone, which project, structure)\n' + YAML.stringify(wins) : '',
+        edits.length ? "# BEN'S EDITS TO YOUR PAST DRAFTS (write the way he edits toward)\n" + YAML.stringify(edits) : '',
+      ].filter(Boolean); })(),
       `# JOB\n${job.company}: ${job.title}\n${(job.description || '').slice(0, 6000)}`,
       '# QUESTIONS\n' + JSON.stringify(ask.map(({ key, label, type, options, required, description }) =>
         ({ key, label, type, required, ...(description ? { description } : {}), ...(options?.length ? { options } : {}) })), null, 1),
@@ -119,10 +143,7 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
       const a = got.get(q.key);
       let v = a?.answer ?? null;
       if (v != null && q.type === 'select') v = matchOption(q.options, v);
-      if (v != null && q.type === 'multiselect') {
-        v = String(v).split('|').map(s => matchOption(q.options, s.trim())).filter(Boolean);
-        if (!v.length) v = null;
-      }
+      if (v != null && q.type === 'multiselect') v = pickMany(q.options, v);
       if (v != null && v !== '') answers[q.key] = v;
       else if (q.required) needs.push({ key: q.key, label: q.label, options: q.options, why: a?.need_human_reason || 'no valid answer' });
     }

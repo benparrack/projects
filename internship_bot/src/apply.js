@@ -18,9 +18,12 @@ mkdirSync(SHOTS, { recursive: true });
 export async function apply(browser, job, { dryRun = true } = {}) {
   const ats = adapterFor(job.url);
   const form = await ats.load(job.url);
-  const { answers, needs, manual } = await answerAll(form.questions, { ...job, description: form.description });
+  // Approved in the dashboard: submit exactly the answers Ben reviewed (and maybe edited).
+  const reviewed = job.status === 'approved' && job.answers ? JSON.parse(job.answers).answers : null;
+  const { answers, needs, manual } = reviewed ? { answers: reviewed, needs: [] }
+    : await answerAll(form.questions, { ...job, description: form.description });
   if (manual) return handOff(job, manual);
-  const audit = { answers, questions: form.questions.map(q => [q.key, q.label]) };
+  const audit = { answers, questions: form.questions.map(q => [q.key, q.label, q.type]) };
   // A file only Ben can make (a coding assignment, a portfolio) can't be answered by text.
   const file = needs.find(n => n.file || /external task/i.test(n.why));
   if (file) return handOff(job, `${n2why(file)}: "${file.label.slice(0, 150)}"`);
@@ -34,6 +37,8 @@ export async function apply(browser, job, { dryRun = true } = {}) {
     await page.screenshot({ path: screenshot, fullPage: true });
     if (problems.length) return handOff(job, 'form problems: ' + problems.map(p => `${p.label} (${p.why})`).join('; '), screenshot);
     if (dryRun) return record(job, 'dryrun', { answers: audit, screenshot });
+    // Test switch: run the whole live path but stop before the click.
+    if (process.env.INTERN_NO_SUBMIT) return record(job, 'dryrun', { reason: 'INTERN_NO_SUBMIT: stopped before submit', answers: audit, screenshot });
     const res = await ats.submit(page);
     await page.screenshot({ path: screenshot.replace('.png', '-after.png'), fullPage: true });
     if (!res.ok) return handOff(job, `submit blocked: ${res.why}`, screenshot);

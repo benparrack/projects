@@ -8,7 +8,8 @@
   },
   "scripts": {
     "jobs": "node --no-warnings src/run.js --list",
-    "test": "node --no-warnings --test"
+    "test": "node --no-warnings --test",
+    "dashboard": "node --no-warnings src/dashboard.js"
   },
   "dependencies": {
     "playwright-core": "^1.64.0",

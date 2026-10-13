@@ -79,3 +79,16 @@ test('queue: "12 answer" is learned, "skip 12" drops', async () => {
   assert.equal(db.prepare('SELECT status FROM questions WHERE id=?').get(q.id).status, 'skipped');
   db.prepare('DELETE FROM questions WHERE id=?').run(q.id);
 });
+
+test('learned multiselect answers come back as option lists', async () => {
+  const { learn } = await import('../src/profile.js');
+  const { readFileSync, writeFileSync } = await import('node:fs');
+  const bankFile = new URL('../profile/answers.yaml', import.meta.url);
+  const saved = readFileSync(bankFile, 'utf8');
+  try {
+    learn('Where have you written low-level code? Select all that apply.', '1 - Personal Projects | 2 - Classwork');
+    const r = await answerAll([{ key: 'm', label: 'Where have you written low-level code? Select all that apply.', type: 'multiselect',
+      options: ['1 - Personal Projects', '2 - Classwork', '3 - Internship/Workplace'], required: true }], job, { llm: () => assert.fail() });
+    assert.deepEqual(r.answers.m, ['1 - Personal Projects', '2 - Classwork']);
+  } finally { writeFileSync(bankFile, saved); }
+});
