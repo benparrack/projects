@@ -917,3 +917,4 @@ body.gt-fullscreen .crt { max-width: none; }
   .turns-when { display: none; }
 }
 body.gt-byturns .seat-leave { display: none; }
+.solo-chips { margin-top: 8px; }

@@ -12,7 +12,7 @@ import { renderDailyCard, renderDaily } from './daily.js';
 import { renderWeeklyCard } from './weekly.js';
 import { renderTurns } from './turns.js';
 import { showModNotices, showSuspended } from './notices.js';
-import { renderLive, renderActivity } from './home.js';
+import { renderLive, renderActivity, renderSoloCard } from './home.js';
 import { initFriends, setSignedIn, handleSocialState, handleSocialNotice, handleOnline, openOnline, openConversation, getSocial } from './friends.js';
 import { initChat, initGlobalDock, setDockAvailable, chatBox, reopenChats, handleChatHistory, handleChatMessage, handleChatDeleted, handleChatError } from './chat.js';
 import { renderAdmin, handleAdminData } from './admin.js';
@@ -408,6 +408,7 @@ function refreshHome() {
   renderLive(document.getElementById('live-slot'), { gameLabel, pick: pickGame, openOnline: state.account ? openOnline : null });
   renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
   renderWeeklyCard(document.getElementById('weekly-slot'), { auth: state.auth, account: state.account, gameLabel, play: (type) => { pickGame(type); els.btnJoinPublic.click(); } });
+  renderSoloCard(document.getElementById('solo-slot'), { account: state.account, gameLabel, play: (type) => { pickGame(type); els.btnCreatePrivate.click(); } });
   if (state.account) { send(ClientMessage.ACTIVITY_GET, {}); send(ClientMessage.ASYNC_LIST, {}); }
   else { document.getElementById('activity-slot').replaceChildren(); document.getElementById('turns-slot').replaceChildren(); }
 }

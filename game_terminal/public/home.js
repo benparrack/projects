@@ -1,6 +1,7 @@
 // Menu extras: the live stats strip (everyone) and friends' activity (signed in).
 import { h, timeAgo } from './ui.js';
 import { avatarEl, nameColor } from './avatars.js';
+import { fmtScore } from './profile.js';
 
 let live = null; // { at, data }
 
@@ -52,4 +53,28 @@ export function renderActivity(mount, payload, { gameLabel, openFriends }) {
       : h('p.muted.activity-empty', payload.friends
         ? 'Nothing new from your friends yet. Wins, level-ups and unlocks show up here.'
         : ['Add friends to see their wins, level-ups and unlocks here. ', h('button.link-btn', { type: 'button', onclick: openFriends }, 'FIND FRIENDS')])));
+}
+
+// Solo: games where one player can chase a personal best. One click opens a private room.
+const SOLO = ['anagrams', 'wordhunt', 'wordbites', 'wordsearch', 'wordscapes', 'wordtrails', 'crossword', 'codemaster',
+  'mazedash', 'slope', 'slither', 'minigolf', 'bowling', 'skeeball', 'basketball', 'archery', 'darts', 'blackjack'];
+
+export function renderSoloCard(mount, { account, gameLabel, play }) {
+  let open = true;
+  try { open = localStorage.getItem('gt.soloOpen') !== '0'; } catch {}
+  const chips = new Map(SOLO.map((type) => [type, h('button.landing-chip', { type: 'button', onclick: () => play(type) }, gameLabel(type))]));
+  mount.replaceChildren(h('details.activity', {
+    open,
+    ontoggle: (e) => { try { localStorage.setItem('gt.soloOpen', e.currentTarget.open ? '1' : '0'); } catch {} },
+  },
+    h('summary.activity-title', '> SOLO · BEAT YOUR BEST'),
+    h('p.muted.activity-empty', account ? 'Play alone and chase your high score. Your best shows on each game.' : 'Play alone and chase your high score. Sign in to keep your bests.'),
+    h('div.landing-chips.solo-chips', [...chips.values()])));
+  if (!account) return;
+  fetch(`/api/user/${encodeURIComponent(account.username)}`).then((r) => (r.ok ? r.json() : null)).then((data) => {
+    for (const st of (data && data.stats) || []) {
+      const chip = chips.get(st.gameType);
+      if (chip && st.best != null) chip.append(h('span.muted', ` · ${fmtScore(st.best, st.score)}`));
+    }
+  }).catch(() => {}); // bests are a nicety; the buttons work without them
 }
