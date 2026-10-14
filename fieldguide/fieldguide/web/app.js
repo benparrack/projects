@@ -36,7 +36,7 @@ async function shelf() {
       const p = progress(g), done = Object.keys(p.read || {}).length;
       return `<a href="/g/${g.slug}/${p.last && p.last !== '#/' ? p.last : ''}"><div class="label">${esc(g.stats.languages.slice(0, 2).map(l => l[0]).join(' · '))}</div>
         <h2>${esc(g.title)}</h2><p>${esc(g.tagline)}</p>
-        <div class="stats"><span>${g.stats.loc.toLocaleString()} lines</span><span>${g.chapters} chapters</span><span>${done ? `${done} read` : 'unread'}</span><span>built ${esc(g.built.slice(0, 10))}</span>${g.stale ? `<span class="stale" title="${plural(g.stale, 'file')} changed since the build">needs a rebuild</span>` : ''}</div>
+        <div class="stats"><span>${g.stats.loc.toLocaleString()} lines</span><span>${g.chapters} chapters</span><span>${done ? `${done} read` : 'unread'}</span><span>built ${esc(g.built.slice(0, 10))}</span>${g.stale ? `<span class="stale" title="Changed since the build; the overview has the rebuild command">${plural(g.stale, 'file')} changed</span>` : ''}</div>
         <div class="prog"><i style="width:${Math.round((done / g.chapters) * 100)}%"></i></div></a>`;
     }).join('')}</div>` : `<p class="empty-state">No guides yet. Build your first one below.</p>`}
     <div class="howto"><div class="label">Add a project</div>
