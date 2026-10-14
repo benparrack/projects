@@ -200,6 +200,7 @@ function buildView(room, forId) {
     roundMs: ROUND_MS,
     points: POINTS,
     totalWords: st.answers ? st.answers.length : 0,
+    byLength: st.answers ? Object.fromEntries([3, 4, 5, 6].map((n) => [n, st.answers.filter((w) => w.length === n).length])) : null,
     answers: over ? st.answers : null,
     base: over ? st.base : null,
     myWords: me ? me.found : [],

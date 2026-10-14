@@ -70,6 +70,8 @@ const CSS = `
 .an-chip.missed { border-color: rgba(255,138,138,.35); background: transparent; color: #ff9a9a; opacity: .85; }
 .an-chip.long { border-color: rgba(255,210,63,.6); color: #ffd23f; }
 .an-empty { font-size: .82em; opacity: .55; }
+.an-chip.blank { border-style: dashed; background: transparent; opacity: .4; letter-spacing: 3px; }
+.an-glabel.done { color: #39ff14; opacity: 1; }
 .an-scores { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .an-sc { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 4px; border: 1px solid rgba(57,255,20,.15); font-size: .88em; }
 .an-sc.lead { border-color: rgba(255,210,63,.6); background: rgba(255,210,63,.08); }
@@ -138,7 +140,17 @@ export function mount(container, api) {
   allBtn.title = 'No clock: keep going until you have found every word these letters make';
   allBtn.addEventListener('click', () => { sfx.play('select'); api.sendAction({ kind: 'start', mode: 'complete' }); });
   const giveUpBtn = el('button', '', 'GIVE UP & REVEAL');
-  giveUpBtn.addEventListener('click', () => { sfx.play('click'); api.sendAction({ kind: 'giveUp' }); });
+  let giveUpArmed = null;
+  giveUpBtn.addEventListener('click', () => {
+    sfx.play('click');
+    if (!giveUpArmed) { // two taps, so a stray one can't end a long hunt
+      giveUpBtn.textContent = 'SURE? TAP AGAIN';
+      giveUpArmed = setTimeout(() => { giveUpArmed = null; giveUpBtn.textContent = 'GIVE UP & REVEAL'; }, 3000);
+      return;
+    }
+    clearTimeout(giveUpArmed); giveUpArmed = null; giveUpBtn.textContent = 'GIVE UP & REVEAL';
+    api.sendAction({ kind: 'giveUp' });
+  });
   controls.append(startBtn, allBtn, giveUpBtn, botBar.el);
 
   const body = el('div', 'an-body');
@@ -341,7 +353,7 @@ export function mount(container, api) {
       : `${view.totalWords} words hide in these letters`;
     else statusEl.textContent = `Round over — the 6-letter word was ${String(view.base || '').toUpperCase()}`;
     const me = view.players.find((p) => p.clientId === myId());
-    const score = me ? me.score : 0;
+    const score = complete() ? view.myWords.length : me ? me.score : 0; // no clock, so words found is the score
     if (scoreEl.textContent !== String(score)) {
       scoreEl.textContent = String(score);
       scoreEl.classList.remove('bump');
@@ -349,7 +361,7 @@ export function mount(container, api) {
       scoreEl.classList.add('bump');
     }
     const n = view.myWords.length;
-    countEl.textContent = `${n} word${n === 1 ? '' : 's'}`;
+    countEl.textContent = complete() ? `of ${view.totalWords} words` : `${n} word${n === 1 ? '' : 's'}`;
   }
 
   function renderWords() {
@@ -360,13 +372,21 @@ export function mount(container, api) {
     wordsTitle.textContent = over ? 'ALL WORDS' : 'YOUR WORDS';
     wordsMeta.textContent = over ? `you found ${mine.size} of ${view.answers.length}` : `${mine.size} found`;
     const list = over ? view.answers : view.myWords;
-    if (!list.length) { wordsEl.appendChild(el('div', 'an-empty', 'No words yet.')); return; }
+    const hunting = !over && complete() && view.byLength;
+    if (!list.length && !hunting) { wordsEl.appendChild(el('div', 'an-empty', 'No words yet.')); return; }
     for (const len of [6, 5, 4, 3]) {
       const ws = list.filter((w) => w.length === len).sort();
-      if (!ws.length) continue;
+      const total = hunting ? view.byLength[len] || 0 : ws.length;
+      if (!total) continue;
       const g = el('div', 'an-group');
-      g.appendChild(el('div', 'an-glabel', `${len} LETTERS · ${POINTS[len]} each`));
+      if (hunting) {
+        const label = el('div', 'an-glabel', `${len} LETTERS · ${ws.length} / ${total}${ws.length === total ? ' ✓' : ''}`);
+        label.classList.toggle('done', ws.length === total);
+        g.appendChild(label);
+        for (let i = ws.length; i < total; i++) ws.push(null); // blanks for words still to find
+      } else g.appendChild(el('div', 'an-glabel', `${len} LETTERS · ${POINTS[len]} each`));
       for (const w of ws) {
+        if (!w) { g.appendChild(el('span', 'an-chip blank', '·'.repeat(len))); continue; }
         const chip = el('span', 'an-chip', w.toUpperCase());
         if (over && !mine.has(w)) chip.classList.add('missed');
         if (len >= 5 && mine.has(w)) chip.classList.add('long');
@@ -462,7 +482,7 @@ export function mount(container, api) {
         if (counting) renderOverlay();
       }
     } else {
-      timerEl.textContent = view.phase === 'results' ? '0:00' : fmtClock(view.roundMs || 60000);
+      timerEl.textContent = view.phase === 'results' ? (complete() ? fmtClock(view.endedAt - view.startedAt) : '0:00') : fmtClock(view.roundMs || 60000);
       timerEl.classList.remove('low');
     }
   }

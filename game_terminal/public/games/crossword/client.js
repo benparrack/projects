@@ -505,7 +505,7 @@ export function mount(container, api) {
       statusEl.textContent = api.daily ? '· today\'s puzzle, press START' : '· pick a mode and size, then START';
       return;
     }
-    titleEl.textContent = `CROSSWORD · ${(view.sizes[view.size] || '').toUpperCase()} · ${view.mode === 'coop' ? 'CO-OP' : 'RACE'}`;
+    titleEl.textContent = `CROSSWORD · ${(view.sizes[view.size] || '').toUpperCase()} · ${view.ranked ? 'RANKED RACE ★' : view.mode === 'coop' ? 'CO-OP' : 'RACE'}`;
     const done = words.filter((w) => solvedBy(w) !== undefined).length;
     if (view.phase === 'results') {
       statusEl.textContent = view.endReason === 'revealed' ? '· answers revealed' : view.mode === 'race' ? '· race over' : '· solved!';
@@ -638,6 +638,7 @@ export function mount(container, api) {
       overlay.className = 'cw-idle';
       overlay.append(el('b', '', 'CROSSWORD'), ...(api.daily
         ? [el('span', '', 'Today\'s puzzle: one try, fastest solve tops the board. Press START.')]
+        : api.ranked ? [el('span', '', 'RANKED: a head-to-head mini race. Same puzzle, first to finish wins.'), el('span', '', 'Press START once your opponent is here.')]
         : [el('span', '', 'CO-OP: fill one grid together · RACE: same puzzle, first to finish wins'), el('span', '', 'Add a bot if you are on your own.')]));
       if (!view || !view.cols) { gridEl.style.setProperty('--cw', '30px'); gridEl.style.gridTemplateColumns = 'repeat(9, var(--cw))'; if (!gridEl.childElementCount) for (let i = 0; i < 81; i++) gridEl.appendChild(el('div', (i * 7 + (i >> 2)) % 5 === 0 ? 'cw-block' : 'cw-cell')); }
       return;
