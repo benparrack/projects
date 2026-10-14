@@ -5,6 +5,7 @@ he applied to into outcomes: confirmed / oa / interview / offer / rejected.
 Only emails that match an applied company are stored (sender, subject, a short snippet).
     python3 src/mail.py            check new mail
     python3 src/mail.py --selftest classifier + matching checks, no network
+    python3 src/mail.py --links    JSON list of Workday account-verification links (src/confirm.js opens them)
 """
 import email, email.header, email.utils, imaplib, json, re, sqlite3, subprocess, sys, time, urllib.request
 from pathlib import Path
@@ -148,18 +149,42 @@ def verify(host, wait=150):
     creds = json.loads(CREDS.read_text())
     imap = imaplib.IMAP4_SSL(creds.get('host', 'imap.gmail.com'))
     imap.login(creds['user'], creds['password'])
-    link = re.compile(r'https://' + re.escape(host) + r'/[^\s"\'<>]*(?:verif|activat|confirm)[^\s"\'<>]*', re.I)
     for _ in range(wait // 10):
         imap.select('INBOX', readonly=True)
         for uid in reversed(imap.uid('search', None, 'SINCE', time.strftime('%d-%b-%Y'))[1][0].split()[-20:]):
             msg = email.message_from_bytes(imap.uid('fetch', uid, '(BODY.PEEK[])')[1][0][1])
             sent = email.utils.parsedate_to_datetime(msg['Date']).timestamp() if msg['Date'] else 0
             raw = ' '.join((p.get_payload(decode=True) or b'').decode('utf-8', 'replace') for p in msg.walk() if p.get_content_maintype() == 'text')
-            m = link.search(raw.replace('&amp;', '&'))
+            m = verify_link(host, raw)
             if m and time.time() - sent < 900:
-                return print(m.group(0))
+                return print(m)
         time.sleep(10)
     sys.exit(1)
+
+
+def verify_link(host, raw):
+    """A Workday verification link to `host` in an email body, or None. Only verify/activate/confirm paths."""
+    m = re.search(r'https://' + re.escape(host) + r'/[^\s"\'<>]*(?:verif|activat|confirm)[^\s"\'<>]*', raw.replace('&amp;', '&'), re.I)
+    return m and m.group(0)
+
+
+def links(days=21):
+    """Verification links in the last `days` of mail, only for Workday hosts the bot made an account on."""
+    hosts = list(json.loads((ROOT / 'data' / 'workday.json').read_text())) if (ROOT / 'data' / 'workday.json').exists() else []
+    creds = json.loads(CREDS.read_text())
+    imap = imaplib.IMAP4_SSL(creds.get('host', 'imap.gmail.com'))
+    imap.login(creds['user'], creds['password'])
+    imap.select('INBOX', readonly=True)
+    since = time.strftime('%d-%b-%Y', time.localtime(time.time() - days * 86400))
+    out = {}
+    for uid in imap.uid('search', None, 'SINCE', since, 'TEXT', 'myworkdayjobs')[1][0].split():
+        msg = email.message_from_bytes(imap.uid('fetch', uid, '(BODY.PEEK[])')[1][0][1])
+        raw = ' '.join((p.get_payload(decode=True) or b'').decode('utf-8', 'replace') for p in msg.walk() if p.get_content_maintype() == 'text')
+        for h in hosts:
+            if h not in out and (l := verify_link(h, raw)):
+                out[h] = l                           # oldest first is fine: one link per account is enough
+    imap.logout()
+    print(json.dumps([{'host': h, 'link': l} for h, l in out.items()]))
 
 
 def selftest():
@@ -174,11 +199,17 @@ def selftest():
     assert match(jobs, 'Appian Recruiting <no-reply@greenhouse.io>', 'Your application', '')['company'] == 'Appian Corporation'
     assert match(jobs, 'no-reply@ashbyhq.com', 'Update', 'Thanks for your interest in Two Sigma.')['company'] == 'Two Sigma'
     assert match(jobs, 'news@sigma.com', 'Sigma news', 'nothing here') is None
+    h = 'acme.wd1.myworkdayjobs.com'
+    assert verify_link(h, 'Click <a href="https://acme.wd1.myworkdayjobs.com/en-US/careers/activate/abc123?x=1&amp;y=2">') == f'https://{h}/en-US/careers/activate/abc123?x=1&y=2'
+    assert verify_link(h, 'https://acme.wd1.myworkdayjobs.com/en-US/careers/job/123') is None          # not a verify link
+    assert verify_link(h, 'https://evil.example/acme.wd1.myworkdayjobs.com/verify') is None            # wrong host
     print('mail selftest ok')
 
 
 if __name__ == '__main__':
-    if '--verify' in sys.argv:
+    if '--links' in sys.argv:
+        links()
+    elif '--verify' in sys.argv:
         verify(sys.argv[sys.argv.index('--verify') + 1])
     else:
         selftest() if '--selftest' in sys.argv else check()

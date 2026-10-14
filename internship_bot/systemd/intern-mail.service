@@ -8,5 +8,6 @@ ConditionPathExists=%h/projects/internship_bot/data/mail.json
 Type=oneshot
 WorkingDirectory=%h/projects/internship_bot
 Environment=PATH=%h/.local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/python3 src/mail.py
+ExecStart=-/usr/bin/python3 src/mail.py
+ExecStart=/home/ben/AppDev/Tools/nvm/versions/node/v22.23.2/bin/node --no-warnings src/confirm.js
 TimeoutStartSec=20min

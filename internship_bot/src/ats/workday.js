@@ -40,12 +40,18 @@ export async function load(url) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const A = id => `[data-automation-id="${id}"]`;
+// shortcut: assumes US applicant (true for Ben); read facts.address.country if this is ever reused.
+const FIXED = { countryPhoneCode: 'United States of America (+1)', country: 'United States of America' };
 
-// Workday puts a transparent "click_filter" div over its real buttons; clicking that is what a user does.
+// Workday lays a transparent "click_filter" div over its submit buttons and ignores synthetic clicks on
+// either; a real mouse click on the button's spot is what goes through.
 async function press(page, id) {
-  const filt = page.locator(`${A(id)} ~ ${A('click_filter')}, ${A('click_filter')}:has(+ ${A(id)})`).first();
-  if (await filt.count()) await filt.click();
-  else await page.locator(A(id)).first().click();
+  const btn = page.locator(A(id)).first();
+  await btn.scrollIntoViewIfNeeded().catch(() => {});
+  const bb = await btn.boundingBox();
+  if (!bb) return btn.click();
+  await page.mouse.move(bb.x + bb.width / 2 - 15, bb.y + bb.height / 2, { steps: 5 });
+  await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2, { delay: 60 });
 }
 
 async function settle(page) {
@@ -62,19 +68,24 @@ const errors = page => visibleText(page, `${A('errorMessage')}, ${A('inputAlert'
 // ---- account -------------------------------------------------------------------------------------
 
 // Returns null when signed in, else a reason to hand off.
-async function signIn(page, host, { allowCreate, email: me, verifyLink }) {
+async function signIn(page, host, { allowCreate, email: me, verifyLink, apply, again = false }) {
   await page.locator(A('legalNoticeAcceptButton')).click({ timeout: 3000 }).catch(() => {});
   const email = page.locator(`input${A('email')}`);
-  await email.waitFor({ timeout: 20000 }).catch(() => {});
+  // Some tenants lead with Apple/Google buttons and hide the email form behind "Sign in with email".
+  const viaEmail = page.getByRole('button', { name: /^(sign in|continue) with email$/i });
+  await email.or(viaEmail).first().waitFor({ timeout: 20000 }).catch(() => {});
+  if (!(await email.isVisible().catch(() => false)) && await viaEmail.isVisible().catch(() => false)) {
+    await viaEmail.click(); await email.waitFor({ timeout: 8000 }).catch(() => {});
+  }
   if (!(await email.count())) return null;                 // tenant without accounts, or already signed in
   const all = creds();
   let c = all[host];
   const typ = async (sel, v) => { const e = page.locator(sel).first(); await e.click(); await e.fill(''); await e.pressSequentially(v, { delay: 12 }); await e.press('Tab'); };
   const creating = await page.locator(`input${A('verifyPassword')}`).count();
-  if (c && creating) { await press(page, 'signInLink'); await page.locator(`input${A('verifyPassword')}`).waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); }
+  if (c && creating) { await page.locator(A('signInLink')).click(); await page.locator(`input${A('verifyPassword')}`).waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); }
   if (!c) {
     if (!allowCreate) return 'Workday account creation is off (dashboard → Settings)';
-    if (!creating) { await press(page, 'createAccountLink'); await page.locator(`input${A('verifyPassword')}`).waitFor({ timeout: 8000 }); }
+    if (!creating) { await page.locator(A('createAccountLink')).click(); await page.locator(`input${A('verifyPassword')}`).waitFor({ timeout: 8000 }); }
     c = all[host] = { email: me, password: newPassword(), created: Date.now() };
   }
   if (!c.email) return 'no email for the Workday account';
@@ -86,19 +97,31 @@ async function signIn(page, host, { allowCreate, email: me, verifyLink }) {
     const box = page.locator(`input${A('createAccountCheckbox')}`);
     if (await box.count() && !(await box.isChecked())) await box.click();
     saveCreds(all);                                       // before submitting, so a crash can't lose the password
-    await press(page, 'createAccountSubmitButton');
-  } else await press(page, 'signInSubmitButton');
-  await settle(page);
+  }
+  // The first click sometimes lands before Workday has wired the button up: give it one more.
+  const btn = (await verify.count()) ? 'createAccountSubmitButton' : 'signInSubmitButton';
+  for (let i = 0; i < 2; i++) {
+    await press(page, btn); await settle(page);
+    await email.waitFor({ state: 'hidden', timeout: 12000 }).catch(() => {});
+    if (!(await email.isVisible().catch(() => false)) || (await errors(page)).length) break;
+  }
   const err = (await errors(page)).join(' ');
   if (/already (exists|in use|registered)|account with this email/i.test(err)) {
     delete all[host].created; all[host].password = ''; saveCreds(all);
     return `you already have a Workday account here; put its password in data/workday.json under "${host}" or reset it`;
   }
-  if (/verif/i.test(err + ' ' + await page.locator('body').innerText().catch(() => '')) && await email.isVisible().catch(() => false)) {
+  const body = await page.locator('body').innerText().catch(() => '');
+  if (/(verify|confirm|activate) your (email|account)|verification (email|link)|sent (you )?an? (email|link)/i.test(err + ' ' + body)) {
     const link = verifyLink?.(host);
-    if (!link) return 'Workday sent a verification email; click it, then let the bot retry (or set up Gmail so it can)';
+    if (!link) return 'Workday sent a verification email; click it, then let the bot retry (or connect Gmail in Settings so it can)';
     await page.goto(link, { waitUntil: 'load' }); await settle(page);
-    return signIn(page, host, { allowCreate: false, email: me });
+    await page.goto(apply, { waitUntil: 'load' }); await settle(page);
+    return signIn(page, host, { allowCreate: false, email: me, apply, again: true });
+  }
+  // Some tenants drop you on a sign-in page after creating the account: go back and sign in once.
+  if (!again && await email.isVisible().catch(() => false) && !err) {
+    await page.goto(apply, { waitUntil: 'load' }); await settle(page);
+    return signIn(page, host, { allowCreate: false, email: me, apply, again: true });
   }
   if (/incorrect|invalid|locked/i.test(err)) return `Workday sign-in failed: ${err.slice(0, 160)}`;
   if (await email.isVisible().catch(() => false)) return `Workday sign-in didn't go through${err ? ': ' + err.slice(0, 160) : ' (captcha?)'}`;
@@ -154,52 +177,92 @@ const SCAN = () => {
 
 export async function scan(page) {
   const fields = await page.evaluate(SCAN);
-  for (const f of fields.filter(f => f.type === 'dropdown')) {    // listbox options only exist while open
+  // Listbox options only exist while open; set ones are kept, so only open the ones we'll fill.
+  for (const f of fields.filter(f => f.type === 'dropdown' && (!f.value || (FIXED[f.id] && !/united states/i.test(f.value))))) {
     const btn = page.locator(`[data-ib="${f.ref}"] button[aria-haspopup=listbox]`).first();
     await btn.click().catch(() => {});
-    await page.locator('[role=listbox] [role=option]').first().waitFor({ timeout: 3000 }).catch(() => {});
-    f.options = (await visibleText(page, '[role=listbox] [role=option]')).filter(o => !/^select one$/i.test(o));
-    await page.keyboard.press('Escape'); await sleep(150);
+    await page.locator(OPTION).first().waitFor({ timeout: 3000 }).catch(() => {});
+    f.options = (await visibleText(page, OPTION)).filter(o => !/^select one$/i.test(o));
+    await closeMenu(page);
+  }
+  for (const f of fields.filter(f => f.type === 'prompt' && !f.value)) {     // short pickers list their choices on click
+    await open(page.locator(`[data-ib="${f.ref}"] input`).first()).catch(() => {});
+    await sleep(900);
+    const opts = await menu(page);
+    if (opts.length && opts.length < 40) f.options = opts;
+    await closeMenu(page);
   }
   return fields;
 }
 
+// Escape doesn't close Workday's pickers; a click on the empty page margin does, like a person would.
+const closeMenu = async page => {
+  await page.keyboard.press('Escape').catch(() => {});
+  for (const [x, y] of [[60, 300], [6, 500]]) {
+    if (!(await page.locator('[role=listbox]:visible, [data-automation-id="activeListContainer"]:visible').count())) return;
+    await page.mouse.click(x, y); await sleep(300);
+  }
+};
+// The sticky page footer covers fields near the bottom of the viewport: centre the field first.
+// A selected value's pill sits over the input, so click the box like a person would.
+const open = async el => {
+  await el.evaluate(e => e.scrollIntoView({ block: 'center' })); await sleep(200);
+  const bb = await el.boundingBox();
+  await el.page().mouse.click(bb.x + bb.width - 40, bb.y + bb.height / 2);
+};
+// Selected prompt pills are role=option too: skip them.
+const OPTION = '[role=listbox] [role=option]:visible:not([data-automation-id="selectedItem"])';
+const MENU = '[data-automation-id="activeListContainer"] [data-automation-id="menuItem"]:visible';
+const menu = async page => (await page.locator(MENU).allInnerTexts().catch(() => [])).map(t => t.trim()).filter(t => t && !/^no items/i.test(t));
+const chosen = box => box.locator('[data-automation-id="selectedItem"]').evaluateAll(es =>
+  es.map(e => (e.getAttribute('aria-label') || e.innerText).replace(/, press delete to clear value\.?$/, '')));
+const best = (opts, want) => { const n = normQ(want); let i = opts.findIndex(t => normQ(t) === n);
+  return i >= 0 ? i : opts.findIndex(t => normQ(t).includes(n) || (normQ(t).length > 3 && n.includes(normQ(t)))); };
+
 // The answer engine's view of a field. Keys are stable across runs so approved answers refill the same box.
 export function toQuestion(f, step) {
   const where = /my experience/i.test(step) && f.section ? `${f.section}: ` : '';
-  const type = { radio: 'select', dropdown: 'select', check: 'select', checks: 'multiselect', prompt: 'text', date: 'date', file: 'file', textarea: 'textarea', text: 'text' }[f.type];
+  const type = { radio: 'select', dropdown: 'select', check: 'select', checks: 'multiselect', prompt: f.options?.length ? 'select' : 'text', date: 'date', file: 'file', textarea: 'textarea', text: 'text' }[f.type];
   return { key: `${normQ(step)}|${normQ(f.section)}|${f.id}`, label: where + f.label, type, options: f.options, required: f.required, widget: f.type, ref: f.ref,
     ...(f.type === 'check' ? { description: 'single checkbox: answer Yes to tick it' } : {}),
-    ...(f.type === 'prompt' ? { description: 'searchable picker: answer with the text to search for' } : {}) };
+    ...(f.type === 'prompt' && !f.options?.length ? { description: 'searchable picker: answer with the text to search for' } : {}) };
 }
 
 // ---- filling -------------------------------------------------------------------------------------
 
-async function pickPrompt(page, box, want) {
-  const input = box.locator('input').first();
+// Workday "prompt" pickers: a short list (maybe with sub-lists, like How did you hear → Job Sites → ...)
+// or a search box over a long one (schools, countries). `sub(label, options)` answers a sub-list.
+async function pickPrompt(page, box, want, sub, label) {
+  const input = box.locator('input').first(), leaves = [];
   for (const one of String(want).split(' | ')) {
-    await input.click(); await input.fill(''); await input.pressSequentially(one, { delay: 20 }); await input.press('Enter');
-    const opts = page.locator('[data-automation-id="promptOption"], [role=option]');
-    await opts.first().waitFor({ timeout: 5000 }).catch(() => {});
-    const texts = await visibleText(page, '[data-automation-id="promptOption"], [role=option]');
-    if (!texts.length) return false;
-    const n = normQ(one);
-    let i = texts.findIndex(t => normQ(t) === n);
-    if (i < 0) i = texts.findIndex(t => normQ(t).includes(n) || n.includes(normQ(t)));
-    if (i < 0) i = 0;
-    await opts.nth(i).click(); await sleep(500);
-    // Hierarchical pickers ("How did you hear" → Job Board → …): a new level opens; take the closest leaf.
-    const next = await visibleText(page, '[data-automation-id="promptOption"]');
-    if (next.length && next.join() !== texts.join()) {
-      const j = Math.max(0, next.findIndex(t => /other|website|job board|internet|online/i.test(t)));
-      await page.locator('[data-automation-id="promptOption"]').nth(j).click(); await sleep(400);
+    if ((await chosen(box)).some(g => best([g], one) === 0)) { leaves.push(one); continue; }   // already set (e.g. by the country)
+    await open(input); await sleep(700);
+    let opts = await menu(page), i = best(opts, one);
+    if (i < 0) {                                                // not in the short list: search for it
+      await input.fill(''); await input.pressSequentially(one.replace(/\s*\(.*\)\s*$/, ''), { delay: 20 }); await input.press('Enter'); await sleep(1800);
+      opts = await menu(page); i = best(opts, one);
+      if (i < 0 && opts.length) i = 0;                          // the search already narrowed it
     }
-    await page.keyboard.press('Escape').catch(() => {});
+    if (i < 0) { await closeMenu(page); return false; }
+    const path = [opts[i]];
+    for (let depth = 0; depth < 3; depth++) {
+      await page.locator(MENU).nth(i).click(); await sleep(1100);
+      if ((await chosen(box)).some(g => best([g], opts[i]) === 0)) break;   // a leaf: picked
+      const next = await menu(page);
+      if (!next.length || next.join('|') === opts.join('|')) break;
+      const pick = next.length === 1 ? next[0] : await sub?.(`${label} → ${path.join(' → ')}`, next);
+      i = pick ? best(next, pick) : -1;
+      if (i < 0) { await closeMenu(page); return false; }
+      opts = next; path.push(next[i]);
+    }
+    leaves.push(path.at(-1));
+    await closeMenu(page);
   }
-  return true;
+  const got = await chosen(box);
+  return leaves.every(w => got.some(g => best([g], w) === 0));
 }
 
-export async function setField(page, q, v) {
+export async function setField(page, q, v, sub) {
   const box = page.locator(`[data-ib="${q.ref}"]`);
   if (q.widget === 'text' || q.widget === 'textarea') { const e = box.locator('input, textarea').first(); await e.fill(String(v)); await e.press('Tab'); return true; }
   if (q.widget === 'file') { await box.locator('input[type=file]').setInputFiles(v); await settle(page); return true; }
@@ -214,7 +277,7 @@ export async function setField(page, q, v) {
   }
   if (q.widget === 'dropdown') {
     await box.locator('button[aria-haspopup=listbox]').click();
-    const opt = page.locator('[role=listbox] [role=option]').filter({ hasText: new RegExp(`^\\s*${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`) }).first();
+    const opt = page.locator(OPTION).filter({ hasText: new RegExp(`^\\s*${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`) }).first();
     if (!(await opt.count())) { await page.keyboard.press('Escape'); return false; }
     await opt.click(); await sleep(300); return true;
   }
@@ -228,7 +291,7 @@ export async function setField(page, q, v) {
     }
     await page.keyboard.press('Tab'); return true;
   }
-  if (q.widget === 'prompt') return pickPrompt(page, box, v);
+  if (q.widget === 'prompt') return pickPrompt(page, box, v, sub, q.label);
   return false;
 }
 
@@ -242,11 +305,21 @@ export async function run(page, job, form, ctx) {
   const audit = { answers: {}, questions: [] };
   const shot = async () => { const p = ctx.shot(); await page.screenshot({ path: p, fullPage: true }); return p; };
   const out = (status, extra = {}) => ({ status, audit, ...extra });
+  // Sub-lists that open after a pick are asked like any other question (and learned the same way).
+  let subNeeds = null;
+  const sub = async (label, options) => {
+    const key = 'sub|' + normQ(label);
+    if (ctx.reviewed?.[key]) return ctx.reviewed[key];
+    const r = await ctx.answer([{ key, label, type: 'select', options, required: true }]);
+    if (r.needs?.length) { subNeeds = r.needs; return null; }
+    audit.questions.push([key, label, 'select']); audit.answers[key] = r.answers[key];
+    return r.answers[key];
+  };
 
   await page.goto(form.applyUrl, { waitUntil: 'load', timeout: 45000 });
   await settle(page);
   if (/no longer (accepting|available)|job (posting )?is closed/i.test(await page.locator('body').innerText())) return out('closed');
-  const why = await signIn(page, u.host, { allowCreate: ctx.allowCreate, email: ctx.email, verifyLink });
+  const why = await signIn(page, u.host, { allowCreate: ctx.allowCreate, email: ctx.email, verifyLink, apply: form.applyUrl });
   if (why) return out('handoff', { why, screenshot: await shot() });
 
   for (let pageNo = 0, last = '', same = 0; pageNo < 14; pageNo++) {
@@ -277,14 +350,20 @@ export async function run(page, job, form, ctx) {
       if (await up.count() && !has.length) { await up.setInputFiles(ctx.resume); await settle(page); await sleep(2500); await settle(page); }
     }
 
+    // The step bar renders before the form: wait for the fields, or we'd press Next on an empty page.
+    await page.locator('[data-automation-id^="formField-"]').first().waitFor({ timeout: 15000 }).catch(() => {});
+    await sleep(800);
     const fields = await scan(page);
     // Prefilled by the account, an earlier save, or the resume parse: keep it (Ben sees it at review).
-    const todo = fields.filter(f => !f.value || (f.type === 'check' && f.required && f.value !== 'Yes'));
+    // Workday guesses the country (and phone code) from the IP, which is Sweden for Ben right now.
+    const fixed = f => FIXED[f.id] && !/united states/i.test(f.value) ? FIXED[f.id] : null;
+    const todo = fields.filter(f => !f.value || fixed(f) || (f.type === 'check' && f.required && f.value !== 'Yes'));
     const qs = todo.map(f => toQuestion(f, step)).filter(q => q.type !== 'file');
-    for (const f of fields.filter(f => f.value)) { const q = toQuestion(f, step); audit.questions.push([q.key, q.label, q.type]); audit.answers[q.key] = f.value; }
+    const forced = Object.fromEntries(todo.filter(fixed).map(f => [toQuestion(f, step).key, fixed(f)]));
+    for (const f of fields.filter(f => f.value && !fixed(f))) { const q = toQuestion(f, step); audit.questions.push([q.key, q.label, q.type]); audit.answers[q.key] = f.value; }
 
     if (qs.length) {
-      const known = ctx.reviewed ? Object.fromEntries(qs.filter(q => q.key in ctx.reviewed).map(q => [q.key, ctx.reviewed[q.key]])) : {};
+      const known = { ...(ctx.reviewed ? Object.fromEntries(qs.filter(q => q.key in ctx.reviewed).map(q => [q.key, ctx.reviewed[q.key]])) : {}), ...forced };
       const rest = qs.filter(q => !(q.key in known));
       const res = rest.length ? await ctx.answer(rest) : { answers: {}, needs: [] };
       if (res.manual) return out('handoff', { why: res.manual, screenshot: await shot() });
@@ -298,12 +377,25 @@ export async function run(page, job, form, ctx) {
         const v = answers[q.key];
         if (v == null || v === '') continue;
         audit.answers[q.key] = v;
-        const ok = await setField(page, q, v).catch(() => false);
+        let ok = await setField(page, q, v, sub).catch(() => false);
+        // A category whose sub-list has no honest choice (How did you hear → Job Sites → Indeed, LinkedIn...):
+        // drop it and ask again with what's left.
+        for (let tries = 0, opts = q.options; subNeeds && !ok && opts?.length > 1 && tries < 3; tries++) {
+          opts = opts.filter(o => o !== v); subNeeds = null;
+          const r = await ctx.answer([{ ...q, options: opts }]);
+          if (r.needs?.length || !r.answers[q.key]) { subNeeds = r.needs; break; }
+          audit.answers[q.key] = v = r.answers[q.key];
+          ok = await setField(page, q, v, sub).catch(() => false);
+        }
         if (!ok && q.required) problems.push(`${q.label} ("${v}")`);
       }
+      if (subNeeds) return out('needs', { needs: subNeeds });
       if (problems.length) return out('handoff', { why: 'form problems: ' + problems.join('; ').slice(0, 300), screenshot: await shot() });
     }
-    await press(page, 'pageFooterNextButton').catch(() => page.getByRole('button', { name: /save and continue|next|continue/i }).first().click());
+    await closeMenu(page);
+    const pressed = await press(page, 'pageFooterNextButton').then(() => true, () =>
+      page.getByRole('button', { name: /save and continue|next|continue/i }).first().click({ timeout: 8000 }).then(() => true, () => false));
+    if (!pressed) return out('handoff', { why: `no Save and Continue button on "${step || 'an unnamed page'}"`, screenshot: await shot() });
   }
   return out('handoff', { why: 'too many pages', screenshot: await shot() });
 }

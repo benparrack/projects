@@ -14,7 +14,8 @@ turns on auto-submit.
   - **Pipeline:** what's next, failures, what isn't automated yet.
   - **Insights:** what got responses: answers, resume version, speed after posting.
   - **Profile:** edit the profile files.
-  - **Settings:** auto-submit, daily cap, Workday, Gmail.
+  - **Settings:** auto-submit, daily cap, Workday, Gmail, Appearance (palette, light/dark, type, density,
+    corners, accent; saved per browser).
 - **Phone (ntfy app):** subscribe to the two topics shown in Settings. Alerts arrive on the first.
   To answer, reply on the second with `<number> <answer>` (or `skip <number>`), or tap a button.
 - Answers you give or edit are saved to `profile/answers.yaml` and reused. Edits to written answers
@@ -25,7 +26,7 @@ turns on auto-submit.
 | unit | what |
 |---|---|
 | `intern-run.timer` | every 30 min: fetch lists, submit approved jobs, dry-run up to 5 new ones (newest first) |
-| `intern-mail.timer` | hourly, only once Gmail is set up: reads replies, sets confirmed/oa/interview/offer/rejected |
+| `intern-mail.timer` | hourly, only once Gmail is set up: reads replies, sets confirmed/oa/interview/offer/rejected, then `src/confirm.js` clicks Workday verification links (last 3 weeks, only for hosts in `data/workday.json`) and puts those jobs back in line |
 | `intern-dashboard.service` | the dashboard |
 
 Unit files live in `systemd/`. Install or update them with:
@@ -66,16 +67,23 @@ Off until Ben turns it on in Settings, because it creates a candidate account in
 company. When it's on, `src/ats/workday.js`:
 1. reads the posting from Workday's public job API (closed postings are skipped),
 2. signs in, or creates the account (random password saved to `data/workday.json` first). A verification
-   email is read from Gmail with `mail.py --verify <host>`; without Gmail the job goes to "apply yourself",
+   email is read from Gmail with `mail.py --verify <host>`; without Gmail the job goes to "apply yourself"
+   (and the hourly `confirm.js` sweep clicks the link later and re-queues it once Gmail is connected),
 3. walks the wizard one page at a time. It reads every field from Workday's `data-automation-id` markup
    (text, dropdowns, search pickers, radios, checkboxes, dates), answers it with the same engine as the
    other forms, fills it, and clicks Save and Continue. On My Experience it uploads the resume and keeps
-   whatever Workday parses from it,
+   whatever Workday parses from it. Search pickers can be nested ("Career Websites → Corporate
+   Website"): a one-item sub-list is taken automatically, otherwise the sub-choice is asked like any
+   question (key `sub|<label>`); if a sub-list has no honest choice, it backs out and picks again.
+   Country and phone code are pinned to the US. Fields that appear after another is set (State and
+   County after Country) are filled on a second pass,
 4. stops at Review with a screenshot and waits for approval. Assessments, CAPTCHAs and pages it can't get
    past go to "apply yourself".
 
-Tested against the live job API (30/30 postings) and a fixture of Workday's markup. The signed-in pages
-haven't run live yet, so the first few Workday dry runs are worth a closer look.
+Tested against the live job API (30/30 postings) and a fixture of Workday's markup, and dry-run live on
+Copart: sign-in, My Information and My Experience go through, and it stops at Application Questions to ask
+Ben what only he knows. Debug a stuck job with a dry run: `node src/run.js --id <id>`; the screenshot is
+`data/shots/<id>.png`.
 
 ## Not automated yet
 
