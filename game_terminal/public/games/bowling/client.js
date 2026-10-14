@@ -993,7 +993,16 @@ export function mount(container, api) {
     name.style.color = SEAT_COLOR[seat];
     box.append(dot, name);
     const me = mySeat();
-    if (!occ) {
+    if (!occ && view.solo && view.phase !== 'waiting') {
+      name.textContent = `${seat.toUpperCase()}: (solo run)`;
+    } else if (!occ) {
+      if (me && view.phase !== 'playing') {
+        const solo = document.createElement('button');
+        solo.textContent = 'BOWL SOLO';
+        solo.title = 'Ten frames on your own: chase your high score';
+        solo.addEventListener('click', () => api.sendAction({ kind: 'startSolo' }));
+        box.appendChild(solo);
+      }
       if (!me) {
         const btn = document.createElement('button');
         btn.textContent = `BOWL AS ${seat.toUpperCase()}`;
@@ -1024,7 +1033,7 @@ export function mount(container, api) {
     table.appendChild(head);
     const curTurn = anim ? anim.rec.by : sh.turn;
     const curFrame = anim ? anim.rec.frame : sh.frame;
-    for (const seat of SEATS) {
+    for (const seat of activeSeats()) {
       const rolls = sh.rolls[seat];
       const cum = S.scoreFrames(rolls);
       const tr = document.createElement('tr');
@@ -1066,9 +1075,22 @@ export function mount(container, api) {
     return table;
   }
 
+  // A solo run only has the one bowler's row and totals.
+  const activeSeats = () => (view && view.solo ? SEATS.filter((s) => view.players[s]) : SEATS);
+
   function resultsOpts() {
     if (!view || view.phase !== 'game_over' || anim || queue.length) return null;
     const me = mySeat();
+    if (view.solo) {
+      const s = view.winner;
+      return {
+        title: `${view.totals[s]} PINS`,
+        subtitle: `SOLO · ${view.stats[s].strikes} strike${view.stats[s].strikes === 1 ? '' : 's'} · ${view.stats[s].spares} spare${view.stats[s].spares === 1 ? '' : 's'}`,
+        outcome: 'win',
+        rows: [{ name: seatName(s), value: `${view.totals[s]}`, win: true, you: s === me }],
+        rematch: me ? { label: 'BOWL AGAIN', onClick: () => api.sendAction({ kind: 'resetGame' }) } : null,
+      };
+    }
     const w = view.winner;
     const draw = !w || w === 'draw';
     const order = draw ? SEATS : [w, w === 'p1' ? 'p2' : 'p1'];
@@ -1096,7 +1118,10 @@ export function mount(container, api) {
     status.className = 'bw-status';
     status.style.color = '';
     if (view.phase === 'waiting') {
-      status.textContent = 'Waiting for both bowlers.';
+      status.textContent = seat ? 'BOWL SOLO for a high score, or wait for an opponent / play a bot.' : 'Waiting for both bowlers.';
+    } else if (over && view.solo) {
+      status.textContent = `GAME OVER: ${view.totals[view.winner]} PINS`;
+      status.style.color = '#ffb000';
     } else if (over) {
       status.textContent = view.winner === 'draw' ? "IT'S A DRAW!" : `${seatName(view.winner)} WINS ${view.totals[view.winner]}–${view.totals[view.winner === 'p1' ? 'p2' : 'p1']}!`;
       status.style.color = '#ffb000';
@@ -1135,7 +1160,7 @@ export function mount(container, api) {
       who.textContent = view.phase === 'game_over' && !anim ? '' : seatName(by);
       const sc = document.createElement('div');
       sc.style.opacity = '0.85';
-      sc.textContent = SEATS.map((s) => `${s.toUpperCase()} ${S.knownTotal(sh.rolls[s])}`).join('  ');
+      sc.textContent = activeSeats().map((s) => `${s.toUpperCase()} ${S.knownTotal(sh.rolls[s])}`).join('  ');
       frameInfo.append(top, who, sc);
     }
     if (!anim || !anim.ended) rackHud((anim ? anim.rec.before : view.pins).map((p) => p.id));
@@ -1150,7 +1175,7 @@ export function mount(container, api) {
     options.innerHTML = '';
     if (over && seat) {
       const again = document.createElement('button');
-      again.textContent = 'REMATCH (SWAP ORDER)';
+      again.textContent = view.solo ? 'BOWL AGAIN' : 'REMATCH (SWAP ORDER)';
       again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
       options.appendChild(again);
     }

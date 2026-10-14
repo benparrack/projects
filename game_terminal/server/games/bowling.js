@@ -37,6 +37,7 @@ function resetGame(st) {
   st.busyUntil = 0;
   st.stats = { p1: newStats(), p2: newStats() };
   st.gameId = (st.gameId || 0) + 1;
+  st.solo = false; // one bowler, ten frames, chasing a high score
 }
 const newStats = () => ({ strikes: 0, spares: 0, gutters: 0, splits: 0, balls: 0 });
 
@@ -62,6 +63,7 @@ function buildPublicState(room) {
     busyUntil: st.busyUntil,
     stats: st.stats,
     gameId: st.gameId,
+    solo: !!st.solo,
     serverNow: Date.now(),
   };
 }
@@ -117,7 +119,9 @@ function applyRoll(st, seat, rawInput, now) {
 
   if (Sim.frameDone(st.rolls[seat], f)) {
     rec.turnOver = true;
-    if (seat === 'p2' && f === 9) {
+    if (st.solo) {
+      if (f === 9) { st.phase = 'game_over'; st.winner = seat; } else st.frame++;
+    } else if (seat === 'p2' && f === 9) {
       st.phase = 'game_over';
       const t = totals(st);
       st.winner = t.p1 === t.p2 ? 'draw' : t.p1 > t.p2 ? 'p1' : 'p2';
@@ -172,6 +176,13 @@ function startIfReady(st) {
   }
 }
 
+function startSolo(st, seat) {
+  resetGame(st);
+  st.solo = true;
+  st.turn = seat;
+  st.phase = 'playing';
+}
+
 function backToWaiting(st) {
   st.phase = 'waiting';
   resetGame(st);
@@ -213,7 +224,7 @@ module.exports = {
     const seatArg = SEATS.includes(data.seat) ? data.seat : null;
 
     if (data.kind === 'sit') {
-      if (!seatArg || st.players[seatArg]) return;
+      if (!seatArg || st.players[seatArg] || (st.solo && st.phase === 'playing')) return; // no joining a solo run midway
       if (data.bot) {
         st.players[seatArg] = BOT;
         setBotLevel(st, seatArg, data.level);
@@ -251,8 +262,17 @@ module.exports = {
       return;
     }
 
+    if (data.kind === 'startSolo') {
+      const seat = seatOf(st, me);
+      if (!seat || st.phase === 'playing' || st.players[other(seat)]) return;
+      startSolo(st, seat);
+      broadcastState(room);
+      return;
+    }
+
     if (data.kind === 'resetGame') {
       if (st.phase !== 'game_over' || !seatOf(st, me)) return;
+      if (st.solo) { startSolo(st, seatOf(st, me)); broadcastState(room); return; }
       st.players = { p1: st.players.p2, p2: st.players.p1 };
       st.botLevels = { p1: (st.botLevels || {}).p2, p2: (st.botLevels || {}).p1 };
       resetGame(st);

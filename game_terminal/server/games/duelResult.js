@@ -18,10 +18,10 @@ function reportDuel(room, scoreOf) {
   const st = room.state;
   if (st.phase !== 'game_over' || !st.winner || st.reportedGameId === st.gameId) return;
   st.reportedGameId = st.gameId;
-  const seats = Object.keys(st.players);
-  const placements = st.winner === 'draw'
+  const seats = Object.keys(st.players).filter((s) => st.players[s]); // a solo run leaves one seat empty
+  const placements = (st.winner === 'draw'
     ? [seats.map((s) => st.players[s])]
-    : [[st.players[st.winner]], seats.filter((s) => s !== st.winner).map((s) => st.players[s])];
+    : [[st.players[st.winner]], seats.filter((s) => s !== st.winner).map((s) => st.players[s])]).filter((g) => g.length);
   const result = { placements };
   const botSeat = seats.find((s) => st.players[s] === BOT);
   if (botSeat) result.botLevel = botLevelOf(st, botSeat);

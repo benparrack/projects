@@ -190,6 +190,28 @@ test('bowling: all gutters is a draw — one shared place, 0 pins each', () => {
   assert.deepStrictEqual(only(room), { placements: [['A', 'B']], scores: { A: 0, B: 0 } });
 });
 
+test('bowling solo: one bowler, ten frames, reports a solo score; nobody can sit in mid-run', () => {
+  const plugin = require('../server/games/bowling');
+  const room = makeRoom(plugin);
+  const act = actor(plugin);
+  act(room, 'A', { kind: 'sit', seat: 'p1' });
+  act(room, 'A', { kind: 'startSolo' });
+  assert.strictEqual(room.state.phase, 'playing');
+  act(room, 'B', { kind: 'sit', seat: 'p2' });
+  assert.strictEqual(room.state.players.p2, null, 'seat stays empty during a solo run');
+  let balls = 0;
+  for (; room.state.phase === 'playing' && balls < 40; balls++) {
+    assert.strictEqual(room.state.turn, 'p1');
+    act(room, 'A', { kind: 'roll', x: -1, aim: -1, power: 0.5, spin: 0 });
+    room.state.busyUntil = 0;
+  }
+  assert.strictEqual(balls, 20, 'ten frames of two gutter balls');
+  assert.deepStrictEqual(only(room), { placements: [['A']], scores: { A: 0 } });
+  act(room, 'A', { kind: 'resetGame' });
+  assert.strictEqual(room.state.phase, 'playing', 'rematch replays solo');
+  assert.strictEqual(room.state.solo, true);
+});
+
 test('knockout: knocking the last enemy penguin off wins', () => {
   const plugin = require('../server/games/knockout');
   const { room, act } = seated(plugin, ['red', 'blue']);
