@@ -150,6 +150,27 @@ test('archery solo: five ends of three arrows alone, reports a solo score', () =
   assert.strictEqual(r.scores.A, room.state.totals.p2);
 });
 
+test('mini golf solo: nine holes alone (as blue), the empty ball sits out, reports a solo score', () => {
+  const plugin = require('../server/games/minigolf');
+  const room = makeRoom(plugin);
+  const act = actor(plugin);
+  act(room, 'A', { kind: 'sit', seat: 'blue' });
+  act(room, 'A', { kind: 'startSolo' });
+  act(room, 'B', { kind: 'sit', seat: 'red' });
+  assert.strictEqual(room.state.players.red, null);
+  let putts = 0;
+  for (; room.state.phase === 'playing' && putts < 80; putts++) {
+    assert.strictEqual(room.state.turn, 'blue');
+    assert.strictEqual(room.state.balls.red.done, true, 'red ball sits out');
+    act(room, 'A', { kind: 'putt', angle: putts * 0.7, power: 0.6, t0: Date.now() });
+    room.state.busyUntil = 0;
+  }
+  assert.strictEqual(room.state.phase, 'game_over');
+  const r = only(room);
+  assert.deepStrictEqual(r.placements, [['A']]);
+  assert.strictEqual(r.scores.A, room.state.scores.blue.reduce((x, y) => x + y, 0));
+});
+
 test('tanks: healthier tank wins at the turn cap', () => {
   const plugin = require('../server/games/tanks');
   const Sim = require('../public/games/tanks/sim.js');

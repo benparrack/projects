@@ -37,9 +37,12 @@ const MAX_KNOCKS = 12; // per ball per record; a ball pinned that long is droppe
 
 const opponent = (c) => (c === 'red' ? 'blue' : 'red');
 
-function teeBalls(hi) {
+// solo = the lone golfer's colour (or falsy): the empty seat's ball sits every hole out.
+function teeBalls(hi, solo) {
   const [x, y] = Sim.HOLES[hi].tee;
-  return { red: { x, y, done: false, sunk: false }, blue: { x, y, done: false, sunk: false } };
+  const balls = { red: { x, y, done: false, sunk: false }, blue: { x, y, done: false, sunk: false } };
+  if (solo) Object.assign(balls[opponent(solo)], { done: true, sunk: true });
+  return balls;
 }
 
 function resetGame(st) {
@@ -55,6 +58,15 @@ function resetGame(st) {
   st.busyUntil = 0;
   st.settledAt = 0; // server ms when the last record's balls all came to rest
   st.gameId = (st.gameId || 0) + 1;
+  st.solo = null; // the lone golfer's colour in a solo round (9 holes, chasing a low score)
+}
+
+function startSolo(st, seat) {
+  resetGame(st);
+  st.solo = seat;
+  st.balls = teeBalls(0, seat);
+  st.turn = st.first = seat;
+  st.phase = 'playing';
 }
 
 const total = (arr) => arr.reduce((s, v) => s + (v || 0), 0);
@@ -75,6 +87,7 @@ function buildPublicState(room) {
     shotSeq: st.shotSeq,
     busyUntil: st.busyUntil,
     gameId: st.gameId,
+    solo: !!st.solo,
     serverNow: Date.now(),
   };
 }
@@ -152,14 +165,14 @@ function advance(st, hi, prefer) {
       st.phase = 'game_over';
       const r = total(st.scores.red);
       const b = total(st.scores.blue);
-      st.winner = r < b ? 'red' : b < r ? 'blue' : 'draw';
+      st.winner = st.solo || (r < b ? 'red' : b < r ? 'blue' : 'draw');
     } else {
       const sr = st.scores.red[hi];
       const sb = st.scores.blue[hi];
-      st.first = sr < sb ? 'red' : sb < sr ? 'blue' : st.first;
+      st.first = st.solo || (sr < sb ? 'red' : sb < sr ? 'blue' : st.first);
       st.turn = st.first;
       st.hole = hi + 1;
-      st.balls = teeBalls(st.hole);
+      st.balls = teeBalls(st.hole, st.solo);
       st.strokes = { red: 0, blue: 0 };
     }
     return true;
@@ -362,6 +375,7 @@ module.exports = {
     const reject = (reason) => ctx.sendTo(me, { v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'moveRejected', reason } } });
     const seatArg = COLORS.includes(data.seat) ? data.seat : null;
 
+    if (data.kind === 'sit' && st.solo && st.phase === 'playing') return; // no joining a solo round midway
     if (data.kind === 'sit') {
       if (!seatArg || st.players[seatArg]) return;
       if (data.bot) {
@@ -399,8 +413,17 @@ module.exports = {
       return;
     }
 
+    if (data.kind === 'startSolo') {
+      const seat = seatOf(st, me);
+      if (!seat || st.phase === 'playing' || st.players[opponent(seat)]) return;
+      startSolo(st, seat);
+      broadcastState(room);
+      return;
+    }
+
     if (data.kind === 'resetGame') {
       if (st.phase !== 'game_over' || !seatOf(st, me)) return;
+      if (st.solo) { startSolo(st, seatOf(st, me)); broadcastState(room); return; }
       st.players = { red: st.players.blue, blue: st.players.red };
       st.botLevels = { red: (st.botLevels || {}).blue, blue: (st.botLevels || {}).red };
       resetGame(st);

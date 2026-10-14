@@ -1040,7 +1040,16 @@ export function mount(container, api) {
     name.style.color = TEXT_COLOR[color];
     box.append(dot, name);
     const seat = mySeat();
-    if (!occ) {
+    if (!occ && view.solo && view.phase !== 'waiting') {
+      name.textContent = `${color.toUpperCase()}: (solo round)`;
+    } else if (!occ) {
+      if (seat && view.phase !== 'playing') {
+        const solo = document.createElement('button');
+        solo.textContent = 'PLAY SOLO';
+        solo.title = 'Nine holes on your own: chase your best (lowest) score';
+        solo.addEventListener('click', () => api.sendAction({ kind: 'startSolo' }));
+        box.appendChild(solo);
+      }
       if (!seat) {
         const btn = document.createElement('button');
         btn.textContent = `PLAY ${color.toUpperCase()}`;
@@ -1106,7 +1115,7 @@ export function mount(container, api) {
     ptd.textContent = String(S.TOTAL_PAR);
     parRow.append(ptd, document.createElement('td'));
     tbl.appendChild(parRow);
-    for (const c of COLORS) {
+    for (const c of activeColors()) {
       const tr = document.createElement('tr');
       const nm = document.createElement('td');
       nm.className = 'nm';
@@ -1136,11 +1145,22 @@ export function mount(container, api) {
     card.appendChild(tbl);
   }
 
+  // A solo round only shows the one golfer.
+  const activeColors = () => COLORS.filter((c) => !view.solo || view.players[c]);
+  const vsPar = (tot) => { const d = tot - S.TOTAL_PAR; return d === 0 ? 'E' : d > 0 ? `+${d}` : String(d); };
+
   function renderDom() {
     if (destroyed) return;
     const seat = mySeat();
     const over = view && view.phase === 'game_over' && !anim && !queue.length && !interlude;
-    results.update(over ? duelResults({
+    const soloTot = over && view.solo ? view.scores[view.winner].reduce((a, v) => a + (v || 0), 0) : 0;
+    results.update(over && view.solo ? {
+      title: `${soloTot} STROKES`,
+      subtitle: `SOLO · ${vsPar(soloTot)} vs par ${S.TOTAL_PAR}`,
+      outcome: 'win',
+      rows: [{ name: seatName(view.winner), value: `${soloTot} (${vsPar(soloTot)})`, win: true, you: view.winner === seat }],
+      rematch: seat ? { label: 'PLAY AGAIN', onClick: () => api.sendAction({ kind: 'resetGame' }) } : null,
+    } : over ? duelResults({
       winner: view.winner, colors: COLORS, players: view.players, me: seat, nameFor: (id) => (id === 'BOT' ? 'Bot' : nicknameFor(id)),
       subtitle: COLORS.map((c) => {
         const tot = view.scores[c].reduce((a, v) => a + (v || 0), 0);
@@ -1157,7 +1177,10 @@ export function mount(container, api) {
     status.className = 'mg-status';
     status.style.color = '';
     if (view.phase === 'waiting') {
-      status.textContent = 'Waiting for both seats to be filled.';
+      status.textContent = seat ? 'PLAY SOLO for a best score, or wait for an opponent / play a bot.' : 'Waiting for both seats to be filled.';
+    } else if (over && view.solo) {
+      status.textContent = `ROUND OVER: ${soloTot} STROKES (${vsPar(soloTot)})`;
+      status.style.color = '#ffb000';
     } else if (over) {
       status.textContent = view.winner === 'draw' ? "IT'S A TIE!" : `${view.winner.toUpperCase()} WINS!`;
       status.style.color = '#ffb000';
@@ -1200,7 +1223,7 @@ export function mount(container, api) {
 
     strokesBar.innerHTML = '';
     if (view.phase !== 'waiting') {
-      for (const c of COLORS) {
+      for (const c of activeColors()) {
         const el = document.createElement('div');
         el.className = 'mg-sc';
         el.style.color = TEXT_COLOR[c];
@@ -1230,7 +1253,7 @@ export function mount(container, api) {
     options.innerHTML = '';
     if (view.phase === 'game_over' && seat && over) {
       const again = document.createElement('button');
-      again.textContent = 'REMATCH (SWAP COLOURS)';
+      again.textContent = view.solo ? 'PLAY AGAIN' : 'REMATCH (SWAP COLOURS)';
       again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
       options.appendChild(again);
     }
