@@ -331,8 +331,7 @@ function vacate(st, seat) {
 
 module.exports = {
   type: TYPE,
-  stats: { rated: true },
-  score: { label: 'Strokes', better: 'low', format: 'int' },
+  stats: { rated: true, score: { label: 'Strokes', better: 'low', format: 'int' } },
 
   createInitialState() {
     const st = { phase: 'waiting', players: { red: null, blue: null }, botLevels: {} };

@@ -245,8 +245,7 @@ function backToWaiting(st) {
 
 module.exports = {
   type: TYPE,
-  stats: { rated: true },
-  score: { label: '3-dart avg', better: 'high', format: 'pts' },
+  stats: { rated: true, score: { label: '3-dart avg', better: 'high', format: 'pts' } },
 
   createInitialState() {
     const st = { phase: 'waiting', mode: '501', players: { p1: null, p2: null }, botLevels: {} };

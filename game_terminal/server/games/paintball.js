@@ -199,8 +199,7 @@ function vacate(st, seat) {
 
 module.exports = {
   type: TYPE,
-  stats: { rated: true },
-  score: { label: 'Points', better: 'high', format: 'pts' },
+  stats: { rated: true, score: { label: 'Points', better: 'high', format: 'pts' } },
   tickIntervalMs: 50,
 
   createInitialState() {

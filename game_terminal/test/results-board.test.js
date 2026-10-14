@@ -199,7 +199,7 @@ function checkReplay(plugin, room, keys, header = 0) {
     const want = st.winner === 'draw' ? [['A', 'BOT']] : st.winner === 'black' ? [['A'], ['BOT']] : [['BOT'], ['A']];
     assert.deepStrictEqual(r.placements, want);
     checkReplay(rv, t.room, ['board', 'winner', 'counts', 'moveNo', 'lastMove', 'phase']);
-    assert.deepStrictEqual(rv.score, { label: 'DISCS', better: 'high', format: 'int' });
+    assert.deepStrictEqual(rv.stats.score, { label: 'DISCS', better: 'high', format: 'int' });
   });
 }
 

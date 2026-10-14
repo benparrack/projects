@@ -232,8 +232,7 @@ module.exports = {
     return buildPublicState(room);
   },
 
-  stats: { rated: true },
-  score: { label: 'DISCS', better: 'high', format: 'int' },
+  stats: { rated: true, score: { label: 'DISCS', better: 'high', format: 'int' } },
 
   // Re-plays the reported placements on a fresh board (black always opens); one spectator
   // snapshot per position.

@@ -529,8 +529,7 @@ module.exports = {
     return buildPublicState(room);
   },
 
-  stats: { rated: true },
-  score: { label: 'BOXES', better: 'high', format: 'int' },
+  stats: { rated: true, score: { label: 'BOXES', better: 'high', format: 'int' } },
 
   // Re-plays [{ size, seats, first }, ...edges] on a fresh board; one spectator snapshot per
   // position.

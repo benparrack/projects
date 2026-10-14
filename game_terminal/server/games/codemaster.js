@@ -434,8 +434,7 @@ module.exports = {
     return buildView(room, client && client.clientId);
   },
 
-  stats: { rated: true },
-  score: { label: 'GUESSES', better: 'low', format: 'int' },
+  stats: { rated: true, score: { label: 'GUESSES', better: 'low', format: 'int' } },
 
   // Re-plays [setup, ...events] from the start of play (the secrets are in the setup); one
   // spectator view per event, timestamps relative to the start (startedAt 0, `now` = event time).

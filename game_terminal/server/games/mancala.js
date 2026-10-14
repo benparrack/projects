@@ -171,8 +171,7 @@ module.exports = {
     return buildPublicState(room);
   },
 
-  stats: { rated: true },
-  score: { label: 'STONES', better: 'high', format: 'int' },
+  stats: { rated: true, score: { label: 'STONES', better: 'high', format: 'int' } },
 
   // Re-plays [mode, ...pits] on a fresh board; one spectator snapshot per position. The opener is
   // whoever owns the first pit sown. (`score` in the frames is the replay's own session tally.)

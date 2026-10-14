@@ -42,8 +42,8 @@ test('metadata: every plugin declares stats, score only where it reports scores'
   for (const g of ['pool', 'darts', 'cuppong', 'basketball', 'tanks', 'minigolf', 'archery', 'shuffleboard', 'bowling', 'knockout', 'paintball', 'skeeball']) {
     const p = require(`../server/games/${g}`);
     assert.strictEqual(p.stats.rated, true, g);
-    if (withScore[g]) assert.strictEqual(p.score.better, withScore[g], g);
-    else assert.strictEqual(p.score, undefined, g);
+    if (withScore[g]) assert.strictEqual(p.stats.score.better, withScore[g], g);
+    else assert.strictEqual(p.stats.score, undefined, g);
   }
 });
 
