@@ -346,6 +346,7 @@ function checkComplete(st, p, prog) {
     p.raceWins++;
   }
   st.phase = 'complete';
+  st.solvedMs = Date.now() - st.startAt;
 }
 
 // Reveals the first hidden letter of the shortest unfinished word (that's what Wordscapes does).
@@ -465,6 +466,7 @@ function buildView(room, viewerId) {
     me: me ? { hintsLeft: me.hintsLeft, bonusWords: [...me.bonus].sort() } : null,
     winnerId: st.winnerId,
     startAt: st.startAt,
+    solvedMs: st.phase === 'complete' ? st.solvedMs : null,
     serverNow: Date.now(),
     missedBonus: over ? pz.bonusList.filter((w) => !(me && me.bonus.has(w))).slice(0, 40) : undefined,
   };
@@ -485,7 +487,7 @@ function reportIfComplete(room) {
   const st = room.state;
   if (st.phase !== 'complete' || st.reportedPuzzle === st.puzzleId) return;
   st.reportedPuzzle = st.puzzleId;
-  const coopMs = Date.now() - st.startAt;
+  const coopMs = st.solvedMs;
   reportRanked(room, [...st.players.values()].map((p) => (st.mode === 'coop' || p.clientId === st.winnerId
     ? { id: p.clientId, rank: Infinity, score: st.mode === 'coop' ? coopMs : p.finishMs, level: p.bot }
     : { id: p.clientId, rank: p.prog.found.size, level: p.bot })));

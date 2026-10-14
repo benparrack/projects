@@ -257,8 +257,11 @@ export function mount(container, api) {
   function startRound() {
     if (view && view.phase === 'playing') return;
     sfx.play('select');
-    api.sendAction({ kind: 'start', size: prefs.size, mode: prefs.mode });
+    api.sendAction({ kind: 'start', size: prefs.size, mode: solo() ? 'coop' : prefs.mode });
   }
+  // Alone in a normal room: no co-op/race choice to make, just you against the clock.
+  const solo = () => !!view && !view.ranked && !api.daily && view.players.length === 1;
+  const modeLabel = () => (view.ranked ? 'RANKED RACE ★' : solo() || api.daily ? 'SOLO' : view.mode === 'coop' ? 'CO-OP' : 'RACE');
 
   const playing = () => view && view.phase === 'playing';
   const counting = () => playing() && clock.now() < view.startedAt;
@@ -486,6 +489,7 @@ export function mount(container, api) {
   function renderControls() {
     const live = playing();
     modeSeg.hidden = sizeSeg.hidden = !!(view && view.ranked); // ranked is always a mini race
+    if (solo()) modeSeg.hidden = true;
     for (const [m, b] of Object.entries(modeBtns)) { b.classList.toggle('on', (live ? view.mode : prefs.mode) === m); b.disabled = live; }
     for (const [s, b] of Object.entries(sizeBtns)) { b.classList.toggle('on', (live ? view.size : prefs.size) === s); b.disabled = live; }
     startBtn.hidden = live;
@@ -502,10 +506,10 @@ export function mount(container, api) {
   function renderStatus() {
     if (!view || view.phase === 'waiting' || !view.cols) {
       titleEl.textContent = 'CROSSWORD';
-      statusEl.textContent = api.daily ? '· today\'s puzzle, press START' : '· pick a mode and size, then START';
+      statusEl.textContent = api.daily ? '· today\'s puzzle, press START' : view && view.ranked ? '· a mini race, press START' : solo() ? '· SOLO: pick a size, then START' : '· pick a mode and size, then START';
       return;
     }
-    titleEl.textContent = `CROSSWORD · ${(view.sizes[view.size] || '').toUpperCase()} · ${view.ranked ? 'RANKED RACE ★' : view.mode === 'coop' ? 'CO-OP' : 'RACE'}`;
+    titleEl.textContent = `CROSSWORD · ${(view.sizes[view.size] || '').toUpperCase()} · ${modeLabel()}`;
     const done = words.filter((w) => solvedBy(w) !== undefined).length;
     if (view.phase === 'results') {
       statusEl.textContent = view.endReason === 'revealed' ? '· answers revealed' : view.mode === 'race' ? '· race over' : '· solved!';
@@ -638,8 +642,9 @@ export function mount(container, api) {
       overlay.className = 'cw-idle';
       overlay.append(el('b', '', 'CROSSWORD'), ...(api.daily
         ? [el('span', '', 'Today\'s puzzle: one try, fastest solve tops the board. Press START.')]
+        : solo() ? [el('span', '', 'SOLO: solve it as fast as you can. Your best time is saved to your profile.'), el('span', '', 'Want company? Share the invite link, or add a bot for co-op and race.')]
         : api.ranked ? [el('span', '', 'RANKED: a head-to-head mini race. Same puzzle, first to finish wins.'), el('span', '', 'Press START once your opponent is here.')]
-        : [el('span', '', 'CO-OP: fill one grid together · RACE: same puzzle, first to finish wins'), el('span', '', 'Add a bot if you are on your own.')]));
+        : [el('span', '', 'CO-OP: fill one grid together · RACE: same puzzle, first to finish wins')]));
       if (!view || !view.cols) { gridEl.style.setProperty('--cw', '30px'); gridEl.style.gridTemplateColumns = 'repeat(9, var(--cw))'; if (!gridEl.childElementCount) for (let i = 0; i < 81; i++) gridEl.appendChild(el('div', (i * 7 + (i >> 2)) % 5 === 0 ? 'cw-block' : 'cw-cell')); }
       return;
     }
@@ -675,8 +680,8 @@ export function mount(container, api) {
     const topScore = players.length ? players[0].score : 0;
     const done = words.filter((w) => solvedBy(w) !== undefined).length;
     results.update({
-      title: view.endReason === 'revealed' ? 'ANSWERS REVEALED' : 'PUZZLE SOLVED!',
-      subtitle: `CO-OP · ${size} · ${done}/${words.length} clues · ${elapsed}`,
+      title: view.endReason === 'revealed' ? 'ANSWERS REVEALED' : players.length === 1 ? `SOLVED IN ${elapsed}` : 'PUZZLE SOLVED!',
+      subtitle: `${modeLabel()} · ${size} · ${done}/${words.length} clues · ${elapsed}`,
       outcome: view.endReason === 'revealed' ? 'over' : 'win',
       rows: players.map((p) => ({ name: p.nickname, value: `${p.score} pts · ${p.solved} clue${p.solved === 1 ? '' : 's'}`, win: topScore > 0 && p.score === topScore, you: p.clientId === meId })),
       rematch: { label: 'NEW PUZZLE', onClick: () => startRound() },

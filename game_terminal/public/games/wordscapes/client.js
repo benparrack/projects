@@ -335,6 +335,7 @@ export function mount(container, api) {
   window.addEventListener('keydown', onKey);
 
   // --- status ---
+  const solo = () => !!snap && snap.players.length === 1; // alone: no co-op/race choice, just the clock
   function baseStatus() {
     if (!snap) return '';
     const left = snap.total - snap.foundCount;
@@ -343,10 +344,10 @@ export function mount(container, api) {
         const w = snap.players.find((p) => p.clientId === snap.winnerId);
         return w ? (w.clientId === myId() ? 'You won the race! NEXT LEVEL when ready' : `${w.nickname} won the race`) : 'Level over';
       }
-      return `Level ${snap.level} complete! Press NEXT LEVEL`;
+      return `Level ${snap.level} complete${solo() && snap.solvedMs ? ` in ${(snap.solvedMs / 1000).toFixed(1)}s` : ''}! Press NEXT LEVEL`;
     }
     if (clock.now() < snap.startAt) return 'Race starting…';
-    const modeTxt = snap.mode === 'race' ? 'RACE — first to fill your grid wins' : 'CO-OP — fill the grid together';
+    const modeTxt = solo() ? 'SOLO — fill the grid, beat your best time' : snap.mode === 'race' ? 'RACE — first to fill your grid wins' : 'CO-OP — fill the grid together';
     return `${left} word${left === 1 ? '' : 's'} left · ${modeTxt}`;
   }
   function setStatus(msg, cls) {
@@ -492,7 +493,7 @@ export function mount(container, api) {
   function renderResults() {
     if (snap.phase !== 'complete') { results.update(null); return; }
     const me = myId();
-    const race = snap.mode === 'race';
+    const race = snap.mode === 'race' && !solo();
     const rows = snap.players.slice()
       .sort((a, b) => (race ? (b.clientId === snap.winnerId) - (a.clientId === snap.winnerId) || b.progress - a.progress : b.levelWords - a.levelWords) || b.score - a.score)
       .map((p) => ({
@@ -504,7 +505,7 @@ export function mount(container, api) {
     const won = race ? snap.winnerId === me : true;
     const mine = snap.me ? snap.me.bonusWords.length : 0;
     results.update({
-      title: race ? (won ? 'YOU WIN THE RACE!' : `${nameOf(snap.winnerId)} WINS`) : `LEVEL ${snap.level} CLEAR!`,
+      title: race ? (won ? 'YOU WIN THE RACE!' : `${nameOf(snap.winnerId)} WINS`) : solo() && snap.solvedMs ? `LEVEL ${snap.level} CLEAR IN ${(snap.solvedMs / 1000).toFixed(1)}s` : `LEVEL ${snap.level} CLEAR!`,
       subtitle: `${snap.total} words · ${mine}/${snap.bonusTotal} bonus words found by you`,
       outcome: race ? (snap.me ? (won ? 'win' : 'lose') : 'over') : 'win',
       rows,
@@ -531,6 +532,7 @@ export function mount(container, api) {
     }
     coopBtn.classList.toggle('on', snap.mode === 'coop');
     raceBtn.classList.toggle('on', snap.mode === 'race');
+    modes.hidden = solo();
     renderScene();
     renderGrid();
     const found = new Set(snap.slots.map((s, i) => (s.found ? i : -1)).filter((i) => i >= 0));

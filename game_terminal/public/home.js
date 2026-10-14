@@ -55,9 +55,9 @@ export function renderActivity(mount, payload, { gameLabel, openFriends }) {
         : ['Add friends to see their wins, level-ups and unlocks here. ', h('button.link-btn', { type: 'button', onclick: openFriends }, 'FIND FRIENDS')])));
 }
 
-// Solo: games where one player can chase a personal best. One click opens a private room.
-const SOLO = ['anagrams', 'wordhunt', 'wordbites', 'wordsearch', 'wordscapes', 'wordtrails', 'crossword', 'codemaster',
-  'mazedash', 'slope', 'slither', 'minigolf', 'bowling', 'skeeball', 'basketball', 'archery', 'darts', 'blackjack'];
+// Solo: games built to be played alone for a personal best (no opponent or bot needed).
+// One click opens a private room.
+const SOLO = ['crossword', 'anagrams', 'wordhunt', 'wordbites', 'wordscapes', 'wordsearch', 'wordtrails', 'mazedash', 'slope', 'blackjack'];
 
 export function renderSoloCard(mount, { account, gameLabel, play }) {
   let open = true;
