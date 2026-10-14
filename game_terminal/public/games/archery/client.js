@@ -929,7 +929,16 @@ export function mount(container, api) {
     name.textContent = `${seat.toUpperCase()}: ${occ ? (occ === 'BOT' ? '(bot)' : nicknameFor(occ)) : '(empty)'}${occ === api.getClientId() ? ' (you)' : ''}`;
     box.append(chip, name);
     const mine = mySeat();
-    if (!occ) {
+    if (!occ && view.solo && view.phase !== 'waiting') {
+      name.textContent = `${seat.toUpperCase()}: (solo run)`;
+    } else if (!occ) {
+      if (mine && view.phase !== 'playing') {
+        const solo = document.createElement('button');
+        solo.textContent = 'SHOOT SOLO';
+        solo.title = 'Five ends on your own: chase your high score';
+        solo.addEventListener('click', () => api.sendAction({ kind: 'startSolo' }));
+        box.appendChild(solo);
+      }
       if (!mine) {
         const btn = document.createElement('button');
         btn.textContent = `PLAY ${seat.toUpperCase()}`;
@@ -1016,7 +1025,7 @@ export function mount(container, api) {
       hr.appendChild(th);
     }
     t.appendChild(hr);
-    for (const seat of ['p1', 'p2']) {
+    for (const seat of activeSeats()) {
       const tr = document.createElement('tr');
       const nm = document.createElement('td');
       nm.textContent = seat.toUpperCase();
@@ -1044,10 +1053,22 @@ export function mount(container, api) {
     return t;
   }
 
+  // A solo run only shows the one archer.
+  const activeSeats = () => ['p1', 'p2'].filter((s) => !view.solo || view.players[s]);
+
   function resultsOpts() {
     if (!view || view.phase !== 'game_over') return null;
     const me = mySeat();
     const w = view.winner;
+    if (view.solo) {
+      return {
+        title: `${view.totals[w]} POINTS`,
+        subtitle: `SOLO · ${view.xs[w]}X · ${view.tens[w]} tens · ${view.ends * view.arrowsPerEnd} arrows`,
+        outcome: 'win',
+        rows: [{ name: seatName(w), value: `${view.totals[w]} · ${view.xs[w]}X`, win: true, you: w === me }],
+        rematch: me ? { label: 'SHOOT AGAIN', onClick: () => api.sendAction({ kind: 'resetGame' }) } : null,
+      };
+    }
     const draw = !w || w === 'draw';
     const order = draw ? ['p1', 'p2'] : [w, w === 'p1' ? 'p2' : 'p1'];
     let subtitle = `${view.ends} ends · ${view.ends * view.arrowsPerEnd} arrows each`;
@@ -1076,13 +1097,16 @@ export function mount(container, api) {
     status.className = 'ar-status';
     status.style.color = '';
     if (view.phase === 'waiting') {
-      status.textContent = 'Waiting for both archers.';
+      status.textContent = seat ? 'SHOOT SOLO for a high score, or wait for an opponent / play a bot.' : 'Waiting for both archers.';
     } else if (view.phase === 'playing') {
       const mine = seat && seat === view.turn;
       const where = view.shootoff ? 'SHOOT-OFF · CLOSEST TO THE X WINS' : `END ${view.end}/${view.ends} · ARROW ${(view.shotsInEnd % view.arrowsPerEnd) + 1} OF ${view.arrowsPerEnd}`;
       status.textContent = mine ? `▶ YOUR SHOT — ${where}` : `${seatName(view.turn)} TO SHOOT — ${where}`;
       if (mine) status.classList.add('mine');
       status.style.color = SEAT_COLOR[view.turn];
+    } else if (view.solo) {
+      status.textContent = `FINAL SCORE: ${view.totals[view.winner]}`;
+      status.style.color = '#ffb000';
     } else {
       status.textContent = view.winner === 'draw' ? "IT'S A DRAW!" : `${seatName(view.winner)} WINS!`;
       status.style.color = '#ffb000';
@@ -1106,7 +1130,7 @@ export function mount(container, api) {
     const mr = document.createElement('span');
     mr.textContent = view.shootoff ? `SHOOT-OFF ${view.shootoff}` : `END ${view.end}/${view.ends}`;
     meta.append(ml, mr);
-    panel.append(meta, seatCard('p1'), seatCard('p2'), scorecard());
+    panel.append(meta, ...activeSeats().map(seatCard), scorecard());
     for (const so of view.shootoffLog) {
       const d = document.createElement('div');
       d.className = 'ar-so';
@@ -1121,14 +1145,14 @@ export function mount(container, api) {
         hint.dataset.auto = '1';
       }
     } else {
-      hint.textContent = view.phase === 'playing' ? '' : view.phase === 'waiting' ? 'Fill both seats to start: 5 ends of 3 arrows.' : '';
+      hint.textContent = view.phase === 'playing' ? '' : view.phase === 'waiting' ? 'Fill both seats (or SHOOT SOLO) to start: 5 ends of 3 arrows.' : '';
       hint.dataset.auto = '1';
     }
 
     btnRow.innerHTML = '';
     if (view.phase === 'game_over' && seat) {
       const again = document.createElement('button');
-      again.textContent = 'REMATCH (SWAP OPENER)';
+      again.textContent = view.solo ? 'SHOOT AGAIN' : 'REMATCH (SWAP OPENER)';
       again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
       btnRow.appendChild(again);
     }

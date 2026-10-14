@@ -56,7 +56,32 @@ function resetGame(st) {
   st.shotNo = 0;
   st.busyUntil = 0;
   st.callout = null;
+  st.solo = false; // one archer, five ends, chasing a high score
   nextArrow(st);
+}
+
+function startSolo(st, seat) {
+  resetGame(st);
+  st.solo = true;
+  st.opener = st.turn = seat;
+  st.phase = 'playing';
+}
+
+// Solo: an end is just this archer's three arrows; after the last end the run is over.
+function finishSoloEnd(st, seat) {
+  const e = st.end;
+  st.lastEndArrows = st.endArrows;
+  st.endArrows = [];
+  st.shotsInEnd = 0;
+  if (e >= Sim.ENDS) {
+    st.winner = seat;
+    st.phase = 'game_over';
+    st.endReason = 'points';
+    setCallout(st, 'win', seat, `FINAL SCORE ${st.totals[seat]}`);
+    return;
+  }
+  st.end = e + 1;
+  if (!(st.callout && st.callout.seq === st.shotNo)) setCallout(st, 'end', null, `END ${e} · ${st.totals[seat]} SO FAR`);
 }
 
 function buildPublicState(room) {
@@ -72,6 +97,7 @@ function buildPublicState(room) {
     turn: st.turn,
     shotsInEnd: st.shotsInEnd,
     gameId: st.gameId,
+    solo: !!st.solo,
     endArrows: st.endArrows,
     lastEndArrows: st.lastEndArrows,
     card: st.card,
@@ -189,7 +215,8 @@ function applyShot(st, x, y, now = Date.now()) {
   if (set.length === Sim.ARROWS_PER_END && set.every((l) => l === 'X' || l === '10')) {
     setCallout(st, 'perfect', seat, `${seatLabel(seat)} PERFECT END · 30!`);
   }
-  if (st.shotsInEnd >= Sim.ARROWS_PER_END * 2) finishEnd(st);
+  if (st.solo) { if (st.shotsInEnd >= Sim.ARROWS_PER_END) finishSoloEnd(st, seat); }
+  else if (st.shotsInEnd >= Sim.ARROWS_PER_END * 2) finishEnd(st);
   else if (st.shotsInEnd === Sim.ARROWS_PER_END) st.turn = other(st.opener);
   return arrow;
 }
@@ -261,6 +288,7 @@ module.exports = {
     const reject = (reason) => ctx.sendTo(me, { v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'moveRejected', reason } } });
     const seatArg = SEATS.includes(data.seat) ? data.seat : null;
 
+    if (data.kind === 'sit' && st.solo && st.phase === 'playing') return; // no joining a solo run midway
     if (data.kind === 'sit') {
       if (!seatArg || st.players[seatArg]) return;
       if (data.bot) {
@@ -300,8 +328,17 @@ module.exports = {
       return;
     }
 
+    if (data.kind === 'startSolo') {
+      const seat = seatOf(st, me);
+      if (!seat || st.phase === 'playing' || st.players[other(seat)]) return;
+      startSolo(st, seat);
+      broadcastState(room);
+      return;
+    }
+
     if (data.kind === 'resetGame') {
       if (st.phase !== 'game_over' || !seatOf(st, me)) return;
+      if (st.solo) { startSolo(st, seatOf(st, me)); broadcastState(room); return; }
       st.players = { p1: st.players.p2, p2: st.players.p1 };
       st.botLevels = { p1: (st.botLevels || {}).p2, p2: (st.botLevels || {}).p1 };
       resetGame(st);

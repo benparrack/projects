@@ -130,6 +130,26 @@ test('basketball solo: one run alone (as blue) ends the game with a solo score',
   assert.deepStrictEqual(only(room), { placements: [['A']], scores: { A: 14 } });
 });
 
+test('archery solo: five ends of three arrows alone, reports a solo score', () => {
+  const plugin = require('../server/games/archery');
+  const room = makeRoom(plugin);
+  const act = actor(plugin);
+  act(room, 'A', { kind: 'sit', seat: 'p2' });
+  act(room, 'A', { kind: 'startSolo' });
+  act(room, 'B', { kind: 'sit', seat: 'p1' });
+  assert.strictEqual(room.state.players.p1, null);
+  let n = 0;
+  for (; room.state.phase === 'playing' && n < 30; n++) {
+    assert.strictEqual(room.state.turn, 'p2');
+    act(room, 'A', { kind: 'shoot', x: 0, y: 0, t: 1000, seed: room.state.shotSeed });
+    room.state.busyUntil = 0;
+  }
+  assert.strictEqual(n, 15, 'five ends of three arrows');
+  const r = only(room);
+  assert.deepStrictEqual(r.placements, [['A']]);
+  assert.strictEqual(r.scores.A, room.state.totals.p2);
+});
+
 test('tanks: healthier tank wins at the turn cap', () => {
   const plugin = require('../server/games/tanks');
   const Sim = require('../public/games/tanks/sim.js');
