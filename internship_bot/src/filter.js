@@ -12,3 +12,11 @@ export function skipReason(j) {
   if (!j.locations.some(l => US.test(l))) return 'not in the US';
   return null;
 }
+
+// Titles often just say "Co-op"; the posting text says when. Off-cycle (Jan–Jun / fall) clashes with school.
+export function offCycle(desc = '') {
+  const d = desc.replace(/<[^>]+>/g, ' ');
+  if (/\bsummer\b/i.test(d)) return null;
+  return /\b(spring|fall|winter|autumn)\s+(20\d\d\s+)?(semester|co-?op|cycle|term)\b|\b(spring|fall)\s+20\d\d\s+co-?op|\bjan(uary)?\.?\s*(through|to|-|–)\s*(june?|july?)\b/i.test(d)
+    ? 'not a summer term (posting says spring/fall)' : null;
+}

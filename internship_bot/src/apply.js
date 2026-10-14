@@ -5,6 +5,7 @@ import * as ashby from './ats/ashby.js';
 import * as lever from './ats/lever.js';
 import * as workday from './ats/workday.js';
 import { answerAll } from './answer.js';
+import { offCycle } from './filter.js';
 import { loadProfile, resumeFor } from './profile.js';
 import { setStatus, meta } from './db.js';
 import { enqueue } from './queue.js';
@@ -21,6 +22,8 @@ mkdirSync(SHOTS, { recursive: true });
 export async function apply(browser, job, { dryRun = true } = {}) {
   const ats = adapterFor(job.url);
   const form = await ats.load(job.url);
+  const off = job.status !== 'approved' && offCycle(form.description);
+  if (off) return record(job, 'skipped', { reason: off }, { why: off });
   // Approved in the dashboard: submit exactly the answers Ben reviewed (and maybe edited).
   const reviewed = job.status === 'approved' && job.answers ? JSON.parse(job.answers).answers : null;
   if (ats.wizard) return wizard(browser, ats, job, form, reviewed, dryRun || !!process.env.INTERN_NO_SUBMIT);

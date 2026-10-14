@@ -377,7 +377,7 @@ export async function run(page, job, form, ctx) {
       const problems = [];
       for (const q of qs) {
         audit.questions.push([q.key, q.label, q.type]);
-        const v = answers[q.key];
+        let v = answers[q.key];
         if (v == null || v === '') continue;
         audit.answers[q.key] = v;
         let ok = await setField(page, q, v, sub).catch(() => false);
@@ -399,6 +399,8 @@ export async function run(page, job, form, ctx) {
     const pressed = await press(page, 'pageFooterNextButton').then(() => true, () =>
       page.getByRole('button', { name: /save and continue|next|continue/i }).first().click({ timeout: 8000 }).then(() => true, () => false));
     if (!pressed) return out('handoff', { why: `no Save and Continue button on "${step || 'an unnamed page'}"`, screenshot: await shot() });
+    // Saving can outlast networkidle (the button greys out meanwhile): wait for the next step or an error.
+    for (let t = 0; t < 40 && await stepName(page) === step && !(await errors(page)).length; t++) await sleep(500);
   }
   return out('handoff', { why: 'too many pages', screenshot: await shot() });
 }
