@@ -38,6 +38,15 @@ function resetGame(st) {
   st.lastShot = null;
   st.shotSeq = 0;
   st.gameId = (st.gameId || 0) + 1;
+  st.solo = false; // one shooter, one run, chasing a high score
+}
+
+function startSolo(room, seat) {
+  const st = room.state;
+  resetGame(st);
+  st.solo = true;
+  st.phase = 'playing';
+  startRun(room, COLORS.indexOf(seat));
 }
 
 function publicRun(run) {
@@ -63,6 +72,7 @@ function buildPublicState(room) {
     lastShot: st.lastShot,
     shotSeq: st.shotSeq,
     gameId: st.gameId,
+    solo: !!st.solo,
     serverNow: Date.now(),
   };
 }
@@ -102,7 +112,10 @@ function finishRun(room) {
     shooter: run.shooter, ot: run.ot, score: run.score, makes: run.makes, shots: run.shots,
     bestStreak: run.bestStreak, swishes: run.swishes,
   });
-  if (run.idx % 2 === 0) {
+  if (st.solo) {
+    st.phase = 'game_over';
+    st.winner = run.shooter;
+  } else if (run.idx % 2 === 0) {
     startRun(room, run.idx + 1);
   } else if (st.scores.red !== st.scores.blue) {
     st.phase = 'game_over';
@@ -196,6 +209,7 @@ module.exports = {
     const reject = (reason) => ctx.sendTo(me, { v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'moveRejected', reason } } });
     const seatArg = COLORS.includes(data.seat) ? data.seat : null;
 
+    if (data.kind === 'sit' && st.solo && st.phase === 'playing') return; // no joining a solo run midway
     if (data.kind === 'sit') {
       if (!seatArg || st.players[seatArg]) return;
       if (data.bot) {
@@ -232,8 +246,17 @@ module.exports = {
       return;
     }
 
+    if (data.kind === 'startSolo') {
+      const seat = seatOf(st, me);
+      if (!seat || st.phase === 'playing' || st.players[other(seat)]) return;
+      startSolo(room, seat);
+      broadcastState(room);
+      return;
+    }
+
     if (data.kind === 'resetGame') {
       if (st.phase !== 'game_over' || !seatOf(st, me)) return;
+      if (st.solo) { startSolo(room, seatOf(st, me)); broadcastState(room); return; }
       st.players = { red: st.players.blue, blue: st.players.red };
       st.botLevels = { red: (st.botLevels || {}).blue, blue: (st.botLevels || {}).red };
       st.phase = 'waiting';

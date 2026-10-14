@@ -976,6 +976,7 @@ export function mount(container, api) {
     const playing = view.phase === 'playing';
     for (const c of COLORS) {
       const sd = side[c];
+      sd.box.style.visibility = view.solo && !view.players[c] ? 'hidden' : ''; // a solo run shows one side
       setText(sd.name, `${nicknameFor(view.players[c], c) || c.toUpperCase()}${view.players[c] && view.players[c] === api.getClientId() ? ' (you)' : ''}`);
       const shown = Math.max(0, (view.scores[c] || 0) - pendingPoints(c));
       setText(sd.score, String(shown));
@@ -999,7 +1000,7 @@ export function mount(container, api) {
       const left = now < run.startAt ? run.length : run.endAt - now;
       clockText = fmtClock(left);
       low = now >= run.startAt && left <= 5000 && left > 0;
-      setText(periodEl, run.ot ? `OVERTIME ${view.otRound}` : `RUN ${run.idx + 1} / 2`);
+      setText(periodEl, run.ot ? `OVERTIME ${view.otRound}` : view.solo ? 'SOLO RUN' : `RUN ${run.idx + 1} / 2`);
     } else {
       clockText = view.phase === 'game_over' ? 'FINAL' : fmtClock(S.RUN_MS);
       setText(periodEl, view.phase === 'game_over' ? (view.otRound ? `AFTER ${view.otRound} OT` : 'FULL TIME') : 'SHOOTOUT');
@@ -1013,9 +1014,10 @@ export function mount(container, api) {
     let st = '';
     let mine = false;
     let color = '';
-    if (view.phase === 'waiting') st = 'Waiting for both seats — PLAY VS BOT to practise.';
+    if (view.phase === 'waiting') st = seat ? 'SHOOT SOLO for a high score, or wait for an opponent / play a bot.' : 'Waiting for both seats — PLAY VS BOT to practise.';
     else if (view.phase === 'game_over') {
       if (anims.length) { st = 'FINAL BUZZER…'; }
+      else if (view.solo) { st = `TIME! ${view.scores[view.winner]} POINTS`; color = '#ffb000'; }
       else if (view.winner === 'draw') { st = `DRAW ${view.scores.red}–${view.scores.blue}`; color = '#7fd7ff'; }
       else { st = `${view.winner.toUpperCase()} WINS ${Math.max(view.scores.red, view.scores.blue)}–${Math.min(view.scores.red, view.scores.blue)}`; color = '#ffb000'; }
     } else if (run) {
@@ -1052,7 +1054,16 @@ export function mount(container, api) {
     name.style.color = TEXT_COLOR[color];
     box.append(chip, name);
     const seat = mySeat();
-    if (!occ) {
+    if (!occ && view.solo && view.phase !== 'waiting') {
+      name.textContent = `${color.toUpperCase()}: (solo run)`;
+    } else if (!occ) {
+      if (seat && view.phase !== 'playing') {
+        const solo = document.createElement('button');
+        solo.textContent = 'SHOOT SOLO';
+        solo.title = 'One 30-second run on your own: chase your high score';
+        solo.addEventListener('click', () => api.sendAction({ kind: 'startSolo' }));
+        box.appendChild(solo);
+      }
       if (!seat) {
         const btn = document.createElement('button');
         btn.textContent = `PLAY ${color.toUpperCase()}`;
@@ -1082,12 +1093,19 @@ export function mount(container, api) {
     const over = !!(view && view.phase === 'game_over' && !anims.length);
     if (view) {
       const subtitle = view.runs.length
-        ? COLORS.map((c) => {
+        ? COLORS.filter((c) => !view.solo || view.players[c]).map((c) => {
           const rs = view.runs.filter((r) => r.shooter === c);
           return `${c.toUpperCase()} ${rs.reduce((s, r) => s + r.makes, 0)}/${rs.reduce((s, r) => s + r.shots, 0)}`;
         }).join(' · ') + ' made'
         : '';
-      const res = over ? duelResults({
+      const w = view.winner;
+      const res = over && view.solo ? {
+        title: `${view.scores[w]} POINTS`,
+        subtitle: `SOLO · ${subtitle}`,
+        outcome: 'win',
+        rows: [{ name: nicknameFor(view.players[w], w), value: `${view.scores[w]} PTS`, win: true, you: w === seat }],
+        rematch: seat ? { label: 'SHOOT AGAIN', onClick: () => api.sendAction({ kind: 'resetGame' }) } : null,
+      } : over ? duelResults({
         winner: view.winner, colors: COLORS, players: view.players, me: seat, nameFor: (id) => nicknameFor(id, COLORS.find((c) => view.players[c] === id)),
         subtitle, onRematch: () => api.sendAction({ kind: 'resetGame' }),
       }) : null;
@@ -1102,7 +1120,7 @@ export function mount(container, api) {
     if (!view) { setText(status, 'Loading...'); return; }
     err.textContent = flashError ? REJECT_MESSAGES[flashError] || 'Shot rejected' : '';
     // seats + options: rebuild only when something they show changes
-    const sig = JSON.stringify([view.players, view.botLevels, view.phase, view.run && view.run.shooter, seat, over,
+    const sig = JSON.stringify([view.players, view.botLevels, view.phase, view.solo, view.run && view.run.shooter, seat, over,
       COLORS.map((c) => nicknameFor(view.players[c], c))]);
     if (sig === domSig) return;
     domSig = sig;
@@ -1117,7 +1135,7 @@ export function mount(container, api) {
     options.innerHTML = '';
     if (over && seat) {
       const again = document.createElement('button');
-      again.textContent = 'REMATCH (SWAP SIDES)';
+      again.textContent = view.solo ? 'SHOOT AGAIN' : 'REMATCH (SWAP SIDES)';
       again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
       options.appendChild(again);
     }

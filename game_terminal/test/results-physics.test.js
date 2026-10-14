@@ -115,6 +115,21 @@ test('basketball: higher total after both runs wins; scores are points', () => {
   assert.deepStrictEqual(only(room), { placements: [['B'], ['A']], scores: { A: 3, B: 6 } });
 });
 
+test('basketball solo: one run alone (as blue) ends the game with a solo score', () => {
+  const plugin = require('../server/games/basketball');
+  const room = makeRoom(plugin);
+  const act = actor(plugin);
+  act(room, 'A', { kind: 'sit', seat: 'blue' });
+  act(room, 'A', { kind: 'startSolo' });
+  assert.strictEqual(room.state.run.shooter, 'blue');
+  act(room, 'B', { kind: 'sit', seat: 'red' });
+  assert.strictEqual(room.state.players.red, null);
+  room.state.scores.blue = 14;
+  plugin._internal.finishRun(room);
+  assert.strictEqual(room.state.phase, 'game_over');
+  assert.deepStrictEqual(only(room), { placements: [['A']], scores: { A: 14 } });
+});
+
 test('tanks: healthier tank wins at the turn cap', () => {
   const plugin = require('../server/games/tanks');
   const Sim = require('../public/games/tanks/sim.js');
