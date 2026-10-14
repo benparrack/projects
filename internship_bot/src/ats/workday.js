@@ -181,8 +181,11 @@ export async function scan(page) {
   for (const f of fields.filter(f => f.type === 'dropdown' && (!f.value || (FIXED[f.id] && !/united states/i.test(f.value))))) {
     const btn = page.locator(`[data-ib="${f.ref}"] button[aria-haspopup=listbox]`).first();
     await btn.click().catch(() => {});
-    await page.locator(OPTION).first().waitFor({ timeout: 3000 }).catch(() => {});
-    f.options = (await visibleText(page, OPTION)).filter(o => !/^select one$/i.test(o));
+    // The list fades in with only "Select One" rendered at first: poll until real choices show.
+    for (let t = 0; t < 15 && !f.options?.length; t++) {
+      if (t) await sleep(200);
+      f.options = (await visibleText(page, OPTION)).filter(o => !/^select one$/i.test(o));
+    }
     await closeMenu(page);
   }
   for (const f of fields.filter(f => f.type === 'prompt' && !f.value)) {     // short pickers list their choices on click

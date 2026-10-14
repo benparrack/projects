@@ -97,6 +97,8 @@ test('huge dropdowns are trimmed to profile-related options', async () => {
   const { shortList } = await import('../src/answer.js');
   const opts = [...Array(500)].map((_, i) => `Some College ${i}`).concat(['Virginia Tech', 'Other (School Not Listed)']);
   assert.deepEqual(shortList(opts, { education: { school: 'Virginia Tech' } }), ['Virginia Tech', 'Other (School Not Listed)']);
+  // "How did you hear" lists put the generic choice mid-label (SNC: "Website - Other Internet Site").
+  assert.ok(shortList([...opts, 'Website - Other Internet Site'], {}).includes('Website - Other Internet Site'));
 });
 
 test('lever parser reads cards and standard fields', async () => {

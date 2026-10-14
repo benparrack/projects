@@ -56,7 +56,7 @@ export function shortList(options, facts) {
   const mine = new Set(normQ(YAML.stringify(facts.education ?? facts)).split(' '));
   const score = o => normQ(o).split(' ').reduce((t, w) => t + (mine.has(w) && n[w] ? 1 / n[w] : 0), 0);
   const top = options.map(o => [o, score(o)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 40).map(x => x[0]);
-  return [...top, ...options.filter(o => /^other\b/i.test(o) && !top.includes(o))];
+  return [...top, ...options.filter(o => /\bother\b/i.test(o) && !top.includes(o))];
 }
 
 // "a | b" → the matching options, or null if none match.
@@ -161,6 +161,8 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
       let v = a?.answer ?? null;
       if (v != null && q.type === 'select') v = matchOption(q.options, v);
       if (v != null && q.type === 'multiselect') v = pickMany(q.options, v);
+      // An optional box the model has nothing for ("Address Line 2" → "None") stays blank.
+      if (!q.required && /^(none|n\/?a|null|-)$/i.test(String(v ?? '').trim())) v = null;
       if (v != null && v !== '') answers[q.key] = v;
       else if (q.required) needs.push({ key: q.key, label: q.label, options: q.options, why: a?.need_human_reason || 'no valid answer' });
     }
