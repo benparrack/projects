@@ -212,6 +212,26 @@ test('bowling solo: one bowler, ten frames, reports a solo score; nobody can sit
   assert.strictEqual(room.state.solo, true);
 });
 
+test('skeeball solo: nine balls alone (as blue), reports a solo score', () => {
+  const plugin = require('../server/games/skeeball');
+  const room = makeRoom(plugin);
+  const act = actor(plugin);
+  act(room, 'A', { kind: 'sit', seat: 'blue' });
+  act(room, 'A', { kind: 'startSolo' });
+  act(room, 'B', { kind: 'sit', seat: 'red' });
+  assert.strictEqual(room.state.players.red, null);
+  let balls = 0;
+  for (; room.state.phase === 'playing' && balls < 20; balls++) {
+    assert.strictEqual(room.state.turn, 'blue');
+    act(room, 'A', { kind: 'roll', aim: 0, power: 0.6 });
+    room.state.busyUntil = 0;
+  }
+  assert.strictEqual(balls, 9);
+  const r = only(room);
+  assert.deepStrictEqual(r.placements, [['A']]);
+  assert.strictEqual(typeof r.scores.A, 'number');
+});
+
 test('knockout: knocking the last enemy penguin off wins', () => {
   const plugin = require('../server/games/knockout');
   const { room, act } = seated(plugin, ['red', 'blue']);

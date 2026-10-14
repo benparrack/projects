@@ -41,6 +41,14 @@ function resetGame(st) {
   st.rollSeq = 0;
   st.busyUntil = 0;
   st.gameId = (st.gameId || 0) + 1;
+  st.solo = false; // one roller, nine balls, chasing a high score
+}
+
+function startSolo(st, seat) {
+  resetGame(st);
+  st.solo = true;
+  st.turn = seat;
+  st.phase = 'playing';
 }
 
 function buildPublicState(room) {
@@ -61,6 +69,7 @@ function buildPublicState(room) {
     rollSeq: st.rollSeq,
     busyUntil: st.busyUntil,
     gameId: st.gameId,
+    solo: !!st.solo,
     serverNow: Date.now(),
   };
 }
@@ -78,6 +87,10 @@ function seatOf(st, clientId) {
 function advance(st) {
   st.rollNo++;
   const n = st.rollNo;
+  if (st.solo) {
+    if (n >= BALLS) { st.phase = 'game_over'; st.winner = st.turn; }
+    return;
+  }
   if (n >= BALLS * 2 && (n - BALLS * 2) % 2 === 0) {
     const r = total(st.balls.red);
     const b = total(st.balls.blue);
@@ -179,6 +192,7 @@ module.exports = {
     const reject = (reason) => ctx.sendTo(me, { v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'moveRejected', reason } } });
     const seatArg = COLORS.includes(data.seat) ? data.seat : null;
 
+    if (data.kind === 'sit' && st.solo && st.phase === 'playing') return; // no joining a solo run midway
     if (data.kind === 'sit') {
       if (!seatArg || st.players[seatArg]) return;
       if (data.bot) {
@@ -216,8 +230,17 @@ module.exports = {
       return;
     }
 
+    if (data.kind === 'startSolo') {
+      const seat = seatOf(st, me);
+      if (!seat || st.phase === 'playing' || st.players[seat === 'red' ? 'blue' : 'red']) return;
+      startSolo(st, seat);
+      broadcastState(room);
+      return;
+    }
+
     if (data.kind === 'resetGame') {
       if (st.phase !== 'game_over' || !seatOf(st, me)) return;
+      if (st.solo) { startSolo(st, seatOf(st, me)); broadcastState(room); return; }
       st.players = { red: st.players.blue, blue: st.players.red };
       st.botLevels = { red: (st.botLevels || {}).blue, blue: (st.botLevels || {}).red };
       resetGame(st);

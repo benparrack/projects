@@ -768,7 +768,16 @@ export function mount(container, api) {
     name.style.color = TEXT_COLOR[color];
     box.append(dot, name);
     const seat = mySeat();
-    if (!occ) {
+    if (!occ && view.solo && view.phase !== 'waiting') {
+      name.textContent = `${color.toUpperCase()}: (solo run)`;
+    } else if (!occ) {
+      if (seat && view.phase !== 'playing') {
+        const solo = document.createElement('button');
+        solo.textContent = 'ROLL SOLO';
+        solo.title = 'Nine balls on your own: chase your high score';
+        solo.addEventListener('click', () => api.sendAction({ kind: 'startSolo' }));
+        box.appendChild(solo);
+      }
       if (!seat) {
         const btn = document.createElement('button');
         btn.textContent = `PLAY ${color.toUpperCase()}`;
@@ -792,7 +801,7 @@ export function mount(container, api) {
   let seatSig = '';
   function renderSeats() {
     // rebuild only when something shown changed, so buttons aren't replaced under the pointer
-    const sig = JSON.stringify([view.phase, view.turn, view.players, view.botLevels, mySeat(), roster.map((r) => [r.clientId, r.nickname])]);
+    const sig = JSON.stringify([view.phase, view.solo, view.turn, view.players, view.botLevels, mySeat(), roster.map((r) => [r.clientId, r.nickname])]);
     if (sig === seatSig) return;
     seatSig = sig;
     seats.innerHTML = '';
@@ -822,12 +831,14 @@ export function mount(container, api) {
       L.shown = v;
     }
     L.el.classList.toggle('turn', active === c);
+    L.el.style.visibility = view.solo && !view.players[c] ? 'hidden' : '';
   }
 
   function renderCards(active) {
     cards.innerHTML = '';
     const extra = Math.max(view.balls.red.length, view.balls.blue.length) - view.perGame;
     for (const c of COLORS) {
+      if (view.solo && !view.players[c]) continue; // a solo run has one card
       const row = document.createElement('div');
       row.className = 'sk-card';
       const who = document.createElement('span');
@@ -859,7 +870,13 @@ export function mount(container, api) {
     if (destroyed) return;
     const seat = mySeat();
     const over = view && view.phase === 'game_over' && !anim && !queue.length;
-    results.update(over ? duelResults({
+    results.update(over && view.solo ? {
+      title: `${view.totals[view.winner]} POINTS`,
+      subtitle: `SOLO · 100s: ${view.balls[view.winner].filter((p) => p === 100).length}`,
+      outcome: 'win',
+      rows: [{ name: nicknameFor(view.players[view.winner]), value: `${view.totals[view.winner]}`, win: true, you: view.winner === seat }],
+      rematch: seat ? { label: 'ROLL AGAIN', onClick: () => api.sendAction({ kind: 'resetGame' }) } : null,
+    } : over ? duelResults({
       winner: view.winner, colors: COLORS, players: view.players, me: seat, nameFor: nicknameFor,
       subtitle: COLORS.map((c) => `${c.toUpperCase()} ${view.totals[c]}`).join(' · ')
         + ` · 100s: ${COLORS.map((c) => view.balls[c].filter((p) => p === 100).length).join('/')}`,
@@ -876,7 +893,10 @@ export function mount(container, api) {
     const sd = ballNo > view.perGame;
     const ballTxt = sd ? 'SUDDEN DEATH' : `ball ${ballNo} of ${view.perGame}`;
     if (view.phase === 'waiting') {
-      status.textContent = 'Waiting for both seats to be filled.';
+      status.textContent = seat ? 'ROLL SOLO for a high score, or wait for an opponent / play a bot.' : 'Waiting for both seats to be filled.';
+    } else if (over && view.solo) {
+      status.textContent = `GAME OVER: ${view.totals[view.winner]} POINTS`;
+      status.style.color = '#ffb000';
     } else if (over) {
       status.textContent = view.winner === 'draw' ? `DRAW — ${view.totals.red} all` : `${view.winner.toUpperCase()} WINS ${view.totals[view.winner]} – ${view.totals[view.winner === 'red' ? 'blue' : 'red']}!`;
       status.style.color = '#ffb000';
