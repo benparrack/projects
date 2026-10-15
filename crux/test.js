@@ -31,7 +31,7 @@ assert.deepEqual(L.routeStatus('zzz', logs), { tries: 0, sessions: 0, sent: fals
 assert.deepEqual(L.projects(routes, logs).map(r => r.id), ['c']);
 
 // Pyramid: hardest first, with empty grades in between filled in.
-assert.deepEqual(L.pyramid(routes, logs, 'boulder').map(p => [p.label, p.n]), [['6C', 1], ['6B+', 0], ['6B', 1]]);
+assert.deepEqual(L.pyramid(routes, logs, 'boulder').map(p => [p.label, p.n, p.flash]), [['6C', 1, 0], ['6B+', 0, 0], ['6B', 1, 1]]);
 assert.deepEqual(L.pyramid(routes, logs, 'rope').map(p => [p.label, p.n]), [['6a+', 1]]);
 assert.deepEqual(L.pyramid([], [], 'rope'), []);
 
@@ -44,7 +44,19 @@ assert.equal(sb.sends, 2); assert.equal(sb.flashes, 1); assert.equal(sb.flashRat
 assert.equal(L.summary(routes, [], 'rope').hardest, null);
 
 const s1 = L.sessionSummary(sessions[0], routes, logs);
-assert.deepEqual(s1, { climbs: 3, tries: 7, sends: 2, hardest: '6B · 6a+', minutes: 90 });
+assert.deepEqual(s1, { climbs: 3, tries: 7, sends: 2, flashes: 1, hardest: '6B · 6a+', minutes: 90 });
+assert.equal(L.sessionSummary(sessions[1], routes, logs).flashes, 0); // the repeat of b isn't a flash
+
+// Personal bests: s2's 6C beats s1's 6B; s1 had nothing earlier to beat.
+assert.deepEqual(L.personalBests(sessions[1], routes, logs), [{ disc: 'boulder', grade: 9, label: '6C', prev: '6B' }]);
+assert.deepEqual(L.personalBests(sessions[0], routes, logs), []);
+
+// Weekly: Monday-based buckets, oldest first.
+const wed = new Date(2026, 9, 14, 18).getTime(), day = 864e5; // Wed 14 Oct 2026
+const wk = L.weekly([{ start: wed }, { start: wed - 2 * day }, { start: wed - 3 * day }, { start: wed - 60 * day }, { start: wed - 400 * day }], wed, 12);
+assert.equal(wk.length, 12); assert.equal(new Date(wk[11].start).getDay(), 1);
+assert.deepEqual(wk.slice(-2).map(w => w.n), [1, 2]); // Sun 11th is the week before; Mon 12th + Wed 14th this week
+assert.equal(wk.reduce((a, w) => a + w.n, 0), 4); // 400 days ago is out of range
 assert.equal(L.sessionSummary(sessions[1], routes, logs).minutes, null);
 
 for (const d in L.SCALES) assert.equal(new Set(L.SCALES[d].grades).size, L.SCALES[d].grades.length, d + ' grades unique');

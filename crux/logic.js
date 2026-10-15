@@ -24,30 +24,61 @@
 
   const projects = (routes, logs) => routes.filter(r => !r.archived && !routeStatus(r.id, logs).sent);
 
-  // Sent routes per grade for one discipline, from the lowest to the highest grade climbed.
+  // Sent routes per grade for one discipline (flashes split out), from the highest to the lowest grade climbed.
   function pyramid(routes, logs, disc) {
-    const counts = {};
-    for (const r of routes) if (r.disc === disc && routeStatus(r.id, logs).sent) counts[r.grade] = (counts[r.grade] || 0) + 1;
+    const counts = {}, flashes = {};
+    for (const r of routes) {
+      const st = r.disc === disc && routeStatus(r.id, logs);
+      if (!st || !st.sent) continue;
+      counts[r.grade] = (counts[r.grade] || 0) + 1;
+      if (st.flash) flashes[r.grade] = (flashes[r.grade] || 0) + 1;
+    }
     const gs = Object.keys(counts).map(Number);
     if (!gs.length) return [];
     const out = [];
-    for (let g = Math.max(...gs); g >= Math.min(...gs); g--) out.push({ grade: g, label: gradeName(disc, g), n: counts[g] || 0 });
+    for (let g = Math.max(...gs); g >= Math.min(...gs); g--) out.push({ grade: g, label: gradeName(disc, g), n: counts[g] || 0, flash: flashes[g] || 0 });
     return out;
+  }
+
+  // routeId -> the log where it was first sent.
+  function firstSends(logs) {
+    const m = new Map();
+    for (const l of [...logs].sort((a, b) => a.ts - b.ts)) if (l.sent && !m.has(l.routeId)) m.set(l.routeId, l);
+    return m;
   }
 
   // Hardest grade sent in each session (first sends only), oldest first, for one discipline.
   function hardestBySession(sessions, routes, logs, disc) {
-    const byId = Object.fromEntries(routes.map(r => [r.id, r]));
-    const firstSends = new Map();
-    for (const l of [...logs].sort((a, b) => a.ts - b.ts)) if (l.sent && !firstSends.has(l.routeId)) firstSends.set(l.routeId, l);
+    const byId = Object.fromEntries(routes.map(r => [r.id, r])), fs = firstSends(logs);
     return [...sessions].sort((a, b) => a.start - b.start).map(s => {
       let best = null;
-      for (const l of firstSends.values()) {
+      for (const l of fs.values()) {
         const r = byId[l.routeId];
         if (l.sessionId === s.id && r && r.disc === disc && (best === null || r.grade > best)) best = r.grade;
       }
       return { start: s.start, grade: best };
     }).filter(p => p.grade !== null);
+  }
+
+  // Grades this session beat your previous hardest send at (per discipline). Needs an earlier send to beat.
+  function personalBests(session, routes, logs) {
+    const byId = Object.fromEntries(routes.map(r => [r.id, r])), before = {}, now = {};
+    for (const l of firstSends(logs).values()) {
+      const r = byId[l.routeId]; if (!r) continue;
+      const into = l.sessionId === session.id ? now : l.ts < session.start ? before : null;
+      if (into && !(into[r.disc] >= r.grade)) into[r.disc] = r.grade;
+    }
+    return Object.keys(SCALES).filter(d => d in now && d in before && now[d] > before[d])
+      .map(d => ({ disc: d, grade: now[d], label: gradeName(d, now[d]), prev: gradeName(d, before[d]) }));
+  }
+
+  // Sessions per week (weeks start Monday), the last n weeks up to and including the one holding `now`.
+  function weekly(sessions, now, n = 12) {
+    const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+    const weeks = [];
+    for (let i = n - 1; i >= 0; i--) { const s = new Date(d); s.setDate(d.getDate() - 7 * i); weeks.push({ start: s.getTime(), n: 0 }); }
+    for (const s of sessions) { const i = weeks.findLastIndex(w => s.start >= w.start); if (i >= 0) weeks[i].n++; }
+    return weeks;
   }
 
   function summary(routes, logs, disc) {
@@ -71,10 +102,12 @@
       const r = byId[l.routeId];
       if (r && !(best[r.disc] >= r.grade)) best[r.disc] = r.grade;
     }
+    const fs = firstSends(logs);
     return { climbs: mine.length, tries: mine.reduce((a, l) => a + l.tries, 0), sends: sends.length,
+      flashes: sends.filter(l => fs.get(l.routeId) === l && routeStatus(l.routeId, logs).flash).length,
       hardest: Object.keys(SCALES).filter(d => d in best).map(d => gradeName(d, best[d])).join(' · ') || null,
       minutes: session.end ? Math.round((session.end - session.start) / 60000) : null };
   }
 
-  window.Logic = { SCALES, gradeName, routeStatus, projects, pyramid, hardestBySession, summary, sessionSummary };
+  window.Logic = { SCALES, gradeName, routeStatus, projects, pyramid, hardestBySession, personalBests, weekly, summary, sessionSummary };
 })();
