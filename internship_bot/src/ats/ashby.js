@@ -63,7 +63,7 @@ const monthYear = s => { const [m, y] = s.toLowerCase().split(/\s+/); return [St
 async function education(page, box, edu) {
   if (!(await combo(page, box.getByPlaceholder(/search schools/i), edu.school, t => t.split('\n')[0] === edu.school))) return false;
   const sel = box.locator('select');
-  const [sm, sy] = monthYear(edu.start), [em, ey] = monthYear(edu.graduation);
+  const [sm, sy] = monthYear(edu.start), [em, ey] = monthYear(edu.end || edu.graduation);
   await sel.nth(0).selectOption(sm); await sel.nth(1).selectOption(sy);
   const years = await sel.nth(3).locator('option').allInnerTexts();
   if (years.includes(ey)) { await sel.nth(2).selectOption(em); await sel.nth(3).selectOption(ey); }

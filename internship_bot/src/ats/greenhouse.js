@@ -35,6 +35,8 @@ const extras = facts => [
   ['school--0', ['Virginia Tech', 'Virginia Polytechnic', 'Virginia'], /Virginia Tech|Virginia Polytechnic/],
   ['degree--0', ["Bachelor's", 'Bachelor'], /^Bachelor'?s( Degree)?$/],
   ['discipline--0', ['Computer Science'], /^Computer Science$/],
+  ['start-month--0', [facts.education.start.split(' ')[0]], new RegExp(`^${facts.education.start.split(' ')[0]}$`)],
+  ['end-month--0', [(facts.education.end || facts.education.graduation).split(' ')[0]], new RegExp(`^${(facts.education.end || facts.education.graduation).split(' ')[0]}$`)],
   // Race only appears once "Hispanic/Latino?" is answered, so it's filled here, after it.
   ['hispanic_ethnicity', [facts.eeo.hispanic_or_latino ? 'Yes' : 'No'], new RegExp(`^${facts.eeo.hispanic_or_latino ? 'Yes' : 'No'}$`)],
   ['race', [facts.eeo.race], new RegExp(`^${facts.eeo.race}`)],
@@ -92,6 +94,11 @@ export async function fill(page, questions, answers, facts) {
     const ok = await pickOption(page, el, terms, x => re.test(x));
     if (!ok && (await el.getAttribute('aria-required')) === 'true')
       problems.push({ key: id, label: id.replace(/--0$/, ''), why: 'no matching option' });
+  }
+  // Education years are plain number boxes next to the month pickers.
+  for (const [id, when] of [['start-year--0', facts.education.start], ['end-year--0', facts.education.end || facts.education.graduation]]) {
+    const el = page.locator(`[id="${id}"]`);
+    if (await el.count()) await el.fill(when.split(' ')[1]);
   }
   return problems;
 }
