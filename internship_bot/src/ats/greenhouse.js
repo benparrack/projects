@@ -1,5 +1,6 @@
 // Greenhouse: questions come from the public job-board API, filling happens in the real form.
 import { spawn } from 'node:child_process';
+import { basename } from 'node:path';
 const GH = /(?:job-boards|boards)(?:\.eu)?\.greenhouse\.io\/(?:embed\/job_app\?for=)?([\w-]+)\/jobs\/(\d+)/;
 
 export const handles = url => GH.test(url);
@@ -100,6 +101,22 @@ export async function fill(page, questions, answers, facts) {
   for (const [id, when] of [['start-year--0', facts.education.start], ['end-year--0', facts.education.end || facts.education.graduation]]) {
     const el = page.locator(`[id="${id}"]`);
     if (await el.count()) await el.fill(when.split(' ')[1]);
+  }
+  // In the visible live window Greenhouse's late hydration can wipe the plain boxes and the resume after they're
+  // filled (seen 2026-10-15: name, email, resume blank; phone, location kept). Check, refill, and never submit blanks.
+  const refillable = () => questions.filter(q => answers[q.key] != null && (q.type === 'file' || q.type === 'text' || q.type === 'textarea'));
+  for (let pass = 0; ; pass++) {
+    const gone = [];
+    for (const q of refillable()) {
+      const el = page.locator(`[id="${q.key}"]`), v = answers[q.key];
+      if (!(await el.count())) continue;
+      const empty = q.type === 'file' ? !(await page.getByText(basename(String(v))).count()) : (await el.inputValue().catch(() => 'x')) === '';
+      if (empty) gone.push([q, el, v]);
+    }
+    if (!gone.length) break;
+    if (pass === 3) { gone.forEach(([q]) => problems.push({ key: q.key, label: q.label, why: 'kept getting cleared' })); break; }
+    await sleep(1500);
+    for (const [q, el, v] of gone) q.type === 'file' ? await el.setInputFiles(v) : await el.fill(String(v));
   }
   return problems;
 }

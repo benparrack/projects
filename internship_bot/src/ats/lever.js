@@ -83,7 +83,8 @@ export async function fill(page, questions, answers, facts) {
         }
       } else if (q.type === 'location') {
         await el.click(); await el.fill(''); await el.pressSequentially(`${facts.address.city}, ${facts.address.state}`, { delay: 30 });
-        const opt = page.locator('.dropdown-location').first();
+        // Only the real match: results for half-typed text arrive late ("Gle" gave Lenva, Russia on 2026-10-15).
+        const opt = page.locator('.dropdown-location').filter({ hasText: new RegExp(`^${facts.address.city}, ${facts.address.state}\\b`) }).first();
         for (let i = 0; i < 16 && !(await opt.isVisible().catch(() => false)); i++) await sleep(250);
         if (await opt.isVisible().catch(() => false)) await opt.click(); else ok = false;
       } else await el.first().fill(String(v));
