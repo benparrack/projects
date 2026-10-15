@@ -5,7 +5,7 @@ import { extname, join, normalize } from 'node:path';
 import { feed } from './worker.js';
 
 const root = new URL('./public/', import.meta.url).pathname;
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.ics': 'text/calendar', '.webmanifest': 'application/manifest+json' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.ics': 'text/calendar', '.webmanifest': 'application/manifest+json' };
 const port = process.env.PORT || 5195;
 
 http.createServer(async (req, res) => {

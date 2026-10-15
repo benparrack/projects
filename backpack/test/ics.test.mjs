@@ -34,10 +34,42 @@ test('parses Canvas feed: folding, escapes, dates, course', () => {
 
 test('summary without [course] falls back to the calendar name, then host', () => {
   const noName = 'BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nDTSTART:20261020T120000\nSUMMARY:Quiz\nURL:javascript:alert(1)\nEND:VEVENT\nEND:VCALENDAR';
-  const [q] = feedItems(noName, 'https://app.schoology.com/calendar/feed/ical/1/ical.ics');
-  assert.equal(q.course, 'app.schoology.com');
+  const [q] = feedItems(noName, 'https://lms.example.edu/cal.ics');
+  assert.equal(q.course, 'lms.example.edu');
   assert.equal(q.url, '', 'non-http links are dropped');
   assert.equal(feedItems(CANVAS.replace('Essay draft [ENG 200]', 'Essay draft'), 'https://x/y.ics')[1].course, 'Ben Parrack Calendar (Canvas)');
+});
+
+test('Canvas TZID=UTC times and non-assignment events', () => {
+  const ics = ['BEGIN:VCALENDAR',
+    'BEGIN:VEVENT', 'UID:event-assignment-7', 'DTSTART;TZID=UTC:20261020T235900', 'SUMMARY:Unit 2 Quiz [BIO 150]', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:event-calendar-event-9', 'DTSTART;TZID=UTC:20261021T140000', 'SUMMARY:Lecture [BIO 150]', 'END:VEVENT',
+    'END:VCALENDAR'].join('\r\n');
+  const [quiz, lecture] = feedItems(ics, 'https://canvas.school.edu/feeds/calendars/user_x.ics');
+  assert.equal(quiz.due, '2026-10-20T23:59:00.000Z');
+  assert.equal(quiz.kind, 'task');
+  assert.equal(quiz.type, 'test');
+  assert.equal(lecture.kind, 'event');
+  assert.equal(lecture.type, undefined);
+});
+
+test('Schoology: zone wall times, link in description, no course', () => {
+  const ics = ['BEGIN:VCALENDAR',
+    'BEGIN:VEVENT', 'UID:a1', 'DTSTART;TZID=America/Chicago:20260304T235900', 'SUMMARY:Worksheet 4',
+    'DESCRIPTION:Do odd problems - Link: https://district.schoology.com/assignment/7863396025', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:a2', 'DTSTART;TZID=America/Chicago:20261020T080000', 'SUMMARY:Pep rally',
+    'DESCRIPTION: - Link: https://district.schoology.com/event/5551', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:a3', 'DTSTART;TZID=Not/AZone:20261020T080000', 'SUMMARY:x', 'END:VEVENT',
+    'END:VCALENDAR'].join('\r\n');
+  const [ws, rally, bad] = feedItems(ics, 'webcal://district.schoology.com/calendar/feed/ical/1/ical.ics');
+  assert.equal(ws.due, '2026-03-05T05:59:00.000Z', 'CST is UTC-6');
+  assert.equal(rally.due, '2026-10-20T13:00:00.000Z', 'CDT is UTC-5');
+  assert.equal(ws.url, 'https://district.schoology.com/assignment/7863396025');
+  assert.equal(ws.description, 'Do odd problems');
+  assert.equal(ws.course, 'Unsorted');
+  assert.equal(ws.kind, 'task');
+  assert.equal(rally.kind, 'event');
+  assert.ok(!isNaN(Date.parse(bad.due)), 'unknown zone falls back to local time');
 });
 
 test('proxy only passes calendars through', async () => {

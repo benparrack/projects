@@ -5,62 +5,109 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Backpack</title>
   <meta name="description" content="Homework planner that fills itself from Canvas, Schoology and other school calendars.">
-  <meta name="theme-color" content="#2e86ab">
+  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#12151b" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Backpack">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>Backpack</h1>
+    <div class="brand"><img src="icon.svg" alt="" width="28" height="28"><h1>Backpack</h1></div>
     <span id="lastSync" class="muted"></span>
-    <button id="syncBtn" type="button">Sync</button>
-    <button id="settingsBtn" type="button" class="icon" aria-label="Settings">⚙</button>
+    <button id="syncBtn" type="button" class="icon" aria-label="Sync now" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button>
+    <button id="settingsBtn" type="button" class="icon" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
   </header>
-  <p id="status" role="status"></p>
 
   <main>
-    <section id="setup" class="card" hidden>
-      <h2>Connect your school calendar</h2>
-      <p>Paste your calendar feed link once. Your classes and assignments then show up here and stay up to date by themselves.</p>
-      <ul class="howto">
-        <li><b>Canvas:</b> open <i>Calendar</i>, click <i>Calendar Feed</i> (bottom right) and copy the link.</li>
-        <li><b>Schoology:</b> open <i>Calendar</i>, choose <i>Export</i> / <i>iCal feed</i> and copy the link.</li>
-        <li><b>Others</b> (Google Classroom, Brightspace, Blackboard…): look for an iCal or "subscribe to calendar" link.</li>
-      </ul>
-      <form id="setupForm" class="row">
-        <input id="setupUrl" type="url" inputmode="url" placeholder="https://…/feeds/calendars/user_….ics" aria-label="Calendar feed link" required>
-        <button type="submit">Connect</button>
-      </form>
-      <p class="muted small">The link stays on this device. It is only used to fetch your calendar.</p>
+    <p id="status" role="status"></p>
+
+    <section id="setup" hidden>
+      <div class="hero">
+        <img src="icon.svg" alt="" width="64" height="64">
+        <h2>Your homework, already filled in.</h2>
+        <p>Connect your school calendar once. Every class and assignment shows up here and stays up to date by itself. No typing it all in.</p>
+      </div>
+      <div class="card">
+        <h3>1 · Copy your calendar link</h3>
+        <details class="howto" open>
+          <summary>Canvas</summary>
+          <p>Open <b>Calendar</b> in Canvas, click <b>Calendar Feed</b> at the bottom right, and copy the link.</p>
+        </details>
+        <details class="howto">
+          <summary>Schoology</summary>
+          <p>Open <b>Calendar</b>, click the <b>Export</b> / <b>iCal</b> button and copy the link. Schoology doesn't say which class each assignment is for, so you'll sort them into classes once.</p>
+        </details>
+        <details class="howto">
+          <summary>Something else</summary>
+          <p>Google Classroom, Brightspace, Blackboard, Moodle and most others have an "iCal", "export" or "subscribe to calendar" link in their calendar page.</p>
+        </details>
+        <h3>2 · Paste it here</h3>
+        <form id="setupForm" class="row">
+          <input id="setupUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://…/feeds/calendars/user_….ics" aria-label="Calendar feed link" required>
+          <button type="submit" class="primary">Connect</button>
+        </form>
+        <p class="muted small">Your link and your data stay on this device.</p>
+      </div>
+      <p class="center"><button id="demoBtn" type="button" class="link">Just looking? Try it with sample classes</button></p>
     </section>
 
-    <nav id="filters" aria-label="Filter by class"></nav>
-
-    <form id="addForm" class="row card" aria-label="Add your own task">
-      <input id="taskTitle" placeholder="Add a task…" aria-label="Task" required>
-      <select id="taskClass" aria-label="Class"></select>
-      <input id="taskDate" type="date" aria-label="Due date" required>
-      <button type="submit">Add</button>
-    </form>
-
-    <div id="list"></div>
+    <div id="app" hidden>
+      <div id="demoBanner" class="banner" hidden>
+        <span>You're looking at sample data.</span>
+        <button id="exitDemo" type="button" class="primary small-btn">Connect my calendar</button>
+      </div>
+      <div id="summary" class="stats"></div>
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="View">
+          <button id="viewList" type="button">List</button>
+          <button id="viewCal" type="button">Calendar</button>
+        </div>
+        <button id="addToggle" type="button" class="primary small-btn" aria-expanded="false" aria-controls="addForm">+ Add task</button>
+      </div>
+      <form id="addForm" class="card add" hidden aria-label="Add your own task">
+        <input id="taskTitle" placeholder="What do you need to do?" aria-label="Task" required>
+        <div class="row">
+          <select id="taskClass" aria-label="Class"></select>
+          <input id="taskDate" type="date" aria-label="Due date" required>
+          <input id="taskTime" type="time" aria-label="Due time (optional)">
+          <button type="submit" class="primary">Add</button>
+        </div>
+      </form>
+      <nav id="filters" aria-label="Filter by class"></nav>
+      <div id="list"></div>
+    </div>
   </main>
 
+  <div id="toast" role="status" hidden></div>
+
+  <dialog id="detail" aria-label="Assignment details"><div id="detailBody"></div></dialog>
+
   <dialog id="settings" aria-labelledby="settingsTitle">
-    <h2 id="settingsTitle">Settings</h2>
+    <h2 id="settingsTitle" tabindex="-1" autofocus>Settings</h2>
     <h3>Calendar feeds</h3>
     <ul id="feedList" class="plain"></ul>
     <form id="feedForm" class="row">
-      <input id="feedUrl" type="url" inputmode="url" placeholder="Add another feed link" aria-label="Calendar feed link" required>
-      <button type="submit">Add</button>
+      <input id="feedUrl" type="url" inputmode="url" autocomplete="off" placeholder="Add another feed link" aria-label="Calendar feed link" required>
+      <button type="submit" class="primary">Add</button>
     </form>
     <h3>Classes</h3>
+    <p class="muted small">Pick a color, give it a nicer name, or hide a class you don't care about.</p>
     <ul id="classList" class="plain"></ul>
-    <button id="closeSettings" type="button">Done</button>
+    <h3>Backup</h3>
+    <p class="muted small">Your checkmarks, notes and tasks live only on this device. Save a backup to move them to a new phone.</p>
+    <div class="row">
+      <button id="exportBtn" type="button">Save backup</button>
+      <label class="button">Restore backup<input id="importFile" type="file" accept="application/json,.json" hidden></label>
+      <button id="eraseBtn" type="button" class="danger">Erase everything</button>
+    </div>
+    <button id="closeSettings" type="button" class="primary wide">Done</button>
   </dialog>
 
+  <datalist id="classOptions"></datalist>
   <script type="module" src="app.js"></script>
 </body>
 </html>
