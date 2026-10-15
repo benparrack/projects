@@ -157,3 +157,11 @@ test('how did you hear → a job board option; field of study → Computer Scien
   assert.deepEqual(r.answers, { h1: 'Job Board', h2: 'Other Job Board', h3: 'Other', h4: 'Job board',
     f1: 'Computer Science', f2: 'Computer Science, with minors in Mathematics and Biomedical Engineering' });
 });
+
+test('an LLM reply that answers nothing is retried once', async () => {
+  let calls = 0;
+  const llm = async () => (++calls === 1 ? { answers: [] } : { answers: [{ key: 'q', answer: 'Blue' }] });
+  const r = await answerAll([{ key: 'q', label: 'Favorite color zz9?', type: 'text', required: true }], job, { llm });
+  assert.equal(calls, 2);
+  assert.equal(r.answers.q, 'Blue');
+});

@@ -176,8 +176,11 @@ export async function answerAll(questions, job, { llm = askClaude } = {}) {
       '# QUESTIONS\n' + JSON.stringify(ask.map(({ key, label, type, options, required, description }) =>
         ({ key, label, type, required, ...(description ? { description } : {}), ...(options?.length ? { options: shortList(options, facts) } : {}) })), null, 1),
     ].join('\n\n');
-    const out = await llm(SYSTEM, prompt, SCHEMA);
-    const got = new Map(out.answers.map(a => [a.key, a]));
+    // A reply that answers none of the questions is a bad call, not Ben's to fill in (Cloudflare 2026-10-15: all 14 asked): retry once.
+    const covered = out => out?.answers?.some(a => a.answer != null && ask.some(q => q.key === a.key));
+    let out = await llm(SYSTEM, prompt, SCHEMA).catch(() => null);
+    if (!covered(out)) out = await llm(SYSTEM, prompt, SCHEMA);
+    const got = new Map((out.answers || []).map(a => [a.key, a]));
     for (const q of ask) {
       const a = got.get(q.key);
       let v = a?.answer ?? null;
