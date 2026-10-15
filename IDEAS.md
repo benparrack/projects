@@ -601,7 +601,7 @@ day, read in real depth rather than a one-line trivia fact.
 
 ## 44. Auto-Synced Homework Planner (myHomework, minus the typing)
 
-**Status:** Stocked, not started (idea 2026-10-15, from a friend using myhomeworkapp.com).
+**Status:** v1 built 2026-10-15 in `backpack/` (iCal sync via Cloudflare Worker proxy, data on-device, no accounts). Not deployed yet. See its README. Idea came from a friend using myhomeworkapp.com.
 **Pitch:** A myHomework-style planner (classes, upcoming assignments, due-date list/calendar, mark done) that fills itself from the school's LMS (Canvas, Schoology, others) instead of the student typing everything in.
 
 **Why this one:** The manual-entry step is the whole reason people abandon planners. Removing it is the product.

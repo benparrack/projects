@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Backpack</title>
+  <meta name="description" content="Homework planner that fills itself from Canvas, Schoology and other school calendars.">
+  <meta name="theme-color" content="#2e86ab">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Backpack</h1>
+    <span id="lastSync" class="muted"></span>
+    <button id="syncBtn" type="button">Sync</button>
+    <button id="settingsBtn" type="button" class="icon" aria-label="Settings">⚙</button>
+  </header>
+  <p id="status" role="status"></p>
+
+  <main>
+    <section id="setup" class="card" hidden>
+      <h2>Connect your school calendar</h2>
+      <p>Paste your calendar feed link once. Your classes and assignments then show up here and stay up to date by themselves.</p>
+      <ul class="howto">
+        <li><b>Canvas:</b> open <i>Calendar</i>, click <i>Calendar Feed</i> (bottom right) and copy the link.</li>
+        <li><b>Schoology:</b> open <i>Calendar</i>, choose <i>Export</i> / <i>iCal feed</i> and copy the link.</li>
+        <li><b>Others</b> (Google Classroom, Brightspace, Blackboard…): look for an iCal or "subscribe to calendar" link.</li>
+      </ul>
+      <form id="setupForm" class="row">
+        <input id="setupUrl" type="url" inputmode="url" placeholder="https://…/feeds/calendars/user_….ics" aria-label="Calendar feed link" required>
+        <button type="submit">Connect</button>
+      </form>
+      <p class="muted small">The link stays on this device. It is only used to fetch your calendar.</p>
+    </section>
+
+    <nav id="filters" aria-label="Filter by class"></nav>
+
+    <form id="addForm" class="row card" aria-label="Add your own task">
+      <input id="taskTitle" placeholder="Add a task…" aria-label="Task" required>
+      <select id="taskClass" aria-label="Class"></select>
+      <input id="taskDate" type="date" aria-label="Due date" required>
+      <button type="submit">Add</button>
+    </form>
+
+    <div id="list"></div>
+  </main>
+
+  <dialog id="settings" aria-labelledby="settingsTitle">
+    <h2 id="settingsTitle">Settings</h2>
+    <h3>Calendar feeds</h3>
+    <ul id="feedList" class="plain"></ul>
+    <form id="feedForm" class="row">
+      <input id="feedUrl" type="url" inputmode="url" placeholder="Add another feed link" aria-label="Calendar feed link" required>
+      <button type="submit">Add</button>
+    </form>
+    <h3>Classes</h3>
+    <ul id="classList" class="plain"></ul>
+    <button id="closeSettings" type="button">Done</button>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

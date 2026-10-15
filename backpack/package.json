@@ -1,0 +1,10 @@
+{
+  "name": "backpack",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "test": "node --test test/*.mjs",
+    "deploy": "npx wrangler deploy"
+  }
+}
