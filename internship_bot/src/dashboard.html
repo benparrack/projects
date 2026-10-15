@@ -402,7 +402,7 @@ async function approve(id) {
   document.querySelectorAll(`#ap-${id} [data-k]`).forEach(el => edits[el.dataset.k] = el.value);
   await act('/api/approve', { id, edits }, 'Approved: submitting in the background');
 }
-let working = null; const copied = new Set();
+let working = null, formWin = null; const copied = new Set();
 // Hard jobs in the order they're shown, for "Mark as applied → next".
 const hardList = () => [...S.approvals.filter(j => j.ats === 'Ashby'), ...S.manual];
 function copyVal(btn) {
@@ -420,16 +420,24 @@ function openForm(id) {
   const j = [...S.approvals, ...S.manual].find(x => x.id === id), w = Math.floor(screen.availWidth / 2), h = screen.availHeight;
   const f = window.open(j.form, 'ibform', `popup,left=${screen.availLeft},top=${screen.availTop},width=${w},height=${h}`);
   if (!f) return toast('Chrome blocked the window: click Open form');
+  formWin = f;
   try { f.moveTo(screen.availLeft, screen.availTop); f.resizeTo(w, h); } catch {}
   api('/api/tile', { mode: 'unmax' }).then(() => setTimeout(() => { window.resizeTo(w, h); setTimeout(() => window.moveTo(screen.availLeft + w, screen.availTop), 300); }, 250));
-  working = id; render();
+  working = id; render(); api('/api/watch', { id });
   setTimeout(() => document.getElementById('ap-' + id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50);
 }
 // Done for now: close the form window and give the dashboard the whole screen back.
-async function appliedDone(id) {
-  await act('/api/manual-done', { id, applied: true }, 'Logged as applied'); working = null; render();
-  window.open('', 'ibform')?.close(); api('/api/tile', { mode: 'max' });
+async function appliedDone(id, seen) {
+  if (!seen) await api('/api/manual-done', { id, applied: true });
+  toast(seen ? 'Saw the confirmation email: marked applied' : 'Logged as applied');
+  working = null; formWin?.close(); await api('/api/tile', { mode: 'max' }); await refresh();
 }
+// While a form is open, the inbox watcher flips it to applied when the confirmation email lands.
+setInterval(async () => {
+  if (!working) return;
+  const id = working, { status } = await api('/api/status?id=' + id).catch(() => ({}));
+  if (status === 'applied' && working === id) appliedDone(id, true);
+}, 3000);
 async function appliedNext(id) {
   const list = hardList(), next = list[list.findIndex(j => j.id === id) + 1] || list.find(j => j.id !== id);
   await act('/api/manual-done', { id, applied: true }, 'Logged as applied');

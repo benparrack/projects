@@ -23,7 +23,7 @@ RULES = [
     ('interview', r'schedule (a|an|your)? ?(call|interview|chat|time|conversation)|invite you to (an? )?(interview|chat|call)|'
                   r'next (round|step)s? (in|of) (the|our) (process|interview)|phone screen|availability for (a|an) (call|interview)'),
     ('oa', r'hackerrank|codesignal|codility|hirevue|karat|coding (challenge|assessment|exercise)|online assessment|technical assessment'),
-    ('confirmed', r'received your application|thank(s| you) for (applying|your application|submitting)|application (has been |was )?(received|submitted)'),
+    ('confirmed', r'received your application|got your application|thank(s| you) for (applying|your application|submitting)|application (has been |was )?(received|submitted)'),
 ]
 
 
@@ -178,6 +178,39 @@ def verify(host, wait=150):
     sys.exit(1)
 
 
+def watch(job_id, since, wait=1800):
+    """While Ben has one job's form open: the moment that company's confirmation email arrives, mark it applied.
+    The dashboard sees the status change and closes the form window. Regex only (fast); security-code mails don't count."""
+    conn = sqlite3.connect(DB, timeout=10)
+    company = conn.execute('SELECT company FROM jobs WHERE id=?', (job_id,)).fetchone()[0]
+    creds = json.loads(CREDS.read_text())
+    imap = imaplib.IMAP4_SSL(creds.get('host', 'imap.gmail.com'))
+    imap.login(creds['user'], creds['password'])
+    seen = set()
+    for _ in range(wait // 5):
+        if conn.execute('SELECT status FROM jobs WHERE id=?', (job_id,)).fetchone()[0] not in ('dryrun', 'manual'):
+            return                                    # Ben marked it himself
+        imap.select('INBOX', readonly=True)
+        for uid in imap.uid('search', None, 'SINCE', time.strftime('%d-%b-%Y', time.localtime(since - 86400)))[1][0].split()[-10:]:
+            if uid in seen:
+                continue
+            seen.add(uid)
+            msg = email.message_from_bytes(imap.uid('fetch', uid, '(BODY.PEEK[])')[1][0][1])
+            sent = email.utils.parsedate_to_datetime(msg['Date']).timestamp() if msg['Date'] else 0
+            sender, subject, body = header(msg, 'From'), header(msg, 'Subject'), text_of(msg)
+            if sent >= since - 30 and confirms(company, sender, subject, body):
+                conn.execute("UPDATE jobs SET status='applied', reason='applied by Ben', applied_at=?, outcome='confirmed', outcome_at=?, updated=? WHERE id=?",
+                             (int(sent * 1000), int(sent * 1000), int(time.time() * 1000), job_id))
+                conn.commit()
+                return print(f'confirmed: {company} | {subject}')
+        time.sleep(5)
+
+
+def confirms(company, sender, subject, body):
+    return (match([{'company': company, 'applied_at': 0}], sender, subject, body) is not None
+            and not re.search(r'security code', subject, re.I) and classify_rules(subject + '\n' + body[:3000]) == 'confirmed')
+
+
 GH_CODE = re.compile(r'security code field on your application:\s*([A-Za-z0-9]{6,12})\b')
 
 
@@ -242,6 +275,9 @@ def selftest():
     assert match(jobs, 'Appian Recruiting <no-reply@greenhouse.io>', 'Your application', '')['company'] == 'Appian Corporation'
     assert match(jobs, 'no-reply@ashbyhq.com', 'Update', 'Thanks for your interest in Two Sigma.')['company'] == 'Two Sigma'
     assert match(jobs, 'news@sigma.com', 'Sigma news', 'nothing here') is None
+    assert confirms('Tessera Labs', 'Tessera Labs Hiring Team <no-reply@ashbyhq.com>', 'We got your application, Benjamin', 'Thanks!')
+    assert not confirms('Hasbro', 'Greenhouse <no-reply@us.greenhouse-mail.io>', 'Security code for your application to Hasbro', 'received your application')
+    assert not confirms('Valon', 'Tessera Labs <no-reply@ashbyhq.com>', 'We got your application', 'Thanks for applying to Tessera')
     two = [{'company': 'Skydio', 'applied_at': None}, {'company': 'Skydio', 'applied_at': None}, {'company': 'Valon', 'applied_at': None}]
     assert own_pick(two, 'no-reply@ashbyhq.com', 'Thanks for applying to Valon', '')['company'] == 'Valon'
     assert own_pick(two, 'no-reply@ashbyhq.com', 'Thanks for applying to Skydio', '') is None      # two Skydio jobs: ambiguous
@@ -256,6 +292,9 @@ def selftest():
 if __name__ == '__main__':
     if '--links' in sys.argv:
         links()
+    elif '--watch' in sys.argv:
+        k = sys.argv.index('--watch')
+        watch(sys.argv[k + 1], float(sys.argv[k + 2]))
     elif '--code' in sys.argv:
         code(float(sys.argv[sys.argv.index('--code') + 1]))
     elif '--verify' in sys.argv:

@@ -154,6 +154,7 @@ function approve({ id, edits = {} }) {
   startRun(['--approved']);
 }
 
+let watcher = null;
 const routes = {
   'GET /api/state': () => state(),
   'POST /api/answer': ({ id, answer, skip }) => {
@@ -182,6 +183,14 @@ const routes = {
     writeFileSync(ROOT + 'data/mail.json', JSON.stringify({ user, password: password.replace(/\s+/g, '') }), { mode: 0o600 });
   },
   // A page can't resize a maximized window, so tile.py (un)maximizes the dashboard first.
+  // Open form starts an inbox watch for that job's confirmation (one at a time).
+  'POST /api/watch': ({ id }) => {
+    if (!one('SELECT id FROM jobs WHERE id=?', id) || !existsSync(ROOT + 'data/mail.json')) return { ok: false };
+    try { watcher?.kill(); } catch {}
+    watcher = spawn('python3', [ROOT + 'src/mail.py', '--watch', id, String(Date.now() / 1000)], { cwd: ROOT, stdio: 'ignore' });
+    return { ok: true };
+  },
+  'GET /api/status': ({ id }) => ({ status: one('SELECT status FROM jobs WHERE id=?', id)?.status }),
   'POST /api/tile': ({ mode }) => (spawnSync('python3', [ROOT + 'src/tile.py', mode === 'max' ? 'max' : 'unmax'], { timeout: 5000 }), { ok: true }),
   'POST /api/mail-check': () => new Promise(res => {
     const p = spawn('python3', [ROOT + 'src/mail.py'], { cwd: ROOT });

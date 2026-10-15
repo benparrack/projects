@@ -13,7 +13,8 @@ turns on auto-submit.
     Filter Easy (approve, maybe paste a code) / Hard (send it yourself). Greenhouse: the emailed security code is read
     from Gmail onto the clipboard (`mail.py --code`) with the cursor in the code box: Ctrl+V, Submit. Ashby flags the
     bot's browser as spam, so those are Ben's: Open form tiles the form left / dashboard right (`src/tile.py` un-maximizes it first), Copy buttons per answer
-    (resume path first: Ctrl+L, Ctrl+V in the file dialog), Applied → next form opens the next (Mark as applied closes the form and re-maximizes). Their confirmation emails
+    (resume path first: Ctrl+L, Ctrl+V in the file dialog), Applied → next form opens the next (Mark as applied closes the form and re-maximizes). While a form is open, `mail.py --watch` polls the inbox; the confirmation email marks it applied and the
+    dashboard closes the form and re-maximizes. Their confirmation emails
     also mark them applied (`mail.py`, only when it's the sole pending job at that company).
   - **Applications:** history, outcomes (set by hand or from email), notes.
   - **Pipeline:** what's next, failures, what isn't automated yet.
