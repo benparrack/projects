@@ -62,13 +62,17 @@
   const active = () => session(state.active);
   const status = r => L.routeStatus(r.id, state.logs);
   const gradeOf = r => L.gradeName(r.disc, r.grade);
+  const TAGS = { Green: COLORS.green, Blue: COLORS.blue, Red: COLORS.red, Black: COLORS.black, White: COLORS.white, Gray: COLORS.grey };
+  const gradeHtml = r => r.disc === 'tags' ? `<span class="grade tagpill" style="--c:${TAGS[gradeOf(r)]}">${esc(gradeOf(r))}</span>` : `<span class="grade">${esc(gradeOf(r))}</span>`;
+  const hold = r => COLORS[r.color] || (r.disc === 'tags' && TAGS[gradeOf(r)]) || '#999'; // tag routes may skip the hold colour
+  const est = r => r.disc === 'tags' && r.est != null ? '~' + L.gradeName('boulder', r.est) : ''; // optional Font estimate on a tag route
   const cap = s => s[0].toUpperCase() + s.slice(1);
-  const label = r => r.name || `${cap(r.color)} ${gradeOf(r)}`;
+  const label = r => r.name || (r.disc === 'tags' ? `${gradeOf(r)} tag${r.color ? `, ${r.color} holds` : ''}` : `${cap(r.color)} ${gradeOf(r)}`);
   const gyms = () => uniq([...state.sessions.map(s => s.gym), ...state.routes.map(r => r.gym)]);
   const statusTag = st => st.flash ? '<span class="tag flash">Flash</span>' : st.sent ? `<span class="tag sent">Sent · ${plural(st.triesToSend, 'try')}</span>`
     : st.tries ? `<span class="tag">${plural(st.tries, 'try')}</span>` : '<span class="tag">New</span>';
-  const swatch = r => photos[r.id] ? `<img class="thumb" src="${photos[r.id]}" alt="">` : `<span class="swatch" style="background:${COLORS[r.color] || '#999'}"></span>`;
-  const sub = r => [r.wall, L.SCALES[r.disc].short].filter(Boolean).map(esc).join(' · ');
+  const swatch = r => photos[r.id] ? `<img class="thumb" src="${photos[r.id]}" alt="">` : `<span class="swatch" style="background:${hold(r)}"></span>`;
+  const sub = r => [r.wall, est(r) || L.SCALES[r.disc].short].filter(Boolean).map(esc).join(' · ');
   const buzz = p => navigator.vibrate?.(p);
 
   let toastT;
@@ -96,8 +100,8 @@
 
   function logRow(l, act) {
     const r = route(l.routeId); if (!r) return '';
-    return `<div class="item">${swatch(r)}<button class="hit" data-act="${act}" data-id="${r.id}"><span class="grade">${esc(gradeOf(r))}</span>
-      <span class="grow"><span class="title">${esc(label(r))}</span><span class="sub">${l.sent ? (l.tries === 1 ? 'Sent first go' : `Sent in ${l.tries}`) : plural(l.tries, 'try')}${r.wall ? ' · ' + esc(r.wall) : ''}</span></span></button>
+    return `<div class="item">${swatch(r)}<button class="hit" data-act="${act}" data-id="${r.id}">${gradeHtml(r)}
+      <span class="grow"><span class="title">${esc(label(r))}</span><span class="sub">${l.sent ? (l.tries === 1 ? 'Sent first go' : `Sent in ${l.tries}`) : plural(l.tries, 'try')}${[est(r), r.wall].filter(Boolean).map(x => ' · ' + esc(x)).join('')}</span></span></button>
       <button class="x" data-act="unlog" data-id="${l.id}" aria-label="Remove">${I.close}</button></div>`;
   }
 
@@ -140,9 +144,9 @@
       <div class="chips">${chip('rdisc', 'all', 'Everything')}${Object.keys(L.SCALES).map(k => chip('rdisc', k, L.SCALES[k].short)).join('')}</div>
       ${gs.length > 1 ? `<div class="chips scroll">${chip('rgym', 'all', 'All gyms', g === 'all')}${gs.map(x => chip('rgym', x, x, g === x)).join('')}</div>` : ''}
       ${list.length ? `<div class="grid">${list.map(({ r, st }) => `<button class="card" data-act="route" data-id="${r.id}">
-        ${photos[r.id] ? `<img class="pic" src="${photos[r.id]}" alt="">` : `<div class="pic blank" style="background:${COLORS[r.color]}">${esc(gradeOf(r))}</div>`}
-        <div class="body"><div class="line1"><span class="dot" style="background:${COLORS[r.color]}"></span><span class="grade">${esc(gradeOf(r))}</span></div>
-        <div class="name">${esc(label(r))}</div>${r.wall ? `<div class="wall">${esc(r.wall)}</div>` : ''}${statusTag(st)}</div></button>`).join('')}</div>`
+        ${photos[r.id] ? `<img class="pic" src="${photos[r.id]}" alt="">` : `<div class="pic blank ${['white', 'yellow'].includes(r.color) || (!r.color && gradeOf(r) === 'White') ? 'light' : ''}" style="background:${hold(r)}">${esc(gradeOf(r))}</div>`}
+        <div class="body"><div class="line1"><span class="dot" style="background:${hold(r)}"></span>${gradeHtml(r)}</div>
+        <div class="name">${esc(label(r))}</div>${r.wall || est(r) ? `<div class="wall">${[est(r), r.wall].filter(Boolean).map(esc).join(' · ')}</div>` : ''}${statusTag(st)}</div></button>`).join('')}</div>`
         : `<div class="empty">${f === 'projects' ? 'No open projects. Anything you try without sending lands here.' : 'Nothing here yet.'}</div>`}
       <div style="margin-top:14px"><button class="btn" data-act="newroute">${I.plus}Add a route</button></div>`;
   }
@@ -200,7 +204,7 @@
       <h2>Storage</h2>
       <p class="muted" id="storage">${state.routes.length} routes · ${state.logs.length} logs · ${Object.keys(photos).length} photos</p>
       <h2>Grades</h2>
-      <p class="muted">Bouldering uses Font grades (6A, 6B+…), rope routes use French (6a, 6b+…). A <b>flash</b> is a route sent on your very first try.</p>`;
+      <p class="muted">Bouldering can use Font grades (6A, 6B+…) or your gym's tag colours (Green → Blue → Red → Black → White → Gray, with an optional estimated Font grade); rope routes use French (6a, 6b+…). A <b>flash</b> is a route sent on your very first try.</p>`;
   }
   async function storageInfo() {
     const e = await navigator.storage?.estimate?.().catch(() => null), el = $('#storage');
@@ -227,8 +231,8 @@
       <div class="chips">${Object.keys(L.SCALES).map(k => `<button class="chip ${d === k ? 'on' : ''}" data-act="pickdisc" data-v="${k}">${L.SCALES[k].short}</button>`).join('')}</div>
       <button class="btn primary big" data-act="newroute" style="margin-bottom:12px">${I.plus}New route</button>
       <input type="search" id="pickq" placeholder="Search name, wall, colour or grade" value="${esc(pick.q)}" style="margin-bottom:10px">
-      <div class="list">${list.map(({ r, st }) => `<button class="item" data-act="pickroute" data-id="${r.id}">${swatch(r)}<span class="grade">${esc(gradeOf(r))}</span>
-        <div class="grow"><div class="title">${esc(label(r))}</div>${r.wall ? `<div class="sub">${esc(r.wall)}</div>` : ''}</div>${statusTag(st)}</button>`).join('')
+      <div class="list">${list.map(({ r, st }) => `<button class="item" data-act="pickroute" data-id="${r.id}">${swatch(r)}${gradeHtml(r)}
+        <div class="grow"><div class="title">${esc(label(r))}</div>${r.wall || est(r) ? `<div class="sub">${[est(r), r.wall].filter(Boolean).map(esc).join(' · ')}</div>` : ''}</div>${statusTag(st)}</button>`).join('')
         || `<div class="empty">${q ? 'No match. Add it as a new route.' : 'No routes yet. Add the one you just tried.'}</div>`}</div>`);
   }
 
@@ -237,9 +241,11 @@
     const walls = uniq(state.routes.filter(x => !r.gym || x.gym === r.gym).map(x => x.wall));
     openSheet(`${head(r.id ? 'Edit route' : 'New route', fromLog ? 'backpick' : (r.id ? 'backroute' : null))}
       <div class="chips">${Object.keys(L.SCALES).map(k => `<button class="chip ${r.disc === k ? 'on' : ''}" data-act="ddisc" data-v="${k}">${L.SCALES[k].name}</button>`).join('')}</div>
-      <div class="field-label">Grade</div><div class="grades" style="margin-bottom:14px">${sc.grades.map((g, i) =>
-        `<button class="chip ${r.grade === i ? 'on' : ''}" data-act="dgrade" data-v="${i}">${esc(g)}</button>`).join('')}</div>
-      <div class="field-label">Hold colour</div><div class="colors" style="margin-bottom:14px">${Object.entries(COLORS).map(([k, c]) =>
+      <div class="field-label">${r.disc === 'tags' ? 'Tag' : 'Grade'}</div><div class="grades" style="margin-bottom:14px">${sc.grades.map((g, i) =>
+        `<button class="chip ${r.disc === 'tags' ? 'tagchip' : ''} ${r.grade === i ? 'on' : ''}" ${r.disc === 'tags' ? `style="--c:${TAGS[g]}"` : ''} data-act="dgrade" data-v="${i}">${esc(g)}</button>`).join('')}</div>
+      ${r.disc === 'tags' ? `<div class="field-label">Estimated grade (optional)</div><div class="grades" style="margin-bottom:14px">${L.SCALES.boulder.grades.map((g, i) =>
+        `<button class="chip ${r.est === i ? 'on' : ''}" data-act="dest" data-v="${i}">${esc(g)}</button>`).join('')}</div>` : ''}
+      <div class="field-label">Hold colour${r.disc === 'tags' ? ' (optional)' : ''}</div><div class="colors" style="margin-bottom:14px">${Object.entries(COLORS).map(([k, c]) =>
         `<button class="${r.color === k ? 'on' : ''}" style="background:${c}" data-act="dcolor" data-v="${k}" aria-label="${k}" title="${k}"></button>`).join('')}</div>
       <div class="two"><label class="field"><span>Name (optional)</span><input type="text" id="dname" maxlength="60" value="${esc(r.name)}" placeholder="The pinch one"></label>
         <label class="field"><span>Wall (optional)</span><input type="text" id="dwall" list="walls" maxlength="40" value="${esc(r.wall)}" placeholder="Cave, slab…" autocomplete="off"></label></div>
@@ -256,7 +262,7 @@
   function triesSheet(r, back) {
     const prior = state.logs.find(l => l.sessionId === state.active && l.routeId === r.id && !l.sent);
     openSheet(`${head(esc(label(r)), back)}
-      <div class="item" style="margin-bottom:6px">${swatch(r)}<span class="grade">${esc(gradeOf(r))}</span><div class="grow"><div class="sub">${sub(r)}</div></div>${statusTag(status(r))}</div>
+      <div class="item" style="margin-bottom:6px">${swatch(r)}${gradeHtml(r)}<div class="grow"><div class="sub">${sub(r)}</div></div>${statusTag(status(r))}</div>
       <p class="muted" style="text-align:center;margin:18px 0 0">${prior ? `Extra attempts (already ${plural(prior.tries, 'try')} this session)` : 'Attempts this time'}</p>
       <div class="stepper"><button data-act="tries" data-v="-1" aria-label="Fewer">−</button><output id="tries">${tries}</output><button data-act="tries" data-v="1" aria-label="More">+</button></div>
       <div class="row"><button class="btn big" data-act="savelog" data-id="${r.id}" data-sent="0">Not yet</button><button class="btn good big" data-act="savelog" data-id="${r.id}" data-sent="1">Sent it</button></div>`);
@@ -267,8 +273,8 @@
     const st = status(r), hist = state.logs.filter(l => l.routeId === r.id).sort((a, b) => b.ts - a.ts);
     openSheet(`${head(esc(label(r)))}
       ${photos[r.id] ? `<img class="photo" src="${photos[r.id]}" alt="Route photo" data-act="zoom">` : ''}
-      <div class="item" style="margin-bottom:12px"><span class="swatch" style="background:${COLORS[r.color]}"></span><span class="grade">${esc(gradeOf(r))}</span>
-        <div class="grow"><div class="sub">${[r.gym, r.wall, L.SCALES[r.disc].short].filter(Boolean).map(esc).join(' · ')}<br>${plural(st.tries, 'try')} over ${plural(st.sessions, 'session')}</div></div>${statusTag(st)}</div>
+      <div class="item" style="margin-bottom:12px"><span class="swatch" style="background:${hold(r)}"></span>${gradeHtml(r)}
+        <div class="grow"><div class="sub">${[r.gym, r.wall, est(r) ? `${L.SCALES[r.disc].short} (${est(r)})` : L.SCALES[r.disc].short].filter(Boolean).map(esc).join(' · ')}<br>${plural(st.tries, 'try')} over ${plural(st.sessions, 'session')}</div></div>${statusTag(st)}</div>
       ${r.notes ? `<div class="field-label">Notes / beta</div><p class="notes">${esc(r.notes)}</p>` : ''}
       <div class="row" style="margin-bottom:8px"><button class="btn primary" data-act="logthis" data-id="${r.id}">${st.sent ? 'Log a repeat' : 'Log a go'}</button><button class="btn" data-act="editroute" data-id="${r.id}">Edit</button></div>
       <h2>History</h2><div class="hist">${hist.map(l => `<div><span>${fmtDate(l.ts)}</span><span>${l.sent ? `<b>Sent</b> · ${plural(l.tries, 'try')}` : plural(l.tries, 'try')}</span></div>`).join('')
@@ -293,7 +299,7 @@
       ${pbs.map(p => `<div class="pb">${I.star}<div><b>New best: ${esc(p.label)}</b><span>${esc(L.SCALES[p.disc].name)}, up from ${esc(p.prev)}</span></div></div>`).join('')}
       <div class="tiles"><div class="tile"><b>${fmtMin(sum.minutes)}</b><span>On the wall${s.gym ? ' at ' + esc(s.gym) : ''}</span></div><div class="tile"><b>${sum.climbs}</b><span>Climbs · ${plural(sum.tries, 'attempt')}</span></div>
         <div class="tile"><b>${sum.sends}</b><span>Sends</span></div><div class="tile"><b>${sum.flashes}</b><span>Flashes</span></div></div>
-      ${sends.length ? `<h2>Sent</h2><div class="sendlist">${sends.map(r => `<span class="sendchip"><i style="background:${COLORS[r.color]}"></i>${esc(gradeOf(r))}</span>`).join('')}</div>` : ''}
+      ${sends.length ? `<h2>Sent</h2><div class="sendlist">${sends.map(r => `<span class="sendchip"><i style="background:${r.disc === 'tags' ? TAGS[gradeOf(r)] : hold(r)}"></i>${esc(gradeOf(r))}${est(r) ? ` <span class="muted">${esc(est(r))}</span>` : ''}</span>`).join('')}</div>` : ''}
       <button class="btn primary big" data-act="close" style="margin-top:20px">Done</button>`);
   }
 
@@ -376,14 +382,15 @@
       case 'newroute': {
         draftFromLog = sheet.open; draftPhoto = null;
         const disc = pick.disc || state.disc, last = state.last[disc] || {};
-        draft = { id: null, disc, grade: last.grade ?? null, color: last.color || 'yellow', name: '', wall: '', notes: '', gym: active()?.gym ?? state.gym };
+        draft = { id: null, disc, grade: last.grade ?? null, est: null, color: 'color' in last ? last.color : disc === 'tags' ? null : 'yellow', name: '', wall: '', notes: '', gym: active()?.gym ?? state.gym };
         routeForm(draftFromLog); break;
       }
       case 'editroute': draftFromLog = false; draft = { ...route(id) }; draftPhoto = undefined; routeForm(false); break;
       case 'backroute': routeSheet(route(draft.id)); break;
       case 'ddisc': keepDraftText(); if (draft.disc !== v) { draft.disc = v; draft.grade = state.last[v]?.grade ?? null; } routeForm(draftFromLog); break;
       case 'dgrade': keepDraftText(); draft.grade = Number(v); routeForm(draftFromLog); break;
-      case 'dcolor': keepDraftText(); draft.color = v; routeForm(draftFromLog); break;
+      case 'dest': keepDraftText(); draft.est = draft.est === Number(v) ? null : Number(v); routeForm(draftFromLog); break;
+      case 'dcolor': keepDraftText(); draft.color = draft.disc === 'tags' && draft.color === v ? null : v; routeForm(draftFromLog); break;
       case 'dnophoto': keepDraftText(); draftPhoto = null; routeForm(draftFromLog); break;
       case 'dsave': {
         keepDraftText();
@@ -392,6 +399,7 @@
         try { if (draftPhoto !== undefined) await putPhoto(draft.id, draftPhoto); }
         catch (err) { toast('Couldn\'t save the photo'); }
         draft.photo = !!photos[draft.id];
+        if (draft.disc !== 'tags') delete draft.est;
         if (isNew) state.routes.push(draft); else Object.assign(route(draft.id), draft);
         state.disc = draft.disc; state.last[draft.disc] = { grade: draft.grade, color: draft.color };
         if (!save()) break;

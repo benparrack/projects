@@ -135,6 +135,18 @@ await p.click('[data-act="delroute"]'); assert.equal((await st()).routes.length,
 await p.click('[data-act="delroute"]'); assert.equal((await st()).routes.length, 1);
 await p.click('#toast button'); assert.equal((await st()).routes.length, 2);
 
+// ---- tag-colour grades with an optional estimate ----
+await p.goto(url + '#climb'); await p.click('[data-act="start"]');
+await p.click('[data-act="log"]'); await p.click('[data-act="pickdisc"][data-v="tags"]'); await newRoute(2); // Red
+await p.click('[data-act="dest"][data-v="9"]'); await p.click('[data-act="dsave"]'); await p.click('[data-act="savelog"][data-sent="1"]');
+await p.click('[data-act="log"]'); await newRoute(3, 'green'); await p.click('[data-act="dcolor"][data-v="green"]'); await p.click('[data-act="dsave"]'); await p.click('[data-act="savelog"][data-sent="1"]'); // Black: hold colour toggled back off, no estimate
+s = await st(); assert.deepEqual(s.routes.filter(r => r.disc === 'tags').map(r => [r.grade, r.est]), [[2, 9], [3, null]]);
+assert.match(await text(), /Black tagSent/); assert.match(await text(), /Red tagSent[\s\S]*~6C/);
+await shot('11-tags');
+await p.click('[data-act="end"]'); assert.match(await p.textContent('#sheet'), /Black/); await p.click('#sheet [data-act="close"]');
+await p.goto(url + '#stats'); await p.click('[data-act="disc"][data-v="tags"]');
+assert.match(await text(), /Black\s*Hardest send/); await shot('12-tagstats');
+
 for (const v of ['climb', 'routes', 'stats', 'more']) {
   await p.goto(url + '#' + v); await p.waitForTimeout(100);
   assert(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), v + ' scrolls sideways');
