@@ -50,6 +50,7 @@ h2 .b + .b { margin-left:0; }
 .chip { display:inline-block; background:var(--chip); border-radius:var(--r2); padding:1px 7px; font-size:12px; margin:2px 4px 2px 0; }
 .co { font-weight:600; } .role { color:var(--ink); }
 .meta { color:var(--muted); font-size:12.5px; margin-top:2px; }
+.code-note { margin:10px 0 2px; padding:8px 12px; border-left:3px solid var(--warn); background:var(--chip); font-size:13px; }
 .qid { font:500 12px var(--mono); color:var(--muted); margin-right:6px; }
 .qtext { font:400 17px/1.35 var(--serif); }
 
@@ -225,7 +226,7 @@ const VIEWS = {
       <span class="row" style="display:inline-flex"><button class="b quiet" onclick="this.hidden=true;this.nextElementSibling.hidden=false">Skip and drop those jobs</button>
       <span class="row" hidden><span class="small">Drop every job that needs this?</span><button class="b" style="color:var(--bad);border-color:var(--bad)" onclick="act('/api/answer', {id:${q.id}, skip:true}, 'Skipped. Jobs that require it were dropped.')">Yes, drop them</button>
       <button class="b quiet" onclick="this.parentElement.hidden=true;this.parentElement.previousElementSibling.hidden=false">Cancel</button></span></span></div></div>`).join('');
-    const a = S.approvals.map(j => `<div class="card" id="ap-${j.id}">${jobHead(j)}
+    const a = S.approvals.map(j => `<div class="card" id="ap-${j.id}">${jobHead(j)}${j.ats === 'Greenhouse' ? `<div class="code-note">You'll type a code: on Approve a Chrome window opens with this form filled in. Copy the 8-character code Greenhouse emails you into it, then click Submit application.</div>` : ''}
       <div class="qa">${j.items.map(it => `<div class="l">${esc(it.label)}</div><div class="v">${it.type === 'file' ? `<span class="chip" title="Uploaded file">${esc(it.value)}</span>`
         : it.type === 'textarea' || it.value.length > 90 ? `<textarea rows="${Math.min(10, 2 + Math.ceil(it.value.length / 90))}" data-k="${esc(it.key)}" oninput="dirty=true">${esc(it.value)}</textarea>`
         : ['select', 'multiselect', 'location', 'education'].includes(it.type) ? `<span class="chip" title="Picked from the form's own list">${esc(it.type === 'education' ? 'Virginia Tech, CS, Aug 2024 to May 2028' : it.value)}</span>`

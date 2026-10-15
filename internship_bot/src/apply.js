@@ -1,5 +1,6 @@
 // Applies to one job: load questions → answer → fill in a real browser → (unless dry run) submit.
 import { mkdirSync } from 'node:fs';
+import { chromium } from 'playwright-core';
 import * as greenhouse from './ats/greenhouse.js';
 import * as ashby from './ats/ashby.js';
 import * as lever from './ats/lever.js';
@@ -36,7 +37,8 @@ export async function apply(browser, job, { dryRun = true } = {}) {
   if (file) return handOff(job, `${n2why(file)}: "${file.label.slice(0, 150)}"`);
   if (needs.length) { await enqueue(job, needs); return record(job, 'queued', { reason: JSON.stringify(needs), answers: audit }, { needs }); }
 
-  const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+  const own = !dryRun && !process.env.INTERN_NO_SUBMIT && ats.humanCode && await chromium.launch({ channel: 'chrome', headless: false });
+  const page = await (own || browser).newPage({ viewport: { width: 1100, height: 900 } });
   try {
     await page.goto(form.applyUrl, { waitUntil: 'load', timeout: 45000 });
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});   // some boards never go idle
@@ -47,11 +49,12 @@ export async function apply(browser, job, { dryRun = true } = {}) {
     if (dryRun) return record(job, 'dryrun', { answers: audit, screenshot });
     // Test switch: run the whole live path but stop before the click.
     if (process.env.INTERN_NO_SUBMIT) return record(job, 'dryrun', { reason: 'INTERN_NO_SUBMIT: stopped before submit', answers: audit, screenshot });
-    const res = await ats.submit(page);
+    const res = await ats.submit(page, { onCode: () => send(`Type the code: ${job.company}`,
+      'Greenhouse emailed you a security code. Type it into the open Chrome window, then click Submit.', { tags: ['key'] }) });
     await page.screenshot({ path: screenshot.replace('.png', '-after.png'), fullPage: true });
     if (!res.ok) return handOff(job, `submit blocked: ${res.why}`, screenshot);
     return record(job, 'applied', { answers: audit, screenshot }, res);
-  } finally { await page.close(); }
+  } finally { await (own || page).close().catch(() => {}); }
 }
 
 // Multi-page forms (Workday): the adapter walks the pages itself and asks the answer engine page by page.

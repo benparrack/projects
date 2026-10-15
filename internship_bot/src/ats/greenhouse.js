@@ -97,13 +97,29 @@ export async function fill(page, questions, answers, facts) {
 }
 
 // Clicks submit and reports what happened. Never retries: a double submit is worse than a miss.
-export async function submit(page) {
+// Greenhouse's email code is its human check: Ben types it into the open window and clicks Submit himself.
+export const humanCode = true;
+const CONFIRMED = /thank you for applying|application (has been )?(received|submitted)/i;
+
+export async function submit(page, { onCode } = {}) {
   await page.locator('button[type=submit]').last().click();
   for (let i = 0; i < 40; i++) {
     await sleep(500);
     const text = await page.locator('body').innerText();
-    if (/confirmation/.test(page.url()) || /thank you for applying|application (has been )?(received|submitted)/i.test(text)) return { ok: true };
-    if (/security code|verification code/i.test(text)) return { ok: false, why: 'Greenhouse emailed a security code' };
+    if (/confirmation/.test(page.url()) || CONFIRMED.test(text)) return { ok: true };
+    if (/security code|verification code/i.test(text)) {
+      if (!onCode) return { ok: false, why: 'Greenhouse emailed a security code' };
+      await onCode();
+      await page.bringToFront();
+      await page.getByText('Security code', { exact: true }).scrollIntoViewIfNeeded().catch(() => {});
+      for (let t = 0; t < 900; t++) {                              // 15 min for Ben to type it and submit
+        if (page.isClosed()) return { ok: false, why: 'window closed before the code was entered' };
+        await sleep(1000);
+        const done = await page.locator('body').innerText().then(x => /confirmation/.test(page.url()) || CONFIRMED.test(x), () => false);
+        if (done) return { ok: true };
+      }
+      return { ok: false, why: 'security code not entered within 15 minutes' };
+    }
     if (/captcha/i.test(text) && /verify|robot/i.test(text)) return { ok: false, why: 'captcha' };
   }
   const err = await page.locator('[class*=error], [aria-invalid=true]').allInnerTexts().catch(() => []);
