@@ -461,5 +461,18 @@
     render();
   })();
   window.crux = { get state() { return state; }, photos: () => photos }; // for e2e
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    // Home-screen apps resume rather than reload, so check for a deploy on every resume and reload into it
+    // (straight away unless a sheet is open, otherwise when the app is next backgrounded).
+    const hadSW = !!navigator.serviceWorker.controller;
+    let stale = false;
+    navigator.serviceWorker.register('sw.js').then(reg => document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      else if (stale) location.reload();
+    }));
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadSW) return; // first install, nothing new to show
+      if (sheet.open) stale = true; else location.reload();
+    });
+  }
 })();
