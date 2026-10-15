@@ -1,4 +1,5 @@
 // Greenhouse: questions come from the public job-board API, filling happens in the real form.
+import { spawn } from 'node:child_process';
 const GH = /(?:job-boards|boards)(?:\.eu)?\.greenhouse\.io\/(?:embed\/job_app\?for=)?([\w-]+)\/jobs\/(\d+)/;
 
 export const handles = url => GH.test(url);
@@ -108,6 +109,12 @@ export async function fill(page, questions, answers, facts) {
 export const humanCode = true;
 const CONFIRMED = /thank you for applying|application (has been )?(received|submitted)/i;
 
+// Resolves with the code once mail.py sees it (it keeps holding the clipboard after), or null.
+const emailedCode = since => new Promise(res => {
+  const p = spawn('python3', [new URL('../mail.py', import.meta.url).pathname, '--code', String(since)], { stdio: ['ignore', 'pipe', 'ignore'], detached: true });
+  p.unref(); p.stdout.once('data', d => res(String(d).trim())); p.on('exit', () => res(null)); p.on('error', () => res(null));
+});
+
 export async function submit(page, { onCode } = {}) {
   await page.locator('button[type=submit]').last().click();
   for (let i = 0; i < 40; i++) {
@@ -116,9 +123,13 @@ export async function submit(page, { onCode } = {}) {
     if (/confirmation/.test(page.url()) || CONFIRMED.test(text)) return { ok: true };
     if (/security code|verification code/i.test(text)) {
       if (!onCode) return { ok: false, why: 'Greenhouse emailed a security code' };
-      await onCode();
       await page.bringToFront();
       await page.getByText('Security code', { exact: true }).scrollIntoViewIfNeeded().catch(() => {});
+      // Reads the code from Gmail onto the clipboard and puts the cursor in the box. Ben pastes it and clicks Submit.
+      emailedCode(Date.now() / 1000).then(async code => {
+        if (code && !page.isClosed()) await page.locator('input[id*="security" i], input[name*="security" i], input[aria-label*="code" i]').first().focus().catch(() => {});
+        await onCode(code);
+      }).catch(() => {});
       for (let t = 0; t < 900; t++) {                              // 15 min for Ben to type it and submit
         if (page.isClosed()) return { ok: false, why: 'window closed before the code was entered' };
         await sleep(1000);

@@ -10,6 +10,11 @@ turns on auto-submit.
 
 - **Dashboard:** http://127.0.0.1:8377 (always running as a systemd service; `npm run dashboard` to run by hand).
   - **Needs you:** questions to answer, filled applications to approve (edit any answer first), and jobs to apply to yourself.
+    Filter Easy (approve, maybe paste a code) / Hard (send it yourself). Greenhouse: the emailed security code is read
+    from Gmail onto the clipboard (`mail.py --code`) with the cursor in the code box: Ctrl+V, Submit. Ashby flags the
+    bot's browser as spam, so those are Ben's: Open form tiles the form left / dashboard right, Copy buttons per answer
+    (resume path first: Ctrl+L, Ctrl+V in the file dialog), Mark as applied opens the next. Their confirmation emails
+    also mark them applied (`mail.py`, only when it's the sole pending job at that company).
   - **Applications:** history, outcomes (set by hand or from email), notes.
   - **Pipeline:** what's next, failures, what isn't automated yet.
   - **Insights:** what got responses: answers, resume version, speed after posting.

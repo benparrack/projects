@@ -1,5 +1,6 @@
 // Phone I/O via ntfy.sh (same pattern as money/flip-bot): alerts out, typed replies back in.
 import { randomBytes } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { meta } from './db.js';
 
 const NTFY = 'https://ntfy.sh';
@@ -13,6 +14,8 @@ export function topics() {
 
 export async function send(title, message, { click, actions = [], tags = [] } = {}) {
   if (process.env.NO_NOTIFY) return console.log(`[ntfy] ${title}: ${message}`);
+  // Also on the laptop screen, for when Ben is at it rather than on his phone.
+  spawn('notify-send', ['-a', 'Internship Bot', '-i', 'internship-bot', title, message], { stdio: 'ignore' }).on('error', () => {});
   const body = { topic: topics().alert, title, message, tags, ...(click ? { click } : {}),
     actions: actions.slice(0, 3) };        // ntfy allows max 3 buttons
   const r = await fetch(NTFY, { method: 'POST', body: JSON.stringify(body) });

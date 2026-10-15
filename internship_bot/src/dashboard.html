@@ -50,6 +50,8 @@ h2 .b + .b { margin-left:0; }
 .chip { display:inline-block; background:var(--chip); border-radius:var(--r2); padding:1px 7px; font-size:12px; margin:2px 4px 2px 0; }
 .co { font-weight:600; } .role { color:var(--ink); }
 .meta { color:var(--muted); font-size:12.5px; margin-top:2px; }
+.card.working { outline:2px solid var(--accent); outline-offset:2px; }
+.qa .l.done, .qa .v.done button { color:var(--good); } .qa .l.next { color:var(--ink); font-weight:600; } .qa .v.next { box-shadow:inset 3px 0 0 var(--accent); padding-left:8px; }
 .v.cp { display:flex; gap:8px; align-items:flex-start; } .v.cp > :first-child { flex:1; min-width:0; } .v.cp > button { flex:none; min-width:68px; }
 .chip.ease { display:inline-block; margin-bottom:6px; } .chip.ease.hard { color:var(--warn); }
 .code-note { margin:10px 0 2px; padding:8px 12px; border-left:3px solid var(--warn); background:var(--chip); font-size:13px; }
@@ -203,6 +205,7 @@ const act = async (path, body, msg) => { await api(path, body); if (msg) toast(m
 
 function render() {
   const needs = S.questions.length + S.approvals.length + S.manual.length;
+  document.title = needs ? `(${needs}) Internship Bot` : 'Internship Bot';
   document.getElementById('tabs').innerHTML = TABS.map(([k, l]) =>
     `<button class="${k === tab ? 'on' : ''}" onclick="go('${k}')">${l}${k === 'needs' && needs ? `<span class="count hot">${needs}</span>` : ''}</button>`).join('');
   const r = S.runner, pill = document.getElementById('runpill');
@@ -225,7 +228,7 @@ const VIEWS = {
       ${q.multi ? `<div style="margin-top:8px">${q.options.map(o => `<label style="display:block;margin:3px 0"><input type="checkbox" class="m${q.id}" value="${esc(o)}"> ${esc(o)}</label>`).join('')}
         <button class="b primary" style="margin-top:4px" onclick="answer(${q.id}, [...document.querySelectorAll('.m${q.id}:checked')].map(c => c.value).join(' | ') || null)">Save picks</button></div>`
       : q.options.length ? `<div class="row" style="margin-top:8px">${q.options.map(o => `<button class="b opt" onclick='answer(${q.id}, ${esc(JSON.stringify(o))})'>${esc(o)}</button>`).join('')}</div>` : ''}
-      <div class="row" style="margin-top:8px"><textarea id="ans${q.id}" rows="2" class="grow" placeholder="${q.options.length ? 'Or type your own answer' : 'Your answer. It is saved and reused whenever a form asks this.'}" oninput="dirty=true"></textarea></div>
+      <div class="row" style="margin-top:8px"><textarea id="ans${q.id}" rows="2" class="grow" placeholder="${q.options.length ? 'Or type your own answer' : 'Your answer. It is saved and reused whenever a form asks this.'} (Ctrl+Enter saves)" oninput="dirty=true" onkeydown="if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) answer(${q.id})"></textarea></div>
       <div class="row" style="margin-top:6px"><button class="b primary" onclick="answer(${q.id})">Save answer</button>
       <span class="row" style="display:inline-flex"><button class="b quiet" onclick="this.hidden=true;this.nextElementSibling.hidden=false">Skip and drop those jobs</button>
       <span class="row" hidden><span class="small">Drop every job that needs this?</span><button class="b" style="color:var(--bad);border-color:var(--bad)" onclick="act('/api/answer', {id:${q.id}, skip:true}, 'Skipped. Jobs that require it were dropped.')">Yes, drop them</button>
@@ -235,25 +238,30 @@ const VIEWS = {
     const show = j => ease === 'all' || (ease === 'hard') === hard(j);
     const tag = j => `<span class="chip ease ${hard(j) ? 'hard' : ''}">${S.manual.includes(j) ? 'Hard: apply yourself' : j.ats === 'Ashby' ? 'Hard: copy-paste it yourself'
       : j.ats === 'Greenhouse' ? 'Easy: approve, then type a code' : 'Easy: just approve'}</span>`;
-    const field = it => it.type === 'file' ? `<a class="chip" href="/files/${esc(it.value)}" download title="Download to attach it yourself">${esc(it.value)} ↓</a>`
+    const field = it => it.type === 'file' ? `<a class="chip" href="/files/${esc(it.value)}" download title="Download it">${esc(it.value)} ↓</a>`
       : it.type === 'textarea' || it.value.length > 90 ? `<textarea rows="${Math.min(10, 2 + Math.ceil(it.value.length / 90))}" data-k="${esc(it.key)}" oninput="dirty=true">${esc(it.value)}</textarea>`
       : ['select', 'multiselect', 'location', 'education'].includes(it.type) ? `<span class="chip" title="Picked from the form's own list">${esc(it.type === 'education' ? 'Virginia Tech, CS, Aug 2024 to May 2028' : it.value)}</span>`
       : `<input class="text" data-k="${esc(it.key)}" value="${esc(it.value)}" oninput="dirty=true">`;
-    const qa = (j, copy) => `<div class="qa">${j.items.map(it => `<div class="l">${esc(it.label)}</div><div class="v${copy && it.type !== 'file' ? ' cp' : ''}">${field(it)}${copy && it.type !== 'file'
-      ? `<button class="b quiet" onclick="copyVal(this)" data-v="${esc(it.type === 'education' ? 'Virginia Tech, CS, Aug 2024 to May 2028' : it.value)}">Copy</button>` : ''}</div>`).join('')}</div>`;
-    const yourself = j => `<button class="b primary" onclick="act('/api/open-form', {id:'${j.id}'}, 'Opened in your browser')">Open form</button>
-      <button class="b good" onclick="act('/api/manual-done', {id:'${j.id}', applied:true}, 'Logged as applied')">Mark as applied</button>`;
+    // Copy mode: each row gets a Copy button; copied rows go green and the next one is highlighted.
+    const qa = (j, copy) => { const its = copy ? [...j.items].sort((x, y) => (y.type === 'file') - (x.type === 'file')) : j.items;   // resume first: Ashby autofills from it
+      const next = copy && its.find(it => !copied.has(j.id + ':' + it.key));
+      return `<div class="qa">${its.map(it => { const st = !copy ? '' : copied.has(j.id + ':' + it.key) ? ' done' : it === next ? ' next' : '';
+        const v = it.type === 'file' ? it.path : it.type === 'education' ? 'Virginia Tech, CS, Aug 2024 to May 2028' : it.value;
+        return `<div class="l${st}">${esc(it.label)}</div><div class="v${copy ? ' cp' : ''}${st}" data-ck="${esc(j.id + ':' + it.key)}">${field(it)}${copy
+          ? `<button class="b quiet" onclick="copyVal(this)" data-v="${esc(v)}" title="${it.type === 'file' ? 'In the upload dialog: Ctrl+L, Ctrl+V, Enter' : ''}">${it.type === 'file' ? 'Copy path' : 'Copy'}</button>` : ''}</div>`; }).join('')}</div>`; };
+    const yourself = j => `<button class="b primary" onclick="openForm('${j.id}')" title="Form on the left half of the screen, this window on the right">Open form</button>
+      <button class="b good" onclick="appliedNext('${j.id}')" title="Logs it, then opens the next one">Mark as applied${hardList().length > 1 ? ' → next' : ''}</button>`;
     const apps = S.approvals.filter(show).sort((x, y) => hard(x) - hard(y));
-    const a = apps.map(j => `<div class="card" id="ap-${j.id}">${tag(j)}${jobHead(j)}${j.ats === 'Greenhouse' ? `<div class="code-note">You'll type a code: on Approve a Chrome window opens with this form filled in. Copy the 8-character code Greenhouse emails you into it, then click Submit application.</div>`
-      : j.ats === 'Ashby' ? `<div class="code-note">You send this one: Ashby flags the bot's browser as spam. Open form opens it in your browser. Copy each answer in, attach the resume (click it below to download), submit, then Mark as applied.</div>` : ''}
+    const a = apps.map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}${j.ats === 'Greenhouse' ? `<div class="code-note">You'll type a code: on Approve a Chrome window opens with this form filled in. Copy the 8-character code Greenhouse emails you into it, then click Submit application.</div>`
+      : j.ats === 'Ashby' ? `<div class="code-note">You send this one: Ashby flags the bot's browser as spam. Open form puts it on the left half of your screen with this list on the right. Upload the resume first (Copy path, then in the file dialog Ctrl+L, Ctrl+V, Enter): Ashby fills your name, email and links from it. Then copy down the list, submit, and Mark as applied opens the next one.</div>` : ''}
       ${qa(j, j.ats === 'Ashby')}
       ${j.shot ? `<details><summary>Screenshot of the filled form</summary><img class="shot" loading="lazy" src="/shots/${j.id}.png"></details>` : ''}
       <div class="row" style="margin-top:10px">${j.ats === 'Ashby' ? yourself(j) : `<button class="b good" onclick="approve('${j.id}')">Approve and submit</button>`}
       <button class="b" onclick="act('/api/reject', {id:'${j.id}'}, 'Passed')">Pass</button>
       <span class="small muted" style="margin-left:auto">Filled ${ago(j.updated)}.${j.ats === 'Ashby' ? '' : ' Your edits are saved and reused.'}</span></div></div>`).join('');
-    const m = S.manual.filter(show).map(j => `<div class="card">${tag(j)}${jobHead(j)}<div class="why">${esc(j.reason)}</div>
-      ${j.items.length ? `<details><summary>The bot's answers, to copy in</summary>${qa(j, true)}</details>` : ''}
-      <div class="row">${j.items.length ? yourself(j) : `<button class="b good" onclick="act('/api/manual-done', {id:'${j.id}', applied:true}, 'Logged as applied')">I applied</button>`}
+    const m = S.manual.filter(show).map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}<div class="why">${esc(j.reason)}</div>
+      ${j.items.length ? `<details${working === j.id ? ' open' : ''}><summary>The bot's answers, to copy in</summary>${qa(j, true)}</details>` : ''}
+      <div class="row">${yourself(j)}
       <button class="b" onclick="act('/api/manual-done', {id:'${j.id}', applied:false}, 'Removed')">Not for me</button>
       <button class="b quiet" onclick="act('/api/redo', {id:'${j.id}'}, 'Back in line for the bot')">Let the bot retry</button></div></div>`).join('');
     const nHard = S.approvals.filter(hard).length + S.manual.length, nAll = S.approvals.length + S.manual.length;
@@ -393,9 +401,33 @@ async function approve(id) {
   document.querySelectorAll(`#ap-${id} [data-k]`).forEach(el => edits[el.dataset.k] = el.value);
   await act('/api/approve', { id, edits }, 'Approved: submitting in the background');
 }
+let working = null; const copied = new Set();
+// Hard jobs in the order they're shown, for "Mark as applied → next".
+const hardList = () => [...S.approvals.filter(j => j.ats === 'Ashby'), ...S.manual];
 function copyVal(btn) {
-  const el = btn.parentElement.querySelector('input, textarea');
-  navigator.clipboard.writeText(el ? el.value : btn.dataset.v).then(() => { btn.textContent = 'Copied'; setTimeout(() => btn.textContent = 'Copy', 1200); }, () => toast("Couldn't copy"));
+  const el = btn.parentElement.querySelector('input, textarea'), row = btn.parentElement;
+  navigator.clipboard.writeText(el ? el.value : btn.dataset.v).then(() => {
+    copied.add(row.dataset.ck); btn.textContent = 'Copied'; setTimeout(() => btn.textContent = btn.title ? 'Copy path' : 'Copy', 1200);
+    const rows = [...row.parentElement.querySelectorAll('.v')];
+    rows.forEach(r => { const on = copied.has(r.dataset.ck); r.classList.toggle('done', on); r.previousElementSibling.classList.toggle('done', on); r.classList.remove('next'); r.previousElementSibling.classList.remove('next'); });
+    const nx = rows.find(r => !copied.has(r.dataset.ck));
+    if (nx) { nx.classList.add('next'); nx.previousElementSibling.classList.add('next'); nx.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  }, () => toast("Couldn't copy"));
+}
+// The form opens on the left half (same named window each time, so it reuses it); this window moves to the right half.
+function openForm(id) {
+  const j = [...S.approvals, ...S.manual].find(x => x.id === id), w = Math.floor(screen.availWidth / 2), h = screen.availHeight;
+  const f = window.open(j.form, 'ibform', `popup,left=${screen.availLeft},top=${screen.availTop},width=${w},height=${h}`);
+  if (!f) return toast('Chrome blocked the window: click Open form');
+  try { f.moveTo(screen.availLeft, screen.availTop); f.resizeTo(w, h); } catch {}
+  window.resizeTo(w, h); setTimeout(() => window.moveTo(screen.availLeft + w, screen.availTop), 300);
+  working = id; render();
+  setTimeout(() => document.getElementById('ap-' + id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50);
+}
+async function appliedNext(id) {
+  const list = hardList(), next = list[list.findIndex(j => j.id === id) + 1] || list.find(j => j.id !== id);
+  await act('/api/manual-done', { id, applied: true }, 'Logged as applied');
+  if (next) openForm(next.id); else working = null;
 }
 async function approveAll() {
   if (dirty) return toast('You have unsaved edits: approve those jobs one at a time');

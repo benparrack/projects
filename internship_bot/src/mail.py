@@ -67,6 +67,12 @@ def match(jobs, sender, subject, body):
     return None
 
 
+def own_pick(pending, sender, subject, body):
+    """A job Ben applies to himself, only when it's the sole pending job at that company (else we can't tell which)."""
+    job = match(pending, sender, subject, body)
+    return job if job and sum(norm(j['company']) == norm(job['company']) for j in pending) == 1 else None
+
+
 def text_of(msg):
     def dec(part):
         raw = part.get_payload(decode=True) or b''
@@ -100,9 +106,11 @@ def check():
     conn = sqlite3.connect(DB, timeout=10)
     conn.row_factory = sqlite3.Row
     jobs = [dict(r) for r in conn.execute("SELECT id, company, title, applied_at, outcome FROM jobs WHERE status='applied'")]
-    if not jobs:
+    # Jobs Ben sends himself (Ashby, Apply yourself): their confirmation email marks them applied.
+    pending = [dict(r) for r in conn.execute("SELECT id, company, title, updated, NULL applied_at, outcome FROM jobs WHERE status IN ('dryrun','manual')")]
+    if not jobs and not pending:
         return print('no applications yet, nothing to match')
-    first = min(j['applied_at'] or time.time() * 1000 for j in jobs) / 1000 - 86400
+    first = min([j['applied_at'] or time.time() * 1000 for j in jobs] + [j['updated'] for j in pending]) / 1000 - 86400
     meta = lambda k: (conn.execute('SELECT v FROM meta WHERE k=?', (k,)).fetchone() or [None])[0]
     set_meta = lambda k, v: conn.execute('INSERT OR REPLACE INTO meta VALUES (?,?)', (k, str(v)))
 
@@ -118,6 +126,8 @@ def check():
         msg = email.message_from_bytes(imap.uid('fetch', str(uid), '(BODY.PEEK[])')[1][0][1])
         sender, subject, body = header(msg, 'From'), header(msg, 'Subject'), text_of(msg)
         job = match(jobs, sender, subject, body)
+        mine = not job and own_pick(pending, sender, subject, body)
+        job = job or mine
         if not job:
             continue
         kind = classify(subject, body)
@@ -125,6 +135,12 @@ def check():
             continue
         found += 1
         received = int(email.utils.parsedate_to_datetime(msg['Date']).timestamp() * 1000) if msg['Date'] else int(time.time() * 1000)
+        if mine:
+            if received < mine['updated'] - 7 * 86400_000:
+                continue                              # older than the bot's form for it: some earlier application
+            conn.execute("UPDATE jobs SET status='applied', reason='applied by Ben', applied_at=? WHERE id=?", (received, mine['id']))
+            pending.remove(mine); mine['applied_at'] = received; jobs.append(mine)
+            print(f'marked applied from email: {mine["company"]}')
         conn.execute('INSERT OR IGNORE INTO emails VALUES (?,?,?,?,?,?,?)',
                      (f'{validity}:{uid}', job['id'], received, sender, subject, re.sub(r'\s+', ' ', body)[:400], kind))
         if RANK[kind] > RANK.get(job['outcome'] or '', 0):
@@ -159,6 +175,33 @@ def verify(host, wait=150):
             if m and time.time() - sent < 900:
                 return print(m)
         time.sleep(10)
+    sys.exit(1)
+
+
+GH_CODE = re.compile(r'security code field on your application:\s*([A-Za-z0-9]{6,12})\b')
+
+
+def code(since, wait=180):
+    """Greenhouse security code from mail sent after `since` (epoch s): print it, then hold it on the
+    X11 clipboard for 15 min so Ben only has to press Ctrl+V. Ben still pastes it and clicks Submit."""
+    if not CREDS.exists():
+        sys.exit(1)
+    creds = json.loads(CREDS.read_text())
+    imap = imaplib.IMAP4_SSL(creds.get('host', 'imap.gmail.com'))
+    imap.login(creds['user'], creds['password'])
+    for _ in range(wait // 5):
+        imap.select('INBOX', readonly=True)
+        for uid in reversed(imap.uid('search', None, 'SINCE', time.strftime('%d-%b-%Y', time.localtime(since - 86400)), 'FROM', 'greenhouse')[1][0].split()[-5:]):
+            msg = email.message_from_bytes(imap.uid('fetch', uid, '(BODY.PEEK[])')[1][0][1])
+            sent = email.utils.parsedate_to_datetime(msg['Date']).timestamp() if msg['Date'] else 0
+            m = GH_CODE.search(text_of(msg))
+            if m and sent >= since - 30:
+                print(m.group(1), flush=True)
+                import tkinter                        # no xclip here; tk owns the clipboard while it runs
+                r = tkinter.Tk(); r.withdraw(); r.clipboard_clear(); r.clipboard_append(m.group(1)); r.update()
+                r.after(900_000, r.destroy); r.mainloop()
+                return
+        time.sleep(5)
     sys.exit(1)
 
 
@@ -199,16 +242,22 @@ def selftest():
     assert match(jobs, 'Appian Recruiting <no-reply@greenhouse.io>', 'Your application', '')['company'] == 'Appian Corporation'
     assert match(jobs, 'no-reply@ashbyhq.com', 'Update', 'Thanks for your interest in Two Sigma.')['company'] == 'Two Sigma'
     assert match(jobs, 'news@sigma.com', 'Sigma news', 'nothing here') is None
+    two = [{'company': 'Skydio', 'applied_at': None}, {'company': 'Skydio', 'applied_at': None}, {'company': 'Valon', 'applied_at': None}]
+    assert own_pick(two, 'no-reply@ashbyhq.com', 'Thanks for applying to Valon', '')['company'] == 'Valon'
+    assert own_pick(two, 'no-reply@ashbyhq.com', 'Thanks for applying to Skydio', '') is None      # two Skydio jobs: ambiguous
     h = 'acme.wd1.myworkdayjobs.com'
     assert verify_link(h, 'Click <a href="https://acme.wd1.myworkdayjobs.com/en-US/careers/activate/abc123?x=1&amp;y=2">') == f'https://{h}/en-US/careers/activate/abc123?x=1&y=2'
     assert verify_link(h, 'https://acme.wd1.myworkdayjobs.com/en-US/careers/job/123') is None          # not a verify link
     assert verify_link(h, 'https://evil.example/acme.wd1.myworkdayjobs.com/verify') is None            # wrong host
+    assert GH_CODE.search('Copy and paste this code into the security code field on your application: dPo8vFl7 After you enter').group(1) == 'dPo8vFl7'
     print('mail selftest ok')
 
 
 if __name__ == '__main__':
     if '--links' in sys.argv:
         links()
+    elif '--code' in sys.argv:
+        code(float(sys.argv[sys.argv.index('--code') + 1]))
     elif '--verify' in sys.argv:
         verify(sys.argv[sys.argv.index('--verify') + 1])
     else:

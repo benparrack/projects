@@ -25,6 +25,8 @@ const audit = j => { try { return JSON.parse(j.answers || '{}'); } catch { retur
 const ATS = [[/greenhouse/, 'Greenhouse'], [/ashbyhq/, 'Ashby'], [/lever\.co/, 'Lever'], [/workday/, 'Workday'], [/icims/, 'iCIMS'],
   [/oraclecloud/, 'Oracle'], [/smartrecruiters/, 'SmartRecruiters'], [/tiktok|bytedance/, 'TikTok/ByteDance'], [/taleo/, 'Taleo'], [/workable/, 'Workable']];
 const ats = url => ATS.find(([re]) => re.test(url))?.[1] ?? (() => { try { return new URL(url).hostname.replace(/^(www|jobs|careers)\./, ''); } catch { return 'Other'; } })();
+const formUrl = u => /ashbyhq/.test(u) && !/\/application/.test(u) ? u.replace(/[?#].*$/, '') + '/application'
+  : /lever\.co/.test(u) && !/\/apply/.test(u) ? u.replace(/[?#].*$/, '') + '/apply' : u;
 const responded = o => ['oa', 'interview', 'offer', 'rejected'].includes(o);
 const advanced = o => ['oa', 'interview', 'offer'].includes(o);
 
@@ -34,7 +36,7 @@ function items(j) {
   return (a.questions || []).filter(([k]) => a.answers?.[k] != null).map(([key, label, type]) => {
     const v = a.answers[key];
     type ||= /^\/.*\.\w{2,4}$/.test(v) ? 'file' : Array.isArray(v) ? 'multiselect' : String(v).length > 120 ? 'textarea' : 'text';
-    return { key, label, type, value: type === 'file' ? basename(String(v)) : Array.isArray(v) ? v.join(' | ') : String(v) };
+    return { key, label, type, value: type === 'file' ? basename(String(v)) : Array.isArray(v) ? v.join(' | ') : String(v), ...(type === 'file' && { path: String(v) }) };
   });
 }
 
@@ -97,7 +99,7 @@ function state() {
   const queued = rows.filter(r => r.status === 'queued');
   const waitingOn = norm => queued.filter(j => { try { return JSON.parse(j.reason).some(x => normQ(x.label) === norm); } catch { return false; } });
   const pick = (r, ...extra) => ({ id: r.id, company: r.company, title: r.title, url: r.url, posted: r.posted,
-    locations: JSON.parse(r.locations || '[]').slice(0, 3), category: r.category, ats: ats(r.url), ...Object.fromEntries(extra.map(k => [k, r[k]])) });
+    locations: JSON.parse(r.locations || '[]').slice(0, 3), category: r.category, ats: ats(r.url), form: formUrl(r.url), ...Object.fromEntries(extra.map(k => [k, r[k]])) });
   const emails = all('SELECT * FROM emails ORDER BY received');
   const byStatus = s => rows.filter(r => r.status === s).sort((a, b) => b.updated - a.updated);
   return {
@@ -161,13 +163,6 @@ const routes = {
   'POST /api/approve': b => (approve(b), { ok: true }),
   // Ashby flags the bot's browser as spam, so Ben sends those himself (Open form + Copy).
   'POST /api/approve-all': () => { for (const { id } of all("SELECT id FROM jobs WHERE status='dryrun' AND url NOT LIKE '%ashbyhq%'")) approve({ id }); return { ok: true }; },
-  // Opens the posting in Ben's default browser (Firefox), not this Chrome app window.
-  'POST /api/open-form': ({ id }) => {
-    const url = one('SELECT url FROM jobs WHERE id=?', id)?.url;
-    if (!/^https:\/\//.test(url || '')) throw new Error('no posting link');
-    spawn('xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
-    return { ok: true };
-  },
   'POST /api/reject': ({ id }) => db.prepare("UPDATE jobs SET status='skipped', reason='Ben passed on it', updated=? WHERE id=?").run(Date.now(), id),
   'POST /api/redo': ({ id }) => db.prepare("UPDATE jobs SET status='new', reason=NULL, updated=? WHERE id=?").run(Date.now(), id),
   'POST /api/manual-done': ({ id, applied }) => applied

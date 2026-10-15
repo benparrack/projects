@@ -52,8 +52,9 @@ export async function apply(browser, job, { dryRun = true } = {}) {
     if (dryRun) return record(job, 'dryrun', { answers: audit, screenshot });
     // Test switch: run the whole live path but stop before the click.
     if (process.env.INTERN_NO_SUBMIT) return record(job, 'dryrun', { reason: 'INTERN_NO_SUBMIT: stopped before submit', answers: audit, screenshot });
-    const res = await ats.submit(page, { onCode: () => send(`Type the code: ${job.company}`,
-      'Greenhouse emailed you a security code. Type it into the open Chrome window, then click Submit.', { tags: ['key'] }) });
+    const res = await ats.submit(page, { onCode: code => code
+      ? send(`Ctrl+V, then Submit: ${job.company}`, `Code ${code} is on your clipboard and the cursor is in the code box of the open Chrome window.`, { tags: ['key'] })
+      : send(`Type the code: ${job.company}`, 'Greenhouse emailed you a security code. Type it into the open Chrome window, then click Submit.', { tags: ['key'] }) });
     if (!res.ok && !page.isClosed() && !/window closed|within 15 minutes/.test(res.why)) {
       await send(`Finish it yourself: ${job.company}`, `The form didn't confirm (${res.why}). Check the open Chrome window: fix anything flagged, then click Submit.`, { tags: ['warning'] });
       await page.bringToFront();
