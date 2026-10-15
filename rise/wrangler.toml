@@ -1,0 +1,14 @@
+name = "rise"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[vars]
+PREP_MIN = "75"       # minutes between alarm and first class
+BACKUP_ALARMS = "2"   # extra alarms, 5 min apart, until you scan the QR
+FALLBACK = "07:30"    # used if the feed can't be read
+TZ = "Europe/Stockholm"
+# FEED_URL is a secret (the link is a private token): npx wrangler secret put FEED_URL

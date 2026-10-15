@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rise QR</title>
+<style>
+  body { margin: 0; padding: 16px; background: #fff; color: #000; font: 20px system-ui, sans-serif; text-align: center; }
+  #qr svg { width: min(80vw, 12cm); height: auto; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+<h1>I'm up</h1>
+<div id="qr"></div>
+<p>Print this and tape it as far from your bed as you can (kitchen, bathroom mirror).</p>
+<script>
+  // Opens the "I'm up" Shortcut, which switches off the remaining Rise alarms.
+  const q = qrcode(0, 'M');
+  q.addData("shortcuts://run-shortcut?name=I'm%20up");
+  q.make();
+  document.getElementById('qr').innerHTML = q.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+</script>
+</body>
+</html>
