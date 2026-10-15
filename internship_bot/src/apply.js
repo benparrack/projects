@@ -16,6 +16,8 @@ export const ADAPTERS = [greenhouse, ashby, lever, workday];
 // Workday needs a candidate account per company; until Ben allows that, its postings stay "not automated".
 export const adapterFor = url => ADAPTERS.find(a => a.handles(url) && (!a.wizard || meta.get('workday_accounts') === '1'));
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const DONE = /thank you for (applying|your application|your interest)|application (has been |was )?(successfully )?(received|submitted)|we.ve received your application/i;
 const SHOTS = new URL('../data/shots/', import.meta.url).pathname;
 mkdirSync(SHOTS, { recursive: true });
 
@@ -37,7 +39,8 @@ export async function apply(browser, job, { dryRun = true } = {}) {
   if (file) return handOff(job, `${n2why(file)}: "${file.label.slice(0, 150)}"`);
   if (needs.length) { await enqueue(job, needs); return record(job, 'queued', { reason: JSON.stringify(needs), answers: audit }, { needs }); }
 
-  const own = !dryRun && !process.env.INTERN_NO_SUBMIT && ats.humanCode && await chromium.launch({ channel: 'chrome', headless: false });
+  // Live submits run in a visible window: hidden browsers get silently dropped by bot checks, and Ben can step in.
+  const own = !dryRun && !process.env.INTERN_NO_SUBMIT && await chromium.launch({ channel: 'chrome', headless: false });
   const page = await (own || browser).newPage({ viewport: { width: 1100, height: 900 } });
   try {
     await page.goto(form.applyUrl, { waitUntil: 'load', timeout: 45000 });
@@ -51,7 +54,15 @@ export async function apply(browser, job, { dryRun = true } = {}) {
     if (process.env.INTERN_NO_SUBMIT) return record(job, 'dryrun', { reason: 'INTERN_NO_SUBMIT: stopped before submit', answers: audit, screenshot });
     const res = await ats.submit(page, { onCode: () => send(`Type the code: ${job.company}`,
       'Greenhouse emailed you a security code. Type it into the open Chrome window, then click Submit.', { tags: ['key'] }) });
-    await page.screenshot({ path: screenshot.replace('.png', '-after.png'), fullPage: true });
+    if (!res.ok && !page.isClosed() && !/window closed|within 15 minutes/.test(res.why)) {
+      await send(`Finish it yourself: ${job.company}`, `The form didn't confirm (${res.why}). Check the open Chrome window: fix anything flagged, then click Submit.`, { tags: ['warning'] });
+      await page.bringToFront();
+      for (let t = 0; t < 900 && !page.isClosed() && !res.ok; t++) {
+        await sleep(1000);
+        if (await page.locator('body').innerText().then(x => DONE.test(x), () => false)) res.ok = true;
+      }
+    }
+    if (!page.isClosed()) await page.screenshot({ path: screenshot.replace('.png', '-after.png'), fullPage: true });
     if (!res.ok) return handOff(job, `submit blocked: ${res.why}`, screenshot);
     return record(job, 'applied', { answers: audit, screenshot }, res);
   } finally { await (own || page).close().catch(() => {}); }

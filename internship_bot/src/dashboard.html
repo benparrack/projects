@@ -241,7 +241,7 @@ const VIEWS = {
       <button class="b quiet" onclick="act('/api/redo', {id:'${j.id}'}, 'Back in line for the bot')">Let the bot retry</button></div></div>`).join('');
     return `<h2>Questions only you can answer <span class="chip">${S.questions.length}</span></h2>${q || '<div class="card empty">No open questions. The bot has everything it needs.</div>'}
       <h2>Ready to submit <span class="chip">${S.approvals.length}</span>${S.approvals.length > 1 ? `<button class="b" onclick="approveAll()">Approve all</button>` : ''}</h2>
-      <p class="lede">${S.settings.auto_submit ? 'Auto-submit is on, so new jobs skip this step.' : 'Each form is filled in and screenshotted, then waits here. Read it, fix anything, approve.'}</p>
+      <p class="lede">${S.settings.auto_submit ? 'Auto-submit is on, so new jobs skip this step.' : 'Each form is filled in and screenshotted, then waits here. Read it, fix anything, approve. Approving opens a Chrome window that submits it; if it gets stuck you can finish it there.'}</p>
       ${a || '<div class="card empty">Nothing waiting for approval.</div>'}
       <h2>Apply yourself <span class="chip">${S.manual.length}</span></h2>
       <p class="lede">Ones the bot can't or shouldn't finish: no-AI certifications, coding tasks, uploads it doesn't have, blocked submits.</p>
