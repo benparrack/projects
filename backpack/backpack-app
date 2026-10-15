@@ -1,0 +1,12 @@
+#!/bin/sh
+# Opens Backpack: starts the dev server if it isn't up, then a Chrome app window (no tabs/address bar).
+# Data lives in that Chrome profile's storage for http://localhost:5195, so always open it this way.
+DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+URL="http://localhost:5195/"
+NODE="$(command -v node || ls -d "$HOME"/AppDev/Tools/nvm/versions/node/*/bin/node | tail -1)"
+if ! curl -fs -o /dev/null "$URL"; then
+  # setsid + </dev/null: detach fully so the server outlives this launcher
+  setsid "$NODE" "$DIR/dev.mjs" </dev/null >/dev/null 2>&1 &
+  for _ in $(seq 50); do curl -fs -o /dev/null "$URL" && break; sleep 0.1; done
+fi
+exec google-chrome --app="$URL" --class=Backpack --user-data-dir="$HOME/.config/backpack-chrome" --no-first-run --no-default-browser-check >/dev/null 2>&1
