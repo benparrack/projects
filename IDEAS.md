@@ -598,3 +598,18 @@ day, read in real depth rather than a one-line trivia fact.
 **What it needs when resumed:**
 - Revisit live results after ~1–3 months.
 - Possible upgrades: a rule-picked fund universe (e.g. the top 13F filers by AUM as of 2019) to remove hindsight; delisted price data; a longer crypto history source.
+
+## 44. Auto-Synced Homework Planner (myHomework, minus the typing)
+
+**Status:** Stocked, not started (idea 2026-10-15, from a friend using myhomeworkapp.com).
+**Pitch:** A myHomework-style planner (classes, upcoming assignments, due-date list/calendar, mark done) that fills itself from the school's LMS (Canvas, Schoology, others) instead of the student typing everything in.
+
+**Why this one:** The manual-entry step is the whole reason people abandon planners. Removing it is the product.
+
+**What it needs when resumed:**
+- Cheapest universal sync path: **calendar iCal feeds**. Canvas (Calendar → "Calendar Feed") and Schoology (Calendar → iCal export) both give each student a private URL with every assignment and its due date, with no API keys and no school admin approval. Google Classroom and Brightspace have similar feeds. The student pastes one URL and you poll it.
+- Richer path, later: Canvas REST API with a personal access token (`/api/v1/courses`, `/users/self/todo`, submissions → auto-mark done when submitted). Some schools block student tokens. Schoology's API needs per-school keys, so use iCal there.
+- Feeds give class names inconsistently (Canvas puts `[Course]` in the summary). A parse step maps events to classes and lets the user rename and color them.
+- Keep user state (done flags, notes, personal tasks) separate from synced data so a re-sync never wipes it. Dedupe on the event UID.
+- Done when: paste a real Canvas feed URL, see classes and assignments appear, check some off, re-sync, and the checkmarks survive.
+- Question for Ben: personal tool for his own Canvas, or something friends could use (hosted, accounts, phone)? That decides local web app vs hosted PWA.
