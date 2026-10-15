@@ -250,10 +250,11 @@ const VIEWS = {
         return `<div class="l${st}">${esc(it.label)}</div><div class="v${copy ? ' cp' : ''}${st}" data-ck="${esc(j.id + ':' + it.key)}">${field(it)}${copy
           ? `<button class="b quiet" onclick="copyVal(this)" data-v="${esc(v)}" title="${it.type === 'file' ? 'In the upload dialog: Ctrl+L, Ctrl+V, Enter' : ''}">${it.type === 'file' ? 'Copy path' : 'Copy'}</button>` : ''}</div>`; }).join('')}</div>`; };
     const yourself = j => `<button class="b primary" onclick="openForm('${j.id}')" title="Form on the left half of the screen, this window on the right">Open form</button>
-      <button class="b good" onclick="appliedNext('${j.id}')" title="Logs it, then opens the next one">Mark as applied${hardList().length > 1 ? ' → next' : ''}</button>`;
+      <button class="b good" onclick="appliedDone('${j.id}')" title="Logs it, closes the form window and makes this window full screen again">Mark as applied</button>
+      ${hardList().length > 1 ? `<button class="b good" onclick="appliedNext('${j.id}')" title="Logs it, then opens the next one in the same spot">Applied → next form</button>` : ''}`;
     const apps = S.approvals.filter(show).sort((x, y) => hard(x) - hard(y));
     const a = apps.map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}${j.ats === 'Greenhouse' ? `<div class="code-note">You'll type a code: on Approve a Chrome window opens with this form filled in. Copy the 8-character code Greenhouse emails you into it, then click Submit application.</div>`
-      : j.ats === 'Ashby' ? `<div class="code-note">You send this one: Ashby flags the bot's browser as spam. Open form puts it on the left half of your screen with this list on the right. Upload the resume first (Copy path, then in the file dialog Ctrl+L, Ctrl+V, Enter): Ashby fills your name, email and links from it. Then copy down the list, submit, and Mark as applied opens the next one.</div>` : ''}
+      : j.ats === 'Ashby' ? `<div class="code-note">You send this one: Ashby flags the bot's browser as spam. Open form puts it on the left half of your screen with this list on the right. Upload the resume first (Copy path, then in the file dialog Ctrl+L, Ctrl+V, Enter): Ashby fills your name, email and links from it. Then copy down the list and submit. Applied → next form opens the next one; Mark as applied stops there.</div>` : ''}
       ${qa(j, j.ats === 'Ashby')}
       ${j.shot ? `<details><summary>Screenshot of the filled form</summary><img class="shot" loading="lazy" src="/shots/${j.id}.png"></details>` : ''}
       <div class="row" style="margin-top:10px">${j.ats === 'Ashby' ? yourself(j) : `<button class="b good" onclick="approve('${j.id}')">Approve and submit</button>`}
@@ -420,9 +421,14 @@ function openForm(id) {
   const f = window.open(j.form, 'ibform', `popup,left=${screen.availLeft},top=${screen.availTop},width=${w},height=${h}`);
   if (!f) return toast('Chrome blocked the window: click Open form');
   try { f.moveTo(screen.availLeft, screen.availTop); f.resizeTo(w, h); } catch {}
-  window.resizeTo(w, h); setTimeout(() => window.moveTo(screen.availLeft + w, screen.availTop), 300);
+  api('/api/tile', { mode: 'unmax' }).then(() => setTimeout(() => { window.resizeTo(w, h); setTimeout(() => window.moveTo(screen.availLeft + w, screen.availTop), 300); }, 250));
   working = id; render();
   setTimeout(() => document.getElementById('ap-' + id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50);
+}
+// Done for now: close the form window and give the dashboard the whole screen back.
+async function appliedDone(id) {
+  await act('/api/manual-done', { id, applied: true }, 'Logged as applied'); working = null; render();
+  window.open('', 'ibform')?.close(); api('/api/tile', { mode: 'max' });
 }
 async function appliedNext(id) {
   const list = hardList(), next = list[list.findIndex(j => j.id === id) + 1] || list.find(j => j.id !== id);

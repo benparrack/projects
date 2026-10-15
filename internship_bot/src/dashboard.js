@@ -3,7 +3,7 @@
 // apply-yourself list, outcomes, insights, profile editing, settings.
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, existsSync, openSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { basename } from 'node:path';
 import YAML from 'yaml';
 import { db, meta } from './db.js';
@@ -181,6 +181,8 @@ const routes = {
   'POST /api/mail': ({ user, password }) => {
     writeFileSync(ROOT + 'data/mail.json', JSON.stringify({ user, password: password.replace(/\s+/g, '') }), { mode: 0o600 });
   },
+  // A page can't resize a maximized window, so tile.py (un)maximizes the dashboard first.
+  'POST /api/tile': ({ mode }) => (spawnSync('python3', [ROOT + 'src/tile.py', mode === 'max' ? 'max' : 'unmax'], { timeout: 5000 }), { ok: true }),
   'POST /api/mail-check': () => new Promise(res => {
     const p = spawn('python3', [ROOT + 'src/mail.py'], { cwd: ROOT });
     let out = '';
