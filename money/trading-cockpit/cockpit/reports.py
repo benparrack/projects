@@ -231,6 +231,10 @@ def tick(now: datetime | None = None) -> list[str]:
         from . import screener
         screener.run_all(_fire)
         ran.append("screener")
+    if wd < 5 and hm >= (s.get("screener_time") or "22:30") and _due("evolution", day):
+        from . import evolve
+        evolve.daily(_fire)
+        ran.append("evolution")
     if wd == 4 and s.get("weekly_report") and hm >= (s.get("screener_time") or "22:30") and _due("weekly", day):
         send_weekly(day)
         ran.append("weekly")

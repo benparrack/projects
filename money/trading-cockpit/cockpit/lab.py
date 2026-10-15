@@ -54,8 +54,74 @@ def _atr(df: pd.DataFrame, n: int) -> pd.Series:
     return tr.rolling(n).mean()
 
 
+def _dm(df: pd.DataFrame, n: int):
+    """Wilder's +DI, -DI and ADX."""
+    h, l = df["High"], df["Low"]
+    up, dn = h.diff(), -l.diff()
+    pdm = up.where((up > dn) & (up > 0), 0.0)
+    mdm = dn.where((dn > up) & (dn > 0), 0.0)
+    pc = df["Close"].shift(1)
+    tr = pd.concat([h - l, (h - pc).abs(), (l - pc).abs()], axis=1).max(axis=1)
+    w = lambda s: s.ewm(alpha=1 / n, adjust=False).mean()
+    atr = w(tr).replace(0, np.nan)
+    pdi, mdi = 100 * w(pdm) / atr, 100 * w(mdm) / atr
+    adx = w(100 * (pdi - mdi).abs() / (pdi + mdi).replace(0, np.nan))
+    return pdi, mdi, adx
+
+
+def _streak(c: pd.Series) -> pd.Series:
+    """+n after n up closes in a row, -n after n down closes, 0 on an unchanged close."""
+    sgn = np.sign(c.diff().fillna(0)).to_numpy()
+    out = np.zeros(len(sgn))
+    for i in range(1, len(sgn)):
+        out[i] = (out[i - 1] + sgn[i] if sgn[i] and np.sign(out[i - 1]) == sgn[i] else sgn[i])
+    return pd.Series(out, index=c.index)
+
+
+def _days_left(idx: pd.DatetimeIndex) -> pd.Series:
+    """Weekdays left in the month after this day (exchange holidays ignored; the calendar is known in advance)."""
+    ends = idx + pd.offsets.MonthEnd(0)
+    left = [np.busday_count((d + pd.Timedelta(days=1)).date(), (e + pd.Timedelta(days=1)).date()) for d, e in zip(idx, ends)]
+    return pd.Series(left, index=idx, dtype=float)
+
+
+def _coin(df: pd.DataFrame, seed) -> pd.Series:
+    """Placebo: a deterministic pseudo-random number in [0, 1) per bar, different for each seed and stock.
+    Hashes today's date and close, so it uses nothing a real rule couldn't see."""
+    d = df.index.asi8 // 86_400_000_000_000 if len(df) else np.array([])
+    x = np.sin(d * 12.9898 + float(seed) * 78.233 + df["Close"].to_numpy(float) * 0.7311) * 43758.5453
+    return pd.Series(x - np.floor(x), index=df.index)
+
+
 def _funcs(df: pd.DataFrame) -> dict:
-    c = df["Close"]
+    c, h, l = df["Close"], df["High"], df["Low"]
+
+    def macd(f, s):
+        return c.ewm(span=_win(f), adjust=False).mean() - c.ewm(span=_win(s), adjust=False).mean()
+
+    def stoch(n):
+        n = _win(n)
+        lo, hi = l.rolling(n).min(), h.rolling(n).max()
+        return 100 * (c - lo) / (hi - lo).replace(0, np.nan)
+
+    def obv():
+        return (np.sign(c.diff().fillna(0)) * df["Volume"]).cumsum()
+
+    def mfi(n):
+        n = _win(n)
+        tp = (h + l + c) / 3
+        flow = tp * df["Volume"]
+        pos = flow.where(tp.diff() > 0, 0.0).rolling(n).sum()
+        neg = flow.where(tp.diff() < 0, 0.0).rolling(n).sum()
+        return 100 - 100 / (1 + pos / neg.replace(0, np.nan))
+
+    def cci(n):
+        n = _win(n)
+        tp = (h + l + c) / 3
+        ma = tp.rolling(n).mean()
+        md = tp.rolling(n).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
+        return (tp - ma) / (0.015 * md.replace(0, np.nan))
+
     return {
         "sma": (lambda x, n: _s(x, df).rolling(_win(n)).mean(), "sma(close, 50): average of the last n days"),
         "ema": (lambda x, n: _s(x, df).ewm(span=_win(n), adjust=False).mean(), "ema(close, 20): exponential average"),
@@ -74,6 +140,27 @@ def _funcs(df: pd.DataFrame) -> dict:
                           "crosses_above(sma(close,50), sma(close,200))"),
         "crosses_below": (lambda a, b: (_s(a, df) < _s(b, df)) & (_s(a, df).shift(1) >= _s(b, df).shift(1)),
                           "crosses_below(close, sma(close, 20))"),
+        "stdev": (lambda x, n: _s(x, df).rolling(_win(n)).std(),
+                  "stdev(close, 20): standard deviation (Bollinger band = sma ± 2 × stdev)"),
+        "ibs": (lambda: (c - l) / (h - l).replace(0, np.nan), "ibs(): where the close sits in the day's range, 0 = low, 1 = high"),
+        "stoch": (lambda n=14: stoch(n), "stoch(14): stochastic %K, 0–100; under 20 = near the bottom of the range"),
+        "willr": (lambda n=14: stoch(n) - 100, "willr(14): Williams %R, -100–0; under -80 = oversold"),
+        "macd": (lambda f=12, s=26: macd(f, s), "macd(12, 26): fast EMA minus slow EMA"),
+        "macd_signal": (lambda f=12, s=26, g=9: macd(f, s).ewm(span=_win(g), adjust=False).mean(),
+                        "macd_signal(12, 26, 9): EMA of the MACD line"),
+        "macd_hist": (lambda f=12, s=26, g=9: macd(f, s) - macd(f, s).ewm(span=_win(g), adjust=False).mean(),
+                      "macd_hist(12, 26, 9): MACD minus its signal line"),
+        "adx": (lambda n=14: _dm(df, _win(n))[2], "adx(14): trend strength 0–100; over 25 = trending"),
+        "di_plus": (lambda n=14: _dm(df, _win(n))[0], "di_plus(14): +DI, buying pressure"),
+        "di_minus": (lambda n=14: _dm(df, _win(n))[1], "di_minus(14): -DI, selling pressure"),
+        "cci": (lambda n=20: cci(n), "cci(20): commodity channel index; under -100 = stretched down"),
+        "mfi": (lambda n=14: mfi(n), "mfi(14): volume-weighted RSI, 0–100"),
+        "obv": (lambda: obv(), "obv(): on-balance volume (running total of up-day minus down-day volume)"),
+        "streak": (lambda: _streak(c), "streak(): +3 after three up closes in a row, -3 after three down closes"),
+        "dow": (lambda: pd.Series(df.index.dayofweek, index=df.index, dtype=float), "dow(): day of week, 0 = Monday … 4 = Friday"),
+        "dom": (lambda: pd.Series(df.index.day, index=df.index, dtype=float), "dom(): calendar day of the month"),
+        "days_left": (lambda: _days_left(df.index), "days_left(): weekdays left in the month after today (0 = last day)"),
+        "coin": (lambda seed=1: _coin(df, seed), "coin(1): placebo random number 0–1, for testing luck"),
     }
 
 
@@ -203,12 +290,14 @@ def _spec(d: dict) -> dict:
     return spec
 
 
-def outcomes(df: pd.DataFrame, spec: dict, exit_sig: pd.Series | None) -> pd.DataFrame:
+def outcomes(df: pd.DataFrame, spec: dict, exit_sig: pd.Series | None, start: int = 1,
+             mark_open: bool = False) -> pd.DataFrame:
     """For EVERY possible entry day d (buy at d's open), where and why the trade would end.
 
     Precomputing this lets the strategy and thousands of random baselines share one exit engine.
     Stop/target are checked against each day's low/high; if both are touched on the same day the stop
-    is assumed to have hit first. Gaps through a level fill at the open.
+    is assumed to have hit first. Gaps through a level fill at the open. Only entries from `start` on are
+    computed; with `mark_open`, a trade still open at the end is valued at the last close (why = "open").
     """
     o, h, l, c = (df[k].to_numpy(float) for k in ("Open", "High", "Low", "Close"))
     atr = _atr(df, 14).shift(1).to_numpy(float)  # known before day d opens
@@ -219,7 +308,7 @@ def outcomes(df: pd.DataFrame, spec: dict, exit_sig: pd.Series | None) -> pd.Dat
     exit_i = np.full(n, -1)
     rfrac = np.full(n, np.nan)
     why = np.empty(n, dtype=object)
-    for d in range(1, n):
+    for d in range(max(start, 1), n):
         e = o[d]
         if not np.isfinite(e) or e <= 0:
             continue
@@ -250,7 +339,9 @@ def outcomes(df: pd.DataFrame, spec: dict, exit_sig: pd.Series | None) -> pd.Dat
                 break
             j += 1
         if px is None:
-            continue  # still open at the end of the data
+            if not mark_open:
+                continue  # still open at the end of the data
+            px, reason, j = c[n - 1], "open", n - 1
         r = px / e - 1 - 2 * cost
         ret[d], exit_i[d], why[d] = r, j, reason
         if risk:

@@ -73,7 +73,7 @@ async function refreshHeader() {
 
 // ---------- router ----------
 const PAGE_TITLES = { today: "Home", check: "New trade", portfolio: "Positions", journal: "Journal", stats: "Stats & tax", chart: "Chart",
-  screener: "Screener", lab: "Strategy lab", alerts: "Watchlist & alerts", settings: "Settings" };
+  screener: "Screener", lab: "Strategy lab", evolution: "Strategy evolution", alerts: "Watchlist & alerts", settings: "Settings" };
 // quiet: re-render in place (live refresh) without the loading placeholder.
 async function route(quiet) {
   let name = (location.hash || "#today").slice(1).split(/[/?]/)[0];

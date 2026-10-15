@@ -168,11 +168,12 @@ def api_set_settings():
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     db.init()
-    from . import alerts, broker, dash, lab, pwa, reports, screener
+    from . import alerts, broker, dash, evolve, lab, pwa, reports, screener
     pwa.register(app)
     dash.register(app)
     alerts.register(app)
     lab.register(app)
+    evolve.register(app)
     broker.register(app)
     screener.register(app)
     reports.register(app)

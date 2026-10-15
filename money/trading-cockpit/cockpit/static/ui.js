@@ -255,7 +255,7 @@ document.addEventListener("click", (e) => {
 // ---------- command palette ----------
 const PAL_PAGES = [
   ["Home", "#today", "i-home"], ["New trade check", "#check", "i-check"], ["Positions", "#portfolio", "i-wallet"], ["Journal", "#journal", "i-book"],
-  ["Stats & tax", "#stats", "i-bars"], ["Chart", "#chart", "i-candle"], ["Screener", "#screener", "i-filter"], ["Strategy lab", "#lab", "i-flask"],
+  ["Stats & tax", "#stats", "i-bars"], ["Chart", "#chart", "i-candle"], ["Screener", "#screener", "i-filter"], ["Strategy lab", "#lab", "i-flask"], ["Strategy evolution", "#evolution", "i-dna"],
   ["Watchlist & alerts", "#alerts", "i-bell"], ["Settings", "#settings", "i-gear"],
 ];
 const PAL_CMDS = [
@@ -339,13 +339,13 @@ function themeIcon() {
 }
 
 // ---------- shortcuts ----------
-const GO_KEYS = { h: "#today", p: "#portfolio", j: "#journal", s: "#stats", c: "#chart", r: "#screener", l: "#lab", a: "#alerts", ",": "#settings" };
+const GO_KEYS = { h: "#today", p: "#portfolio", j: "#journal", s: "#stats", c: "#chart", r: "#screener", l: "#lab", e: "#evolution", a: "#alerts", ",": "#settings" };
 function showKeys() {
   const k = (a, b) => `<tr><td>${a.split(" ").map((x) => `<kbd>${x}</kbd>`).join(" ")}</td><td>${b}</td></tr>`;
   openModal(`<h2>Keyboard shortcuts</h2><table>
     ${k("Ctrl K", "Search tickers, pages and actions")}${k("/", "Same, from anywhere")}${k("n", "New trade check")}
     ${k("g h", "Home")}${k("g p", "Positions")}${k("g j", "Journal")}${k("g s", "Stats &amp; tax")}${k("g c", "Chart")}${k("g r", "Screener")}
-    ${k("g l", "Strategy lab")}${k("g a", "Watchlist &amp; alerts")}${k("g ,", "Settings")}${k("t", "Light / dark theme")}${k("r", "Refresh this page's numbers")}${k("esc", "Close panels")}${k("?", "This list")}</table>
+    ${k("g l", "Strategy lab")}${k("g e", "Strategy evolution")}${k("g a", "Watchlist &amp; alerts")}${k("g ,", "Settings")}${k("t", "Light / dark theme")}${k("r", "Refresh this page's numbers")}${k("esc", "Close panels")}${k("?", "This list")}</table>
     <p class="small muted">Click any ticker anywhere for a quick view. Ctrl/⌘-click to jump straight to its chart.</p>`);
 }
 let gPending = 0;

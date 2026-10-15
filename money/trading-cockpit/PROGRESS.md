@@ -34,6 +34,18 @@ gap-down reversal NO EDGE, golden cross TOO FEW TRADES. That's expected and is t
 - [x] Stats: daily P/L calendar heatmap and R-multiple histogram
 - [x] 42 tests; UI checked in Firefox at desktop and 390px widths, both themes, no horizontal overflow
 
+## 2026-10-15: strategy evolution
+- [x] Lab rule language gains IBS, stochastics, Williams %R, MACD, ADX/DI, CCI, MFI, OBV, streaks, calendar and coin()
+- [x] 308-strategy library (284 real across 35 families + 24 placebos) in `strategies.py`, each tagged with its source
+- [x] `evolve.py`: 609 stocks scanned in parallel (~80s), 5 generations on fresh stock cohorts, holdout final exam,
+      prior-year check, date-clustered z, a $10k 10-slot paper account (median of 25 pick orders) per survivor
+- [x] Live paper trial for the finalists, refreshed every weekday by the scheduler with ntfy pushes on status changes
+- [x] Evolution page: funnel, real-vs-placebo survival, population map, survivors, live trial, graveyard, method notes
+- [x] First run (prices through 2026-10-15): 308 → 103 → 64 → 42 → 28 → 19 → **11 finalists, 0/24 placebos**.
+      Winners are almost all short-term mean reversion in uptrends (RSI-2, RSI-3+IBS, 4 down days, Bollinger) plus
+      turn of the month (+1.08%/trade over random on the holdout). Trial started 2026-10-15; earliest graduation ~2026-11-12
+- [x] 48 tests
+
 ## Waiting on Ben
 - Subscribe to the ntfy topic (Alerts tab) and press "Send test alert".
 - Optionally add an SEC contact in Settings for insider-buy alerts.

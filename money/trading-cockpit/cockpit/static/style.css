@@ -299,3 +299,34 @@ label.chk { display: inline-flex; gap: 6px; align-items: center; margin: 0; } la
 @media (max-width: 860px) { #view table { display: block; overflow-x: auto; } #view .tablewrap table { display: table; } }
 @media (max-width: 380px) { #mkts .mkt b { display: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+
+/* ---------- strategy evolution ---------- */
+.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+svg.spark-inline { display: block; width: 100%; height: 26px; } svg.spark-inline .l { fill: none; stroke-width: 1.5; }
+.evo-funnel { display: flex; flex-direction: column; gap: 10px; }
+.evo-fr { display: grid; grid-template-columns: 120px minmax(0, 1fr) 70px; gap: 12px; align-items: center; }
+.evo-fr .num { text-align: right; font-variant-numeric: tabular-nums; }
+.evo-fb { display: flex; height: 22px; border-radius: 6px; background: var(--panel2); overflow: hidden; gap: 1px; }
+.evo-fb i { display: block; height: 100%; }
+.evo-legend { display: flex; flex-wrap: wrap; gap: 12px; } .evo-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.evo-c { display: inline-block; width: 15px; height: 15px; border-radius: 4px; border: 0; padding: 0; cursor: pointer; flex: none; transition: transform .1s; }
+button.evo-c:hover { transform: scale(1.35); box-shadow: 0 0 0 2px var(--text); position: relative; z-index: 1; }
+.evo-c.placebo { outline: 1.5px dashed var(--violet); outline-offset: 1px; } i.evo-c.placebo { background: var(--panel3); cursor: default; }
+.evo-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 6px 28px; }
+.evo-group { display: flex; flex-direction: column; gap: 4px; break-inside: avoid; }
+.evo-gh { font-size: 10.5px; text-transform: uppercase; letter-spacing: .9px; color: var(--muted); padding: 10px 0 2px; }
+.evo-fam { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; align-items: start; }
+.evo-fn { font-size: 12.5px; line-height: 18px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evo-cells { display: flex; flex-wrap: wrap; gap: 3px; }
+.evo-cause { display: grid; grid-template-columns: minmax(0, 1fr) 34% 36px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.evo-cause .num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.evo-dead td { opacity: .5; }
+.evo-steps { padding-left: 18px; margin: 0; } .evo-steps li { margin-bottom: 8px; }
+.evo-rule { display: grid; gap: 8px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.evo-rule > div { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; align-items: baseline; } .evo-rule code { white-space: normal; word-break: break-word; }
+@media (max-width: 560px) {
+  .evo-fr { grid-template-columns: 74px minmax(0, 1fr) 56px; gap: 8px; }
+  .evo-map { grid-template-columns: minmax(0, 1fr); } .evo-fam { grid-template-columns: 112px minmax(0, 1fr); }
+  .evo-cause { grid-template-columns: minmax(0, 1fr) 28% 30px; }
+}
+.evo-scroll { max-height: 440px; overflow-y: auto; }

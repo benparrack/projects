@@ -21,8 +21,8 @@ MANIFEST = {
 }
 
 SW = """// Cache the app shell; always go to the network for data so numbers are never stale.
-const V = 'cockpit-v2';
-const SHELL = ['/', '/static/style.css', '/static/app.js', '/static/alerts.js', '/static/lab.js',
+const V = 'cockpit-v3';
+const SHELL = ['/', '/static/style.css', '/static/app.js', '/static/alerts.js', '/static/lab.js', '/static/evolve.js',
                '/static/more.js', '/static/ui.js', '/static/chart.umd.min.js', '/icon-192.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks =>

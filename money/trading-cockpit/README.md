@@ -34,6 +34,7 @@ and Positions numbers refresh every minute.
 | **Chart** | Candlesticks with volume and 20/50/200-day averages, your buys and sells as markers, and the open plan's entry/stop/target (and the original stop, once trailing has raised it). Crosshair readout, 3M–2Y. Headlines for the ticker, plus an optional Claude summary of them. |
 | **Screener** | Run any Lab rule across the S&P 500, Stockholm large/mid cap, a volatile-US list, or your watchlist, with price / dollar-volume / ATR% filters. Saved screens run every weekday evening; hits land in the briefing and (optionally) as a push. |
 | **Lab** | Write a buy rule like `close > sma(close, 200) and rsi(2) < 10`, an optional sell rule, stop/target/max-hold, and backtest it across tickers. It trades at the next open (no lookahead), holds out the last 30% of data, and compares against **random entries with the same exits** (500 runs). Verdict: EDGE / NO EDGE / TOO FEW TRADES. Strategies you save can send phone alerts when they fire. **Account simulation:** the same trades run as one $10k account (1% risk per trade, max N positions) vs SPY, with CAGR and max drawdown. **Robustness search:** grid over stop/hold/target (and a `$p` number in the rule), choose on the older 70%, see where the pick lands on the newer 30%; verdict ROBUST-ISH / OVERFIT RISK. **Compare** saved strategies side by side. |
+| **Evolution** | **Natural selection for strategies.** 284 rule-based strategies from the literature (35 families: Connors RSI-2 / Double 7 / cumulative RSI, IBS, Bollinger/Keltner, Williams %R, stochastics, MACD, ADX, down-day streaks, NR7, Donchian/Turtle breakouts, 52-week highs, turn of the month, …) plus 24 coin-flip **placebos** compete on the last year of ~600 stocks (S&P 500 + volatile and small caps). Each of 5 generations deals a fresh cohort of ~100 stocks; a strategy dies if it is starved of trades, loses money, trails random entries with the same exits (all pooled over every cohort so far), or lands in the bottom 35% by edge z-score. Survivors sit a **final exam** on ~100 holdout stocks (edge z ≥ 1) and are checked on the prior year. z-scores cluster trades by date, since same-day trades across stocks are correlated. Finalists go on a **live paper trial** scored every weekday after the close: eliminated after 15+ trades without an edge, **graduated** (a candidate for real money) after 20+ trading days and 25+ trades at z ≥ 1.65. Nothing here places orders. CLI: `.venv/bin/python -m cockpit.evolve run` / `live`. |
 | **Settings** | **Accounts & broker links** (Alpaca API, CSV import from Avanza / Nordnet / IBKR / any CSV), guardrails, briefing/report times, Anthropic key, phone-app PIN, risk per trade, max position, max heat, tax rates, paper slippage/fees, fractional shares, paper auto-exit, alert thresholds, ntfy topic, SEC contact. |
 
 **Managing trades:** a plan can carry rules: stop to breakeven at +xR, trail N×ATR or N% under the high, sell part at
@@ -64,9 +65,11 @@ cockpit/
   reports.py  morning briefing, weekly HTML report, scheduler; /api/today, news routes
   dash.py     dashboard endpoints: market clocks, ticker search, quick view, upcoming earnings
   ai.py       Anthropic API: news summaries, journal coach (optional)
+  strategies.py  the evolution's strategy library (families × parameter grids, with sources) and placebos
+  evolve.py   evolution engine: parallel scan, generations, holdout exam, paper sim, live trial; /api/evo routes
   pwa.py      phone app: manifest, service worker, icons, PIN gate for non-local requests
   db.py       SQLite schema + settings (data/cockpit.sqlite)
-  static/     index.html, style.css, app.js (router, check/portfolio/journal/stats/settings), alerts.js, lab.js,
+  static/     index.html, style.css, app.js (router, check/portfolio/journal/stats/settings), alerts.js, lab.js, evolve.js,
               more.js (screener/chart/broker), ui.js (home, search palette, quick-view drawer, theme, shortcuts), Chart.js
 tests/        pytest, offline (`.venv/bin/python -m pytest -q tests`)
 ```

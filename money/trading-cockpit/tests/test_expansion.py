@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pytest
 
-from cockpit import broker, db, lab, manage, market, reports, screener, service
+from cockpit import broker, db, evolve, lab, manage, market, reports, screener, service
 from cockpit.service import UserError
 from conftest import make_df
 
@@ -258,16 +258,17 @@ def test_scheduler_runs_each_job_once_per_day(fresh_db, monkeypatch):
     monkeypatch.setattr(reports, "send_briefing", lambda day: ran.append("b"))
     monkeypatch.setattr(reports, "send_weekly", lambda day: ran.append("w"))
     monkeypatch.setattr(screener, "run_all", lambda fire=None: ran.append("s"))
+    monkeypatch.setattr(evolve, "daily", lambda fire=None: ran.append("e"))
     tz = ZoneInfo("Europe/Stockholm")
     db.set_setting("timezone", "Europe/Stockholm")
     fri = dt.datetime(2026, 10, 2, 7, 0, tzinfo=tz)
     assert reports.tick(fri) == []                       # before the briefing time
     assert reports.tick(fri.replace(hour=9)) == ["briefing"]
     assert reports.tick(fri.replace(hour=12)) == []
-    assert reports.tick(fri.replace(hour=23)) == ["screener", "weekly"]
+    assert reports.tick(fri.replace(hour=23)) == ["screener", "evolution", "weekly"]
     assert reports.tick(fri.replace(hour=23, minute=30)) == []
     assert reports.tick(dt.datetime(2026, 10, 3, 23, 0, tzinfo=tz)) == []  # Saturday
-    assert ran == ["b", "s", "w"]
+    assert ran == ["b", "s", "e", "w"]
 
 
 # ---------- settings masking + remote PIN gate ----------
