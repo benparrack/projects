@@ -3,14 +3,17 @@
 A climbing logbook for gym sessions: log each climb as you go, keep a list of open projects, and see
 your stats. Bouldering (Font grades) and rope routes (French grades), kept separate.
 
-- **Climb**: pick your gym, start a session, then **Log a climb** after each problem: pick the route (or add it on the spot:
-  grade and colour default to your last route; optional name, wall, photo and beta), set the tries, tap **Sent it** or **Not yet**.
+- **Climb**: pick your gym, start a session, then **Log a climb** after each problem: tap a new route's grade/tag (one tap; it only
+  saves once a go is logged, details optional) or pick one you've tried, set the tries, tap **Sent it** or **Not yet** (undoable).
   Tap a climb in the session to log another go (goes on an unsent route merge into one entry). Removing a climb can be undone.
-  Ending a session shows a recap with sends, flashes and any new personal best.
+  A session forgotten for 4h+ ends itself at your last climb. Ending a session shows a recap with sends, flashes and any new personal best.
   Past sessions open to show their climbs; fix mistakes or delete the session there.
-- **Routes**: Projects (tried, not sent) / Sent / All / Archived. Archive routes when the gym resets them.
+- **Routes**: Projects (tried, not sent) / Sent / All / Archived. Archive routes when the gym resets them
+  (one tap archives every project untried for 6 weeks).
   Tap one for its photo, notes, history, **Log a go**, edit and delete.
-- **Stats** (per discipline): hardest send, routes sent, flash rate, open projects, grade pyramid,
+- **Grading**: Font, rope (French), or your gym's tag colours Green → Blue → Red → Black → White → Gray, with an
+  optional estimated Font grade per tag route. Stats/Routes only offer the systems you've used.
+- **Stats** (per grading system): hardest send, routes sent, flash rate, open projects, grade pyramid,
   hardest send per session over time, sessions per week (last 12 weeks).
 - **More**: back up (one JSON file with photos; on a phone it opens the share sheet) and restore. The Climb tab nags after
   2 weeks without a backup.
@@ -30,6 +33,7 @@ Static files, no build. Data lives in the browser's localStorage for whatever or
 ## Test
 
 - `node test.js`: logic (sends, flashes, pyramid, per-session hardest, summaries).
+- The service worker is network-first: deploys show up on the next open, and a resumed app reloads into them.
 - `python3 -m http.server 5191`, then `node e2e.mjs [screenshot-dir]`: drives the whole flow in Firefox at phone size.
 
 ## Files

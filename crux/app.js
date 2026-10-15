@@ -67,7 +67,9 @@
   const hold = r => COLORS[r.color] || (r.disc === 'tags' && TAGS[gradeOf(r)]) || '#999'; // tag routes may skip the hold colour
   const est = r => r.disc === 'tags' && r.est != null ? '~' + L.gradeName('boulder', r.est) : ''; // optional Font estimate on a tag route
   const cap = s => s[0].toUpperCase() + s.slice(1);
-  const label = r => r.name || (r.disc === 'tags' ? `${gradeOf(r)} tag${r.color ? `, ${r.color} holds` : ''}` : `${cap(r.color)} ${gradeOf(r)}`);
+  const label = r => r.name || (r.disc === 'tags' ? (r.color ? `${cap(r.color)} holds` : `${gradeOf(r)} tag`) : `${cap(r.color)} ${gradeOf(r)}`);
+  // Grading systems you've actually used (all of them until you've used any), so Stats/Routes don't offer empty ones.
+  const usedDiscs = () => { const u = Object.keys(L.SCALES).filter(k => state.routes.some(r => r.disc === k)); return u.length ? u : Object.keys(L.SCALES); };
   const gyms = () => uniq([...state.sessions.map(s => s.gym), ...state.routes.map(r => r.gym)]);
   const statusTag = st => st.flash ? '<span class="tag flash">Flash</span>' : st.sent ? `<span class="tag sent">Sent · ${plural(st.triesToSend, 'try')}</span>`
     : st.tries ? `<span class="tag">${plural(st.tries, 'try')}</span>` : '<span class="tag">New</span>';
@@ -134,15 +136,17 @@
   }
 
   function renderRoutes() {
-    const f = state.view.routes, d = state.view.rdisc, gs = gyms(), g = gs.includes(state.view.rgym) ? state.view.rgym : 'all';
+    const f = state.view.routes, d = usedDiscs().includes(state.view.rdisc) ? state.view.rdisc : 'all', gs = gyms(), g = gs.includes(state.view.rgym) ? state.view.rgym : 'all';
     const list = state.routes.filter(r => (d === 'all' || r.disc === d) && (g === 'all' || r.gym === g)).map(r => ({ r, st: status(r) })).filter(({ r, st }) =>
       f === 'archived' ? r.archived : !r.archived && (f === 'all' || (f === 'sent') === st.sent))
       .sort((a, b) => (b.st.last || b.r.created) - (a.st.last || a.r.created));
+    const stale = f === 'projects' ? list.filter(x => Date.now() - (x.st.last || x.r.created) > 42 * DAY) : []; // likely reset by the gym
     const chip = (k, v, name, on = state.view[k] === v) => `<button class="chip ${on ? 'on' : ''}" data-act="filter" data-k="${k}" data-v="${esc(v)}">${esc(name)}</button>`;
     return `<h1>Routes</h1>
       <div class="chips">${chip('routes', 'projects', 'Projects')}${chip('routes', 'sent', 'Sent')}${chip('routes', 'all', 'All')}${chip('routes', 'archived', 'Archived')}</div>
-      <div class="chips">${chip('rdisc', 'all', 'Everything')}${Object.keys(L.SCALES).map(k => chip('rdisc', k, L.SCALES[k].short)).join('')}</div>
+      ${usedDiscs().length > 1 ? `<div class="chips">${chip('rdisc', 'all', 'All grading')}${usedDiscs().map(k => chip('rdisc', k, L.SCALES[k].short)).join('')}</div>` : ''}
       ${gs.length > 1 ? `<div class="chips scroll">${chip('rgym', 'all', 'All gyms', g === 'all')}${gs.map(x => chip('rgym', x, x, g === x)).join('')}</div>` : ''}
+      ${stale.length ? `<button class="linkbtn" data-act="archstale" style="margin:-4px 0 8px">Archive ${plural(stale.length, 'project')} not tried in 6 weeks</button>` : ''}
       ${list.length ? `<div class="grid">${list.map(({ r, st }) => `<button class="card" data-act="route" data-id="${r.id}">
         ${photos[r.id] ? `<img class="pic" src="${photos[r.id]}" alt="">` : `<div class="pic blank ${['white', 'yellow'].includes(r.color) || (!r.color && gradeOf(r) === 'White') ? 'light' : ''}" style="background:${hold(r)}">${esc(gradeOf(r))}</div>`}
         <div class="body"><div class="line1"><span class="dot" style="background:${hold(r)}"></span>${gradeHtml(r)}</div>
@@ -152,13 +156,13 @@
   }
 
   function renderStats() {
-    const d = state.disc, g = i => L.gradeName(d, i);
+    const used = usedDiscs(), d = used.includes(state.disc) ? state.disc : used[0], g = i => L.gradeName(d, i);
     const sum = L.summary(state.routes, state.logs, d), pyr = L.pyramid(state.routes, state.logs, d);
     const series = L.hardestBySession(state.sessions, state.routes, state.logs, d);
     const weeks = L.weekly(state.sessions.filter(s => s.end || s.id === state.active), Date.now(), 12);
     const max = Math.max(1, ...pyr.map(p => p.n)), wmax = Math.max(1, ...weeks.map(w => w.n));
     return `<h1>Stats</h1>
-      <div class="chips">${Object.keys(L.SCALES).map(k => `<button class="chip ${d === k ? 'on' : ''}" data-act="disc" data-v="${k}">${L.SCALES[k].name}</button>`).join('')}</div>
+      ${used.length > 1 ? `<div class="chips">${used.map(k => `<button class="chip ${d === k ? 'on' : ''}" data-act="disc" data-v="${k}">${L.SCALES[k].short}</button>`).join('')}</div>` : ''}
       <div class="tiles">
         <div class="tile"><b>${sum.hardest === null ? '–' : esc(g(sum.hardest))}</b><span>Hardest send</span></div>
         <div class="tile"><b>${sum.sends}</b><span>Routes sent</span></div>
@@ -213,7 +217,10 @@
 
   // ---------- sheets ----------
   const sheet = $('#sheet'), lightbox = $('#lightbox');
-  const openSheet = html => { $('#sheet-body').innerHTML = html; if (!sheet.open) sheet.showModal(); };
+  const openSheet = html => {
+    $('#sheet-body').innerHTML = html; if (!sheet.open) sheet.showModal();
+    $$('#sheet-body .scroll .on, #sheet-body .scroll .near').forEach(c => c.scrollIntoView({ inline: 'center', block: 'nearest' })); // sideways rows open on your pick
+  };
   const closeSheet = () => { if (sheet.open) sheet.close(); render(); };
   sheet.addEventListener('click', e => { if (e.target === sheet) closeSheet(); });
   sheet.addEventListener('close', () => { document.body.appendChild($('#toast')); render(); });
@@ -229,22 +236,28 @@
       .map(r => ({ r, st: status(r) })).sort((a, b) => (a.st.sent - b.st.sent) || ((b.st.last || b.r.created) - (a.st.last || a.r.created)));
     openSheet(`${head('Log a climb')}
       <div class="chips">${Object.keys(L.SCALES).map(k => `<button class="chip ${d === k ? 'on' : ''}" data-act="pickdisc" data-v="${k}">${L.SCALES[k].short}</button>`).join('')}</div>
-      <button class="btn primary big" data-act="newroute" style="margin-bottom:12px">${I.plus}New route</button>
-      <input type="search" id="pickq" placeholder="Search name, wall, colour or grade" value="${esc(pick.q)}" style="margin-bottom:10px">
+      <div class="field-label">New route: tap its ${d === 'tags' ? 'tag' : 'grade'}</div>
+      <div class="grades ${d === 'tags' ? '' : 'chips scroll'}" style="margin-bottom:6px">${L.SCALES[d].grades.map((g, i) =>
+        `<button class="chip ${d === 'tags' ? 'tagchip' : ''} ${state.last[d]?.grade === i ? 'on' : ''}" ${d === 'tags' ? `style="--c:${TAGS[g]}"` : ''} data-act="quick" data-v="${i}">${esc(g)}</button>`).join('')}</div>
+      <button class="linkbtn" data-act="newroute" style="margin-bottom:14px">${I.plus}New route with photo, name or wall</button>
+      ${list.length > 5 || q ? `<input type="search" id="pickq" placeholder="Search name, wall, colour or grade" value="${esc(pick.q)}" style="margin-bottom:10px">` : ''}
+      ${list.length ? '<div class="field-label">Or one you\'ve tried</div>' : ''}
       <div class="list">${list.map(({ r, st }) => `<button class="item" data-act="pickroute" data-id="${r.id}">${swatch(r)}${gradeHtml(r)}
         <div class="grow"><div class="title">${esc(label(r))}</div>${r.wall || est(r) ? `<div class="sub">${[est(r), r.wall].filter(Boolean).map(esc).join(' · ')}</div>` : ''}</div>${statusTag(st)}</button>`).join('')
-        || `<div class="empty">${q ? 'No match. Add it as a new route.' : 'No routes yet. Add the one you just tried.'}</div>`}</div>`);
+        || `<div class="empty">${q ? 'No match. Add it as a new route above.' : 'No routes here yet. Tap the grade of the one you just tried.'}</div>`}</div>`);
   }
 
   function routeForm(fromLog) {
     const r = draft, sc = L.SCALES[r.disc], ph = draftPhoto === undefined ? photos[r.id] : draftPhoto;
     const walls = uniq(state.routes.filter(x => !r.gym || x.gym === r.gym).map(x => x.wall));
+    // Your usual estimate for this tag colour, so the sideways row opens there instead of at "3".
+    const ests = state.routes.filter(x => x.disc === 'tags' && x.grade === r.grade && x.est != null).map(x => x.est).sort((a, b) => a - b), near = ests[ests.length >> 1];
     openSheet(`${head(r.id ? 'Edit route' : 'New route', fromLog ? 'backpick' : (r.id ? 'backroute' : null))}
-      <div class="chips">${Object.keys(L.SCALES).map(k => `<button class="chip ${r.disc === k ? 'on' : ''}" data-act="ddisc" data-v="${k}">${L.SCALES[k].name}</button>`).join('')}</div>
+      <div class="field-label">Grading</div><div class="chips">${Object.keys(L.SCALES).map(k => `<button class="chip ${r.disc === k ? 'on' : ''}" data-act="ddisc" data-v="${k}">${L.SCALES[k].short}</button>`).join('')}</div>
       <div class="field-label">${r.disc === 'tags' ? 'Tag' : 'Grade'}</div><div class="grades" style="margin-bottom:14px">${sc.grades.map((g, i) =>
         `<button class="chip ${r.disc === 'tags' ? 'tagchip' : ''} ${r.grade === i ? 'on' : ''}" ${r.disc === 'tags' ? `style="--c:${TAGS[g]}"` : ''} data-act="dgrade" data-v="${i}">${esc(g)}</button>`).join('')}</div>
-      ${r.disc === 'tags' ? `<div class="field-label">Estimated grade (optional)</div><div class="grades" style="margin-bottom:14px">${L.SCALES.boulder.grades.map((g, i) =>
-        `<button class="chip ${r.est === i ? 'on' : ''}" data-act="dest" data-v="${i}">${esc(g)}</button>`).join('')}</div>` : ''}
+      ${r.disc === 'tags' ? `<div class="field-label">Estimated grade (optional)</div><div class="grades chips scroll" style="margin-bottom:14px">${L.SCALES.boulder.grades.map((g, i) =>
+        `<button class="chip ${r.est === i ? 'on' : r.est == null && near === i ? 'near' : ''}" data-act="dest" data-v="${i}">${esc(g)}</button>`).join('')}</div>` : ''}
       <div class="field-label">Hold colour${r.disc === 'tags' ? ' (optional)' : ''}</div><div class="colors" style="margin-bottom:14px">${Object.entries(COLORS).map(([k, c]) =>
         `<button class="${r.color === k ? 'on' : ''}" style="background:${c}" data-act="dcolor" data-v="${k}" aria-label="${k}" title="${k}"></button>`).join('')}</div>
       <div class="two"><label class="field"><span>Name (optional)</span><input type="text" id="dname" maxlength="60" value="${esc(r.name)}" placeholder="The pinch one"></label>
@@ -260,12 +273,13 @@
   const keepDraftText = () => { if ($('#dname')) { draft.name = $('#dname').value.trim(); draft.wall = $('#dwall').value.trim(); draft.notes = $('#dnotes').value; } };
 
   function triesSheet(r, back) {
-    const prior = state.logs.find(l => l.sessionId === state.active && l.routeId === r.id && !l.sent);
+    const prior = r.id && state.logs.find(l => l.sessionId === state.active && l.routeId === r.id && !l.sent);
     openSheet(`${head(esc(label(r)), back)}
       <div class="item" style="margin-bottom:6px">${swatch(r)}${gradeHtml(r)}<div class="grow"><div class="sub">${sub(r)}</div></div>${statusTag(status(r))}</div>
       <p class="muted" style="text-align:center;margin:18px 0 0">${prior ? `Extra attempts (already ${plural(prior.tries, 'try')} this session)` : 'Attempts this time'}</p>
       <div class="stepper"><button data-act="tries" data-v="-1" aria-label="Fewer">−</button><output id="tries">${tries}</output><button data-act="tries" data-v="1" aria-label="More">+</button></div>
-      <div class="row"><button class="btn big" data-act="savelog" data-id="${r.id}" data-sent="0">Not yet</button><button class="btn good big" data-act="savelog" data-id="${r.id}" data-sent="1">Sent it</button></div>`);
+      <div class="row"><button class="btn big" data-act="savelog" data-id="${r.id || ''}" data-sent="0">Not yet</button><button class="btn good big" data-act="savelog" data-id="${r.id || ''}" data-sent="1">Sent it</button></div>
+      ${r.id ? '' : `<button class="linkbtn" data-act="qdetails" style="margin:16px auto 0">${I.camera}Add photo, name or wall</button>`}`);
   }
 
   let confirmDel = null;
@@ -318,13 +332,24 @@
     });
   }
 
+  // A session left running after you go home ends itself at your last climb (or is dropped if nothing was logged).
+  function autoEnd() {
+    const s = active(); if (!s) return;
+    const mine = state.logs.filter(l => l.sessionId === s.id), last = Math.max(s.start, ...mine.map(l => l.ts));
+    if (Date.now() - last < 4 * 3600e3) return;
+    if (mine.length) s.end = last; else state.sessions = state.sessions.filter(x => x !== s);
+    state.active = null; save();
+    if (mine.length) toast(`Ended your ${fmtDate(s.start)} session`);
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && active()) { autoEnd(); if (!sheet.open) render(); } });
+
   function startSession() {
     const gymEl = $('#gym'); if (gymEl) state.gym = gymEl.value.trim();
     const s = { id: uid(), start: Date.now(), end: null, gym: state.gym };
     state.sessions.push(s); state.active = s.id; save();
   }
   // Another go on a route you haven't sent yet this session adds to that entry; a send after a send is a separate repeat.
-  function logClimb(routeId, n, sent) {
+  function logClimb(routeId, n, sent, snap) {
     if (!active()) startSession();
     const prior = state.logs.find(l => l.sessionId === state.active && l.routeId === routeId && !l.sent);
     if (prior) { prior.tries += n; prior.sent = sent; prior.ts = Date.now(); }
@@ -332,7 +357,8 @@
     if (!save()) return;
     const st = status(route(routeId));
     buzz(sent ? [30, 50, 80] : 15);
-    toast(!sent ? 'Logged. It\'s in your projects.' : st.flash ? 'Flashed it!' : st.sentTs === (prior || state.logs[state.logs.length - 1]).ts ? 'Sent! Project ticked.' : 'Repeat logged');
+    toast(!sent ? 'Logged. It\'s in your projects.' : st.flash ? 'Flashed it!' : st.sentTs === (prior || state.logs[state.logs.length - 1]).ts ? 'Sent! Project ticked.' : 'Repeat logged',
+      () => { state = merge(JSON.parse(snap)); save(); refresh(); });
   }
 
   async function exportBackup() {
@@ -356,7 +382,11 @@
   }
 
   // ---------- events ----------
-  let draftFromLog = false;
+  let draftFromLog = false, pending = null; // pending: a quick-added route that only joins the logbook once a go is logged on it
+  function addRoute(r) {
+    if (!r.id) Object.assign(r, { id: uid(), created: Date.now(), archived: false, photo: false });
+    state.routes.push(r); state.disc = r.disc; state.last[r.disc] = { grade: r.grade, color: r.color };
+  }
   const undoable = (msg, apply) => { const snap = JSON.stringify(state); apply(); save(); render(); toast(msg, () => { state = merge(JSON.parse(snap)); save(); refresh(); }); };
   const refresh = () => { if (!sheet.open) return render(); const s = $('#sheet-body [data-act="delsession"]'); s ? sessionSheet(session(s.dataset.id)) : render(); };
   document.addEventListener('click', async e => {
@@ -376,7 +406,17 @@
       case 'backpick': pickSheet(); break;
       case 'pickroute': case 'logthis': tries = 1; triesSheet(route(id), act === 'pickroute' ? 'backpick' : null); break;
       case 'tries': tries = Math.max(1, Math.min(99, tries + Number(v))); $('#tries').textContent = tries; break;
-      case 'savelog': logClimb(id, tries, b.dataset.sent === '1'); closeSheet(); break;
+      case 'savelog': {
+        const snap = JSON.stringify(state);
+        if (!id && pending) addRoute(pending);
+        logClimb(id || pending.id, tries, b.dataset.sent === '1', snap); pending = null; closeSheet(); break;
+      }
+      case 'quick': {
+        const disc = pick.disc || state.disc, last = state.last[disc] || {};
+        pending = { disc, grade: Number(v), est: null, color: disc === 'tags' ? null : last.color || 'yellow', name: '', wall: '', notes: '', gym: active()?.gym ?? state.gym };
+        tries = 1; triesSheet(pending, 'backpick'); break;
+      }
+      case 'qdetails': draft = pending; pending = null; draftPhoto = null; draftFromLog = true; routeForm(true); break;
       case 'unlog': { const l = state.logs.find(x => x.id === id), r = l && route(l.routeId);
         undoable(`Removed ${r ? label(r) : 'climb'}`, () => { state.logs = state.logs.filter(x => x.id !== id); }); refresh(); break; }
       case 'newroute': {
@@ -400,8 +440,7 @@
         catch (err) { toast('Couldn\'t save the photo'); }
         draft.photo = !!photos[draft.id];
         if (draft.disc !== 'tags') delete draft.est;
-        if (isNew) state.routes.push(draft); else Object.assign(route(draft.id), draft);
-        state.disc = draft.disc; state.last[draft.disc] = { grade: draft.grade, color: draft.color };
+        if (isNew) addRoute(draft); else Object.assign(route(draft.id), draft);
         if (!save()) break;
         if (draftFromLog) { tries = 1; triesSheet(route(draft.id), 'backpick'); } else routeSheet(route(draft.id));
         break;
@@ -420,6 +459,10 @@
         confirmDel = null; closeSheet();
         undoable('Session deleted', () => { state.sessions = state.sessions.filter(s => s.id !== id); state.logs = state.logs.filter(l => l.sessionId !== id); });
         break;
+      case 'archstale': {
+        const old = state.routes.filter(r => !r.archived && !status(r).sent && Date.now() - (status(r).last || r.created) > 42 * DAY);
+        undoable(`Archived ${plural(old.length, 'project')}`, () => old.forEach(r => { r.archived = true; })); break;
+      }
       case 'filter': state.view[b.dataset.k] = v; save(); render(); break;
       case 'disc': state.disc = v; save(); render(); break;
       case 'close': closeSheet(); break;
@@ -452,6 +495,7 @@
 
   (async () => {
     try {
+      autoEnd();
       await loadPhotos();
       const old = state.routes.filter(r => typeof r.photo === 'string'); // pre-IndexedDB versions kept photos inline
       for (const r of old) { await putPhoto(r.id, r.photo); r.photo = true; }

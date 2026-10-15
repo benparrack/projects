@@ -51,9 +51,8 @@ await p.click('.list .hit >> text=Red 6C');
 assert.match(await p.textContent('#sheet'), /already 3 tries this session/);
 await p.click('[data-act="savelog"][data-sent="0"]');
 s = await st(); assert.equal(s.logs.length, 2); assert.equal(s.logs.find(l => !l.sent).tries, 4);
-// search finds by wall
-await p.click('[data-act="log"]'); await p.fill('#pickq', 'slab w');
-assert.equal(await p.locator('#sheet [data-act="pickroute"]').count(), 1);
+// search only appears once the list is long enough to need it
+await p.click('[data-act="log"]'); assert.equal(await p.locator('#pickq').count(), 0);
 await p.click('#sheet [data-act="close"]');
 // remove + undo
 await p.click('.list .item >> nth=0 >> [data-act="unlog"]');
@@ -135,17 +134,35 @@ await p.click('[data-act="delroute"]'); assert.equal((await st()).routes.length,
 await p.click('[data-act="delroute"]'); assert.equal((await st()).routes.length, 1);
 await p.click('#toast button'); assert.equal((await st()).routes.length, 2);
 
-// ---- tag-colour grades with an optional estimate ----
+// ---- tag-colour grades: one-tap quick add, optional details/estimate, undo, forgotten-session auto-end ----
 await p.goto(url + '#climb'); await p.click('[data-act="start"]');
-await p.click('[data-act="log"]'); await p.click('[data-act="pickdisc"][data-v="tags"]'); await newRoute(2); // Red
-await p.click('[data-act="dest"][data-v="9"]'); await p.click('[data-act="dsave"]'); await p.click('[data-act="savelog"][data-sent="1"]');
-await p.click('[data-act="log"]'); await newRoute(3, 'green'); await p.click('[data-act="dcolor"][data-v="green"]'); await p.click('[data-act="dsave"]'); await p.click('[data-act="savelog"][data-sent="1"]'); // Black: hold colour toggled back off, no estimate
-s = await st(); assert.deepEqual(s.routes.filter(r => r.disc === 'tags').map(r => [r.grade, r.est]), [[2, 9], [3, null]]);
+await p.click('[data-act="log"]'); await p.click('[data-act="pickdisc"][data-v="tags"]');
+await p.click('[data-act="quick"][data-v="2"]'); // Red
+assert.equal((await st()).routes.length, 2, 'quick add only saves once a go is logged');
+await p.click('[data-act="qdetails"]'); await p.click('[data-act="dest"][data-v="9"]'); await p.click('[data-act="dsave"]');
+await p.click('[data-act="savelog"][data-sent="1"]');
+await p.click('[data-act="log"]'); await p.click('[data-act="quick"][data-v="3"]'); // Black, tags remembered
+await p.click('[data-act="savelog"][data-sent="1"]');
+assert.equal((await st()).routes.length, 4);
+await p.click('#toast button'); assert.equal((await st()).routes.length, 3, 'undo removes the quick-added route too');
+await p.click('[data-act="log"]'); await p.click('[data-act="quick"][data-v="3"]'); await p.click('[data-act="savelog"][data-sent="1"]');
+s = await st(); assert.deepEqual(s.routes.filter(r => r.disc === 'tags').map(r => [r.grade, r.est ?? null, r.color]), [[2, 9, null], [3, null, null]]);
 assert.match(await text(), /Black tagSent/); assert.match(await text(), /Red tagSent[\s\S]*~6C/);
 await shot('11-tags');
-await p.click('[data-act="end"]'); assert.match(await p.textContent('#sheet'), /Black/); await p.click('#sheet [data-act="close"]');
+await p.click('[data-act="log"]'); await shot('11b-picker'); await p.click('#sheet [data-act="close"]');
+// forgot to end it: 5h later it ends itself at the last climb
+await p.evaluate(() => { const s = crux.state.sessions.find(x => x.id === crux.state.active), h = 5 * 3600e3; s.start -= h; crux.state.logs.filter(l => l.sessionId === s.id).forEach(l => l.ts -= h); document.dispatchEvent(new Event('visibilitychange')); });
+s = await st(); assert.equal(s.active, null); const ended = s.sessions.at(-1); assert.equal(ended.end, Math.max(...s.logs.filter(l => l.sessionId === ended.id).map(l => l.ts)));
 await p.goto(url + '#stats'); await p.click('[data-act="disc"][data-v="tags"]');
+assert.equal(await p.locator('[data-act="disc"]').count(), 2, 'unused rope is hidden');
 assert.match(await text(), /Black\s*Hardest send/); await shot('12-tagstats');
+
+// stale projects (gym reset) archive in one tap, with undo
+await p.evaluate(() => { const r = crux.state.routes[0]; crux.state.routes.push({ ...r, id: 'old1', archived: false, created: Date.now() - 60 * 864e5 }, { ...r, id: 'new1', archived: false, created: Date.now() }); localStorage.setItem('crux.v1', JSON.stringify(crux.state)); });
+await p.goto(url + '#routes'); await p.reload(); await p.waitForTimeout(300); await p.click('[data-act="filter"][data-v="projects"]');
+await p.click('text=Archive 1 project not tried in 6 weeks'); assert.equal((await st()).routes.find(r => r.id === 'old1').archived, true);
+assert.equal((await st()).routes.find(r => r.id === 'new1').archived, false);
+await p.click('#toast button'); assert.equal((await st()).routes.find(r => r.id === 'old1').archived, false);
 
 for (const v of ['climb', 'routes', 'stats', 'more']) {
   await p.goto(url + '#' + v); await p.waitForTimeout(100);
