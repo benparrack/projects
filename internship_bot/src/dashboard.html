@@ -50,11 +50,13 @@ h2 .b + .b { margin-left:0; }
 .chip { display:inline-block; background:var(--chip); border-radius:var(--r2); padding:1px 7px; font-size:12px; margin:2px 4px 2px 0; }
 .co { font-weight:600; } .role { color:var(--ink); }
 .meta { color:var(--muted); font-size:12.5px; margin-top:2px; }
+.card[id] { scroll-margin-top:100px; }
 .card.working { outline:2px solid var(--accent); outline-offset:2px; }
 .qa .l.done, .qa .v.done button { color:var(--good); } .qa .l.next { color:var(--ink); font-weight:600; } .qa .v.next { box-shadow:inset 3px 0 0 var(--accent); padding-left:8px; }
 .v.cp { display:flex; gap:8px; align-items:flex-start; } .v.cp > :first-child { flex:1; min-width:0; } .v.cp > button { flex:none; min-width:68px; }
 .chip.ease { display:inline-block; margin-bottom:6px; } .chip.ease.hard { color:var(--warn); }
-.code-note { margin:10px 0 2px; padding:8px 12px; border-left:3px solid var(--warn); background:var(--chip); font-size:13px; }
+.qa .l.auto, .qa .v.auto { opacity:.6; }
+.card > details { margin-top:8px; }
 .qid { font:500 12px var(--mono); color:var(--muted); margin-right:6px; }
 .qtext { font:400 17px/1.35 var(--serif); }
 
@@ -69,6 +71,7 @@ button:disabled { opacity:.45; cursor:default; }
 input, textarea, select { font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line-2); border-radius:var(--r2); padding:6px 9px; }
 input:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 textarea { width:100%; resize:vertical; line-height:1.5; }
+.qa textarea { field-sizing:content; min-height:3lh; max-height:24lh; }
 input.text { width:100%; }
 input[type=checkbox] { accent-color:var(--accent); }
 
@@ -212,7 +215,9 @@ function render() {
   pill.className = 'status' + (r.running ? ' run' : '');
   pill.textContent = r.running ? (r.current ? 'Applying: ' + r.current : 'Checking the lists') : 'Idle' + (S.settings.last_fetch ? ` · lists checked ${ago(S.settings.last_fetch)}` : '');
   pill.title = pill.textContent;
+  const f = document.activeElement?.tagName === 'BUTTON' && document.activeElement.getAttribute('onclick');
   document.getElementById('main').innerHTML = VIEWS[tab]();
+  if (f) [...document.querySelectorAll('main button')].find(b => b.getAttribute('onclick') === f)?.focus({ preventScroll: true });   // live refresh keeps your place
 }
 function go(k) { tab = k; try { localStorage.setItem('tab', k); } catch {} render(); if (k === 'profile') loadProfile(); }
 
@@ -235,6 +240,7 @@ const VIEWS = {
       <button class="b quiet" onclick="this.parentElement.hidden=true;this.parentElement.previousElementSibling.hidden=false">Cancel</button></span></span></div></div>`).join('');
     // Easy: approve (maybe type a Greenhouse code). Hard: Ben sends it himself, copy-pasting the answers.
     const hard = j => j.ats === 'Ashby' || S.manual.includes(j);
+    const auto = it => /^(full_name|email)$/.test(it.key) || /phone|linkedin/i.test(it.label);
     const show = j => ease === 'all' || (ease === 'hard') === hard(j);
     const tag = j => `<span class="chip ease ${hard(j) ? 'hard' : ''}">${S.manual.includes(j) ? 'Hard: apply yourself' : j.ats === 'Ashby' ? 'Hard: copy-paste it yourself'
       : j.ats === 'Greenhouse' ? 'Easy: approve, then type a code' : 'Easy: just approve'}</span>`;
@@ -243,24 +249,33 @@ const VIEWS = {
       : ['select', 'multiselect', 'location', 'education'].includes(it.type) ? `<span class="chip" title="Picked from the form's own list">${esc(it.type === 'education' ? 'Virginia Tech, CS, Aug 2024 to May 2028' : it.value)}</span>`
       : `<input class="text" data-k="${esc(it.key)}" value="${esc(it.value)}" oninput="dirty=true">`;
     // Copy mode: each row gets a Copy button; copied rows go green and the next one is highlighted.
-    const qa = (j, copy) => { const its = copy ? [...j.items].sort((x, y) => (y.type === 'file') - (x.type === 'file')) : j.items;   // resume first: Ashby autofills from it
-      const next = copy && its.find(it => !copied.has(j.id + ':' + it.key));
-      return `<div class="qa">${its.map(it => { const st = !copy ? '' : copied.has(j.id + ':' + it.key) ? ' done' : it === next ? ' next' : '';
+    const rank = it => it.type === 'file' ? 0 : auto(it) ? 2 : 1;   // resume first (Ashby autofills from it), autofilled rows last
+    const qa = (j, copy, its = j.items) => { if (copy) its = [...its].sort((x, y) => rank(x) - rank(y));
+      const next = copy && its.find(it => !auto(it) && !copied.has(j.id + ':' + it.key));
+      return `<div class="qa">${its.map(it => { const st = !copy ? '' : copied.has(j.id + ':' + it.key) ? ' done' : it === next ? ' next' : auto(it) ? ' auto' : '';
         const v = it.type === 'file' ? it.path : it.type === 'education' ? 'Virginia Tech, CS, Aug 2024 to May 2028' : it.value;
-        return `<div class="l${st}">${esc(it.label)}</div><div class="v${copy ? ' cp' : ''}${st}" data-ck="${esc(j.id + ':' + it.key)}">${field(it)}${copy
+        return `<div class="l${st}">${esc(it.label)}${st === ' auto' ? '<div class="small">Usually filled from your resume</div>' : ''}</div><div class="v${copy ? ' cp' : ''}${st}" data-ck="${esc(j.id + ':' + it.key)}">${field(it)}${copy
           ? `<button class="b quiet" onclick="copyVal(this)" data-v="${esc(v)}" title="${it.type === 'file' ? 'In the upload dialog: Ctrl+L, Ctrl+V, Enter' : ''}">${it.type === 'file' ? 'Copy path' : 'Copy'}</button>` : ''}</div>`; }).join('')}</div>`; };
-    const yourself = j => `<button class="b primary" onclick="openForm('${j.id}')" title="Form on the left half of the screen, this window on the right">Open form</button>
-      <button class="b good" onclick="appliedDone('${j.id}')" title="Logs it, closes the form window and makes this window full screen again">Mark as applied</button>
-      ${hardList().length > 1 ? `<button class="b good" onclick="appliedNext('${j.id}')" title="Logs it, then opens the next one in the same spot">Applied → next form</button>` : ''}`;
+    // Before the form is open only Open form matters; once it is, the finish buttons take over.
+    const yourself = j => working === j.id
+      ? `<button class="b good" onclick="appliedDone('${j.id}')" title="Logs it, closes the form window and makes this window full screen again">Mark as applied</button>
+        ${hardList().length > 1 ? `<button class="b good" onclick="appliedNext('${j.id}')" title="Logs it, then opens the next one in the same spot">Applied → next form</button>` : ''}
+        <button class="b" onclick="openForm('${j.id}')">Reopen form</button>`
+      : `<button class="b primary" onclick="openForm('${j.id}')" title="Form on the left half of the screen, this window on the right">Open form</button>
+        <button class="b quiet" onclick="appliedDone('${j.id}')">I already applied</button>`;
+    const essay = it => it.type === 'textarea' || it.value.length > 90;
+    const easyQa = j => { const e = j.items.filter(essay), f = j.items.filter(it => !essay(it));
+      return `${e.length ? qa(j, false, e) : ''}${f.length ? `<details><summary>${f.length} answers from your profile and past answers</summary>${qa(j, false, f)}</details>` : ''}`; };
+    const ashbyQa = j => working === j.id ? qa(j, true)
+      : `<div class="meta" style="margin-top:8px">${j.items.length} fields to copy${(n => n ? `, ${n} written answer${n > 1 ? 's' : ''}` : '')(j.items.filter(essay).length)}. They show here when you open the form.</div>`;
     const apps = S.approvals.filter(show).sort((x, y) => hard(x) - hard(y));
-    const a = apps.map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}${j.ats === 'Greenhouse' ? `<div class="code-note">You'll type a code: on Approve a Chrome window opens with this form filled in. Copy the 8-character code Greenhouse emails you into it, then click Submit application.</div>`
-      : j.ats === 'Ashby' ? `<div class="code-note">You send this one: Ashby flags the bot's browser as spam. Open form puts it on the left half of your screen with this list on the right. Upload the resume first (Copy path, then in the file dialog Ctrl+L, Ctrl+V, Enter): Ashby fills your name, email and links from it. Then copy down the list and submit. Applied → next form opens the next one; Mark as applied stops there.</div>` : ''}
-      ${qa(j, j.ats === 'Ashby')}
-      ${j.shot ? `<details><summary>Screenshot of the filled form</summary><img class="shot" loading="lazy" src="/shots/${j.id}.png"></details>` : ''}
+    const a = apps.map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}
+      ${j.ats === 'Ashby' ? ashbyQa(j) : easyQa(j)}
+      ${j.shot && j.ats !== 'Ashby' ? `<details><summary>Screenshot of the filled form</summary><img class="shot" loading="lazy" src="/shots/${j.id}.png"></details>` : ''}
       <div class="row" style="margin-top:10px">${j.ats === 'Ashby' ? yourself(j) : `<button class="b good" onclick="approve('${j.id}')">Approve and submit</button>`}
       <button class="b" onclick="act('/api/reject', {id:'${j.id}'}, 'Passed')">Pass</button>
       <span class="small muted" style="margin-left:auto">Filled ${ago(j.updated)}.${j.ats === 'Ashby' ? '' : ' Your edits are saved and reused.'}</span></div></div>`).join('');
-    const m = S.manual.filter(show).map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}<div class="why">${esc(j.reason)}</div>
+    const m = S.manual.filter(show).map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}<div class="why">${esc(j.ats === 'Ashby' && /^submit blocked/.test(j.reason) ? "Ashby's spam check stopped the bot's submit. Copy the answers in yourself." : j.reason)}</div>${j.ats === 'Workday' ? `<div class="meta">Sign in with ${esc(S.settings.mail || 'your email')}. The bot made that account; its password is in <code>data/workday.json</code> under <code>${esc(new URL(j.url).hostname)}</code>.</div>` : ''}
       ${j.items.length ? `<details${working === j.id ? ' open' : ''}><summary>The bot's answers, to copy in</summary>${qa(j, true)}</details>` : ''}
       <div class="row">${yourself(j)}
       <button class="b" onclick="act('/api/manual-done', {id:'${j.id}', applied:false}, 'Removed')">Not for me</button>
@@ -268,10 +283,10 @@ const VIEWS = {
     const nHard = S.approvals.filter(hard).length + S.manual.length, nAll = S.approvals.length + S.manual.length;
     const seg = `<div class="seg" style="margin:4px 0 0">${[['all', 'All', nAll], ['easy', 'Easy: just approve', nAll - nHard], ['hard', 'Hard: do it yourself', nHard]]
       .map(([k, l, n]) => `<button class="${ease === k ? 'on' : ''}" onclick="setEase('${k}')">${l} (${n})</button>`).join('')}</div>`;
-    return `<h2>Questions only you can answer <span class="chip">${S.questions.length}</span></h2>${q || '<div class="card empty">No open questions. The bot has everything it needs.</div>'}
-      <h2>Applications</h2>${seg}
+    return `${q ? `<h2>Questions only you can answer <span class="chip">${S.questions.length}</span></h2>${q}` : ''}
+      <div style="margin-top:22px">${seg}</div>
       <h2>Ready to submit <span class="chip">${apps.length}</span>${apps.filter(j => !hard(j)).length > 1 ? `<button class="b" onclick="approveAll()">Approve all easy ones</button>` : ''}</h2>
-      <p class="lede">${S.settings.auto_submit ? 'Auto-submit is on, so new jobs skip this step.' : 'Each form is filled in and screenshotted, then waits here. Read it, fix anything, approve. Approving opens a Chrome window that submits it; if it gets stuck you can finish it there.'}</p>
+      <p class="lede">${S.settings.auto_submit ? 'Auto-submit is on, so new jobs skip this step.' : 'Easy: read the written answers, fix anything, approve. A Chrome window submits it; for Greenhouse, paste the emailed code (it is already on your clipboard) and click Submit. Hard (Ashby flags the bot as spam, so you send these): Open form puts the form on the left and this list on the right. Upload the resume first (Copy path, then Ctrl+L, Ctrl+V, Enter in the file dialog), copy down the list, submit. The confirmation email marks it applied and closes the form.'}</p>
       ${a || '<div class="card empty">Nothing here.</div>'}
       ${ease === 'easy' ? '' : `<h2>Apply yourself <span class="chip">${S.manual.length}</span></h2>
       <p class="lede">Ones the bot can't or shouldn't finish: no-AI certifications, coding tasks, uploads it doesn't have, blocked submits.</p>
@@ -303,6 +318,7 @@ const VIEWS = {
     const p = S.pipeline, c = S.counts;
     const lab = { new: 'Waiting in line', dryrun: 'Awaiting approval', approved: 'Submitting', queued: 'Waiting on a question', applied: 'Applied', manual: 'Apply yourself', failed: 'Failed', skipped: 'Filtered out' };
     const list = (rows, extra = () => '') => rows.length ? `<div class="scroll"><table>${rows.map(j => `<tr><td><span class="co">${esc(j.company)}</span> <span class="muted">·</span> ${esc(j.title)}<div class="meta">${where(j)}</div>${extra(j)}</td><td style="width:1%"><a class="b" href="${esc(j.url)}" target="_blank" rel="noopener">↗</a></td></tr>`).join('')}</table></div>` : '<div class="card empty">None.</div>';
+    const more = (rows, extra) => list(rows.slice(0, 10), extra) + (rows.length > 10 ? `<details style="margin-top:6px"><summary>${rows.length - 10} more</summary>${list(rows.slice(10), extra)}</details>` : '');
     const needs = j => { try { return '<div class="small">Needs: ' + JSON.parse(j.reason).map(n => esc(n.label)).join('; ') + '</div>'; } catch { return ''; } };
     return `<div class="tiles">${Object.entries(lab).map(([k, l]) => `<div class="tile"><span>${l}</span><b>${(c[k] || 0).toLocaleString()}</b></div>`).join('')}</div>
       <h2>Run the bot</h2><div class="card"><div class="row"><span>Fill the next</span><input id="napply" type="number" value="5" min="1" max="50" style="width:70px"><span>jobs</span>
@@ -312,10 +328,10 @@ const VIEWS = {
       ${p.approved.length ? `<h2>Submitting now</h2>${list(p.approved)}` : ''}
       <h2>Waiting on your answers <span class="chip">${p.queued.length}</span></h2>${list(p.queued, needs)}
       <h2>Failed <span class="chip">${p.failed.length}</span></h2>${list(p.failed, j => `<div class="small err">${esc(j.reason)}</div><button class="b" style="margin-top:6px" onclick="act('/api/redo',{id:'${j.id}'},'Back in line')">Retry</button>`)}
-      <h2>Next in line <span class="chip">${p.nextCount}</span></h2>${list(p.next)}
+      <h2>Next in line <span class="chip">${p.nextCount}</span></h2>${more(p.next)}
       <h2>Not automated yet <span class="chip">${p.unsupportedCount}</span></h2>
       <p class="lede">${p.unsupportedBy.map(u => `${esc(u.ats)} ${u.n.toLocaleString()}`).join(' · ')}. The bot can't fill these forms${S.settings.workday ? '' : ' (Workday turns on in Settings)'}, so apply by hand if one looks good. Newest first.</p>
-      ${list(p.unsupported, j => `<button class="b" style="margin-top:6px" onclick="act('/api/manual-done',{id:'${j.id}',applied:true},'Logged as applied')">I applied</button>`)}
+      ${more(p.unsupported, j => `<button class="b" style="margin-top:6px" onclick="act('/api/manual-done',{id:'${j.id}',applied:true},'Logged as applied')">I applied</button>`)}
       <h2>Filtered out</h2><div class="scroll"><table><tr><th>Reason</th><th>Jobs</th></tr>${p.skipped.map(s => `<tr><td>${esc(s.reason)}</td><td class="num">${s.n.toLocaleString()}</td></tr>`).join('')}</table></div>
       <h2>Sources</h2><div class="card small">${p.bySource.map(s => `<span class="chip">${esc(s.source)} ${s.n.toLocaleString()}</span>`).join('')}
         <div class="muted" style="margin-top:8px">Daily-updated GitHub internship lists. Greenhouse, Ashby and Lever forms are filled automatically${S.settings.workday ? ', plus Workday' : ''}. The rest show above under Not automated yet.</div></div>`;
@@ -326,8 +342,8 @@ const VIEWS = {
     const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '–';
     return `<h2>Funnel</h2><div class="card funnel">${fun.map(([l, n]) => `<div><span class="small">${l}</span><span class="track"><span class="f" style="width:${f.applied ? n / f.applied * 100 : 0}%"></span></span><b>${n}</b><span class="small muted pct">${pct(n, f.applied)}</span></div>`).join('')}</div>
       <h2>Applications per day <span class="chip">last 30 days</span></h2>${I.perDay.some(d => d.n) ? `<div class="card"><div class="bars">${I.perDay.map(d => `<div style="height:${d.n / max * 100}%" data-t="${d.day}: ${d.n}"></div>`).join('')}</div></div>` : '<div class="card empty">Nothing sent yet.</div>'}
-      <h2>What's working</h2><div class="card">${I.findings.length ? I.findings.map(x => `<div style="padding:4px 0">${esc(x)}</div>`).join('') : '<span class="empty" style="padding:0">Not enough results yet. Findings show up once each side of a comparison has five or more applications. Mark outcomes in Applications, or connect Gmail in Settings, to feed this.</span>'}</div>
-      ${I.split.map(s => `<h2>${esc(s.name)}</h2>${s.groups.length ? `<div class="scroll"><table><tr><th>Group</th><th>Applied</th><th>Responded</th><th>OA / interview / offer</th></tr>${s.groups.map(g => `<tr><td>${esc(g.group)}</td><td class="num">${g.n}</td><td class="num">${g.responses} <span class="muted">${pct(g.responses, g.n)}</span></td><td class="num">${g.advanced} <span class="muted">${pct(g.advanced, g.n)}</span></td></tr>`).join('')}</table></div>` : '<div class="card empty">No applications yet.</div>'}`).join('')}
+      <h2>What's working</h2><div class="card">${I.findings.length ? I.findings.map(x => `<div style="padding:4px 0">${esc(x)}</div>`).join('') : `<span class="empty" style="padding:0">Not enough results yet. Findings show up once each side of a comparison has five or more applications. ${S.settings.mail ? 'Gmail is connected, so outcomes fill in as replies arrive.' : 'Mark outcomes in Applications, or connect Gmail in Settings, to feed this.'}</span>`}</div>
+      ${!f.responded ? '' : I.split.map(s => `<h2>${esc(s.name)}</h2>${s.groups.length ? `<div class="scroll"><table><tr><th>Group</th><th>Applied</th><th>Responded</th><th>OA / interview / offer</th></tr>${s.groups.map(g => `<tr><td>${esc(g.group)}</td><td class="num">${g.n}</td><td class="num">${g.responses} <span class="muted">${pct(g.responses, g.n)}</span></td><td class="num">${g.advanced} <span class="muted">${pct(g.advanced, g.n)}</span></td></tr>`).join('')}</table></div>` : '<div class="card empty">No applications yet.</div>'}`).join('')}
       <h2>Answers that got you interviews</h2><p class="lede">The bot reads these, and your edits below, before it writes anything new.</p>
       ${I.wins.length ? I.wins.map(w => `<div class="card"><span class="chip o-${w.outcome}">${w.outcome}</span> <b>${esc(w.company)}</b>: ${esc(w.question)}<p>${esc(w.answer)}</p></div>`).join('') : '<div class="card empty">None yet.</div>'}
       <h2>Your edits to the bot's drafts</h2>
@@ -411,7 +427,7 @@ function copyVal(btn) {
     copied.add(row.dataset.ck); btn.textContent = 'Copied'; setTimeout(() => btn.textContent = btn.title ? 'Copy path' : 'Copy', 1200);
     const rows = [...row.parentElement.querySelectorAll('.v')];
     rows.forEach(r => { const on = copied.has(r.dataset.ck); r.classList.toggle('done', on); r.previousElementSibling.classList.toggle('done', on); r.classList.remove('next'); r.previousElementSibling.classList.remove('next'); });
-    const nx = rows.find(r => !copied.has(r.dataset.ck));
+    const nx = rows.find(r => !copied.has(r.dataset.ck) && !r.classList.contains('auto'));
     if (nx) { nx.classList.add('next'); nx.previousElementSibling.classList.add('next'); nx.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
   }, () => toast("Couldn't copy"));
 }
@@ -431,6 +447,12 @@ async function appliedDone(id, seen) {
   if (!seen) await api('/api/manual-done', { id, applied: true });
   toast(seen ? 'Saw the confirmation email: marked applied' : 'Logged as applied');
   working = null; formWin?.close(); await api('/api/tile', { mode: 'max' }); await refresh();
+  nextUp();
+}
+// Put the next hard job at the top with its Open form focused, so Enter starts it.
+function nextUp() {
+  const n = hardList()[0], c = n && document.getElementById('ap-' + n.id);
+  if (c) { c.scrollIntoView({ block: 'start', behavior: 'smooth' }); c.querySelector('button.primary')?.focus({ preventScroll: true }); }
 }
 // While a form is open, the inbox watcher flips it to applied when the confirmation email lands.
 setInterval(async () => {

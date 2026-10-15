@@ -95,7 +95,7 @@ export async function fill(page, questions, answers, facts) {
 }
 
 export async function submit(page) {
-  await page.locator('#btn-submit, button[type=submit]').first().click();
+  await page.locator('#btn-submit:visible, button[type=submit]:visible').first().click();   // a hidden hcaptchaSubmitBtn can come first
   for (let i = 0; i < 40; i++) {
     await sleep(500);
     if (/\/thanks/.test(page.url())) return { ok: true };
