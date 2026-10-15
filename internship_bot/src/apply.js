@@ -73,7 +73,8 @@ export async function apply(browser, job, { dryRun = true } = {}) {
 async function wizard(browser, ats, job, form, reviewed, dryRun) {
   const { facts } = loadProfile();
   const screenshot = `${SHOTS}${job.id}.png`;
-  const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+  const own = !dryRun && !process.env.INTERN_NO_SUBMIT && await chromium.launch({ channel: 'chrome', headless: false });
+  const page = await (own || browser).newPage({ viewport: { width: 1100, height: 900 } });
   try {
     const r = await ats.run(page, job, form, { dryRun, reviewed, email: facts.email, resume: resumeFor(job).path,
       allowCreate: meta.get('workday_accounts') === '1', shot: () => screenshot,
@@ -83,7 +84,7 @@ async function wizard(browser, ats, job, form, reviewed, dryRun) {
     if (r.status === 'handoff') return handOff(job, r.why, r.screenshot);
     if (r.status === 'review') return record(job, 'dryrun', { answers: r.audit, screenshot, ...(process.env.INTERN_NO_SUBMIT ? { reason: 'INTERN_NO_SUBMIT: stopped before submit' } : {}) });
     return record(job, 'applied', { answers: r.audit, screenshot }, { ok: true });
-  } finally { await page.close(); }
+  } finally { await (own || page).close().catch(() => {}); }
 }
 
 const n2why = n => /external task/i.test(n.why) ? 'asks for outside work' : /field type/.test(n.why) ? 'has a field the bot can\'t fill' : 'wants a file upload';
