@@ -78,7 +78,9 @@ def test_live_gates():
     assert live_status(base, 25)[0] == "graduated"
     assert live_status({**base, "z": 1.0}, 25)[0] == "on trial"
     assert live_status({**base, "mean": -0.001, "excess": -0.003}, 25)[0] == "eliminated"
-    assert live_status({**base, "n": 5, "mean": -0.01, "excess": -0.01}, 3)[0] == "on trial"
+    assert live_status({**base, "mean": -0.001, "excess": -0.003, "z": -0.5}, 12)[0] == "on trial"  # too early to tell
+    assert live_status({**base, "mean": -0.01, "excess": -0.01, "z": -1.5}, 12)[0] == "eliminated"
+    assert live_status({**base, "n": 80, "mean": -0.01, "excess": -0.01, "z": -3}, 2)[0] == "on trial"  # one bad day
 
 
 def test_new_indicators():
@@ -93,3 +95,18 @@ def test_new_indicators():
                  "stoch(14) < 20", "days_left() <= 2", "coin(3)", "obv() > sma(obv(), 20)"):
         lab.evaluate(rule, df)
     assert lab.evaluate("coin(1)", df).equals(lab.evaluate("coin(1)", df))
+
+
+def test_book_compounds_each_trade_to_its_return():
+    from cockpit.evolve import _day_rets, _book, _position
+    idx = pd.bdate_range("2026-01-05", periods=6)
+    df = pd.DataFrame({"Open": [10, 10, 11, 12, 12, 13.0], "Close": [10, 11, 12, 11, 13, 13.0]}, index=idx)
+    t = ("AAA", "2026-01-06", "2026-01-08", 0.05, 3, "time")
+    r = _day_rets(t, df)
+    assert list(r.index) == ["2026-01-06", "2026-01-07", "2026-01-08"] and abs((1 + r).prod() - 1.05) < 1e-12
+    days = list(idx.strftime("%Y-%m-%d"))
+    book = _book([t, ("BBB", "2026-01-08", "2026-01-08", -0.02, 1, "time")], {"AAA": df, "BBB": df}, days)
+    assert book[0]["v"] == 1 and book[0]["n"] == 0 and book[3]["n"] == 2
+    assert abs(book[-1]["v"] - (1 + r.iloc[0]) * (1 + r.iloc[1]) * (1 + (r.iloc[2] - 0.02) / 2)) < 1e-6
+    p = _position(("AAA", "2026-01-08", "2026-01-12", 0.1, 3, "open"), df, 5)
+    assert (p["px0"], p["px"], p["held"], p["path"], p["chg"]) == (12, 13, 3, [11, 13, 13], 0)

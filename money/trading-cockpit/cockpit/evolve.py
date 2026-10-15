@@ -47,7 +47,7 @@ COST_BPS = 10      # per side
 DEFAULTS = {"generations": 5, "cull": 0.35, "min_trades": 8, "seed": 2026}
 EXAM_Z = 1.0      # final exam: the holdout edge must be at least one standard error above random entries
 # Live trial gates: judged only on trades made after promotion.
-LIVE_MIN_TRADES_ELIM = 15
+LIVE_ELIM = {"days": 10, "trades": 15, "z": -1.0}  # early exit: clearly worse than random entries
 LIVE_GRAD = {"days": 20, "trades": 25, "z": 1.65}
 
 _UNI = Path(__file__).parent / "universes"
@@ -429,9 +429,12 @@ def promote_finalists(res: dict) -> list[str]:
 def live_status(stats: dict, days: int) -> tuple[str, str]:
     """Trial verdict from trades made since promotion (closed and open, marked to market)."""
     n = stats["n"]
-    if n >= LIVE_MIN_TRADES_ELIM and (stats["mean"] <= 0 or stats["excess"] <= 0):
-        return "eliminated", (f"After {n} live trades it averaged {stats['mean']:+.2%} per trade vs {stats['base']:+.2%} "
-                              "for random entries.")
+    # One bad day can bring 50 losing trades, so both exits wait for enough days, not just enough trades.
+    early = days >= LIVE_ELIM["days"] and n >= LIVE_ELIM["trades"] and (stats["z"] or 0) <= LIVE_ELIM["z"]
+    full = days >= LIVE_GRAD["days"] and n >= LIVE_GRAD["trades"] and (stats["mean"] <= 0 or stats["excess"] <= 0)
+    if early or full:
+        return "eliminated", (f"After {n} live trades over {days} trading days it averaged {stats['mean']:+.2%} per trade "
+                              f"vs {stats['base']:+.2%} for random entries (z={stats['z']:.2f}).")
     if days >= LIVE_GRAD["days"] and n >= LIVE_GRAD["trades"] and stats["z"] >= LIVE_GRAD["z"] and stats["mean"] > 0:
         return "graduated", (f"{n} live trades over {days} trading days: {stats['mean']:+.2%} per trade, beating random "
                              f"entries by {stats['excess']:+.2%} (z={stats['z']:.2f}). Candidate for real money.")
@@ -443,6 +446,42 @@ def live_status(stats: dict, days: int) -> tuple[str, str]:
     if n and stats["z"] is not None and stats["z"] < LIVE_GRAD["z"]:
         need.append(f"an edge of z ≥ {LIVE_GRAD['z']} (now {stats['z']:.2f})")
     return "on trial", "Needs " + ", ".join(need) + "." if need else "On trial."
+
+
+def _day_rets(t: tuple, df: pd.DataFrame) -> pd.Series:
+    """One trade's daily returns (open→close on day one, then close→close), with the last day set so they compound
+    to the trade's net return. Exits at a stop or the open are thereby booked on the exit day."""
+    d = df.loc[t[1]:t[2]]
+    if d.empty:
+        return pd.Series(dtype=float)
+    c = d["Close"].to_numpy(float)
+    f = np.r_[c[0] / float(d["Open"].iat[0]), c[1:] / c[:-1]]
+    f[-1] = (1 + t[3]) / np.prod(f[:-1])
+    return pd.Series(f - 1, index=d.index.strftime("%Y-%m-%d"))
+
+
+def _book(trades: list[tuple], frames: dict, days: list[str]) -> list[dict]:
+    """Equal-weight book: each day the money is split evenly across every open position (cash when there are none)."""
+    per_day: dict[str, list[float]] = {}
+    for t in trades:
+        if t[0] in frames:
+            for d, r in _day_rets(t, frames[t[0]]).items():
+                per_day.setdefault(d, []).append(r)
+    v, out = 1.0, []
+    for d in days:
+        v *= 1 + (float(np.mean(per_day[d])) if d in per_day else 0.0)
+        out.append({"d": d, "v": round(v, 6), "n": len(per_day.get(d, ()))})
+    return out
+
+
+def _position(t: tuple, df: pd.DataFrame, max_hold: int) -> dict:
+    """An open trade as a position: entry price, last close, today's move and the closes since entry."""
+    d = df.loc[t[1]:]
+    c = d["Close"].to_numpy(float)
+    prev = df["Close"].loc[:d.index[-1]].iloc[-2] if len(df.loc[:d.index[-1]]) > 1 else c[-1]
+    return {"t": t[0], "d": t[1], "px0": round(float(d["Open"].iat[0]), 4), "px": round(float(c[-1]), 4),
+            "ret": t[3], "chg": float(c[-1] / prev - 1), "held": len(d), "max": max_hold,
+            "path": [round(float(x), 4) for x in c[-60:]]}
 
 
 def refresh_live(progress=None) -> dict:
@@ -468,6 +507,11 @@ def refresh_live(progress=None) -> dict:
         spy = market.history("SPY", years=YEARS)["Close"]
         days = int(((spy.index > pd.Timestamp(since)) & (spy.index <= pd.Timestamp(last))).sum())
         spy_ret = float(spy.asof(pd.Timestamp(last)) / spy.asof(pd.Timestamp(since)) - 1) if days else 0.0
+        spy_w = spy[(spy.index > pd.Timestamp(since)) & (spy.index <= pd.Timestamp(last))]
+        book_days = list(spy_w.index.strftime("%Y-%m-%d"))
+        spy_curve = [round(float(x), 6) for x in spy_w / spy.asof(pd.Timestamp(since))]
+        held = {t[0] for k in range(len(sids)) for t in trades[k]}
+        frames = {tk: market.completed(market.history(tk, years=YEARS), tk) for tk in held}
         for k, sid in enumerate(sids):
             v = active[sid]
             s = _stats(rets[k], base.get(_exit_key(specs[k]), [0, 0]), ldays[k])
@@ -475,8 +519,12 @@ def refresh_live(progress=None) -> dict:
             status, why = live_status(s, days)
             if v["status"] == "graduated" and status == "on trial":
                 status = "graduated"  # a graduate keeps its badge unless it fails the elimination test
-            v.update(stats=s, days=days, last=last, spy=spy_ret, why=why, sim=_sim(trades[k]),
+            book = _book(trades[k], frames, book_days)
+            for b, sv in zip(book, spy_curve):
+                b["spy"] = sv
+            v.update(stats=s, days=days, last=last, spy=spy_ret, why=why, sim=_sim(trades[k]), book=book,
                      open=[t for t in tt if t[5] == "open"], closed=[t for t in tt if t[5] != "open"][:80],
+                     positions=[_position(t, frames[t[0]], specs[k]["max_hold"]) for t in tt if t[5] == "open"],
                      signals=sorted(sc["ticker"] for sc in good if k in sc["signals"]))
             if status != v["status"]:
                 v.setdefault("events", []).append({"ts": db.now(), "from": v["status"], "to": status, "why": why})
@@ -568,7 +616,7 @@ def register(app) -> None:
         with _job_lock:
             job = {k: v for k, v in _job.items() if k != "trace"}
         return jsonify({"run": r, "runs": runs(), "live": live_state(), "job": job, "defaults": DEFAULTS, "exam_z": EXAM_Z,
-                        "gates": {"elim_trades": LIVE_MIN_TRADES_ELIM, **LIVE_GRAD}})
+                        "gates": {"elim": LIVE_ELIM, **LIVE_GRAD}})
 
     @app.get("/api/evo/job")
     def api_evo_job():
