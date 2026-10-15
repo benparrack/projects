@@ -113,8 +113,7 @@ textarea { width: 100%; resize: vertical; }
 .add .row > * { flex: 1 1 auto; }
 @keyframes drop { from { opacity: 0; transform: translateY(-4px); } }
 
-#filters { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 6px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; scrollbar-width: none; }
-#filters::-webkit-scrollbar { display: none; }
+#filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 6px; }
 .chip { background: var(--card); border: 1px solid var(--line); border-radius: var(--pill); padding: 5px 12px; white-space: nowrap; font-size: .88rem; font-weight: 500; }
 .chip[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c, var(--muted)); flex: none; }

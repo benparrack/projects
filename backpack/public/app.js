@@ -264,7 +264,7 @@ function renderCalendar(list, now) {
 function renderSummary(list, now) {
   const open = list.filter((i) => isTask(i) && !S.done[i.uid]);
   const n = (...gs) => open.filter((i) => gs.includes(groupOf(i, now))).length;
-  const week = open.filter((i) => Date.parse(i.due) < addDays(startOfDay(now), 7) && ['Today', 'Tomorrow', 'This week', 'Next week'].includes(groupOf(i, now))).length;
+  const week = open.filter((i) => Date.parse(i.due) < addDays(startOfDay(now), 8) &&  /* today + 7 full days, so next Thursday counts on a Thursday */ ['Today', 'Tomorrow', 'This week', 'Next week'].includes(groupOf(i, now))).length;
   const stats = [['Overdue', n('Overdue'), 'bad'], ['Due today', n('Today'), 'warn'], ['Next 7 days', week, '']];
   $('#summary').replaceChildren(...stats.map(([name, v, tone]) =>
     h('div', { className: `stat ${v ? tone : 'zero'}` }, h('span', { className: 'num' }, v), h('span', { className: 'lbl' }, name))));
