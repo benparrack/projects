@@ -13,6 +13,15 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // Apply the saved look before first paint (app.js keeps it up to date after that).
+    try {
+      const L = (JSON.parse(localStorage.getItem('backpack.v1')) || {}).look || {}, r = document.documentElement;
+      for (const k of ['theme', 'font', 'corners']) if (L[k]) r.dataset[k] = L[k];
+      r.toggleAttribute('data-dark', L.mode === 'dark' || (L.mode !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches));
+      if (/^#[0-9a-f]{6}$/i.test(L.accent || '')) r.style.setProperty('--accent', L.accent);
+    } catch {}
+  </script>
 </head>
 <body>
   <header>
@@ -97,6 +106,8 @@
     <h3>Classes</h3>
     <p class="muted small">Pick a color, give it a nicer name, or hide a class you don't care about.</p>
     <ul id="classList" class="plain"></ul>
+    <h3>Appearance</h3>
+    <div id="look" class="look"></div>
     <h3>Backup</h3>
     <p class="muted small">Your checkmarks, notes and tasks live only on this device. Save a backup to move them to a new phone.</p>
     <div class="row">

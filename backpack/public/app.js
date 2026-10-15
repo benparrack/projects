@@ -7,13 +7,21 @@ const $ = (s) => document.querySelector(s);
 
 // Everything lives on this device. Synced items are replaced on every sync; done
 // flags, notes, class moves, colors and personal tasks are the user's and never are.
-const BASE = () => ({ feeds: [], items: {}, done: {}, classes: {}, tasks: [], courseOf: {}, notes: {}, view: 'list', demo: false, lastSync: 0 });
+// The US and Canada start weeks on Sunday; most other places on Monday.
+const localWeekStart = () => {
+  try { const f = new Intl.Locale(navigator.language).getWeekInfo?.().firstDay; if (f) return f === 7 ? 'sun' : 'mon'; } catch {}
+  return /-(US|CA)$/i.test(navigator.language) ? 'sun' : 'mon';
+};
+const LOOK = () => ({ theme: 'classic', mode: 'system', font: 'system', corners: 'round', accent: '', weekStart: localWeekStart() });
+const BASE = () => ({ feeds: [], items: {}, done: {}, classes: {}, tasks: [], courseOf: {}, notes: {}, view: 'list', demo: false, lastSync: 0, look: LOOK() });
 function load() {
-  try { return { ...BASE(), ...JSON.parse(localStorage.getItem(KEY)) }; } catch { return BASE(); }
+  try { const s = { ...BASE(), ...JSON.parse(localStorage.getItem(KEY)) }; s.look = { ...LOOK(), ...s.look }; return s; } catch { return BASE(); }
 }
 let S = load();
 let filter = null, syncing = false;
 const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const addDays = (t, n) => { const d = new Date(t); d.setDate(d.getDate() + n); return d.getTime(); };
+const weekStart = (t) => { const d = new Date(startOfDay(t)); return addDays(d, -((d.getDay() - (S.look.weekStart === 'sun' ? 0 : 1) + 7) % 7)); };
 const monthStart = (t) => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
 let calMonth = monthStart(Date.now()), calDay = startOfDay(Date.now());
 
@@ -142,7 +150,7 @@ function clearDemo() {
 
 /* ---------- list ---------- */
 
-const GROUPS = ['Overdue', 'Today', 'Tomorrow', 'This week', 'Later', 'Done'];
+const GROUPS = ['Overdue', 'Today', 'Tomorrow', 'This week', 'Next week', 'Later', 'Done'];
 function groupOf(item, now) {
   const t = Date.parse(item.due), today = startOfDay(now);
   if (isTask(item) && S.done[item.uid]) return t >= today - 7 * DAY ? 'Done' : null;
@@ -153,7 +161,10 @@ function groupOf(item, now) {
   }
   if (t < today + DAY) return 'Today';
   if (t < today + 2 * DAY) return 'Tomorrow';
-  if (t < today + 7 * DAY) return 'This week';
+  // Calendar weeks, not "the next 7 days", so next Monday's work isn't under This week.
+  const wk = weekStart(now);
+  if (t < addDays(wk, 7)) return 'This week';
+  if (t < addDays(wk, 14)) return 'Next week';
   return 'Later';
 }
 
@@ -220,7 +231,8 @@ function renderCalendar(list, now) {
   const byDay = {};
   for (const it of list) (byDay[startOfDay(Date.parse(it.due))] ||= []).push(it);
   const today = startOfDay(now);
-  const cells = Array.from({ length: first.getDay() }, () => h('span', { className: 'cell pad' }));
+  const ws = S.look.weekStart === 'sun' ? 0 : 1;
+  const cells = Array.from({ length: (first.getDay() - ws + 7) % 7 }, () => h('span', { className: 'cell pad' }));
   for (let d = 1; d <= new Date(y, m + 1, 0).getDate(); d++) {
     const t = new Date(y, m, d).getTime(), its = (byDay[t] || []).sort(byDue);
     const open = its.filter((i) => isTask(i) && !S.done[i.uid]).length;
@@ -232,7 +244,7 @@ function renderCalendar(list, now) {
     h('span', { className: 'dots' }, its.slice(0, 4).map((i) => h('span', { className: `dot${S.done[i.uid] ? ' faded' : ''}${isTask(i) ? '' : ' ring'}`, style: `--c:${classOf(i.course).color}` })))));
   }
   const step = (n) => () => { calMonth = new Date(y, m + n, 1).getTime(); render(); };
-  const weekdays = Array.from({ length: 7 }, (_, i) => new Date(2026, 1, 1 + i).toLocaleDateString([], { weekday: 'narrow' })); // Feb 1 2026 is a Sunday
+  const weekdays = Array.from({ length: 7 }, (_, i) => new Date(2026, 1, 1 + ws + i).toLocaleDateString([], { weekday: 'narrow' })); // Feb 1 2026 is a Sunday
   const dayItems = (byDay[calDay] || []).sort(byDue);
   $('#list').replaceChildren(
     h('div', { className: 'cal card' },
@@ -252,7 +264,8 @@ function renderCalendar(list, now) {
 function renderSummary(list, now) {
   const open = list.filter((i) => isTask(i) && !S.done[i.uid]);
   const n = (...gs) => open.filter((i) => gs.includes(groupOf(i, now))).length;
-  const stats = [['Overdue', n('Overdue'), 'bad'], ['Due today', n('Today'), 'warn'], ['Next 7 days', n('Today', 'Tomorrow', 'This week'), '']];
+  const week = open.filter((i) => Date.parse(i.due) < addDays(startOfDay(now), 7) && ['Today', 'Tomorrow', 'This week', 'Next week'].includes(groupOf(i, now))).length;
+  const stats = [['Overdue', n('Overdue'), 'bad'], ['Due today', n('Today'), 'warn'], ['Next 7 days', week, '']];
   $('#summary').replaceChildren(...stats.map(([name, v, tone]) =>
     h('div', { className: `stat ${v ? tone : 'zero'}` }, h('span', { className: 'num' }, v), h('span', { className: 'lbl' }, name))));
 }
@@ -352,9 +365,54 @@ function openDetail(uid) {
   $('#detail').showModal();
 }
 
+/* ---------- appearance ---------- */
+
+const THEMES = { classic: 'Classic', paper: 'Paper', notebook: 'Notebook', mono: 'Mono', forest: 'Forest', bubblegum: 'Bubblegum', dusk: 'Dusk' };
+const FONTS = { system: 'Default', rounded: 'Rounded', serif: 'Serif', hand: 'Handwritten', mono: 'Typewriter' };
+const darkMQ = matchMedia('(prefers-color-scheme: dark)');
+function applyLook() {
+  const L = S.look, r = document.documentElement;
+  for (const k of ['theme', 'font', 'corners']) r.dataset[k] = L[k];
+  r.toggleAttribute('data-dark', L.mode === 'dark' || (L.mode !== 'light' && darkMQ.matches));
+  r.style.removeProperty('--accent');
+  r.style.removeProperty('--accent-ink');
+  if (/^#[0-9a-f]{6}$/i.test(L.accent)) {
+    const [R, G, B] = [1, 3, 5].map((i) => parseInt(L.accent.slice(i, i + 2), 16));
+    r.style.setProperty('--accent', L.accent);
+    r.style.setProperty('--accent-ink', 0.299 * R + 0.587 * G + 0.114 * B > 150 ? '#111' : '#fff');
+  }
+  const bg = getComputedStyle(r).getPropertyValue('--bg').trim();
+  document.querySelectorAll('meta[name=theme-color]').forEach((m) => { m.content = bg; });
+}
+darkMQ.addEventListener('change', () => { applyLook(); if ($('#settings').open) renderLook(); });
+
+function renderLook() {
+  const L = S.look, dark = document.documentElement.hasAttribute('data-dark');
+  const set = (k, v) => () => { L[k] = v; save(); applyLook(); renderLook(); render(); };
+  const seg = (k, opts) => h('div', { className: 'seg', role: 'group', 'aria-labelledby': `look-${k}` }, Object.entries(opts).map(([v, name]) =>
+    h('button', { type: 'button', 'aria-pressed': String(L[k] === v), 'data-font': k === 'font' ? v : null, onclick: set(k, v) }, name)));
+  const label = (k, text) => h('span', { id: `look-${k}` }, text);
+  $('#look').replaceChildren(
+    label('theme', 'Theme'),
+    h('div', { className: 'swatches', role: 'group', 'aria-labelledby': 'look-theme' }, Object.entries(THEMES).map(([v, name]) =>
+      // Each swatch carries its own data-theme, so it previews in that theme's colors.
+      h('button', { type: 'button', className: 'sw', 'aria-pressed': String(L.theme === v), 'data-theme': v, 'data-dark': dark ? '' : null, onclick: set('theme', v) },
+        h('span', { className: 'chips', 'aria-hidden': 'true' }, ['--bg', '--card', '--accent', '--text'].map((c) => h('i', { style: `background:var(${c})` }))), name))),
+    label('mode', 'Light or dark'), seg('mode', { system: 'Match device', light: 'Light', dark: 'Dark' }),
+    label('font', 'Font'), seg('font', FONTS),
+    label('corners', 'Corners'), seg('corners', { round: 'Round', soft: 'Soft', square: 'Square' }),
+    label('accent', 'Accent color'),
+    h('div', { className: 'row' },
+      h('input', { type: 'color', value: L.accent || getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(), 'aria-labelledby': 'look-accent',
+        oninput: (e) => { L.accent = e.target.value; save(); applyLook(); }, onchange: renderLook }),
+      L.accent ? h('button', { type: 'button', onclick: set('accent', '') }, "Use the theme's color") : h('span', { className: 'muted small' }, "Using the theme's color.")),
+    label('weekStart', 'Week starts on'), seg('weekStart', { sun: 'Sunday', mon: 'Monday' }));
+}
+
 /* ---------- settings ---------- */
 
 function renderSettings() {
+  renderLook();
   $('#feedList').replaceChildren(...(S.feeds.length ? S.feeds.map((f) =>
     h('li', {}, h('span', { className: 'url', title: f }, f.replace(/^(https?|webcal):\/\//, '')),
       h('button', { type: 'button', onclick: () => removeFeed(f) }, 'Remove'))) : [h('li', { className: 'muted small' }, 'No calendar connected yet.')]));
@@ -385,6 +443,8 @@ async function importData(file) {
       && (data.tasks || []).every((t) => t && typeof t.uid === 'string' && typeof t.title === 'string' && !isNaN(Date.parse(t.due)));
     if (!ok) throw new Error('bad backup');
     S = { ...base, ...data };
+    S.look = { ...LOOK(), ...S.look };
+    applyLook();
     save();
     render();
     renderSettings();
@@ -418,6 +478,7 @@ $('#eraseBtn').addEventListener('click', (e) => {
   if (e.target.dataset.armed !== '1') { e.target.dataset.armed = '1'; e.target.textContent = 'Tap again to erase'; return; }
   S = BASE();
   save();
+  applyLook();
   $('#settings').close();
   render();
 });
@@ -445,5 +506,6 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { re
 setInterval(updateLastSync, 60e3);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 
+applyLook();
 render();
 maybeSync();

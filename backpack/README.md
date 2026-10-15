@@ -4,12 +4,12 @@ A myHomework-style planner that fills itself in. A student pastes their school
 calendar feed link once (Canvas, Schoology, or anything with an iCal feed), and their
 classes and assignments show up on their own.
 
-**Features:** Overdue / Today / Tomorrow / This week / Later list, month calendar,
+**Features:** Overdue / Today / Tomorrow / This week / Next week / Later list (calendar weeks, Sunday or Monday start), month calendar,
 summary counts, class filters and colors, tests and quizzes flagged, lectures and other
 calendar events shown separately (no checkbox), detail sheet with the assignment text,
 your own notes and an "Open in Canvas" link, your own tasks (with optional time), an undo
 toast, sample-data mode for first-time visitors, a backup file to move to a new phone,
-dark mode, and it installs to the home screen and opens offline.
+appearance settings (7 themes, light/dark, 5 fonts bundled in `public/fonts/` under the OFL, corner style, accent color), and it installs to the home screen and opens offline.
 
 **How it's built:**
 - **Data stays on the device** (localStorage). There are no accounts and no database.
