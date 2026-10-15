@@ -9,7 +9,11 @@ summary counts, class filters and colors, tests and quizzes flagged, lectures an
 calendar events shown separately (no checkbox), detail sheet with the assignment text,
 your own notes and an "Open in Canvas" link, your own tasks (with optional time), an undo
 toast, sample-data mode for first-time visitors, a backup file to move to a new phone,
-appearance settings (7 themes, light/dark, 5 fonts bundled in `public/fonts/` under the OFL, corner style, accent color), and it installs to the home screen and opens offline.
+appearance settings (7 themes, light/dark, 5 fonts bundled in `public/fonts/` under the OFL, corner style, accent color), and it installs to the home screen and opens offline. Quick-add reads a trailing date/time ("Essay draft fri 5pm"; `public/quick.js`), `n` opens it.
+"Mark all done" on Overdue, Later list collapsed past 8, links in assignment text are clickable,
+overdue+today count in the tab title and app badge. Pasting the feed link connects with no extra tap;
+bad links are rejected instead of saved. Settings → "Set up my phone" shares a `/#feed=…` link
+(the fragment never reaches the server) that offers to connect the same calendars on the other device.
 
 **How it's built:**
 - **Data stays on the device** (localStorage). There are no accounts and no database.

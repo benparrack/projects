@@ -1,4 +1,5 @@
 import { feedItems, typeOf } from './ics.js';
+import { parseQuick } from './quick.js';
 
 const KEY = 'backpack.v1';
 const COLORS = ['#e4572e', '#2e86ab', '#3bb273', '#f2a541', '#8e5ccf', '#d6457c', '#17a3a3', '#7a8b99'];
@@ -13,12 +14,12 @@ const localWeekStart = () => {
   return /-(US|CA)$/i.test(navigator.language) ? 'sun' : 'mon';
 };
 const LOOK = () => ({ theme: 'classic', mode: 'system', font: 'system', corners: 'round', accent: '', weekStart: localWeekStart() });
-const BASE = () => ({ feeds: [], items: {}, done: {}, classes: {}, tasks: [], courseOf: {}, notes: {}, view: 'list', demo: false, lastSync: 0, look: LOOK() });
+const BASE = () => ({ feeds: [], items: {}, done: {}, classes: {}, tasks: [], courseOf: {}, notes: {}, view: 'list', demo: false, lastSync: 0, look: LOOK(), tipDone: false });
 function load() {
   try { const s = { ...BASE(), ...JSON.parse(localStorage.getItem(KEY)) }; s.look = { ...LOOK(), ...s.look }; return s; } catch { return BASE(); }
 }
 let S = load();
-let filter = null, syncing = false;
+let filter = null, showAllLater = false, syncQueue = Promise.resolve();
 const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 const addDays = (t, n) => { const d = new Date(t); d.setDate(d.getDate() + n); return d.getTime(); };
 const weekStart = (t) => { const d = new Date(startOfDay(t)); return addDays(d, -((d.getDay() - (S.look.weekStart === 'sun' ? 0 : 1) + 7) % 7)); };
@@ -57,19 +58,19 @@ const withCourse = (i) => ({ ...i, course: S.courseOf[i.uid] || i.course });
 function setStatus(msg) { $('#status').textContent = msg; }
 
 let toastTimer;
-function toast(msg, action, fn) {
+function toast(msg, action, fn, ms = 5000) {
   const t = $('#toast');
   t.replaceChildren(h('span', {}, msg), ...(action ? [h('button', { type: 'button', onclick: () => { t.hidden = true; fn(); } }, action)] : []));
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
+  toastTimer = setTimeout(() => { t.hidden = true; }, ms);
 }
 
 /* ---------- sync ---------- */
 
-async function sync() {
-  if (syncing || !S.feeds.length) return;
-  syncing = true;
+const sync = () => (syncQueue = syncQueue.then(runSync));
+async function runSync() {
+  if (!S.feeds.length) return new Set();
   $('#syncBtn').classList.add('spin');
   setStatus('');
   const fresh = [], errors = [], failed = new Set();
@@ -87,27 +88,50 @@ async function sync() {
   fresh.sort(byDue).forEach((i) => classOf(i.course));
   if (failed.size < S.feeds.length) S.lastSync = Date.now();
   save();
-  syncing = false;
   $('#syncBtn').classList.remove('spin');
   if (errors.length) setStatus(navigator.onLine ? 'Sync problem: ' + errors[0] : "You're offline. Showing your last sync.");
   render();
+  return failed;
 }
 
 function maybeSync() { if (Date.now() - S.lastSync > 15 * 60e3) sync(); }
 
 async function addFeed(input) {
-  const url = input.value.trim();
+  const url = input.value.trim(), btn = input.form.querySelector('button[type=submit]');
   if (!/^(https|webcal):\/\//i.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(url)) {
     setStatus('Paste the full calendar link (it starts with https:// or webcal://).');
     return;
   }
-  if (S.demo) clearDemo();
-  if (!S.feeds.includes(url)) S.feeds.push(url);
+  // The most common mistake: copying the address bar of the Canvas calendar page instead of the feed link.
+  if (/instructure\.com|canvas/i.test(url) && !/\/feeds\//.test(url)) {
+    setStatus("That's the Canvas page address, not the feed link. In Canvas Calendar, click \"Calendar Feed\" (bottom right) and copy the link in the box that pops up.");
+    return;
+  }
+  if (S.feeds.includes(url)) { input.value = ''; toast('That calendar is already connected.'); return; }
+  const wasDemo = S.demo;
+  if (wasDemo) clearDemo();
+  S.feeds.push(url);
   input.value = '';
-  save();
+  btn.disabled = true;
+  const label0 = btn.textContent;
+  btn.textContent = 'Connecting…';
   S.lastSync = 0;
-  render();
-  await sync();
+  const failed = await sync();
+  btn.disabled = false;
+  btn.textContent = label0;
+  if (failed.has(url)) {
+    // Never saved a working copy, so don't keep it: put the link back so it can be fixed.
+    S.feeds = S.feeds.filter((f) => f !== url);
+    save();
+    input.value = url;
+    render();
+    setStatus($('#status').textContent.replace('Sync problem: ', "Couldn't connect: "));
+    input.focus();
+  } else {
+    navigator.storage?.persist?.().catch(() => {}); // ask the browser not to evict our data
+    const n = Object.values(S.items).filter((i) => i.feed === url).length;
+    toast(`Connected. ${n} item${n === 1 ? '' : 's'} added.`);
+  }
   renderSettings();
 }
 
@@ -217,10 +241,20 @@ function renderList(list, now) {
     const ul = h('ul', {}, items.map((i) => row(i, g)));
     if (g === 'Done') return h('details', { className: 'group' }, h('summary', {}, `Done this week · ${items.length}`), ul);
     const n = items.filter(isTask).length;
-    return h('section', { className: 'group' + (g === 'Overdue' ? ' overdue' : '') }, h('h2', {}, g, n > 0 && h('span', { className: 'count' }, n)), ul);
+    // A new feed brings the last few weeks with it, most of it already handed in: clear it in one tap.
+    const clearAll = g === 'Overdue' && n > 1 && h('button', { type: 'button', className: 'link small head-action', onclick: () => {
+      const ids = items.map((i) => i.uid), t = Date.now();
+      ids.forEach((id) => { S.done[id] = t; });
+      save(); render();
+      toast(`Marked ${ids.length} done`, 'Undo', () => { ids.forEach((id) => delete S.done[id]); save(); render(); });
+    } }, 'Mark all done');
+    const LATER_MAX = 8, more = g === 'Later' && !showAllLater && items.length > LATER_MAX + 2;
+    if (more) ul.replaceChildren(...[...ul.children].slice(0, LATER_MAX));
+    return h('section', { className: 'group' + (g === 'Overdue' ? ' overdue' : '') }, h('h2', {}, g, n > 0 && h('span', { className: 'count' }, n), clearAll), ul,
+      more && h('button', { type: 'button', className: 'link small more', onclick: () => { showAllLater = true; render(); } }, `Show ${items.length - LATER_MAX} more`));
   });
   $('#list').replaceChildren(...(sections.length ? sections : [
-    h('div', { className: 'empty' }, h('p', { className: 'big' }, 'Nothing coming up.'), h('p', {}, 'Enjoy it. New assignments show up here on their own.')),
+    h('div', { className: 'empty' }, h('p', { className: 'big' }, filter ? `Nothing coming up for ${label(filter)}.` : 'Nothing coming up.'), h('p', {}, 'Enjoy it. New assignments show up here on their own.')),
   ]));
 }
 
@@ -250,7 +284,8 @@ function renderCalendar(list, now) {
     h('div', { className: 'cal card' },
       h('div', { className: 'calhead' },
         h('button', { type: 'button', className: 'icon', 'aria-label': 'Previous month', onclick: step(-1) }, '‹'),
-        h('h2', {}, first.toLocaleDateString([], { month: 'long', year: 'numeric' })),
+        h('h2', {}, first.toLocaleDateString([], { month: 'long', year: 'numeric' }),
+          (calMonth !== monthStart(now) || calDay !== today) && h('button', { type: 'button', className: 'link small', onclick: () => { calMonth = monthStart(now); calDay = today; render(); } }, 'Today')),
         h('button', { type: 'button', className: 'icon', 'aria-label': 'Next month', onclick: step(1) }, '›')),
       h('div', { className: 'grid weekdays', 'aria-hidden': 'true' }, weekdays.map((n) => h('span', {}, n))),
       h('div', { className: 'grid' }, cells)),
@@ -277,6 +312,8 @@ function render() {
   $('#app').hidden = !active;
   $('#syncBtn').hidden = !S.feeds.length;
   $('#demoBanner').hidden = !S.demo;
+  // iOS Safari can wipe a website's saved data after a week unused; a Home Screen app keeps it.
+  $('#iosTip').hidden = !(active && !S.demo && !S.tipDone && /iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone);
   updateLastSync();
   if (!active) return;
 
@@ -286,6 +323,9 @@ function render() {
   const list = filter ? visible.filter((i) => i.course === filter) : visible;
 
   renderSummary(list, now);
+  const due = visible.filter((i) => isTask(i) && !S.done[i.uid] && ['Overdue', 'Today'].includes(groupOf(i, now))).length;
+  document.title = due ? `(${due}) Backpack` : 'Backpack';
+  if (navigator.setAppBadge) (due ? navigator.setAppBadge(due) : navigator.clearAppBadge()).catch(() => {});
   $('#viewList').setAttribute('aria-pressed', String(S.view !== 'calendar'));
   $('#viewCal').setAttribute('aria-pressed', String(S.view === 'calendar'));
   $('#filters').replaceChildren(...(courses.length > 1 ? [null, ...courses] : []).map((c) =>
@@ -348,7 +388,8 @@ function openDetail(uid) {
           h('input', { id: 'editDate', type: 'date', value: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, 'aria-label': 'Due date', onchange: setDue }),
           h('input', { id: 'editTime', type: 'time', value: it.allDay ? '' : `${pad(d.getHours())}:${pad(d.getMinutes())}`, 'aria-label': 'Due time', onchange: setDue }))
         : d.toLocaleString([], { weekday: 'long', month: 'long', day: 'numeric', ...(it.allDay ? {} : { hour: 'numeric', minute: '2-digit' }) }))),
-    it.description && h('div', { className: 'desc' }, it.description),
+    it.description && h('div', { className: 'desc' }, it.description.split(/(https?:\/\/[^\s<>"]*[^\s<>".,;:!?)\]'])/).map((part, i) =>
+      i % 2 ? h('a', { href: part, target: '_blank', rel: 'noopener' }, part) : part)),
     h('label', { className: 'notes' }, 'My notes',
       h('textarea', { rows: 3, value: S.notes[uid] || '', placeholder: 'Page numbers, who to ask, anything…', oninput: (e) => {
         if (e.target.value.trim()) S.notes[uid] = e.target.value; else delete S.notes[uid];
@@ -413,6 +454,7 @@ function renderLook() {
 
 function renderSettings() {
   renderLook();
+  $('#phoneBox').hidden = !S.feeds.length;
   $('#feedList').replaceChildren(...(S.feeds.length ? S.feeds.map((f) =>
     h('li', {}, h('span', { className: 'url', title: f }, f.replace(/^(https?|webcal):\/\//, '')),
       h('button', { type: 'button', onclick: () => removeFeed(f) }, 'Remove'))) : [h('li', { className: 'muted small' }, 'No calendar connected yet.')]));
@@ -457,22 +499,51 @@ async function importData(file) {
 /* ---------- wiring ---------- */
 
 $('#setupForm').addEventListener('submit', (e) => { e.preventDefault(); addFeed($('#setupUrl')); });
+$('#setupUrl').addEventListener('paste', () => setTimeout(() => { if (/^(https?|webcal):\/\/\S+$/i.test($('#setupUrl').value.trim())) $('#setupForm').requestSubmit(); }));
 $('#feedForm').addEventListener('submit', (e) => { e.preventDefault(); addFeed($('#feedUrl')); });
 $('#demoBtn').addEventListener('click', startDemo);
 $('#exitDemo').addEventListener('click', () => { clearDemo(); render(); $('#setupUrl').focus(); });
 $('#syncBtn').addEventListener('click', sync);
 $('#viewList').addEventListener('click', () => { S.view = 'list'; save(); render(); });
 $('#viewCal').addEventListener('click', () => { S.view = 'calendar'; save(); render(); });
-$('#addToggle').addEventListener('click', () => {
-  const form = $('#addForm'), open = form.hidden;
-  form.hidden = !open;
+const ymd = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function showAdd(open) {
+  $('#addForm').hidden = !open;
   $('#addToggle').setAttribute('aria-expanded', String(open));
   $('#addToggle').textContent = open ? 'Cancel' : '+ Add task';
-  if (open) $('#taskTitle').focus();
+  if (!open) return;
+  // Default to the day picked in the calendar, otherwise today (recomputed so it's never yesterday's date).
+  $('#taskDate').value = ymd(S.view === 'calendar' ? calDay : Date.now());
+  $('#taskTime').value = '';
+  $('#quickHint').textContent = '';
+  $('#taskTitle').focus();
+}
+$('#addToggle').addEventListener('click', () => showAdd($('#addForm').hidden));
+$('#addForm').addEventListener('keydown', (e) => { if (e.key === 'Escape') { showAdd(false); $('#addToggle').focus(); } });
+$('#taskTitle').addEventListener('input', () => {
+  const q = parseQuick($('#taskTitle').value);
+  if (q.date) $('#taskDate').value = ymd(q.date);
+  if (q.time) $('#taskTime').value = q.time.map((n) => String(n).padStart(2, '0')).join(':');
+  const [y, m, d] = $('#taskDate').value.split('-').map(Number);
+  $('#quickHint').textContent = q.date || q.time ? `"${q.title}" · due ${new Date(y, m - 1, d).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}${q.time ? ' at ' + time(new Date(2000, 0, 1, ...q.time)) : ''}` : '';
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'n' || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input, textarea, select, dialog') || $('#app').hidden) return;
+  e.preventDefault();
+  showAdd(true);
 });
 $('#settingsBtn').addEventListener('click', () => { renderSettings(); $('#settings').showModal(); });
 $('#closeSettings').addEventListener('click', () => $('#settings').close());
 $('#exportBtn').addEventListener('click', exportData);
+async function shareLink(url, title, text, copied) {
+  try { if (navigator.share) return await navigator.share({ title, text, url }); } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); toast(copied); } catch { prompt('Copy this link:', url); }
+}
+// The feed link rides in the #fragment, which browsers never send to the server.
+$('#phoneBtn').addEventListener('click', () => shareLink(`${location.origin}/#${new URLSearchParams(S.feeds.map((f) => ['feed', f]))}`,
+  'Backpack', 'Open this on your phone to set up Backpack', 'Link copied. Open it on your other device.'));
+$('#friendBtn').addEventListener('click', () => shareLink(location.origin + '/', 'Backpack', 'Homework planner that fills itself in from Canvas/Schoology', 'Link copied'));
+$('#iosTipClose').addEventListener('click', () => { S.tipDone = true; save(); render(); });
 $('#importFile').addEventListener('change', (e) => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
 $('#eraseBtn').addEventListener('click', (e) => {
   if (e.target.dataset.armed !== '1') { e.target.dataset.armed = '1'; e.target.textContent = 'Tap again to erase'; return; }
@@ -490,17 +561,16 @@ $('#addForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const [y, m, d] = $('#taskDate').value.split('-').map(Number), tv = $('#taskTime').value;
   const [hh, mm] = tv ? tv.split(':').map(Number) : [23, 59];
-  const title = $('#taskTitle').value.trim(), course = $('#taskClass').value;
+  const title = parseQuick($('#taskTitle').value).title, course = $('#taskClass').value;
   classOf(course);
   S.tasks.push({ uid: `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, title, course, due: new Date(y, m - 1, d, hh, mm).toISOString(), allDay: !tv, url: '', kind: 'task', type: typeOf(title) });
   $('#taskTitle').value = '';
   $('#taskTime').value = '';
+  $('#quickHint').textContent = '';
   save();
   render();
   toast(`Added: ${title}`);
 });
-const todayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 10);
-$('#taskDate').value = todayStr();
 
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { render(); maybeSync(); } });
 setInterval(updateLastSync, 60e3);
@@ -508,4 +578,12 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').cat
 
 applyLook();
 render();
+// Opened from a "Set up another device" link: offer to add the calendars it carries.
+const incoming = new URLSearchParams(location.hash.slice(1)).getAll('feed').filter((f) => !S.feeds.includes(f));
+if (location.hash) history.replaceState(null, '', location.pathname);
+if (incoming.length) {
+  toast(`Add ${incoming.length === 1 ? 'the calendar' : incoming.length + ' calendars'} from your link?`, 'Add', async () => {
+    for (const f of incoming) { const input = S.feeds.length ? $('#feedUrl') : $('#setupUrl'); input.value = f; await addFeed(input); }
+  }, 30000);
+}
 maybeSync();

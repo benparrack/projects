@@ -44,7 +44,7 @@
         <h3>1 · Copy your calendar link</h3>
         <details class="howto" open>
           <summary>Canvas</summary>
-          <p>Open <b>Calendar</b> in Canvas, click <b>Calendar Feed</b> at the bottom right, and copy the link.</p>
+          <p>On a computer (the Canvas phone app doesn't show it), open <b>Calendar</b> in Canvas, click <b>Calendar Feed</b> at the bottom of the right sidebar, and copy the link in the box that pops up. Afterwards, Settings has a link to set up your phone in one tap.</p>
         </details>
         <details class="howto">
           <summary>Schoology</summary>
@@ -59,7 +59,7 @@
           <input id="setupUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://…/feeds/calendars/user_….ics" aria-label="Calendar feed link" required>
           <button type="submit" class="primary">Connect</button>
         </form>
-        <p class="muted small">Your link and your data stay on this device.</p>
+        <p class="muted small">Pasting the link connects right away. Your link and your data stay on this device.</p>
       </div>
       <p class="center"><button id="demoBtn" type="button" class="link">Just looking? Try it with sample classes</button></p>
     </section>
@@ -68,6 +68,10 @@
       <div id="demoBanner" class="banner" hidden>
         <span>You're looking at sample data.</span>
         <button id="exitDemo" type="button" class="primary small-btn">Connect my calendar</button>
+      </div>
+      <div id="iosTip" class="banner" hidden>
+        <span>Tip: tap <b>Share → Add to Home Screen</b>. iPhones can clear website data that goes unused, but a Home Screen app keeps your checkmarks and notes.</span>
+        <button id="iosTipClose" type="button" class="small-btn">Got it</button>
       </div>
       <div id="summary" class="stats"></div>
       <div class="toolbar">
@@ -78,7 +82,8 @@
         <button id="addToggle" type="button" class="primary small-btn" aria-expanded="false" aria-controls="addForm">+ Add task</button>
       </div>
       <form id="addForm" class="card add" hidden aria-label="Add your own task">
-        <input id="taskTitle" placeholder="What do you need to do?" aria-label="Task" required>
+        <input id="taskTitle" placeholder="What's due? Try &quot;Essay draft fri 5pm&quot;" aria-label="Task" aria-describedby="quickHint" autocomplete="off" required>
+        <p id="quickHint" class="muted small" aria-live="polite"></p>
         <div class="row">
           <select id="taskClass" aria-label="Class"></select>
           <input id="taskDate" type="date" aria-label="Due date" required>
@@ -103,11 +108,17 @@
       <input id="feedUrl" type="url" inputmode="url" autocomplete="off" placeholder="Add another feed link" aria-label="Calendar feed link" required>
       <button type="submit" class="primary">Add</button>
     </form>
+    <div id="phoneBox">
+      <button id="phoneBtn" type="button" class="wide">Set up my phone (or another device)</button>
+      <p class="muted small">Sends a link that connects the same calendars there. It contains your private calendar link, so only send it to yourself.</p>
+    </div>
     <h3>Classes</h3>
     <p class="muted small">Pick a color, give it a nicer name, or hide a class you don't care about.</p>
     <ul id="classList" class="plain"></ul>
     <h3>Appearance</h3>
     <div id="look" class="look"></div>
+    <h3>Share</h3>
+    <button id="friendBtn" type="button" class="wide">Send Backpack to a friend</button>
     <h3>Backup</h3>
     <p class="muted small">Your checkmarks, notes and tasks live only on this device. Save a backup to move them to a new phone.</p>
     <div class="row">

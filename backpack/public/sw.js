@@ -1,7 +1,7 @@
 // Network-first for the app shell (so updates show up right away), cache as the
 // offline fallback. Calendar fetches (/feed) are never cached here.
-const CACHE = 'backpack-v1';
-const SHELL = ['/', '/app.js', '/ics.js', '/style.css', '/icon.svg', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
+const CACHE = 'backpack-v2';
+const SHELL = ['/', '/app.js', '/ics.js', '/quick.js', '/style.css', '/icon.svg', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
