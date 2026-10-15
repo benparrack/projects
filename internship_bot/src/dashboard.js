@@ -8,7 +8,7 @@ import { basename } from 'node:path';
 import YAML from 'yaml';
 import { db, meta } from './db.js';
 import { handleReply, syncReplies } from './queue.js';
-import { learn, normQ } from './profile.js';
+import { learn, normQ, filePath } from './profile.js';
 import { lessons } from './answer.js';
 import { topics } from './notify.js';
 import { adapterFor } from './apply.js';
@@ -105,7 +105,7 @@ function state() {
     questions: all("SELECT * FROM questions WHERE status='open' ORDER BY id").map(q => ({ id: q.id, label: q.label,
       options: JSON.parse(q.options || '[]'), multi: /select all|all that apply|check all/i.test(q.label), jobs: waitingOn(q.norm).map(j => j.company) })),
     approvals: byStatus('dryrun').map(r => ({ ...pick(r, 'updated'), shot: !!r.screenshot && existsSync(r.screenshot), items: items(r) })),
-    manual: byStatus('manual').map(r => pick(r, 'reason', 'updated')),
+    manual: byStatus('manual').map(r => ({ ...pick(r, 'reason', 'updated'), items: items(r) })),
     history: rows.filter(r => r.status === 'applied').sort((a, b) => b.applied_at - a.applied_at)
       .map(r => ({ ...pick(r, 'applied_at', 'outcome', 'outcome_at', 'notes', 'reason'), shot: !!r.screenshot && existsSync(r.screenshot),
         items: items(r), emails: emails.filter(e => e.job_id === r.id) })),
@@ -159,7 +159,15 @@ const routes = {
     return syncReplies();
   },
   'POST /api/approve': b => (approve(b), { ok: true }),
-  'POST /api/approve-all': () => { for (const { id } of all("SELECT id FROM jobs WHERE status='dryrun'")) approve({ id }); return { ok: true }; },
+  // Ashby flags the bot's browser as spam, so Ben sends those himself (Open form + Copy).
+  'POST /api/approve-all': () => { for (const { id } of all("SELECT id FROM jobs WHERE status='dryrun' AND url NOT LIKE '%ashbyhq%'")) approve({ id }); return { ok: true }; },
+  // Opens the posting in Ben's default browser (Firefox), not this Chrome app window.
+  'POST /api/open-form': ({ id }) => {
+    const url = one('SELECT url FROM jobs WHERE id=?', id)?.url;
+    if (!/^https:\/\//.test(url || '')) throw new Error('no posting link');
+    spawn('xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
+    return { ok: true };
+  },
   'POST /api/reject': ({ id }) => db.prepare("UPDATE jobs SET status='skipped', reason='Ben passed on it', updated=? WHERE id=?").run(Date.now(), id),
   'POST /api/redo': ({ id }) => db.prepare("UPDATE jobs SET status='new', reason=NULL, updated=? WHERE id=?").run(Date.now(), id),
   'POST /api/manual-done': ({ id, applied }) => applied
@@ -205,6 +213,8 @@ createServer(async (req, res) => {
       const j = one('SELECT screenshot FROM jobs WHERE id=?', shot[1]);
       return j?.screenshot && existsSync(j.screenshot) ? send(200, readFileSync(j.screenshot), 'image/png') : send(404, 'no screenshot', 'text/plain');
     }
+    const file = url.pathname.match(/^\/files\/([\w-]+\.pdf)$/), fp = file && filePath(file[1]);
+    if (file) return fp ? send(200, readFileSync(fp), 'application/pdf') : send(404, 'no such file', 'text/plain');
     const route = routes[`${req.method} ${url.pathname}`];
     if (!route) return send(404, '{"error":"not found"}');
     // Only this page may call the API (blocks other sites from POSTing to localhost).
