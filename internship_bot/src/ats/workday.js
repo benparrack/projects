@@ -140,6 +140,7 @@ export function verifyLink(host) {
 // Every visible form field on the page, tagged with data-ib so fill() can find it again.
 const SCAN = () => {
   const out = [];
+  document.querySelectorAll('[data-ib]').forEach(e => delete e.dataset.ib);   // tags from before a re-render
   const lab = el => (el?.innerText || '').replace(/\s*\*\s*$/, '').replace(/\s+/g, ' ').trim();
   const fields = [...document.querySelectorAll('[data-automation-id^="formField-"]')].filter(f => f.offsetParent && !f.parentElement.closest('[data-automation-id^="formField-"]'));
   fields.forEach((f, i) => {
@@ -215,7 +216,8 @@ const open = async el => {
   await el.page().mouse.click(bb.x + bb.width - 40, bb.y + bb.height / 2);
 };
 // Selected prompt pills are role=option too: skip them.
-const OPTION = '[role=listbox] [role=option]:visible:not([data-automation-id="selectedItem"])';
+// The newest list only: a picked Country's list stays open behind the next one (Esc doesn't close it).
+const OPTION = '[role=listbox]:visible >> nth=-1 >> [role=option]:visible:not([data-automation-id="selectedItem"])';
 const MENU = '[data-automation-id="activeListContainer"] [data-automation-id="menuItem"]:visible';
 const menu = async page => (await page.locator(MENU).allInnerTexts().catch(() => [])).map(t => t.trim()).filter(t => t && !/^no items/i.test(t));
 const chosen = box => box.locator('[data-automation-id="selectedItem"]').evaluateAll(es =>
@@ -280,10 +282,15 @@ export async function setField(page, q, v, sub) {
     return true;
   }
   if (q.widget === 'dropdown') {
-    await box.locator('button[aria-haspopup=listbox]').click();
+    const btn = box.locator('button[aria-haspopup=listbox]'), lists = () => page.locator('[role=listbox]:visible').count();
+    const before = await lists();
+    await btn.click();
     const opt = page.locator(OPTION).filter({ hasText: new RegExp(`^\\s*${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`) }).first();
     if (!(await opt.count())) { await page.keyboard.press('Escape'); return false; }
-    await opt.click(); await sleep(300); return true;
+    await opt.click(); await sleep(300);
+    // The list can stay open after a pick, and a later focus change moves the choice (US became UK on GE Vernova).
+    for (let i = 0; i < 2 && await lists() > before; i++) { await btn.click(); await sleep(400); }
+    return true;
   }
   if (q.widget === 'date') {
     const d = new Date(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v) ? v : Date.parse(v) ? v : NaN);
@@ -358,10 +365,21 @@ export async function run(page, job, form, ctx) {
     // The step bar renders before the form: wait for the fields, or we'd press Next on an empty page.
     await page.locator('[data-automation-id^="formField-"]').first().waitFor({ timeout: 15000 }).catch(() => {});
     await sleep(800);
-    const fields = await scan(page);
+    let fields = await scan(page);
     // Prefilled by the account, an earlier save, or the resume parse: keep it (Ben sees it at review).
     // Workday guesses the country (and phone code) from the IP, which is Sweden for Ben right now.
     const fixed = f => FIXED[f.id] && !/united states/i.test(f.value) ? FIXED[f.id] : null;
+    // Set those first and re-read: County, State etc. list Sweden's options until Country changes.
+    if (fields.some(fixed)) {
+      const lists = () => page.locator('[role=listbox]:visible').count(), base = await lists();
+      for (const f of fields.filter(fixed)) await setField(page, toQuestion(f, step), fixed(f), sub).catch(() => false);
+      await settle(page); await sleep(1500);
+      // The re-render leaves Country's list open, and the next focus change picks its highlighted row
+      // (US became United Kingdom on GE Vernova). Toggling the button closes it.
+      const btn = page.locator(`${A('formField-country')} button[aria-haspopup=listbox]`);
+      for (let i = 0; i < 3 && await lists() > base; i++) { await btn.click().catch(() => {}); await sleep(500); }
+      fields = await scan(page);
+    }
     const todo = fields.filter(f => !f.value || fixed(f) || (f.type === 'check' && f.required && f.value !== 'Yes'));
     const qs = todo.map(f => toQuestion(f, step)).filter(q => q.type !== 'file');
     const forced = Object.fromEntries(todo.filter(fixed).map(f => [toQuestion(f, step).key, fixed(f)]));
@@ -398,6 +416,8 @@ export async function run(page, job, form, ctx) {
       if (problems.length) return out('handoff', { why: 'form problems: ' + problems.join('; ').slice(0, 300), screenshot: await shot() });
     }
     await closeMenu(page);
+    const country = await page.locator(`${A('formField-country')} button`).first().innerText().catch(() => '');
+    if (country && !/united states/i.test(country)) return out('handoff', { why: `Country switched to "${country}" while filling; check it`, screenshot: await shot() });
     const pressed = await press(page, 'pageFooterNextButton').then(() => true, () =>
       page.getByRole('button', { name: /save and continue|next|continue/i }).first().click({ timeout: 8000 }).then(() => true, () => false));
     if (!pressed) return out('handoff', { why: `no Save and Continue button on "${step || 'an unnamed page'}"`, screenshot: await shot() });
