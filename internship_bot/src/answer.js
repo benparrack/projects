@@ -65,6 +65,11 @@ const pickMany = (options, ans) => {
   return v.length ? v : null;
 };
 
+const HEAR = /how did you (first )?(hear|find|learn)|where did you (first )?(hear|find|learn|see)|hear(d)? about (us|this)|source of (your )?(application|referral)|how were you referred/i;
+const HEAR_NO = /indeed|linkedin|handshake|glassdoor|ziprecruiter|referr|employee|friend|family|fair|recruiter|event|social|facebook|twitter|instagram|tiktok|campus|university|school|professor|news|radio|tv\b|print/i;
+const HEAR_PREF = [/job ?boards?|job (site|search)|online job/i, /simplify|github/i, /internet|online|web ?site|career (site|page)/i, /\bother\b/i];
+const STUDY = /field of study|area of study|\bmajor\b|\bminors?\b|discipline|program of study|degree (subject|field)/i;
+
 // Fixed answers by field key, for fields every ATS shares.
 function standard(q, facts) {
   const f = facts, eeo = f.eeo || {};
@@ -82,6 +87,22 @@ function standard(q, facts) {
     // Lever's "Current company": he's a full-time student now, not still at last summer's internship.
     'current company': f.education.school, 'current employer': f.education.school };
   if (q.type === 'education') return 'from profile';
+  // Asked on most forms, worded and nested every way (Workday: "How did you hear → Job Board → ..."); Ben wants a job board.
+  if (HEAR.test(q.label) && /^(text|select|multiselect)$/.test(q.type)) {
+    if (q.type === 'text') return 'Job board';
+    const ok = q.options.filter(o => !HEAR_NO.test(o));
+    const pick = HEAR_PREF.map(re => ok.find(o => re.test(o))).find(Boolean);
+    return pick ? (q.type === 'multiselect' ? [pick] : pick) : undefined;
+  }
+  // Field of study / major (not a yes/no about it: the select falls through unless Computer Science is an option).
+  const ed = f.education;
+  if (STUDY.test(q.label) && q.label.length < 60 && /^(text|select|multiselect)$/.test(q.type)) {
+    if (q.type === 'text') return /minor/i.test(q.label) ? ed.minors.join(', ') : `${ed.major}, with minors in ${ed.minors.join(' and ')}`;
+    const cs = q.options.find(o => normQ(o) === normQ(ed.major)) ?? q.options.find(o => /^computer science\b/i.test(o));
+    if (q.type === 'select') return cs;
+    const all = [cs, ...ed.minors.map(m => q.options.find(o => normQ(o) === normQ(m)))].filter(Boolean);
+    return all.length ? all : undefined;
+  }
   if (q.type === 'location') return `${f.address.city}, ${f.address.state}`;
   const v = byKey[q.key] ?? (q.type === 'text' ? byLabel[normQ(q.label)] : undefined);
   if (v == null) return undefined;

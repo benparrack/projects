@@ -143,3 +143,17 @@ test('workday: job URL → API path and apply URL; fields → stable question ke
   assert.equal(q.type, 'text'); assert.equal(q.widget, 'prompt');
   assert.equal(wd.toQuestion({ ref: '1', id: 'x', section: '', label: 'I agree', type: 'check', options: ['Yes', 'No'], required: true }, 'Review').type, 'select');
 });
+
+test('how did you hear → a job board option; field of study → Computer Science, no LLM', async () => {
+  const qs = [
+    { key: 'h1', label: 'How did you hear about us?', type: 'select', options: ['LinkedIn', 'Employee Referral', 'Job Board', 'Other'] },
+    { key: 'h2', label: 'How Did You Hear About Us? → Job Board', type: 'select', options: ['Dice', 'Indeed', 'Other Job Board'] },
+    { key: 'h3', label: 'Where did you hear about this position?', type: 'select', options: ['Indeed', 'Other'] },
+    { key: 'h4', label: 'How did you hear about us?', type: 'text' },
+    { key: 'f1', label: 'Field of Study', type: 'select', options: ['Biology', 'Mathematics', 'Computer Science'] },
+    { key: 'f2', label: 'Major', type: 'text' },
+  ];
+  const r = await answerAll(qs, job, { llm: () => assert.fail('LLM should not be called') });
+  assert.deepEqual(r.answers, { h1: 'Job Board', h2: 'Other Job Board', h3: 'Other', h4: 'Job board',
+    f1: 'Computer Science', f2: 'Computer Science, with minors in Mathematics and Biomedical Engineering' });
+});
