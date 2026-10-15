@@ -3,4 +3,4 @@
 # https://benparrack.github.io/crux/. That repo is only a mirror, so it's force-pushed every time.
 set -e
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-git push --force https://github.com/benparrack/crux.git "$(git subtree split --prefix crux HEAD)":refs/heads/main
+git push --force https://github.com/benparrack/crux.git "$(git subtree split -q --prefix crux HEAD)":refs/heads/main

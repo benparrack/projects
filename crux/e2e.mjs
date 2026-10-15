@@ -1,7 +1,7 @@
 import { firefox } from '/home/ben/.npm/_npx/9833c18b2d85bc59/node_modules/playwright-core/index.mjs';
 import assert from 'assert';
 // Run: python3 -m http.server 5191 (in this folder), then node e2e.mjs [screenshot-dir]
-const shots = process.argv[2], url = 'http://localhost:5191/';
+const shots = process.argv[2], url = process.env.URL || 'http://localhost:5191/';
 const b = await firefox.launch({ env: { ...process.env, MOZ_DISABLE_CONTENT_SANDBOX: '1' } });
 const p = await b.newPage({ viewport: { width: 390, height: 844 } });
 const errs = []; p.on('pageerror', e => errs.push(e.message));

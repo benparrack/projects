@@ -20,7 +20,8 @@ A *flash* is a route sent on the first try of its first log. Grades are stored a
 Static files, no build. Data lives in the browser's localStorage for whatever origin you open it from.
 
 - `./crux-app`: starts `python3 -m http.server 5181` if needed and opens a Chrome app window.
-- On a phone: it's an installable PWA but must be hosted (e.g. GitHub Pages) and then has its own data.
+- On a phone: https://benparrack.github.io/crux/ then Share → Add to Home Screen (iPhone) or Install app (Android).
+  After committing changes, `./deploy.sh` republishes it (pushes `crux/` to the benparrack/crux mirror repo).
   Photos are shrunk to ~40KB each; localStorage holds ~5MB, so roughly 100 photos.
 
 ## Test
