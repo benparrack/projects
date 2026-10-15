@@ -1,0 +1,12 @@
+#!/bin/sh
+# Opens Crux: starts a local static server if it isn't up, then a Chrome app window (no tabs/address bar).
+# Your data lives in that Chrome profile's storage for http://127.0.0.1:5181, so always open it this way.
+DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+PORT=5181
+URL="http://127.0.0.1:$PORT/"
+if ! curl -fs -o /dev/null "$URL"; then
+  # setsid + </dev/null: detach fully so the server outlives this launcher
+  setsid /usr/bin/python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$DIR" </dev/null >/dev/null 2>&1 &
+  for _ in $(seq 50); do curl -fs -o /dev/null "$URL" && break; sleep 0.1; done
+fi
+exec google-chrome --app="$URL" --class=Crux --user-data-dir="$HOME/.config/crux-chrome" >/dev/null 2>&1
