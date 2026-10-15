@@ -9,13 +9,16 @@ turns on auto-submit.
 ## Daily use
 
 - **Dashboard:** http://127.0.0.1:8377 (always running as a systemd service; `npm run dashboard` to run by hand).
-  - **Needs you:** questions to answer, filled applications to approve (edit any answer first), and jobs to apply to yourself.
-    Filter Easy (approve, maybe paste a code) / Hard (send it yourself). Greenhouse: the emailed security code is read
-    from Gmail onto the clipboard (`mail.py --code`) with the cursor in the code box: Ctrl+V, Submit. Ashby flags the
-    bot's browser as spam, so those are Ben's: Open form tiles the form left / dashboard right (`src/tile.py` un-maximizes it first), Copy buttons per answer
-    (resume path first: Ctrl+L, Ctrl+V in the file dialog), Applied → next form opens the next (Mark as applied closes the form and re-maximizes). While a form is open, `mail.py --watch` polls the inbox; the confirmation email marks it applied and the
-    dashboard closes the form and re-maximizes. Their confirmation emails
-    also mark them applied (`mail.py`, only when it's the sole pending job at that company).
+  - **Needs you:** questions to answer (hidden when there are none), filled applications to approve, and jobs to apply
+    to yourself. Filter Easy (approve, maybe paste a code) / Hard (send it yourself). Easy cards show the written answers
+    to review; the profile-fact rows fold away. Greenhouse: the emailed security code is read from Gmail onto the
+    clipboard (`mail.py --code`) with the cursor in the code box: Ctrl+V, Submit.
+    Hard (Ashby flags the bot's browser as spam, so those are Ben's): Open form tiles the form left / dashboard right
+    (`src/tile.py` un-maximizes first) and only then shows that job's Copy list: resume path first (Ctrl+L, Ctrl+V in
+    the file dialog), rows Ashby fills from the resume dimmed and skipped. While a form is open `mail.py --watch` polls
+    the inbox; the confirmation email marks it applied, closes the form, re-maximizes, and focuses the next job's Open
+    form (Enter starts it). Mark as applied does the same by hand; Applied → next form goes straight to the next.
+    Confirmation emails also mark pending jobs applied (`mail.py`, only when it's the sole pending job at that company).
   - **Applications:** history, outcomes (set by hand or from email), notes.
   - **Pipeline:** what's next, failures, what isn't automated yet.
   - **Insights:** what got responses: answers, resume version, speed after posting.

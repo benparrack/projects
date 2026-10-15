@@ -290,7 +290,8 @@ export async function setField(page, q, v, sub) {
     const parts = { Month: d.getMonth() + 1, Day: d.getDate(), Year: d.getFullYear() };
     for (const [k, n] of Object.entries(parts)) {
       const e = box.locator(`[data-automation-id="dateSection${k}-input"], input[data-automation-id="dateSection${k}"]`).first();
-      if (await e.count()) { await e.click(); await e.pressSequentially(String(n).padStart(k === 'Year' ? 4 : 2, '0'), { delay: 30 }); }
+      // focus, not click: a -display overlay sits on the input and swallows clicks
+      if (await e.count()) { await e.focus(); await page.keyboard.type(String(n).padStart(k === 'Year' ? 4 : 2, '0'), { delay: 30 }); }
     }
     await page.keyboard.press('Tab'); return true;
   }
