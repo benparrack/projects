@@ -34,7 +34,7 @@ turns on auto-submit.
 
 | unit | what |
 |---|---|
-| `intern-run.timer` | every 30 min: fetch lists, submit approved jobs, dry-run up to 5 new ones (newest first) |
+| `intern-run.timer` | every 30 min: fetch lists, submit approved jobs, dry-run up to 5 new ones (Greenhouse and Lever first, then newest first) |
 | `intern-mail.timer` | hourly, only once Gmail is set up: reads replies, sets confirmed/oa/interview/offer/rejected, then `src/confirm.js` clicks Workday verification links (last 3 weeks, only for hosts in `data/workday.json`) and puts those jobs back in line |
 | `intern-dashboard.service` | the dashboard |
 
