@@ -82,6 +82,20 @@ test('queue: "12 answer" is learned, "skip 12" drops', async () => {
   db.prepare('DELETE FROM questions WHERE id=?').run(q.id);
 });
 
+test('queue: an answered question that is needed again is asked again', async () => {
+  process.env.NO_NOTIFY = '1';
+  const { db } = await import('../src/db.js');
+  const { enqueue } = await import('../src/queue.js');
+  const label = 'Test-only reask ' + Date.now();
+  await enqueue({ company: 'T', url: 'https://x' }, [{ label, options: [] }]);
+  db.prepare("UPDATE questions SET status='answered' WHERE label=?").run(label);
+  await enqueue({ company: 'T', url: 'https://x' }, [{ label, options: ['A', 'B'] }]);
+  const q = db.prepare('SELECT * FROM questions WHERE label=?').get(label);
+  assert.equal(q.status, 'open');
+  assert.deepEqual(JSON.parse(q.options), ['A', 'B']);
+  db.prepare('DELETE FROM questions WHERE id=?').run(q.id);
+});
+
 test('learned multiselect answers come back as option lists', async () => {
   const { learn } = await import('../src/profile.js');
   const { readFileSync, writeFileSync } = await import('node:fs');

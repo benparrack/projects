@@ -15,10 +15,13 @@ export async function enqueue(job, needs) {
   const { facts } = loadProfile();
   for (const n of needs) {
     const opts = shortList(n.options || [], facts);   // a 3000-school list is useless on a phone
-    const r = db.prepare('INSERT OR IGNORE INTO questions (norm,label,options,created) VALUES (?,?,?,?)')
+    // Asked before but still needed (the saved answer isn't one of this form's options): ask again, or the
+    // job goes straight back in line every run and eats the slots (GE Vernova, 2026-10-15).
+    const r = db.prepare(`INSERT INTO questions (norm,label,options,created) VALUES (?,?,?,?)
+      ON CONFLICT(norm) DO UPDATE SET status='open', label=excluded.label, options=excluded.options, created=excluded.created WHERE status='answered'`)
       .run(normQ(n.label), n.label, JSON.stringify(opts), Date.now());
     if (!r.changes) continue;
-    const id = Number(r.lastInsertRowid);
+    const id = db.prepare('SELECT id FROM questions WHERE norm=?').get(normQ(n.label)).id;
     await send(`#${id} ${job.company} needs an answer`,
       `${n.label.slice(0, 600)}\n\n${opts.length ? 'Options: ' + opts.join(' / ') + '\n' : ''}Reply: ${id} <answer>   (or: skip ${id})`,
       { click: job.url, tags: ['question'], actions: opts.length <= 3 ? opts.map(o => replyButton(o, `${id} ${o}`)) : [] });
