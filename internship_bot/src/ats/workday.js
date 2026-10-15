@@ -63,8 +63,8 @@ async function settle(page) {
 const visibleText = async (page, sel) => (await page.locator(sel).allInnerTexts().catch(() => [])).map(t => t.trim()).filter(Boolean);
 export const stepName = async page => (await page.locator(A('progressBarActiveStep')).first().innerText().catch(() => ''))
   .replace(/current step \d+ of \d+/i, '').trim();
-// Workday also puts success toasts in role=alert ("resume-swe.pdf successfully uploaded"); those aren't errors.
-const errors = async page => (await visibleText(page, `${A('errorMessage')}, ${A('inputAlert')}, ${A('errorBanner')} li, [role=alert]`)).filter(t => !/successfully/i.test(t));
+// Workday also puts success toasts in role=alert ("resume-swe.pdf successfully uploaded", "Search for Jobs page is loaded" after a submit); those aren't errors.
+const errors = async page => (await visibleText(page, `${A('errorMessage')}, ${A('inputAlert')}, ${A('errorBanner')} li, [role=alert]`)).filter(t => !/successfully|page is loaded/i.test(t));
 
 // ---- account -------------------------------------------------------------------------------------
 
