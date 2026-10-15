@@ -1,0 +1,14 @@
+#!/bin/sh
+# Shared launcher for project apps: app-launch <Class> <port> <dir> <server cmd...>
+# Starts the server in <dir> if http://127.0.0.1:<port>/ isn't up, then opens a Chrome app window.
+# Each app gets its own Chrome profile, so its saved data stays put across launches.
+CLASS=$1 PORT=$2 DIR=$3; shift 3
+URL="http://127.0.0.1:$PORT/"
+PATH="$PATH:$(dirname "$(ls -d "$HOME"/AppDev/Tools/nvm/versions/node/*/bin/node 2>/dev/null | tail -1)")"
+if ! curl -fs -o /dev/null "$URL"; then
+  cd "$DIR" || exit 1
+  # setsid + </dev/null: detach fully so the server outlives this launcher
+  setsid "$@" </dev/null >/dev/null 2>&1 &
+  for _ in $(seq 100); do curl -fs -o /dev/null "$URL" && break; sleep 0.1; done
+fi
+exec google-chrome --app="$URL" --class="$CLASS" --user-data-dir="$HOME/.config/$(echo "$CLASS" | tr A-Z a-z)-chrome" --no-first-run --no-default-browser-check >/dev/null 2>&1
