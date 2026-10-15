@@ -17,13 +17,15 @@ test('matchOption', () => {
 test('standard fields and EEO never hit the LLM', async () => {
   const qs = [
     { key: 'first_name', label: 'First Name', type: 'text', required: true },
+    { key: 'preferred_name', label: 'Preferred First Name', type: 'text' },
     { key: 'email', label: 'Email', type: 'text', required: true },
     { key: 'resume', label: 'Resume/CV', type: 'file', required: true },
     { key: 'gender', label: 'Gender', type: 'select', options: ['Male', 'Female', 'Decline To Self Identify'] },
     { key: 'veteran_status', label: 'VeteranStatus', type: 'select', options: ["I don't wish to answer", 'I identify as one or more of the classifications of a protected veteran', 'I am not a protected veteran'] },
   ];
   const r = await answerAll(qs, job, { llm: () => assert.fail('LLM should not be called') });
-  assert.equal(r.answers.first_name, 'Ben');
+  assert.equal(r.answers.first_name, 'Benjamin');
+  assert.equal(r.answers.preferred_name, 'Ben');
   assert.equal(r.answers.gender, 'Male');
   assert.equal(r.answers.veteran_status, 'I am not a protected veteran');
   assert.match(r.answers.resume, /resume-swe\.pdf$/);

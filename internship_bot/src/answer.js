@@ -69,7 +69,7 @@ const pickMany = (options, ans) => {
 function standard(q, facts) {
   const f = facts, eeo = f.eeo || {};
   const byKey = {
-    first_name: f.name.first, last_name: f.name.last, preferred_name: f.name.first, full_name: f.name.full, name: f.name.full,
+    first_name: f.name.first, last_name: f.name.last, preferred_name: f.name.preferred || f.name.first, full_name: f.name.full, name: f.name.full,
     email: f.email, phone: f.phone, today: new Date().toLocaleDateString('en-US'),
     gender: eeo.gender, race: eeo.race, hispanic_ethnicity: eeo.hispanic_or_latino ? 'Yes' : 'No',
     veteran_status: /not/i.test(eeo.veteran) ? 'I am not a protected veteran' : eeo.veteran,
@@ -78,6 +78,7 @@ function standard(q, facts) {
   const byLabel = { phone: f.phone, 'phone number': f.phone, linkedin: f.links.linkedin, 'linkedin profile': f.links.linkedin,
     'linkedin url': f.links.linkedin, github: f.links.github, 'github url': f.links.github, website: f.links.website,
     portfolio: f.links.website, 'portfolio url': f.links.website, 'website url': f.links.website, 'personal website': f.links.website, name: f.name.full, 'full name': f.name.full,
+    'preferred name': f.name.preferred, 'preferred first name': f.name.preferred, nickname: f.name.preferred,
     // Lever's "Current company": he's a full-time student now, not still at last summer's internship.
     'current company': f.education.school, 'current employer': f.education.school };
   if (q.type === 'education') return 'from profile';
