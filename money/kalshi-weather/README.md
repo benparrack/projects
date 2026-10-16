@@ -5,6 +5,25 @@ This project downloads every settled market, its hourly order-book quotes and ar
 weather models, then runs a strict walk-forward backtest and prints a verdict: **EDGE**, **MAYBE** or **NO EDGE**.
 Live picks are paper-traded until the verdict is EDGE.
 
+## Result (2026-10-16, all 47 US series, holdout Oct 2025 → Oct 2026)
+
+**MAYBE.** 14,931 holdout trades, ROI **+1.8%** after taker fees, p < 0.001 — but:
+
+| Check | ROI | p(ROI≤0) |
+|---|---|---|
+| Strategy (blend of model + market) | +1.8% | 0.000 |
+| Highs, evening-before (18:00 the day before) | +3.0% | 0.000 |
+| Lows, evening-before | +1.5% | 0.038 |
+| Highs, day-of (08:00) | +0.8% | 0.107 |
+| Same trades filled 1¢ worse | +0.5% | 0.164 |
+| Since Kalshi switched settlement to The Weather Company (Aug 15 2026) | **−0.9%** | 0.776 |
+| Market price recalibrated, no weather (baseline) | +0.3% | 0.153 |
+
+The model alone loses to the market (log loss 0.369 vs 0.334); the blend beats it slightly (0.330). The edge was
+steady through Aug 2026 (+2.6%) and has been flat to negative since the settlement switch, so the verdict is held at
+MAYBE and `scan` only paper-trades. Re-run `./run.sh pull && ./run.sh backtest` in a month: if the post-switch
+line turns positive over ≥100 trades the verdict goes back to EDGE by itself.
+
 ## Run
 
 ```bash
@@ -14,6 +33,14 @@ Live picks are paper-traded until the verdict is EDGE.
 ./run.sh settle        # fill in paper-trade results
 ./run.sh report        # rebuild the report with current picks and the paper ledger
 .venv/bin/python -m pytest -q tests
+```
+
+Paper-trade automatically (hourly at :58, which catches each city's 07:58 and 18:58 local windows; picks go to
+`data/paper.csv` and the report is rebuilt each run):
+
+```bash
+cp systemd/kalshi-weather.* ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user enable --now kalshi-weather.timer
+journalctl --user -u kalshi-weather -n 30   # last run
 ```
 
 `scan` only shows markets at the two moments the backtest tested: **day-of** (daily highs, 07:00–08:59 local,

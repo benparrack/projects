@@ -1,0 +1,9 @@
+[Unit]
+Description=Kalshi weather paper scan hourly (at :58, closest to the backtest's 08:00 / 18:00 quotes)
+
+[Timer]
+OnCalendar=*:58
+Persistent=false
+
+[Install]
+WantedBy=timers.target

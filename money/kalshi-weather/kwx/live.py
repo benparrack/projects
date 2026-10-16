@@ -106,7 +106,7 @@ def picks(state, bankroll, now=None):
     t["p_side"] = np.where(t["side"] == "YES", t["p_blend"], 1 - t["p_blend"])
     t["contracts"] = [size(p, c, bankroll) for p, c in zip(t["p_side"], t["cost"])]
     t["mode"] = "LIVE" if state["verdict"] == "EDGE" else "PAPER"
-    return t.sort_values("ev", ascending=False)
+    return t[t["contracts"] > 0].sort_values("ev", ascending=False)  # too small an edge to size means no pick
 
 
 def log_paper(t):

@@ -103,3 +103,11 @@ def test_live_windows_match_backtest_times():
     assert live.decision_for(NY, "low", d, at(d, 8)) is None
     assert live.decision_for(NY, "low", d, at(date(2026, 7, 9), 17)) is None
     assert live.decision_for(NY, "low", d, at(date(2026, 7, 9), 19)) == "evening-before"
+
+
+def test_verdict_needs_recent_period_not_losing():
+    good = {"n": 1000, "roi": 0.02, "p": 0.01}
+    assert backtest.judge(good, {"n": 500, "roi": 0.01}) == "EDGE"
+    assert backtest.judge(good, {"n": 500, "roi": -0.01}) == "MAYBE"
+    assert backtest.judge(good, {"n": 20, "roi": -0.05}) == "EDGE"  # too few recent trades to judge
+    assert backtest.judge({"n": 1000, "roi": -0.01, "p": 0.7}, {"n": 0, "roi": float("nan")}) == "NO EDGE"

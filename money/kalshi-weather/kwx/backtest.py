@@ -15,6 +15,7 @@ MARGINS = (0.0, 0.02, 0.04, 0.06, 0.08, 0.10, 0.15)
 MIN_TRAIN_DAYS = 90
 MIN_MODEL_ROWS = 150
 MIN_BLEND_ROWS = 1500
+SOURCE_SWITCH = "2026-08-15"  # Kalshi settles on The Weather Company instead of the NWS climate report from about here
 SETTLE_LAG = pd.Timedelta(days=2)  # a day's value is known the next morning; the earliest decision is 18:00 the day before
 
 
@@ -110,6 +111,15 @@ def scores(df, p):
             "brier": float(np.mean((p - y) ** 2))}
 
 
+def judge(res, recent):
+    """EDGE / MAYBE / NO EDGE from the holdout summary and its post-settlement-switch slice."""
+    if res["n"] >= 100 and res["roi"] > 0 and res["p"] < 0.05 and not (recent["n"] >= 100 and recent["roi"] < 0):
+        return "EDGE"
+    if res["n"] >= 30 and res["roi"] > 0 and res["p"] < 0.25:
+        return "MAYBE"
+    return "NO EDGE"
+
+
 def evaluate(oos):
     """Everything the report shows. Strategy = blend probability; model-only shown for comparison."""
     oos = oos[np.isfinite(oos["p_blend"])].copy()
@@ -144,14 +154,10 @@ def evaluate(oos):
         seg.append({"segment": f"{kind}s, {dec}", **summary(g)})
     by_city = pd.DataFrame([{"series": c, **summary(g)} for c, g in held.groupby("series")])
 
-    if res["n"] >= 100 and res["roi"] > 0 and res["p"] < 0.05:
-        verdict = "EDGE"
-    elif res["n"] >= 30 and res["roi"] > 0 and res["p"] < 0.25:
-        verdict = "MAYBE"
-    else:
-        verdict = "NO EDGE"
+    recent = summary(held[held["date"] >= SOURCE_SWITCH])
+    verdict = judge(res, recent)
     return {"verdict": verdict, "margin": margin, "holdout": res, "model_only": model_only, "favorites": fav,
-            "market_cal": market_cal, "slipped": slipped,
+            "market_cal": market_cal, "slipped": slipped, "recent": recent,
             "grid": grid, "scores": sc, "segments": pd.DataFrame(seg), "by_city": by_city, "trades": held,
             "val_range": (val["date"].min(), val["date"].max()), "hold_range": (hold["date"].min(), hold["date"].max())}
 

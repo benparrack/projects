@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from .backtest import SOURCE_SWITCH
 from .model import mid
 from .stations import DATA
 
@@ -83,10 +84,12 @@ def build(ev, oos, blends, picks=None, ledger=None, ledger_stats=None):
 <p class="muted">Generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC. Validation {ev['val_range'][0]} → {ev['val_range'][1]},
 holdout {ev['hold_range'][0]} → {ev['hold_range'][1]} (never used to pick anything).</p>
 <div class="verdict" style="background:{COLORS[v]}">{v}</div>
-<p>EDGE needs ≥100 holdout trades, positive ROI after taker fees and a date-block-bootstrap p &lt; 0.05.
+<p>EDGE needs ≥100 holdout trades, positive ROI after taker fees, a date-block-bootstrap p &lt; 0.05, and no losing
+record since the settlement-source switch (≥100 trades). Otherwise MAYBE: positive but unproven, so picks stay paper.
 Trade rule: buy the side whose blended probability beats its price plus fee by more than <b>{ev['margin']:.2f}</b>
 (picked on the validation half), at most one trade per city, day and decision time.</p>
-<h2>Holdout results</h2><ul>{stat_block('Strategy (blend)', ev['holdout'])}{stat_block('Model only, same rule', ev['model_only'])}
+<h2>Holdout results</h2><ul>{stat_block('Strategy (blend)', ev['holdout'])}
+{stat_block(f'Same strategy since Kalshi switched settlement to The Weather Company ({SOURCE_SWITCH})', ev['recent'])}{stat_block('Model only, same rule', ev['model_only'])}
 {stat_block('Same trades filled 1¢ worse', ev['slipped'])}
 {stat_block('Baseline: market price recalibrated on history, no weather', ev['market_cal'])}
 {stat_block('Baseline: buy favorites ≥85¢', ev['favorites'])}</ul>
@@ -98,10 +101,10 @@ the favorite-longshot bias without any weather). The blend is a logistic regress
 <p>Final blend weights:</p><ul>{weights}</ul>
 {reliability(oos[np.isfinite(oos['p_blend'])])}
 <h2>Threshold grid</h2>{table(grid, {'val_roi': pct, 'hold_roi': pct, 'val_p': p3, 'hold_p': p3})}
-<h2>Holdout by segment</h2>{table(ev['segments'][['segment', 'n', 'days', 'roi', 'win', 'p', 'pnl']], {'roi': pct, 'win': pct, 'p': p3, 'pnl': money})}
-<h2>Holdout by city</h2>{table(ev['by_city'][['series', 'n', 'days', 'roi', 'win', 'p', 'pnl']], {'roi': pct, 'win': pct, 'p': p3, 'pnl': money})}"""]
+<h2>Holdout by segment</h2>{table(ev['segments'][['segment', 'n', 'days', 'roi', 'win', 'p', 'pnl']], {'roi': pct, 'win': lambda x: f'{x:.0%}', 'p': p3, 'pnl': money})}
+<h2>Holdout by city</h2>{table(ev['by_city'][['series', 'n', 'days', 'roi', 'win', 'p', 'pnl']], {'roi': pct, 'win': lambda x: f'{x:.0%}', 'p': p3, 'pnl': money})}"""]
     if picks is not None:
-        parts.append("<h2>Current picks</h2>" + (table(picks[["mode", "series", "date", "decision", "label", "side", "price", "p_side", "ev", "contracts"]],
+        parts.append("<h2>Current picks</h2>" + (table(picks[["mode", "ticker", "decision", "side", "price", "p_side", "ev", "contracts"]],
                                                          {"price": p3, "p_side": p3, "ev": p3}) if len(picks) else "<p>None right now.</p>"))
     if ledger is not None and len(ledger):
         s = ledger_stats or {}

@@ -25,8 +25,8 @@ def run_backtest(series):
     for d, s in ev["scores"].items():
         print(f"  {d:15s} logloss market {s['market']['logloss']:.4f}  market_cal {s['market_cal']['logloss']:.4f}  "
               f"model {s['model']['logloss']:.4f}  blend {s['blend']['logloss']:.4f}  (n={s['n']})")
-    for k, name in (("market_cal", "market recalibrated, no weather"), ("slipped", "same trades 1c worse")):
-        print(f"  baseline {name}: ROI {ev[k]['roi']:+.1%}, p {ev[k]['p']:.3f}" if ev[k].get("n") else f"  baseline {name}: no trades")
+    for k, name in (("recent", f"since settlement switch {backtest.SOURCE_SWITCH}"), ("market_cal", "baseline: market recalibrated, no weather"), ("slipped", "same trades 1c worse")):
+        print(f"  {name}: ROI {ev[k]['roi']:+.1%}, p {ev[k]['p']:.3f}" if ev[k].get("n") else f"  {name}: no trades")
     print("report:", report.build(ev, oos, blends))
 
 
@@ -34,7 +34,7 @@ def show(t):
     if t.empty:
         print("No picks right now (decision windows: day-of highs 07-09 local, evening-before 18-24 local).")
         return
-    cols = ["mode", "series", "date", "decision", "label", "side", "price", "p_side", "ev", "contracts"]
+    cols = ["mode", "ticker", "decision", "side", "price", "p_side", "ev", "contracts"]
     with pd.option_context("display.width", 200, "display.max_rows", 200):
         print(t[cols].round(3).to_string(index=False))
 

@@ -1,0 +1,12 @@
+# systemd --user unit, started hourly by kalshi-weather.timer. Install: see README.md.
+[Unit]
+Description=Kalshi weather paper-trading scan
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/money/kalshi-weather
+ExecStart=%h/projects/money/kalshi-weather/.venv/bin/python -m kwx scan
+ExecStart=%h/projects/money/kalshi-weather/.venv/bin/python -m kwx report
+TimeoutStartSec=30min
+Nice=10
