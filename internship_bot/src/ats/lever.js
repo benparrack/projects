@@ -38,8 +38,11 @@ export function parse(html) {
       const end = html.indexOf('</select>', m.index);
       options = [...html.slice(m.index, end).matchAll(/<option value="([^"]+)"[^>]*>([^<]*)/g)].map(o => text(o[2]));
     }
-    const type = /type="file"/.test(m[2]) ? 'file' : m[1] === 'select' ? 'select' : m[1] === 'textarea' ? 'textarea' : name === 'location' ? 'location' : 'text';
-    qs.push({ key: ALIAS[name] ?? name, name, label, type, options, required: /\brequired\b/.test(m[2]) || /✱/.test(labels.at(-1)?.[1] || '') });
+    // EEO race (and similar) are radio groups: every input with this name is one option.
+    const radio = /type="radio"/.test(m[2]);
+    if (radio) options = [...html.matchAll(/<input\b[^>]*>/g)].map(x => x[0]).filter(x => x.includes(`name="${name}"`)).map(x => unesc(x.match(/value="([^"]*)"/)?.[1] ?? '')).filter(Boolean);
+    const type = /type="file"/.test(m[2]) ? 'file' : m[1] === 'select' || radio ? 'select' : m[1] === 'textarea' ? 'textarea' : name === 'location' ? 'location' : 'text';
+    qs.push({ key: ALIAS[name] ?? name, name, label, type, options, ...(radio ? { widget: 'radio' } : {}), required: /\brequired\b/.test(m[2]) || /✱/.test(labels.at(-1)?.[1] || '') });
   }
   return qs;
 }
@@ -79,13 +82,16 @@ export async function fill(page, questions, answers, facts) {
       else if (q.type === 'select' || q.type === 'multiselect') {
         for (const one of [v].flat()) {
           const box = page.locator(`input[name="${q.name}"][value="${one.replace(/"/g, '\\"')}"]`);
-          if (await box.count()) await box.first().check({ force: true }); else ok = false;
+          // Click the label like a person; a forced click on the bare radio can land on whatever re-rendered over it.
+          if (!(await box.count())) { ok = false; continue; }
+          await box.first().locator('xpath=ancestor::label[1]').click({ timeout: 5000 }).catch(() => box.first().check({ force: true, timeout: 5000 }).catch(() => {}));
+          ok = (await box.first().isChecked()) && ok;
         }
       } else if (q.type === 'location') {
         await el.click(); await el.fill(''); await el.pressSequentially(`${facts.address.city}, ${facts.address.state}`, { delay: 30 });
         // Only the real match: results for half-typed text arrive late ("Gle" gave Lenva, Russia on 2026-10-15).
         const opt = page.locator('.dropdown-location').filter({ hasText: new RegExp(`^${facts.address.city}, ${facts.address.state}\\b`) }).first();
-        for (let i = 0; i < 16 && !(await opt.isVisible().catch(() => false)); i++) await sleep(250);
+        for (let i = 0; i < 32 && !(await opt.isVisible().catch(() => false)); i++) await sleep(250);
         if (await opt.isVisible().catch(() => false)) await opt.click(); else ok = false;
       } else await el.first().fill(String(v));
     } catch (e) { ok = false; }
