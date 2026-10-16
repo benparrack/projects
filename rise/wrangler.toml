@@ -6,9 +6,21 @@ compatibility_date = "2025-09-01"
 directory = "./public"
 binding = "ASSETS"
 
+# Stores the last good calendar, the morning log and your overrides.
+# Create once with: npx wrangler kv namespace create RISE   (then paste the id here)
+[[kv_namespaces]]
+binding = "RISE"
+id = "REPLACE_WITH_KV_ID"
+
 [vars]
-PREP_MIN = "75"       # minutes between alarm and first class
-BACKUP_ALARMS = "2"   # extra alarms, 5 min apart, until you scan the QR
-FALLBACK = "07:30"    # used if the feed can't be read
+PREP_MIN = "75"       # minutes from first alarm to first class
+COMMUTE_MIN = "30"    # "leave by" = first class minus this
+BACKUP_ALARMS = "4"   # extra alarms, 5 min apart, until you scan the QR
+SLEEP_HOURS = "8"     # for "lights out by"
+FALLBACK = "07:30"    # if the calendar can't be read and there's no saved copy
 TZ = "Europe/Stockholm"
-# FEED_URL is a secret (the link is a private token): npx wrangler secret put FEED_URL
+LAT = "59.33"         # weather location (Stockholm)
+LON = "18.07"
+# Secrets (not in this file):
+#   npx wrangler secret put FEED_URL   your class-schedule iCal link(s), space-separated
+#   npx wrangler secret put KEY        any long random string; every link includes ?k=<it>

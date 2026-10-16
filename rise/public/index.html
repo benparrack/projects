@@ -4,61 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rise">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#000">
+<meta name="theme-color" content="#0b0d14">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" href="/icon-180.png">
 <title>Rise</title>
-<style>
-  html, body { margin: 0; height: 100%; background: #000; color: #a33; font: 18px/1.4 system-ui, sans-serif; }
-  body { display: grid; place-items: center; text-align: center; transition: background-color 10s linear; -webkit-user-select: none; user-select: none; }
-  #msg { padding: 16px; max-width: 26em; transition: opacity 3s; }
-  button { font: inherit; color: #fdd; background: #511; border: 0; border-radius: 12px; padding: 14px 28px; margin-top: 16px; }
-  .gone { opacity: 0; }
-</style>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div id="msg">
-  <div id="info">Loading tomorrow's alarm...</div>
-  <div style="font-size:14px;opacity:.7;margin-top:8px">Turn brightness up, plug in, leave face up.</div>
-  <button id="go">Start night mode</button>
-</div>
-<script>
-// Fake sunrise: black all night, then deep red -> orange -> warm white over RAMP minutes before the alarm.
-// ?at=HH:MM&ramp=1 overrides the alarm time and ramp length (for trying it out).
-const q = new URLSearchParams(location.search);
-const RAMP = +(q.get('ramp') || 20) * 60e3;
-const stops = [[0, 0, 0], [60, 0, 0], [200, 40, 0], [255, 140, 50], [255, 236, 210]];
-let alarm = null, lock = null;
-
-function nextAt(t) {
-  const d = new Date(); d.setHours(+t.slice(0, 2), +t.slice(3), 0, 0);
-  if (d < Date.now() - 60 * 60e3) d.setDate(d.getDate() + 1); // stay lit for an hour after the alarm
-  return d;
-}
-function color(f) {
-  const x = Math.min(Math.max(f, 0), 1) * (stops.length - 1), i = Math.min(x | 0, stops.length - 2), k = x - i;
-  return `rgb(${stops[i].map((c, j) => Math.round(c + (stops[i + 1][j] - c) * k))})`;
-}
-const tick = () => { if (alarm) document.body.style.backgroundColor = color(1 - (alarm - Date.now()) / RAMP); };
-
-async function keepAwake() {
-  try { lock = await navigator.wakeLock.request('screen'); }
-  catch { info.textContent = "This browser can't keep the screen on. Set Auto-Lock to Never tonight, or add Rise to the home screen."; }
-}
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && go.hidden) keepAwake(); });
-
-go.onclick = async () => {
-  go.hidden = true;
-  await keepAwake();
-  setTimeout(() => msg.classList.add('gone'), 8000);
-  setInterval(tick, 10e3); tick();
-};
-
-(async () => {
-  let t = q.get('at');
-  if (!t) try { t = (await (await fetch('/alarms', { cache: 'no-store' })).text()).split('\n')[0].trim(); } catch {}
-  if (/^\d\d:\d\d$/.test(t || '')) { alarm = nextAt(t); info.textContent = `Sunrise starts ${RAMP / 60e3} min before ${t}.`; }
-  else info.textContent = 'No alarm tomorrow. Screen stays dark.';
-})();
-</script>
+<main id="app"><p class="loading">Loading…</p></main>
+<div id="night" hidden></div>
+<dialog id="sheet"></dialog>
+<script type="module" src="/app.js"></script>
 </body>
 </html>

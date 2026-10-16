@@ -41,6 +41,11 @@ export function parseICS(text) {
     else if (name === 'SUMMARY') ev.summary = unescape(value);
     else if (name === 'DESCRIPTION') ev.description = unescape(value);
     else if (name === 'URL') ev.url = value;
+    else if (name === 'LOCATION') ev.location = unescape(value);
+    else if (name === 'STATUS') ev.status = value.toUpperCase();
+    else if (name === 'RRULE') ev.rrule = value;
+    else if (name === 'EXDATE') (ev.exdates ||= []).push(...value.split(',').map((v) => v.slice(0, 8)));
+    else if (name === 'RECURRENCE-ID') ev.recurrenceId = value.slice(0, 8);
     else if (name === 'DTSTART') Object.assign(ev, parseDate(value, params));
   }
   return { calName, events };
