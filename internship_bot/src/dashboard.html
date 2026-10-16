@@ -179,7 +179,7 @@ darkMQ.addEventListener('change', () => { applyLook(); if (typeof render === 'fu
 <body>
 <header>
   <div class="bar"><div class="brand"><h1>Internship <i>Bot</i></h1><span class="sub">Summer 2027 applications</span></div>
-    <span id="runpill" class="status">Loading</span>
+    <span id="runpill" class="status">Loading</span><button id="pausebtn" class="b quiet" onclick="setPaused(!S.settings.paused)"></button>
     <button class="b" onclick="runNow()">Run now</button></div>
   <nav id="tabs"></nav>
 </header>
@@ -213,7 +213,9 @@ function render() {
     `<button class="${k === tab ? 'on' : ''}" onclick="go('${k}')">${l}${k === 'needs' && needs ? `<span class="count hot">${needs}</span>` : ''}</button>`).join('');
   const r = S.runner, pill = document.getElementById('runpill');
   pill.className = 'status' + (r.running ? ' run' : '');
-  pill.textContent = r.running ? (r.current ? 'Applying: ' + r.current : 'Checking the lists') : 'Idle' + (S.settings.last_fetch ? ` · lists checked ${ago(S.settings.last_fetch)}` : '');
+  const pb = document.getElementById('pausebtn'), paused = S.settings.paused;
+  pb.textContent = paused ? 'Resume' : 'Pause'; pb.title = paused ? 'Fill new jobs again, every 30 minutes' : 'Stop filling new jobs (after the current one). Approved ones still get sent.';
+  pill.textContent = r.running ? (r.current ? (paused ? 'Pausing after: ' : 'Applying: ') + r.current : 'Checking the lists') : paused ? 'Paused' : 'Idle' + (S.settings.last_fetch ? ` · lists checked ${ago(S.settings.last_fetch)}` : '');
   pill.title = pill.textContent;
   const f = document.activeElement?.tagName === 'BUTTON' && document.activeElement.getAttribute('onclick');
   document.getElementById('main').innerHTML = VIEWS[tab]();
@@ -322,7 +324,7 @@ const VIEWS = {
     const needs = j => { try { return '<div class="small">Needs: ' + JSON.parse(j.reason).map(n => esc(n.label)).join('; ') + '</div>'; } catch { return ''; } };
     return `<div class="tiles">${Object.entries(lab).map(([k, l]) => `<div class="tile"><span>${l}</span><b>${(c[k] || 0).toLocaleString()}</b></div>`).join('')}</div>
       <h2>Run the bot</h2><div class="card"><div class="row"><span>Fill the next</span><input id="napply" type="number" value="5" min="1" max="50" style="width:70px"><span>jobs</span>
-        <button class="b primary" onclick="runNow(+document.getElementById('napply').value)">Run now</button>
+        <button class="b primary" onclick="runNow(+document.getElementById('napply').value)" ${S.settings.paused ? 'disabled title="Paused: press Resume at the top first"' : ''}>Run now</button>
         <span class="small muted">${S.settings.auto_submit ? 'Auto-submit is on, so these will be sent.' : 'They wait for your approval.'} It also runs on its own every 30 minutes, up to ${S.settings.daily_cap} a day.</span></div>
         ${S.runner.log ? `<details ${S.runner.running ? 'open' : ''}><summary>Last run log</summary><pre>${esc(S.runner.log)}</pre></details>` : ''}</div>
       ${p.approved.length ? `<h2>Submitting now</h2>${list(p.approved)}` : ''}
@@ -474,6 +476,7 @@ async function approveAll() {
 const setOutcome = (id, outcome) => { const h = S.history.find(x => x.id === id); act('/api/outcome', { id, outcome, notes: h.notes }, 'Saved'); };
 const setNotes = (id, notes) => { const h = S.history.find(x => x.id === id); act('/api/outcome', { id, outcome: h.outcome || '', notes }, 'Note saved'); };
 async function runNow(n = 5) { const r = await api('/api/run', { apply: n }); toast(r.started ? 'Started' : 'Already running'); setTimeout(refresh, 1500); }
+async function setPaused(p) { await act('/api/settings', { paused: p }, p ? 'Paused: no new jobs get filled' : 'Resumed: fills new jobs every 30 minutes'); }
 async function setAuto(el) {
   if (el.checked && !confirm('Turn on auto-submit? New applications will be sent without your review.')) { el.checked = false; return; }
   await act('/api/settings', { auto_submit: el.checked }, el.checked ? 'Auto-submit on' : 'Auto-submit off');

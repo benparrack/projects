@@ -84,6 +84,7 @@ const run = async (job, dryRun) => {
 try {
   for (let a; (a = approved()).length;) for (const job of a) await run(job, false);
   for (const job of pending.slice(0, n)) {
+    if (meta.get('paused') === '1') { console.log('Paused from the dashboard: no new jobs filled.'); break; }   // approved ones still go out
     await run(job, !live);
     for (const job of approved()) await run(job, false);   // Ben approved something mid-run
   }

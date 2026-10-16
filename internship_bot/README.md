@@ -23,6 +23,7 @@ turns on auto-submit.
   - **Pipeline:** what's next, failures, what isn't automated yet.
   - **Insights:** what got responses: answers, resume version, speed after posting.
   - **Profile:** edit the profile files.
+  - **Pause / Resume** (header): paused, runs stop filling new jobs (the current pass stops after its job); approved jobs still go out.
   - **Settings:** auto-submit, daily cap, Workday, Gmail, Appearance (palette, light/dark, type, density,
     corners, accent; saved per browser).
 - **Phone (ntfy app):** subscribe to the two topics shown in Settings. Alerts arrive on the first.
