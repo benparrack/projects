@@ -1,6 +1,7 @@
 """Natural selection for trading strategies.
 
-~300 published strategies (strategies.py) plus 24 placebo coin-flip strategies are all backtested on the last
+A population of strategies (strategies.py: batch 1 = 308 incl. 24 placebos, batch 2 = ~1,000 new incl. 84 placebos —
+published rules, variants, and labeled made-up combinations) plus coin-flip placebos is backtested on the last
 year of daily data for ~600 US stocks (S&P 500 + well-known small/mid caps). The stocks are dealt into cohorts;
 each generation, the surviving strategies face a NEW cohort they have never traded, and die if they:
 
@@ -44,7 +45,8 @@ YEARS = 3          # history to download: ~200 days of indicator warm-up + the p
 WINDOW = 252       # trading days in "the last year"
 WARMUP = 260       # bars an indicator may need (52-week high = 252) before a trade can count
 COST_BPS = 10      # per side
-DEFAULTS = {"generations": 5, "cull": 0.35, "min_trades": 8, "seed": 2026}
+DEFAULTS = {"generations": 5, "cull": 0.35, "min_trades": 8, "seed": 2026, "batch": 2}
+BATCHES = {1: "Batch 1 · 308 strategies (Oct 2026)", 2: "Batch 2 · ~1,000 new strategies (Oct 2026)"}
 EXAM_Z = 1.0      # final exam: the holdout edge must be at least one standard error above random entries
 # Live trial gates: judged only on trades made after promotion.
 LIVE_ELIM = {"days": 10, "trades": 15, "z": -1.0}  # early exit: clearly worse than random entries
@@ -357,7 +359,7 @@ def _set_job(**kw):
 def run(cfg: dict | None = None, promote: bool = True) -> dict:
     cfg = {**DEFAULTS, **(cfg or {})}
     t0 = time.time()
-    specs = strategies.library()
+    specs = strategies.library(cfg.get("batch", 1))
     uni = universe()
     segs = dict(uni)
     tickers = [t for t, _ in uni]
@@ -593,13 +595,16 @@ def _cfg(d: dict) -> dict:
         cfg = {"generations": int(d.get("generations") or DEFAULTS["generations"]),
                "cull": float(d.get("cull") if d.get("cull") not in (None, "") else DEFAULTS["cull"]),
                "min_trades": int(d.get("min_trades") or DEFAULTS["min_trades"]),
-               "seed": int(d.get("seed") or DEFAULTS["seed"])}
+               "seed": int(d.get("seed") or DEFAULTS["seed"]),
+               "batch": int(d.get("batch") or DEFAULTS["batch"])}
     except (TypeError, ValueError):
         raise UserError("Settings must be numbers")
     if not 2 <= cfg["generations"] <= 10:
         raise UserError("Generations must be 2–10")
     if not 0 <= cfg["cull"] <= 0.6:
         raise UserError("Cull share must be 0–0.6")
+    if cfg["batch"] not in BATCHES:
+        raise UserError("Unknown strategy batch")
     if not 3 <= cfg["min_trades"] <= 50:
         raise UserError("Minimum trades must be 3–50")
     return cfg
@@ -615,7 +620,7 @@ def register(app) -> None:
             r["holdout"] = len(r["holdout"])
         with _job_lock:
             job = {k: v for k, v in _job.items() if k != "trace"}
-        return jsonify({"run": r, "runs": runs(), "live": live_state(), "job": job, "defaults": DEFAULTS, "exam_z": EXAM_Z,
+        return jsonify({"run": r, "runs": runs(), "live": live_state(), "job": job, "defaults": DEFAULTS, "batches": BATCHES, "exam_z": EXAM_Z,
                         "gates": {"elim": LIVE_ELIM, **LIVE_GRAD}})
 
     @app.get("/api/evo/job")

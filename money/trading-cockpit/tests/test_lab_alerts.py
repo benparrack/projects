@@ -85,3 +85,21 @@ def test_form4_parser():
     from cockpit import alerts
     b = alerts.parse_form4(xml)
     assert len(b) == 1 and b[0]["value"] == 12500 and b[0]["owner"] == "Doe Jane" and b[0]["role"] == "Director"
+
+
+def test_batch2_indicators_ranges_and_no_lookahead():
+    rng = np.random.default_rng(3)
+    df = make_df(100 * np.exp(np.cumsum(rng.normal(0, 0.02, 400))))
+    rules = {"crsi()": (0, 100), "pctrank(ret(1), 100)": (0, 100), "aroon_up(25)": (0, 100), "aroon_down(25)": (0, 100),
+             "cmf(20)": (-1, 1), "uo()": (0, 100), "vi_plus(14)": (0, 5), "trix(15)": (-50, 50), "month()": (1, 12)}
+    for r, (lo, hi) in rules.items():
+        s = lab.evaluate(f"{r} >= {lo}", df) & lab.evaluate(f"{r} <= {hi}", df)
+        assert s.iloc[150:].all(), r
+    df2 = df.copy()
+    df2.iloc[300:, :4] *= 2
+    for r in ["crsi() < 20", "aroon_up(25) > 70", "cmf(20) > 0", "force(2) < 0", "adl() > prev(adl(), 5)", "uo() < 40",
+              "crosses_above(vi_plus(14), vi_minus(14))", "trix(15) > 0", "count(close < prev(close), 5) >= 4"]:
+        assert (lab.evaluate(r, df).iloc[:300] == lab.evaluate(r, df2).iloc[:300]).all(), r
+    up = make_df(np.r_[np.full(30, 100.0), np.linspace(100, 130, 30)])
+    assert lab.evaluate("aroon_up(25) == 100", up).iloc[-1]
+    assert lab.evaluate("count(close > prev(close), 5) == 5", up).iloc[-1]

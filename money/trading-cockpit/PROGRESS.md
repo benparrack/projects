@@ -46,6 +46,14 @@ gap-down reversal NO EDGE, golden cross TOO FEW TRADES. That's expected and is t
       turn of the month (+1.08%/trade over random on the holdout). Trial started 2026-10-15; earliest graduation ~2026-11-12
 - [x] 48 tests
 
+## 2026-10-16 — Evolution: positions view + batch 2 (1,038 strategies)
+- **Live trial tab** (`#evolution?tab=live`): every strategy keeps a paper book vs SPY. It is rebuilt from price data on each refresh, so nothing depends on the laptop being on. The tab shows open positions as tiles and a table with a strategy filter, plus closed trades. When more than 8 strategies are on trial, the chart draws a bold average line.
+- **Faster elimination:** a strategy is cut at ≥10 days, ≥15 trades and z ≤ −1, or at ≥20 days and ≥25 trades with mean ≤ 0 or excess ≤ 0.
+- **Batch 2** (`python -m cockpit.evolve run --batch 2`): 1,038 strategies, deduped against batch 1. About 520 come from published rules (ConnorsRSI, R3, %b, Williams %R, Elder, Minervini, Darvas, seasonal, …), about 432 are made up (dip combos, double-oversold), and 84 are coin-flip placebos. 13 new DSL indicators were added (crsi, pctrank, count, aroon, cmf, adl, force, trix, uo, vortex, month).
+- **Result:** 1,038 → 351 → 214 → 139 → 91 → 60, and 33 passed the holdout exam. 0 of 84 placebos survived (14 got through gen 1). The 33 joined the 11 from batch 1, so 44 are on the live trial.
+- **Caveats:** the finalists are mostly correlated variants of one idea (buy a short-term dip in an uptrend). The two Halloween seasonal finalists lost money in the prior year. A 2026-09-15→10-15 backdated trial would have eliminated 10 of the 11 batch-1 mean-reversion strategies, because it was a bad month for dip buyers.
+- Tests: 51 passing.
+
 ## Waiting on Ben
 - Subscribe to the ntfy topic (Alerts tab) and press "Send test alert".
 - Optionally add an SEC contact in Settings for insider-buy alerts.

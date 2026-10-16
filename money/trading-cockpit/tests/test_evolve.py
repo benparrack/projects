@@ -84,7 +84,7 @@ def test_live_gates():
 
 
 def test_new_indicators():
-    from cockpit import lab
+    from cockpit import lab, strategies
     c = 100 + np.cumsum(np.random.default_rng(2).normal(0, 1, 300))
     df = make_df(c)
     ibs = lab.evaluate("ibs()", df).dropna()
@@ -110,3 +110,19 @@ def test_book_compounds_each_trade_to_its_return():
     assert abs(book[-1]["v"] - (1 + r.iloc[0]) * (1 + r.iloc[1]) * (1 + (r.iloc[2] - 0.02) / 2)) < 1e-6
     p = _position(("AAA", "2026-01-08", "2026-01-12", 0.1, 3, "open"), df, 5)
     assert (p["px0"], p["px"], p["held"], p["path"], p["chg"]) == (12, 13, 3, [11, 13, 13], 0)
+
+
+def test_batch2_is_new_unique_and_runs():
+    from cockpit import lab, strategies
+    b1, b2 = strategies.library(1), strategies.library(2)
+    key = strategies._key
+    assert len(b2) >= 1000 and sum(s["family"] == "placebo" for s in b2) == 84
+    assert not {key(s) for s in b1} & {key(s) for s in b2}
+    assert len({key(s) for s in b2}) == len(b2)
+    real1 = {s["id"] for s in b1 if s["family"] != "placebo"}
+    assert not real1 & {s["id"] for s in b2}  # live-trial ids can't collide
+    assert all(strategies.FAMILIES[s["family"]][2] in strategies.SOURCES for s in b2)
+    rng = np.random.default_rng(0)
+    df = make_df(100 * np.exp(np.cumsum(rng.normal(0, 0.02, 600))))
+    for s in b2[::7]:
+        lab.evaluate(s["entry"], df)

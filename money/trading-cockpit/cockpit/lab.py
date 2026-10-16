@@ -122,7 +122,57 @@ def _funcs(df: pd.DataFrame) -> dict:
         md = tp.rolling(n).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
         return (tp - ma) / (0.015 * md.replace(0, np.nan))
 
+    def pctrank(x, n):
+        x = _s(x, df)
+        return x.rolling(_win(n) + 1).apply(lambda w: (w[:-1] < w[-1]).mean() * 100, raw=True)
+
+    def adl():
+        mf = ((c - l) - (h - c)) / (h - l).replace(0, np.nan)
+        return (mf.fillna(0) * df["Volume"]).cumsum()
+
+    def aroon(n, up):
+        n = _win(n)
+        s = h if up else l
+        pos = s.rolling(n + 1).apply(lambda w: (np.argmax(w) if up else np.argmin(w)), raw=True)
+        return 100 * pos / n  # 100 = the extreme is today
+
+    def uo():
+        pc = c.shift(1)
+        bp = c - np.minimum(l, pc)
+        tr = np.maximum(h, pc) - np.minimum(l, pc)
+        a = [bp.rolling(k).sum() / tr.rolling(k).sum().replace(0, np.nan) for k in (7, 14, 28)]
+        return 100 * (4 * a[0] + 2 * a[1] + a[2]) / 7
+
+    def vortex(n, plus):
+        n = _win(n)
+        tr = np.maximum(h, c.shift(1)) - np.minimum(l, c.shift(1))
+        vm = (h - l.shift(1)).abs() if plus else (l - h.shift(1)).abs()
+        return vm.rolling(n).sum() / tr.rolling(n).sum().replace(0, np.nan)
+
+    def trix(n):
+        e = c
+        for _ in range(3):
+            e = e.ewm(span=_win(n), adjust=False).mean()
+        return e.pct_change() * 100
+
     return {
+        "pctrank": (lambda x, n: pctrank(x, n), "pctrank(ret(1), 100): % of the previous n values below today's, 0–100"),
+        "crsi": (lambda: (_rsi(c, 3) + _rsi(_streak(c), 2) + pctrank(c.pct_change(), 100)) / 3,
+                 "crsi(): ConnorsRSI(3, 2, 100), 0–100; under 10 = deeply oversold"),
+        "count": (lambda x, n: _s(x, df).astype(float).rolling(_win(n)).sum(),
+                  "count(close < prev(close), 5): days in the last n the condition held"),
+        "aroon_up": (lambda n=25: aroon(n, True), "aroon_up(25): 100 = n-day high is today, 0 = n days ago"),
+        "aroon_down": (lambda n=25: aroon(n, False), "aroon_down(25): 100 = n-day low is today"),
+        "cmf": (lambda n=20: (((c - l) - (h - c)) / (h - l).replace(0, np.nan) * df["Volume"]).rolling(_win(n)).sum()
+                / df["Volume"].rolling(_win(n)).sum().replace(0, np.nan), "cmf(20): Chaikin money flow, -1–1"),
+        "adl": (lambda: adl(), "adl(): accumulation/distribution line"),
+        "force": (lambda n=13: (c.diff() * df["Volume"]).ewm(span=_win(n), adjust=False).mean(),
+                  "force(2): Elder force index (price change × volume, smoothed)"),
+        "trix": (lambda n=15: trix(n), "trix(15): % change of a triple-smoothed EMA"),
+        "uo": (lambda: uo(), "uo(): Williams' Ultimate Oscillator (7/14/28), 0–100"),
+        "vi_plus": (lambda n=14: vortex(n, True), "vi_plus(14): vortex +VI"),
+        "vi_minus": (lambda n=14: vortex(n, False), "vi_minus(14): vortex −VI"),
+        "month": (lambda: pd.Series(df.index.month, index=df.index, dtype=float), "month(): 1 = January … 12 = December"),
         "sma": (lambda x, n: _s(x, df).rolling(_win(n)).mean(), "sma(close, 50): average of the last n days"),
         "ema": (lambda x, n: _s(x, df).ewm(span=_win(n), adjust=False).mean(), "ema(close, 20): exponential average"),
         "rsi": (lambda n=14: _rsi(c, _win(n)), "rsi(14): 0–100 momentum; under 30 = oversold"),

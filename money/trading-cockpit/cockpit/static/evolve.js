@@ -138,9 +138,9 @@ function evoHeader(run, running) {
   const runs = EVO.runs || [];
   return `<div class="ph" style="margin-bottom:16px"><div>
       <div style="font-size:22px;font-weight:700;letter-spacing:-.5px">Strategy evolution</div>
-      <div class="muted small">${run ? `Run ${esc(run.created_at.slice(0, 16).replace("T", " "))} · prices through ${esc(run.data_end)} · ${run.config.generations} generations · ${run.seconds}s`
+      <div class="muted small">${run ? `Run ${esc(run.created_at.slice(0, 16).replace("T", " "))} · prices through ${esc(run.data_end)} · ${run.summary.strategies} strategies · ${run.config.generations} generations · ${run.seconds}s`
         : "Natural selection for trading rules"}</div></div>
-    <div class="row">${runs.length > 1 ? `<select id="evo-run" style="width:auto">${runs.map((r) => `<option value="${esc(r.id)}" ${run && r.id === run.id ? "selected" : ""}>${esc(r.created_at.slice(0, 16).replace("T", " "))} · ${r.summary.finalists} finalists</option>`).join("")}</select>` : ""}
+    <div class="row">${runs.length > 1 ? `<select id="evo-run" style="width:auto">${runs.map((r) => `<option value="${esc(r.id)}" ${run && r.id === run.id ? "selected" : ""}>${esc(r.created_at.slice(0, 16).replace("T", " "))} · ${r.summary.strategies} strategies · ${r.summary.finalists} finalists</option>`).join("")}</select>` : ""}
       ${run ? `<button id="evo-live" ${running ? "disabled" : ""}>Refresh live trial</button>` : ""}
       <button class="primary" id="evo-new" ${running ? "disabled" : ""}>Run new evolution</button></div></div>`;
 }
@@ -241,16 +241,18 @@ function evoLiveTable(trial) {
   const G = EVO.gates;
   const rank = (v) => (v.status === "graduated" ? 0 : v.status === "on trial" ? 1 : 2);
   trial.sort((a, b) => rank(a) - rank(b) || (b.backtest?.holdout?.z ?? 0) - (a.backtest?.holdout?.z ?? 0));
-  return `<div class="tablewrap"><table><tr><th>Strategy</th><th>Status</th><th class="num">Live trades</th><th class="num">Avg trade</th><th class="num">vs random</th>
+  return `<div class="tablewrap"><table><tr><th>Strategy</th><th>Status</th><th class="num">Live trades</th><th class="num" title="the strategy's paper book since it was promoted, and SPY over the same days">Book</th><th class="num">Avg trade</th><th class="num">vs random</th>
     <th class="num" title="t-stat of the live edge, clustered by day">Edge z</th><th title="progress to graduation: trades, trading days and edge, the weakest of the three">Graduation</th><th>Buys at the next open</th></tr>
     ${trial.map((v) => {
       const s = v.stats || {}, dead = v.status === "eliminated";
       const prog = Math.min((s.n || 0) / G.trades, (v.days || 0) / G.days, Math.max(0, s.z || 0) / G.z, 1);
       const sig = v.signals || [];
+      const bk = (v.book || []).at(-1), book = bk && v.book.length > 1 ? bk.v - 1 : null, spy = bk && isNum(bk.spy) ? bk.spy - 1 : null;
       return `<tr class="click ${dead ? "evo-dead" : ""}" data-sid="${esc(v.id)}"><td class="wrap"><b>${esc(v.spec.name.split(" · ")[0])}</b> <span class="small muted">${esc(v.id)}</span>
-          <div class="small muted">${esc(v.spec.name.split(" · ")[1] || "")}</div></td>
+          <div class="small muted">${esc(v.spec.name.split(" · ")[1] || "")} · since ${esc(v.since)}</div></td>
         <td><span class="pill ${LIVE_PILL[v.status]}" title="${esc(v.why || "")}">${esc(v.status)}</span></td>
         <td class="num">${s.n ?? 0}${v.open?.length ? ` <span class="small muted">(${v.open.length} open)</span>` : ""}</td>
+        <td class="num"><span class="${cls(book)}">${isNum(book) ? pct(book, 1, true) : "—"}</span>${isNum(spy) ? `<div class="small muted">SPY ${pct(spy, 1, true)}</div>` : ""}</td>
         <td class="num ${cls(s.mean)}">${pct(s.mean, 2, true)}</td><td class="num ${cls(s.excess)}">${pct(s.excess, 2, true)}</td><td class="num">${evoZ(s.z)}</td>
         <td style="min-width:130px" title="${esc(v.why || "")}">${dead ? `<span class="small muted">${esc((v.why || "").slice(0, 60))}</span>` : `<div class="small muted">${s.n || 0}/${G.trades} trades · ${v.days || 0}/${G.days} days</div>
           <div class="meter" style="margin-top:3px;height:4px"><i style="width:${Math.max(2, prog * 100)}%"></i></div>`}</td>
@@ -289,18 +291,25 @@ function evoDetail(sid) {
   const lv = EVO.live.strategies?.[sid];
   if (!r && !lv) return;
   const spec = r || lv.spec;
+  const bt = r || lv?.backtest;  // a strategy from an older run keeps the backtest it was promoted with
   const fam = EVO.run.families[spec.family];
   const st = (label, s) => `<div class="card"><div class="k">${label}</div><div class="v ${cls(s?.mean)}">${s?.n ? pct(s.mean, 2, true) : "—"}</div>
     <div class="small muted">${s?.n ? `${s.n} trades · ${pct(s.win, 0)} wins · vs random ${pct(s.excess, 2, true)} · z ${isNum(s.z) ? s.z.toFixed(2) : "—"}` : "no trades"}</div></div>`;
-  const trades = lv?.closed?.length || lv?.open?.length ? [...(lv.open || []), ...lv.closed] : r?.recent || [];
+  const trades = lv?.closed?.length ? lv.closed : r?.recent || [];
   openModal(`<button class="x" onclick="closeModal()" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
     <h2 style="margin-top:0">${esc(spec.name)}</h2>
     <div class="row small" style="margin-bottom:12px">${r ? evoFate(r) : ""}${lv ? `<span class="pill ${LIVE_PILL[lv.status]}">live: ${esc(lv.status)}</span>` : ""}
       <span class="muted">${esc(fam?.kind || "")} · ${evoSrc(fam?.source)}</span></div>
     <div class="evo-rule"><div><span class="muted small">Buy when</span><code>${esc(spec.entry)}</code></div>
       <div><span class="muted small">Sell</span><span>${esc(spec.exit_text || "")}</span></div></div>
-    <div class="grid g3" style="margin-top:12px">${r ? st("Holdout exam", r.holdout) + st("Test year, all stocks", r.all) + st("Prior year", r.prior) : ""}
+    <div class="grid g3" style="margin-top:12px">${bt ? st("Holdout exam", bt.holdout) + st("Test year, all stocks", bt.all) + st("Prior year", bt.prior) : ""}
       ${lv ? st(`Live since ${esc(lv.since)}`, lv.stats) : ""}</div>
+    ${lv?.book?.length > 1 ? `<h3>Live paper book vs SPY</h3><div style="height:170px"><canvas id="evo-lb"></canvas></div>` : ""}
+    ${lv?.positions?.length ? `<h3>Open positions (${lv.positions.length})</h3><div class="tablewrap" style="max-height:260px;overflow-y:auto"><table>
+      <tr><th>Stock</th><th>Bought</th><th class="num">Entry</th><th class="num">Now</th><th class="num">P/L</th><th>Held</th></tr>
+      ${[...lv.positions].sort((a, b) => b.ret - a.ret).map((p) => `<tr><td><a href="#chart?t=${encodeURIComponent(p.t)}" onclick="closeModal()">${esc(p.t)}</a></td><td>${esc(p.d)}</td>
+        <td class="num">${num(p.px0)}</td><td class="num">${num(p.px)}</td><td class="num ${cls(p.ret)}">${pct(p.ret, 2, true)}</td>
+        <td class="small muted">day ${p.held} of ${p.max}</td></tr>`).join("")}</table></div>` : ""}
     ${lv?.signals?.length && lv.status !== "eliminated" ? `<h3>Buys at the next open (${lv.signals.length})</h3><div class="chips">${lv.signals.map((t) => `<a class="chip" href="#chart?t=${encodeURIComponent(t)}" onclick="closeModal()">${esc(t)}</a>`).join("")}</div>` : ""}
     ${lv?.why ? `<p class="small muted">${esc(lv.why)}</p>` : ""}
     ${r?.sim?.curve?.length > 1 ? `<h3>Paper account on the selection stocks</h3><div class="small muted">$10,000 in 10 slots, median of ${r.sim.draws || 1} random pick orders: ${pct(r.sim.total_return, 1, true)}${isNum(r.sim.p10) ? ` (middle 80%: ${pct(r.sim.p10, 1, true)} to ${pct(r.sim.p90, 1, true)})` : ""}, max drawdown ${pct(r.sim.max_drawdown, 1)}${isNum(r.sim.spy_return) ? `, SPY ${pct(r.sim.spy_return, 1, true)} over the same dates` : ""}.</div>
@@ -308,13 +317,19 @@ function evoDetail(sid) {
     ${r?.gens?.length ? `<h3>Generation by generation</h3><div class="tablewrap"><table><tr><th>Gen</th><th class="num">Trades</th><th class="num">Avg trade</th><th class="num">Random</th><th class="num">Edge</th><th class="num">Cumulative z</th></tr>
       ${r.gens.map((g) => `<tr><td>${g.g}</td><td class="num">${g.n}</td><td class="num ${cls(g.mean)}">${pct(g.mean, 2, true)}</td><td class="num">${pct(g.base, 2, true)}</td>
         <td class="num ${cls(g.excess)}">${pct(g.excess, 2, true)}</td><td class="num">${evoZ(g.cum_z)}</td></tr>`).join("")}</table></div>` : ""}
-    ${trades.length ? `<h3>${lv?.closed?.length || lv?.open?.length ? "Live trades" : "Recent backtest trades"}</h3><div class="tablewrap" style="max-height:260px;overflow-y:auto"><table>
+    ${trades.length ? `<h3>${lv?.closed?.length ? "Closed live trades" : "Recent backtest trades"}</h3><div class="tablewrap" style="max-height:260px;overflow-y:auto"><table>
       <tr><th>Stock</th><th>In</th><th>Out</th><th class="num">Days</th><th class="num">Return</th><th>Exit</th></tr>
       ${trades.slice(0, 60).map((t) => `<tr><td><a href="#chart?t=${encodeURIComponent(t[0])}" onclick="closeModal()">${esc(t[0])}</a></td><td>${esc(t[1])}</td><td>${esc(t[2])}</td>
         <td class="num">${t[4]}</td><td class="num ${cls(t[3])}">${pct(t[3], 2, true)}</td><td class="small muted">${esc(t[5])}</td></tr>`).join("")}</table></div>` : ""}
     ${lv && lv.status !== "eliminated" ? `<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="sm danger" id="evo-retire">Retire from live trial</button></div>` : ""}`);
   if (r?.sim?.curve?.length > 1) lineChart("evo-eq", r.sim.curve.map((p) => p.t), [{ label: "Account", data: r.sim.curve.map((p) => p.v), borderColor: cssv("--accent"), backgroundColor: cssv("--accent-soft"), fill: true }],
     { plugins: { legend: { display: false } } });
+  if (lv?.book?.length > 1) lineChart("evo-lb", lv.book.map((b) => b.d), [
+    { label: spec.id || sid, data: lv.book.map((b) => b.v - 1), borderColor: cssv("--accent"), backgroundColor: cssv("--accent-soft"), fill: true },
+    { label: "SPY", data: lv.book.map((b) => (isNum(b.spy) ? b.spy - 1 : null)), borderColor: cssv("--text"), borderDash: [5, 4], borderWidth: 1.5 }],
+    { scales: { x: { ticks: { color: "#8b95a3", maxTicksLimit: 6 }, grid: { display: false } },
+                y: { ticks: { color: "#8b95a3", callback: (v) => (v * 100).toFixed(1) + "%" }, grid: { color: cssv("--grid") }, border: { display: false } } },
+      plugins: { legend: { labels: { color: "#8b95a3", boxWidth: 10 } }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${pct(c.raw, 2, true)}` } } } });
   if ($("#evo-retire")) $("#evo-retire").onclick = (e) => guard(async () => { await POST(`/api/evo/live/${encodeURIComponent(sid)}/retire`); closeModal(); toast("Retired."); route(true); }, e.target);
 }
 
@@ -322,9 +337,11 @@ function evoRunModal() {
   const d = EVO.defaults;
   openModal(`<button class="x" onclick="closeModal()" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
     <h2 style="margin-top:0">Run a new evolution</h2>
-    <p class="small muted">Downloads fresh prices, backtests every strategy on every stock, and runs the selection. Takes one to three minutes.
+    <p class="small muted">Downloads fresh prices, backtests every strategy on every stock, and runs the selection. Takes a few minutes.
       New finalists join the live trial; strategies already on trial keep their record.</p>
     <div class="form">
+      <div class="span6"><label>Strategy population</label><select id="ev-b">${Object.entries(EVO.batches || {}).map(([k, l]) =>
+        `<option value="${k}" ${+k === d.batch ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
       <div class="span2"><label>Generations</label><input id="ev-g" type="number" min="2" max="10" value="${d.generations}"></div>
       <div class="span2"><label>Cull per generation</label><input id="ev-c" type="number" min="0" max="0.6" step="0.05" value="${d.cull}"></div>
       <div class="span2"><label>Min trades per generation</label><input id="ev-m" type="number" min="3" max="50" value="${d.min_trades}"></div>
@@ -333,7 +350,7 @@ function evoRunModal() {
     </div>
     <p class="small muted" style="margin-bottom:0">Running many seeds and keeping the one you like best is itself data snooping. Pick settings once.</p>`);
   $("#ev-go").onclick = (e) => guard(async () => {
-    await POST("/api/evo/run", { generations: $("#ev-g").value, cull: $("#ev-c").value, min_trades: $("#ev-m").value, seed: $("#ev-s").value });
+    await POST("/api/evo/run", { generations: $("#ev-g").value, cull: $("#ev-c").value, min_trades: $("#ev-m").value, seed: $("#ev-s").value, batch: $("#ev-b").value });
     closeModal(); toast("Evolution started."); route(true);
   }, e.target);
 }
@@ -341,9 +358,7 @@ function evoRunModal() {
 function evoWire(running) {
   const v = $("#view");
   v.querySelectorAll("[data-sid]").forEach((t) => (t.onclick = (e) => { if (!e.target.closest("a")) evoDetail(t.dataset.sid); }));
-  v.querySelectorAll("#evo-pf [data-pf]").forEach((c) => (c.onclick = () => {
-    evoPosFilter = c.dataset.pf; v.querySelectorAll("#evo-pf .chip").forEach((x) => x.classList.toggle("on", x === c)); evoPositions();
-  }));
+  if ($("#evo-pf")) $("#evo-pf").onchange = (e) => { evoPosFilter = e.target.value; evoPositions(); };
   v.querySelectorAll("#evo-gf [data-f]").forEach((c) => (c.onclick = () => {
     evoFilter = c.dataset.f; v.querySelectorAll("#evo-gf .chip").forEach((x) => x.classList.toggle("on", x === c)); evoGrave();
   }));
@@ -379,7 +394,7 @@ function evoLiveTab(trial) {
   const daysIn = Math.max(0, ...act.map((v) => v.days || 0));
   return `<div class="kpis">
     <div class="kpi hero"><div class="k">On live trial</div><div class="v">${act.length} strategies</div>
-      <div class="s">${trial.filter((v) => v.status === "graduated").length} graduated · ${trial.length - act.length} eliminated · since ${esc(since || "—")}</div></div>
+      <div class="s">${new Set(act.map((v) => v.spec.family)).size} families · ${trial.filter((v) => v.status === "graduated").length} graduated · ${trial.length - act.length} eliminated · since ${esc(since || "—")}</div></div>
     <div class="kpi"><div class="k">Open positions</div><div class="v">${pos.length}</div><div class="s">in ${stocks.size} stocks</div></div>
     <div class="kpi"><div class="k">Open P/L</div><div class="v ${cls(avg(pos.map((p) => p.ret)))}">${pos.length ? pct(avg(pos.map((p) => p.ret)), 2, true) : "—"}</div>
       <div class="s">average position${pos.length ? ` · today ${pct(avg(pos.map((p) => p.chg)), 2, true)}` : ""}</div></div>
@@ -388,7 +403,7 @@ function evoLiveTab(trial) {
     <div class="kpi"><div class="k">Buys at the next open</div><div class="v">${sig}</div><div class="s">day ${daysIn} of ${G.days} before anyone can graduate</div></div>
   </div>
 
-  <div class="panel"><div class="ph"><h2>Paper books vs SPY</h2><span class="small muted">each strategy's money split evenly across its open positions, rebalanced daily</span></div>
+  <div class="panel"><div class="ph"><h2>Paper books vs SPY</h2><span class="small muted">each strategy's money split evenly across its open positions, rebalanced daily${act.length > 8 ? " · thin lines = single strategies" : ""}</span></div>
     ${act.some((v) => (v.book || []).length > 1) ? `<div style="height:260px"><canvas id="evo-books"></canvas></div>`
       : `<div class="empty small">The first trades are bought at the open after ${esc(since || "promotion")}; the books start moving after that day's close.</div>`}</div>
 
@@ -401,9 +416,9 @@ function evoLiveTab(trial) {
       or if after ${G.days}+ days and ${G.trades}+ trades it isn't making money and beating random entries.
       It <b>graduates</b> (candidate for real money) after ${G.days}+ trading days and ${G.trades}+ trades with an edge of z ≥ ${G.z}.</p></div>
 
-  <div class="panel"><div class="ph"><h2>Open positions</h2><div class="chips" id="evo-pf">
-      ${[["all", "All", pos.length], ...act.filter((v) => v.positions?.length).map((v) => [v.id, v.id, v.positions.length])]
-        .map(([k, l, n]) => `<span class="chip ${evoPosFilter === k ? "on" : ""}" data-pf="${esc(k)}">${esc(l)} <small>${n}</small></span>`).join("")}</div></div>
+  <div class="panel"><div class="ph"><h2>Open positions</h2><select id="evo-pf" style="width:auto" aria-label="Filter positions by strategy">
+      ${[["all", "All strategies", pos.length], ...act.filter((v) => v.positions?.length).sort((a, b) => a.id.localeCompare(b.id)).map((v) => [v.id, `${v.id} · ${v.spec.name.split(" · ")[0]}`, v.positions.length])]
+        .map(([k, l, n]) => `<option value="${esc(k)}" ${evoPosFilter === k ? "selected" : ""}>${esc(l)} (${n})</option>`).join("")}</select></div>
     ${pos.length ? `<p class="small muted" style="margin-top:-6px">One tile per stock, colored by its average P/L; ×N = held by N strategies. Click for the chart.</p>
       <div class="evo-tiles" id="evo-tiles"></div><div class="tablewrap evo-scroll" id="evo-pos" style="margin-top:14px"></div>`
       : `<div class="empty small">No open positions. ${sig ? `${sig} buys are queued for the next open.` : ""}</div>`}</div>
@@ -421,17 +436,24 @@ function evoLiveCharts(trial) {
   if (!act.length || !$("#evo-books")) return;
   const days = [...new Set(act.flatMap((v) => v.book.map((b) => b.d)))].sort();
   const ref = act.reduce((a, v) => (v.book.length > a.book.length ? v : a), act[0]);
+  const many = act.length > 8;
   const ds = act.map((v, i) => {
     const m = Object.fromEntries(v.book.map((b) => [b.d, b.v - 1]));
-    return { label: v.id, data: days.map((d) => m[d] ?? null), borderColor: evoPal(i), borderWidth: 1.4, spanGaps: true };
+    return { label: v.id, data: days.map((d) => m[d] ?? null), borderColor: many ? `color-mix(in srgb, ${evoPal(i)} 45%, transparent)` : evoPal(i),
+             borderWidth: many ? 1 : 1.4, spanGaps: true };
   });
+  if (many) ds.push({ label: "Average strategy", data: days.map((_, j) => {
+    const xs = ds.map((d) => d.data[j]).filter(isNum);
+    return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  }), borderColor: cssv("--accent"), borderWidth: 3, spanGaps: true });
   const spy = Object.fromEntries(ref.book.map((b) => [b.d, isNum(b.spy) ? b.spy - 1 : null]));
   ds.push({ label: "SPY", data: days.map((d) => spy[d] ?? null), borderColor: cssv("--text"), borderDash: [5, 4], borderWidth: 2, spanGaps: true });
   lineChart("evo-books", days, ds, {
     scales: { x: { ticks: { color: "#8b95a3", maxTicksLimit: 8 }, grid: { display: false } },
               y: { ticks: { color: "#8b95a3", callback: (v) => (v * 100).toFixed(0) + "%" }, grid: { color: cssv("--grid") }, border: { display: false } } },
-    plugins: { legend: { position: "bottom", labels: { color: "#8b95a3", boxWidth: 10, font: { size: 11 } } },
-               tooltip: { itemSort: (a, b) => b.raw - a.raw, callbacks: { label: (c) => `${c.dataset.label}: ${pct(c.raw, 2, true)}` } } } });
+    plugins: { legend: { position: "bottom", labels: { color: "#8b95a3", boxWidth: 10, font: { size: 11 },
+                                                          filter: (it) => !many || ["SPY", "Average strategy"].includes(it.text) } },
+               tooltip: { itemSort: (a, b) => b.raw - a.raw, filter: (it) => !many || ["SPY", "Average strategy"].includes(it.dataset.label), callbacks: { label: (c) => `${c.dataset.label}: ${pct(c.raw, 2, true)}` } } } });
 }
 
 function evoPositions() {
