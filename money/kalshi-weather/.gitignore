@@ -1,0 +1,4 @@
+data/
+.venv/
+reports/*.html
+!reports/latest.html
