@@ -231,6 +231,10 @@ def tick(now: datetime | None = None) -> list[str]:
         from . import screener
         screener.run_all(_fire)
         ran.append("screener")
+    if _due("evolution-catchup", day):  # first tick after the app opens: catch the live trial up on missed closes
+        from . import evolve
+        evolve.daily(_fire)
+        ran.append("evolution-catchup")
     if wd < 5 and hm >= (s.get("screener_time") or "22:30") and _due("evolution", day):
         from . import evolve
         evolve.daily(_fire)

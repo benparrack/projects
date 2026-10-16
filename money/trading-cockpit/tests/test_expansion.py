@@ -262,13 +262,13 @@ def test_scheduler_runs_each_job_once_per_day(fresh_db, monkeypatch):
     tz = ZoneInfo("Europe/Stockholm")
     db.set_setting("timezone", "Europe/Stockholm")
     fri = dt.datetime(2026, 10, 2, 7, 0, tzinfo=tz)
-    assert reports.tick(fri) == []                       # before the briefing time
+    assert reports.tick(fri) == ["evolution-catchup"]    # app opened: catch up, then nothing until the briefing time
     assert reports.tick(fri.replace(hour=9)) == ["briefing"]
     assert reports.tick(fri.replace(hour=12)) == []
     assert reports.tick(fri.replace(hour=23)) == ["screener", "evolution", "weekly"]
     assert reports.tick(fri.replace(hour=23, minute=30)) == []
-    assert reports.tick(dt.datetime(2026, 10, 3, 23, 0, tzinfo=tz)) == []  # Saturday
-    assert ran == ["b", "s", "e", "w"]
+    assert reports.tick(dt.datetime(2026, 10, 3, 23, 0, tzinfo=tz)) == ["evolution-catchup"]  # Saturday: catch-up only
+    assert ran == ["e", "b", "s", "e", "w", "e"]
 
 
 # ---------- settings masking + remote PIN gate ----------
