@@ -162,8 +162,8 @@ const routes = {
     return syncReplies();
   },
   'POST /api/approve': b => (approve(b), { ok: true }),
-  // Ashby flags the bot's browser as spam, so Ben sends those himself (Open form + Copy).
-  'POST /api/approve-all': () => { for (const { id } of all("SELECT id FROM jobs WHERE status='dryrun' AND url NOT LIKE '%ashbyhq%'")) approve({ id }); return { ok: true }; },
+  // Ashby and Lever reject the bot's browser, so Ben sends those himself (Open form + Copy).
+  'POST /api/approve-all': () => { for (const { id } of all("SELECT id FROM jobs WHERE status='dryrun' AND url NOT LIKE '%ashbyhq%' AND url NOT LIKE '%lever.co%'")) approve({ id }); return { ok: true }; },
   'POST /api/reject': ({ id }) => db.prepare("UPDATE jobs SET status='skipped', reason='Ben passed on it', updated=? WHERE id=?").run(Date.now(), id),
   'POST /api/redo': ({ id }) => db.prepare("UPDATE jobs SET status='new', reason=NULL, updated=? WHERE id=?").run(Date.now(), id),
   'POST /api/manual-done': ({ id, applied }) => applied

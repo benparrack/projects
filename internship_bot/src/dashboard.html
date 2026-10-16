@@ -239,10 +239,10 @@ const VIEWS = {
       <span class="row" hidden><span class="small">Drop every job that needs this?</span><button class="b" style="color:var(--bad);border-color:var(--bad)" onclick="act('/api/answer', {id:${q.id}, skip:true}, 'Skipped. Jobs that require it were dropped.')">Yes, drop them</button>
       <button class="b quiet" onclick="this.parentElement.hidden=true;this.parentElement.previousElementSibling.hidden=false">Cancel</button></span></span></div></div>`).join('');
     // Easy: approve (maybe type a Greenhouse code). Hard: Ben sends it himself, copy-pasting the answers.
-    const hard = j => j.ats === 'Ashby' || S.manual.includes(j);
+    const hard = j => byHand(j) || S.manual.includes(j);
     const auto = it => /^(full_name|email)$/.test(it.key) || /phone|linkedin/i.test(it.label);
     const show = j => ease === 'all' || (ease === 'hard') === hard(j);
-    const tag = j => `<span class="chip ease ${hard(j) ? 'hard' : ''}">${S.manual.includes(j) ? 'Hard: apply yourself' : j.ats === 'Ashby' ? 'Hard: copy-paste it yourself'
+    const tag = j => `<span class="chip ease ${hard(j) ? 'hard' : ''}">${S.manual.includes(j) ? 'Hard: apply yourself' : byHand(j) ? 'Hard: copy-paste it yourself'
       : j.ats === 'Greenhouse' ? 'Easy: approve, then type a code' : 'Easy: just approve'}</span>`;
     const field = it => it.type === 'file' ? `<a class="chip" href="/files/${esc(it.value)}" download title="Download it">${esc(it.value)} ↓</a>`
       : it.type === 'textarea' || it.value.length > 90 ? `<textarea rows="${Math.min(10, 2 + Math.ceil(it.value.length / 90))}" data-k="${esc(it.key)}" oninput="dirty=true">${esc(it.value)}</textarea>`
@@ -270,12 +270,12 @@ const VIEWS = {
       : `<div class="meta" style="margin-top:8px">${j.items.length} fields to copy${(n => n ? `, ${n} written answer${n > 1 ? 's' : ''}` : '')(j.items.filter(essay).length)}. They show here when you open the form.</div>`;
     const apps = S.approvals.filter(show).sort((x, y) => hard(x) - hard(y));
     const a = apps.map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}
-      ${j.ats === 'Ashby' ? ashbyQa(j) : easyQa(j)}
-      ${j.shot && j.ats !== 'Ashby' ? `<details><summary>Screenshot of the filled form</summary><img class="shot" loading="lazy" src="/shots/${j.id}.png"></details>` : ''}
-      <div class="row" style="margin-top:10px">${j.ats === 'Ashby' ? yourself(j) : `<button class="b good" onclick="approve('${j.id}')">Approve and submit</button>`}
+      ${byHand(j) ? ashbyQa(j) : easyQa(j)}
+      ${j.shot && !byHand(j) ? `<details><summary>Screenshot of the filled form</summary><img class="shot" loading="lazy" src="/shots/${j.id}.png"></details>` : ''}
+      <div class="row" style="margin-top:10px">${byHand(j) ? yourself(j) : `<button class="b good" onclick="approve('${j.id}')">Approve and submit</button>`}
       <button class="b" onclick="act('/api/reject', {id:'${j.id}'}, 'Passed')">Pass</button>
-      <span class="small muted" style="margin-left:auto">Filled ${ago(j.updated)}.${j.ats === 'Ashby' ? '' : ' Your edits are saved and reused.'}</span></div></div>`).join('');
-    const m = S.manual.filter(show).map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}<div class="why">${esc(j.ats === 'Ashby' && /^submit blocked/.test(j.reason) ? "Ashby's spam check stopped the bot's submit. Copy the answers in yourself." : j.reason)}</div>${j.ats === 'Workday' ? `<div class="meta">Sign in with ${esc(S.settings.mail || 'your email')}. The bot made that account; its password is in <code>data/workday.json</code> under <code>${esc(new URL(j.url).hostname)}</code>.</div>` : ''}
+      <span class="small muted" style="margin-left:auto">Filled ${ago(j.updated)}.${byHand(j) ? '' : ' Your edits are saved and reused.'}</span></div></div>`).join('');
+    const m = S.manual.filter(show).map(j => `<div class="card${working === j.id ? ' working' : ''}" id="ap-${j.id}">${tag(j)}${jobHead(j)}<div class="why">${esc(byHand(j) && /^submit blocked/.test(j.reason) ? `${j.ats}'s bot check stopped the bot's submit. Copy the answers in yourself.` : j.reason)}</div>${j.ats === 'Workday' ? `<div class="meta">Sign in with ${esc(S.settings.mail || 'your email')}. The bot made that account; its password is in <code>data/workday.json</code> under <code>${esc(new URL(j.url).hostname)}</code>.</div>` : ''}
       ${j.items.length ? `<details${working === j.id ? ' open' : ''}><summary>The bot's answers, to copy in</summary>${qa(j, true)}</details>` : ''}
       <div class="row">${yourself(j)}
       <button class="b" onclick="act('/api/manual-done', {id:'${j.id}', applied:false}, 'Removed')">Not for me</button>
@@ -286,7 +286,7 @@ const VIEWS = {
     return `${q ? `<h2>Questions only you can answer <span class="chip">${S.questions.length}</span></h2>${q}` : ''}
       <div style="margin-top:22px">${seg}</div>
       <h2>Ready to submit <span class="chip">${apps.length}</span>${apps.filter(j => !hard(j)).length > 1 ? `<button class="b" onclick="approveAll()">Approve all easy ones</button>` : ''}</h2>
-      <p class="lede">${S.settings.auto_submit ? 'Auto-submit is on, so new jobs skip this step.' : 'Easy: read the written answers, fix anything, approve. A Chrome window submits it; for Greenhouse, paste the emailed code (it is already on your clipboard) and click Submit. Hard (Ashby flags the bot as spam, so you send these): Open form puts the form on the left and this list on the right. Upload the resume first (Copy path, then Ctrl+L, Ctrl+V, Enter in the file dialog), copy down the list, submit. The confirmation email marks it applied and closes the form.'}</p>
+      <p class="lede">${S.settings.auto_submit ? 'Auto-submit is on, so new jobs skip this step.' : 'Easy: read the written answers, fix anything, approve. A Chrome window submits it; for Greenhouse, paste the emailed code (it is already on your clipboard) and click Submit. Hard (Ashby and Lever reject the bot browser, so you send these): Open form puts the form on the left and this list on the right. Upload the resume first (Copy path, then Ctrl+L, Ctrl+V, Enter in the file dialog), copy down the list, submit. The confirmation email marks it applied and closes the form.'}</p>
       ${a || '<div class="card empty">Nothing here.</div>'}
       ${ease === 'easy' ? '' : `<h2>Apply yourself <span class="chip">${S.manual.length}</span></h2>
       <p class="lede">Ones the bot can't or shouldn't finish: no-AI certifications, coding tasks, uploads it doesn't have, blocked submits.</p>
@@ -419,8 +419,10 @@ async function approve(id) {
   await act('/api/approve', { id, edits }, 'Approved: submitting in the background');
 }
 let working = null, formWin = null; const copied = new Set();
+// Ashby and Lever bot checks reject the bot's browser even when Ben clicks Submit in it, so he sends those from his own.
+const byHand = j => j.ats === 'Ashby' || j.ats === 'Lever';
 // Hard jobs in the order they're shown, for "Mark as applied → next".
-const hardList = () => [...S.approvals.filter(j => j.ats === 'Ashby'), ...S.manual];
+const hardList = () => [...S.approvals.filter(byHand), ...S.manual];
 function copyVal(btn) {
   const el = btn.parentElement.querySelector('input, textarea'), row = btn.parentElement;
   navigator.clipboard.writeText(el ? el.value : btn.dataset.v).then(() => {

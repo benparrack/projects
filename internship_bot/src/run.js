@@ -53,10 +53,9 @@ if (!opt('--approved')) {
 
 const rows = sql => db.prepare(sql).all().map(r => ({ ...r, locations: JSON.parse(r.locations) })).filter(r => adapterFor(r.url));
 const approved = () => rows("SELECT * FROM jobs WHERE status='approved' ORDER BY updated");
-// Ben's "just approve" ones (Greenhouse, Lever) first, so he can clear a batch in one sitting; then newest first.
+// Ben's "just approve" ones (Greenhouse) first, so he can clear a batch in one sitting; then newest first.
 const pending = opt('--id') ? rows(`SELECT * FROM jobs WHERE id='${String(opt('--id')).replace(/\W/g, '')}'`)
-  : opt('--approved') ? [] : rows(`SELECT * FROM jobs WHERE status='new'
-      ORDER BY (url LIKE '%greenhouse.io%' OR url LIKE '%lever.co%') DESC, posted DESC`);
+  : opt('--approved') ? [] : rows(`SELECT * FROM jobs WHERE status='new' ORDER BY url LIKE '%greenhouse.io%' DESC, posted DESC`);
 
 if (opt('--list')) for (const r of pending.slice(0, 25))
   console.log(`${r.id} ${r.company.padEnd(22).slice(0, 22)} ${r.title.slice(0, 60)}`);

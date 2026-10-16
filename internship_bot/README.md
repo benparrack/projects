@@ -13,7 +13,7 @@ turns on auto-submit.
     to yourself. Filter Easy (approve, maybe paste a code) / Hard (send it yourself). Easy cards show the written answers
     to review; the profile-fact rows fold away. Greenhouse: the emailed security code is read from Gmail onto the
     clipboard (`mail.py --code`) with the cursor in the code box: Ctrl+V, Submit.
-    Hard (Ashby flags the bot's browser as spam, so those are Ben's): Open form tiles the form left / dashboard right
+    Hard (Ashby and Lever reject the bot's browser, so those are Ben's): Open form tiles the form left / dashboard right
     (`src/tile.py` un-maximizes first) and only then shows that job's Copy list: resume path first (Ctrl+L, Ctrl+V in
     the file dialog), rows Ashby fills from the resume dimmed and skipped. While a form is open `mail.py --watch` polls
     the inbox; the confirmation email marks it applied, closes the form, re-maximizes, and focuses the next job's Open
@@ -34,7 +34,7 @@ turns on auto-submit.
 
 | unit | what |
 |---|---|
-| `intern-run.timer` | every 30 min: fetch lists, submit approved jobs, dry-run up to 5 new ones (Greenhouse and Lever first, then newest first) |
+| `intern-run.timer` | every 30 min: fetch lists, submit approved jobs, dry-run up to 5 new ones (Greenhouse first, then newest first) |
 | `intern-mail.timer` | hourly, only once Gmail is set up: reads replies, sets confirmed/oa/interview/offer/rejected, then `src/confirm.js` clicks Workday verification links (last 3 weeks, only for hosts in `data/workday.json`) and puts those jobs back in line |
 | `intern-dashboard.service` | the dashboard |
 
