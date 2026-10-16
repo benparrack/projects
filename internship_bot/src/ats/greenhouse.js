@@ -69,6 +69,9 @@ const exact = s => x => x.toLowerCase() === s.toLowerCase();
 // Fills every answered field. Returns a list of problems (required fields it couldn't fill).
 export async function fill(page, questions, answers, facts) {
   const problems = [];
+  // Fields filled before React takes over the form are dropped (a resume attached that early never shows): wait for it.
+  await page.waitForFunction(() => [...document.querySelectorAll('input[id]')].some(e => Object.keys(e).some(k => k.startsWith('__react'))),
+    null, { timeout: 20000 }).catch(() => {});
   for (const q of questions) {
     const v = answers[q.key];
     const el = page.locator(`[id="${q.key}"]`);
@@ -116,7 +119,8 @@ export async function fill(page, questions, answers, facts) {
     if (!gone.length) break;
     if (pass === 3) { gone.forEach(([q]) => problems.push({ key: q.key, label: q.label, why: 'kept getting cleared' })); break; }
     await sleep(1500);
-    for (const [q, el, v] of gone) q.type === 'file' ? await el.setInputFiles(v) : await el.fill(String(v));
+    // Clear first: re-setting the file an input already holds may not fire the change the page listens for.
+    for (const [q, el, v] of gone) q.type === 'file' ? await el.setInputFiles([]).then(() => el.setInputFiles(v)) : await el.fill(String(v));
   }
   return problems;
 }
