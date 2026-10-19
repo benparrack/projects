@@ -8,13 +8,18 @@ const BASE_SPEED = 3.3; // world units per tick — bumped from 2.6, playtest fe
 const BOOST_MULT = 2.0;
 const TURN_RATE = 0.15; // max radians the heading can change per tick
 const START_LENGTH = 120;
-const MAX_LENGTH = 3000;
+const MAX_LENGTH = 1000000; // score cap (sanity only); playtest: "points max at 3 thousand"
+// Past this the body grows 10x slower than the score (capped at 2x): every tick sends every body
+// point, so a huge score mustn't mean a huge path.
+const BODY_FULL_LENGTH = 3000;
+const bodyLength = (len) => Math.min(BODY_FULL_LENGTH * 2, len <= BODY_FULL_LENGTH ? len : BODY_FULL_LENGTH + (len - BODY_FULL_LENGTH) * 0.1);
 const POINT_SPACING = 6; // approx distance between stored path points
 const BASE_SNAKE_RADIUS = 9;
 // Girth grows alongside length, not just the tail getting longer — playtest feedback: "make width
 // difference at lots of points bigger", so a long snake reads as visibly thicker, not just longer.
-const MAX_SNAKE_RADIUS = 26;
+const MAX_SNAKE_RADIUS = 42;
 const RADIUS_GROWTH_LENGTH = 2400; // length gained (beyond START_LENGTH) to reach MAX_SNAKE_RADIUS
+const RADIUS_GROWTH_CURVE = 1.35;
 const FOOD_RADIUS = 6;
 const FOOD_COUNT = 220;
 const FOOD_VALUE = 14;
@@ -28,15 +33,12 @@ const SPAWN_MARGIN = 300; // keep spawns away from arena walls
 const SPAWN_SAFE_RADIUS = 150; // keep new spawns clear of other snakes' heads by roughly this much
 const SPAWN_ATTEMPTS = 8;
 
-// Drives collision distance (below) and food-eating range — gameplay-critical, so this stays
-// conservative even though public/games/slither/client.js's own computeRadius (used only for
-// the rendered stroke width) now grows much more dramatically per playtest feedback ("make width
-// difference at lots of points bigger"). The two intentionally no longer match 1:1: widening
-// this one too would silently make big snakes easier to hit and able to eat food from farther
-// away, not just look better.
+// Drives collision distance and food-eating range. Must match computeRadius in
+// public/games/slither/client.js exactly (playtest: "hitboxes aren't scaling like they seem
+// visually" when the two differed).
 function radiusFor(snake) {
   const t = Math.min(1, Math.max(0, (snake.length - START_LENGTH) / RADIUS_GROWTH_LENGTH));
-  return BASE_SNAKE_RADIUS + (MAX_SNAKE_RADIUS - BASE_SNAKE_RADIUS) * t;
+  return BASE_SNAKE_RADIUS + (MAX_SNAKE_RADIUS - BASE_SNAKE_RADIUS) * Math.pow(t, RADIUS_GROWTH_CURVE);
 }
 
 const COLOR_PALETTE = ['#39ff14', '#ffb000', '#00e5ff', '#ff4dd2', '#ff4d4d', '#c792ff', '#ffee58'];
@@ -126,7 +128,7 @@ function trimToLength(snake) {
     const a = snake.points[i - 1];
     const b = snake.points[i];
     dist += Math.hypot(b.x - a.x, b.y - a.y);
-    if (dist >= snake.length) {
+    if (dist >= bodyLength(snake.length)) {
       snake.points.length = i + 1;
       return;
     }

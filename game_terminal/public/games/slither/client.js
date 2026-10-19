@@ -36,13 +36,8 @@ function computeZoom(length) {
   return Math.max(ZOOM_MIN, 1 / (1 + grown / ZOOM_SHRINK_RATE));
 }
 
-// Girth grows alongside length, not just the tail getting longer — playtest feedback: "make
-// width difference at lots of points bigger". This is now DELIBERATELY more dramatic than the
-// server's own radiusFor (server/games/slither.js), which still drives collision/hit-detection
-// and food-eating range and has to stay balanced for gameplay — the two formulas used to match
-// 1:1 (see the comment there) but no longer do on purpose. This one only ever feeds the client's
-// rendered stroke width (ctx.lineWidth below), never anything sent back to the server, so
-// widening it purely changes how satisfyingly thick a big snake *looks*.
+// Girth grows alongside length. Must match radiusFor in server/games/slither.js exactly: that
+// one is the hitbox, and this is what players see.
 const BASE_SNAKE_RADIUS = 9;
 const MAX_SNAKE_RADIUS = 42; // was 26 — bigger gap between a fresh spawn and a maxed-out snake
 const RADIUS_GROWTH_LENGTH = 2400;
