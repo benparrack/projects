@@ -1,6 +1,18 @@
 // How-to-play text for every hub game type, shown in the "i" info popover. Plain data only:
 // facts come from each game's server/games/<type>.js rules and its client hint text.
 export const HOWTO = {
+  wordle: {
+    about: 'Everyone gets the same hidden five-letter word and six guesses.',
+    rules: [
+      'Each guess must be a real five-letter word.',
+      'Green = right letter, right spot; yellow = in the word but elsewhere; grey = not in the word.',
+      'Fewest guesses wins; a tie goes to whoever solved it first.',
+      'You see other players\' colours as they go, but their letters only when the round ends.',
+    ],
+    controls: [
+      'Type letters (or tap the on-screen keyboard); ENTER guesses, BACKSPACE deletes.',
+    ],
+  },
   anagrams: {
     about: 'Everyone gets the same six letters and 60 seconds to make as many words as they can.',
     rules: [

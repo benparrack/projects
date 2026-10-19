@@ -14,6 +14,7 @@ const DAILY_GAMES = {
   wordhunt: { start: 'start', better: 'high', label: 'Word Hunt' },
   crossword: { start: 'start', better: 'low', label: 'Crossword' },
   anagrams: { start: 'start', better: 'high', label: 'Anagrams' },
+  wordle: { start: 'start', better: 'low', label: 'Wordle' },
 };
 const DAY = 86400000;
 const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);

@@ -102,6 +102,7 @@ const CATEGORIES = [
   {
     name: 'WORD GAMES',
     games: [
+      { type: 'wordle', label: 'WORDLE' },
       { type: 'scrabble', label: 'WORD TILES' },
       { type: 'wordscapes', label: 'WORD WHEEL' },
       { type: 'wordsearch', label: 'WORD SEARCH' },
