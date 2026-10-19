@@ -1,227 +1,286 @@
 // Gartic Phone-style drawing telephone — 3-8 players. Round 0 everyone writes a secret prompt;
 // each round after that alternates drawing what you're shown / guessing what you're shown, always
-// based only on the immediately-previous entry. After every book has rotated through all players,
-// everyone sees the full chains. Server plugin: ../../../server/games/garticphone.js
+// based only on the immediately-previous entry. Every round is timed (whatever you have is sent
+// when it runs out). Afterwards the chains are revealed one link at a time, in sync for everyone.
+// Server plugin: ../../../server/games/garticphone.js
 
+import { makeServerClock } from '../serverClock.js';
 import { sfx } from '../sfx.js';
-import { scribble } from '../drawFx.js';
+import { timerBar, scribble } from '../drawFx.js';
 
-const CANVAS_WIDTH = 360;
-const CANVAS_HEIGHT = 240;
+const CANVAS_WIDTH = 480;
+const CANVAS_HEIGHT = 320;
+const MAX_DRAWING_LEN = 60000; // kept in sync by hand with server/games/garticphone.js
+const COLORS = ['#111111', '#ffffff', '#ff4d4d', '#ffb000', '#ffe14d', '#39ff14', '#1f8f0c', '#00e5ff', '#4d79ff', '#a64dff', '#ff4dd2', '#8b5a2b'];
+const SIZES = [3, 7, 14, 28];
+const ROUND_SECS = [60, 90, 120];
+
+const CSS = `
+.gp-card { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; padding: 14px; border: 1px solid #1f8f0c; border-radius: 10px; background: rgba(57,255,20,.04); }
+.gp-label { font-size: 11px; letter-spacing: 3px; opacity: .75; }
+.gp-quote { font-size: 1.5em; font-style: italic; text-align: center; color: #ffb000; word-break: break-word; }
+.gp-img { width: ${CANVAS_WIDTH}px; max-width: 100%; aspect-ratio: ${CANVAS_WIDTH} / ${CANVAS_HEIGHT}; background: #fff; border-radius: 6px; box-shadow: 0 0 0 2px #1f8f0c; }
+.gp-blank { opacity: .55; font-style: italic; }
+.gp-tools { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; align-items: center; }
+.gp-swatch { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid #333; cursor: pointer; }
+.gp-swatch.on { border-color: #fff; box-shadow: 0 0 0 2px #39ff14; }
+.gp-size { width: 30px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.gp-size span { display: block; border-radius: 50%; background: currentColor; }
+.gp-size.on { box-shadow: 0 0 0 2px #39ff14; }
+.gp-canvas { display: block; max-width: 100%; height: auto; background: #fff; border-radius: 6px; box-shadow: 0 0 0 2px #39ff14; touch-action: none; cursor: crosshair; user-select: none; }
+.gp-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.gp-pip { padding: 2px 10px; border-radius: 10px; border: 1px solid #444; opacity: .55; font-size: .8em; }
+.gp-pip.done { border-color: #39ff14; color: #39ff14; opacity: 1; }
+.gp-input { width: 300px; max-width: 70vw; font-size: 1.05em; }
+.gp-chain { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
+.gp-link { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
+.gp-who { font-size: .8em; opacity: .7; }
+`;
 
 export function mount(container, api) {
+  const serverClock = makeServerClock();
   let view = null;
   let roster = [];
+  let tickHandle = null;
   // The in-progress task widget is cached across re-renders so another player's submit (which
   // broadcasts new state) doesn't wipe your half-finished drawing or typed text.
-  let taskCache = { key: null, el: null };
+  let taskCache = { key: null, el: null, submitNow: null };
+  let revealKey = null;
+
+  const style = document.createElement('style');
+  style.textContent = CSS;
+  container.appendChild(style);
 
   const root = document.createElement('div');
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
-  root.style.gap = '10px';
+  root.style.gap = '12px';
   root.style.alignItems = 'center';
+  root.style.width = '100%';
   root.style.maxWidth = '640px';
+  root.style.margin = '0 auto';
   container.appendChild(root);
+
+  const timer = timerBar();
+  timer.el.style.width = `${CANVAS_WIDTH}px`;
+  timer.el.style.maxWidth = '100%';
 
   function nicknameFor(clientId) {
     const entry = roster.find((r) => r.clientId === clientId);
     return entry ? entry.nickname : 'someone';
   }
   function mySeatIndex() {
-    if (!view) return -1;
-    return view.seats.indexOf(api.getClientId());
+    return view ? view.seats.indexOf(api.getClientId()) : -1;
+  }
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  // Pop in once only: a re-render re-inserts cached nodes, which would otherwise replay it.
+  function popOnce(node) {
+    node.classList.add('dfx-pop');
+    node.addEventListener('animationend', () => node.classList.remove('dfx-pop'), { once: true });
+    return node;
   }
 
-  function buildCanvasWidget(onSubmit) {
-    const wrap = document.createElement('div');
-    wrap.style.display = 'flex';
-    wrap.style.flexDirection = 'column';
-    wrap.style.gap = '6px';
-    wrap.style.alignItems = 'center';
-
-    const canvas = document.createElement('canvas');
+  function buildCanvasWidget() {
+    const wrap = el('div', 'gp-chain');
+    const canvas = el('canvas', 'gp-canvas');
     canvas.width = CANVAS_WIDTH;
     canvas.height = CANVAS_HEIGHT;
-    canvas.style.background = '#fff';
-    canvas.style.touchAction = 'none';
-    canvas.style.cursor = 'crosshair';
     canvas.draggable = false;
-    canvas.style.userSelect = 'none';
     canvas.addEventListener('dragstart', (ev) => ev.preventDefault());
-    const canvasCtx = canvas.getContext('2d');
-    canvasCtx.lineCap = 'round';
-    canvasCtx.lineWidth = 3;
-    canvasCtx.strokeStyle = '#111';
+    const cctx = canvas.getContext('2d');
+    let color = COLORS[0];
+    let size = SIZES[1];
+    const strokes = [];
 
-    let drawing = false;
-    let last = null;
+    function drawStroke(s) {
+      cctx.strokeStyle = s.color;
+      cctx.fillStyle = s.color;
+      cctx.lineWidth = s.size;
+      cctx.lineCap = 'round';
+      cctx.lineJoin = 'round';
+      if (s.pts.length === 1) {
+        cctx.beginPath();
+        cctx.arc(s.pts[0].x, s.pts[0].y, s.size / 2, 0, Math.PI * 2);
+        cctx.fill();
+        return;
+      }
+      cctx.beginPath();
+      cctx.moveTo(s.pts[0].x, s.pts[0].y);
+      for (const p of s.pts) cctx.lineTo(p.x, p.y);
+      cctx.stroke();
+    }
+    function redraw() {
+      cctx.fillStyle = '#fff';
+      cctx.fillRect(0, 0, canvas.width, canvas.height);
+      strokes.forEach(drawStroke);
+    }
+    redraw();
+
+    const tools = el('div', 'gp-tools');
+    const swatches = COLORS.map((c) => {
+      const b = el('button', 'gp-swatch');
+      b.style.background = c;
+      b.title = c;
+      b.addEventListener('click', () => { color = c; swatches.forEach((s) => s.classList.toggle('on', s === b)); });
+      tools.appendChild(b);
+      return b;
+    });
+    swatches[0].classList.add('on');
+    const sizeBtns = SIZES.map((sz) => {
+      const b = el('button', 'gp-size');
+      const dot = el('span');
+      dot.style.width = dot.style.height = `${Math.min(22, sz)}px`;
+      b.appendChild(dot);
+      b.title = `brush ${sz}`;
+      b.addEventListener('click', () => { size = sz; sizeBtns.forEach((s) => s.classList.toggle('on', s === b)); });
+      tools.appendChild(b);
+      return b;
+    });
+    sizeBtns[1].classList.add('on');
+    const undoBtn = el('button', null, 'UNDO');
+    undoBtn.addEventListener('click', () => { strokes.pop(); redraw(); });
+    const clearBtn = el('button', null, 'CLEAR');
+    clearBtn.addEventListener('click', () => { strokes.length = 0; sfx.play('whoosh'); redraw(); });
+    tools.append(undoBtn, clearBtn);
+
+    let cur = null;
     function pos(ev) {
       const rect = canvas.getBoundingClientRect();
       return { x: ((ev.clientX - rect.left) / rect.width) * canvas.width, y: ((ev.clientY - rect.top) / rect.height) * canvas.height };
     }
     canvas.addEventListener('pointerdown', (ev) => {
       ev.preventDefault();
-      drawing = true;
-      last = pos(ev);
+      cur = { color, size, pts: [pos(ev)] };
+      strokes.push(cur);
       canvas.setPointerCapture(ev.pointerId);
+      drawStroke(cur);
       scribble();
     });
     canvas.addEventListener('pointermove', (ev) => {
-      if (!drawing) return;
+      if (!cur) return;
       ev.preventDefault();
       const p = pos(ev);
-      canvasCtx.beginPath();
-      canvasCtx.moveTo(last.x, last.y);
-      canvasCtx.lineTo(p.x, p.y);
-      canvasCtx.stroke();
+      const last = cur.pts[cur.pts.length - 1];
+      cur.pts.push(p);
+      cctx.strokeStyle = cur.color;
+      cctx.lineWidth = cur.size;
+      cctx.lineCap = 'round';
+      cctx.beginPath();
+      cctx.moveTo(last.x, last.y);
+      cctx.lineTo(p.x, p.y);
+      cctx.stroke();
       scribble();
-      last = p;
     });
-    const stop = () => { drawing = false; last = null; };
+    const stop = () => { cur = null; };
     canvas.addEventListener('pointerup', stop);
-    canvas.addEventListener('pointerleave', stop);
-
-    wrap.appendChild(canvas);
-
-    const controls = document.createElement('div');
-    controls.style.display = 'flex';
-    controls.style.gap = '6px';
-    const clearBtn = document.createElement('button');
-    clearBtn.textContent = 'CLEAR';
-    clearBtn.addEventListener('click', () => canvasCtx.clearRect(0, 0, canvas.width, canvas.height));
-    controls.appendChild(clearBtn);
-    const doneBtn = document.createElement('button');
-    doneBtn.textContent = 'DONE — SUBMIT DRAWING';
-    doneBtn.addEventListener('click', () => {
-      const dataUrl = canvas.toDataURL('image/png');
-      if (dataUrl.length > 60000) {
-        alert('That drawing is too detailed to send — try simplifying it a bit.');
-        return;
-      }
-      onSubmit(dataUrl);
+    canvas.addEventListener('pointercancel', stop);
+    document.addEventListener('keydown', (ev) => {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'z' && wrap.isConnected) { ev.preventDefault(); undoBtn.click(); }
     });
-    controls.appendChild(doneBtn);
-    wrap.appendChild(controls);
-    return wrap;
+
+    // PNG suits line art; very busy drawings fall back to lossy JPEG so they still fit the cap.
+    function exportImage() {
+      let url = canvas.toDataURL('image/png');
+      for (const q of [0.8, 0.6, 0.4, 0.25]) {
+        if (url.length <= MAX_DRAWING_LEN) break;
+        url = canvas.toDataURL('image/jpeg', q);
+      }
+      return url.length <= MAX_DRAWING_LEN ? url : null;
+    }
+
+    const doneBtn = el('button', null, 'DONE ✓');
+    const send = () => {
+      const url = exportImage();
+      if (url) api.sendAction({ kind: 'submit', content: url });
+    };
+    doneBtn.addEventListener('click', send);
+
+    wrap.append(tools, canvas, doneBtn);
+    return { el: wrap, submitNow: send };
   }
 
-  function renderPreviousEntry(entry) {
-    const box = document.createElement('div');
-    box.style.display = 'flex';
-    box.style.flexDirection = 'column';
-    box.style.alignItems = 'center';
-    box.style.gap = '4px';
-    const label = document.createElement('div');
-    label.style.fontSize = '0.8em';
-    label.style.opacity = '0.8';
-    label.textContent = entry.type === 'drawing' ? 'What was drawn:' : 'What was written:';
-    box.appendChild(label);
+  function buildTextForm(placeholder) {
+    const form = el('form', 'gp-row');
+    const input = el('input', 'gp-input');
+    input.type = 'text';
+    input.maxLength = 200;
+    input.placeholder = placeholder;
+    const submit = el('button', null, 'DONE ✓');
+    submit.type = 'submit';
+    form.append(input, submit);
+    const send = () => {
+      const val = input.value.trim();
+      if (val) api.sendAction({ kind: 'submit', content: val });
+    };
+    form.addEventListener('submit', (ev) => { ev.preventDefault(); send(); });
+    setTimeout(() => input.focus(), 0);
+    return { el: form, submitNow: send };
+  }
+
+  function renderEntry(entry) {
+    if (entry.content == null) return el('div', 'gp-blank', entry.type === 'drawing' ? '(no drawing — ran out of time)' : '(nothing written — ran out of time)');
     if (entry.type === 'drawing') {
-      const img = document.createElement('img');
+      const img = el('img', 'gp-img');
       img.src = entry.content;
-      img.style.width = `${CANVAS_WIDTH}px`;
-      img.style.height = `${CANVAS_HEIGHT}px`;
-      img.style.border = '1px solid #333';
-      img.style.background = '#fff';
-      box.appendChild(img);
-    } else {
-      const text = document.createElement('div');
-      text.textContent = `"${entry.content}"`;
-      text.style.fontSize = '1.2em';
-      text.style.fontStyle = 'italic';
-      box.appendChild(text);
+      img.alt = 'drawing';
+      return img;
     }
-    return box;
+    return el('div', 'gp-quote', `“${entry.content}”`);
   }
 
   function buildTask(task) {
-    const box = document.createElement('div');
-    box.className = 'dfx-pop';
-    box.style.display = 'flex';
-    box.style.flexDirection = 'column';
-    box.style.gap = '10px';
-    box.style.alignItems = 'center';
+    const card = popOnce(el('div', 'gp-card'));
+    let widget;
     if (task.taskType === 'prompt') {
-      const hint = document.createElement('div');
-      hint.textContent = 'Write a short prompt for someone else to draw:';
-      hint.style.fontSize = '0.85em';
-      box.appendChild(hint);
-      const form = document.createElement('form');
-      form.style.display = 'flex';
-      form.style.gap = '6px';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.maxLength = 200;
-      input.placeholder = 'e.g. a cat riding a skateboard';
-      input.style.width = '260px';
-      const submit = document.createElement('button');
-      submit.type = 'submit';
-      submit.textContent = 'SUBMIT';
-      form.appendChild(input);
-      form.appendChild(submit);
-      form.addEventListener('submit', (ev) => {
-        ev.preventDefault();
-        const val = input.value.trim();
-        if (!val) return;
-        api.sendAction({ kind: 'submit', content: val });
-      });
-      box.appendChild(form);
+      card.appendChild(el('div', 'gp-label', 'WRITE A PROMPT'));
+      card.appendChild(el('div', null, 'Something fun for the next player to draw.'));
+      widget = buildTextForm('e.g. a cat riding a skateboard');
     } else if (task.taskType === 'drawing') {
-      box.appendChild(renderPreviousEntry(task.previousEntry));
-      box.appendChild(buildCanvasWidget((dataUrl) => api.sendAction({ kind: 'submit', content: dataUrl })));
-    } else if (task.taskType === 'guess') {
-      box.appendChild(renderPreviousEntry(task.previousEntry));
-      const hint = document.createElement('div');
-      hint.textContent = 'What do you think this drawing shows?';
-      hint.style.fontSize = '0.85em';
-      box.appendChild(hint);
-      const form = document.createElement('form');
-      form.style.display = 'flex';
-      form.style.gap = '6px';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.maxLength = 200;
-      input.style.width = '260px';
-      const submit = document.createElement('button');
-      submit.type = 'submit';
-      submit.textContent = 'SUBMIT';
-      form.appendChild(input);
-      form.appendChild(submit);
-      form.addEventListener('submit', (ev) => {
-        ev.preventDefault();
-        const val = input.value.trim();
-        if (!val) return;
-        api.sendAction({ kind: 'submit', content: val });
-      });
-      box.appendChild(form);
+      card.appendChild(el('div', 'gp-label', 'DRAW THIS'));
+      card.appendChild(renderEntry(task.previousEntry));
+      widget = buildCanvasWidget();
+    } else {
+      card.appendChild(el('div', 'gp-label', 'WHAT IS THIS?'));
+      card.appendChild(renderEntry(task.previousEntry));
+      widget = buildTextForm('your best guess');
     }
-    return box;
+    card.appendChild(widget.el);
+    return { el: card, submitNow: widget.submitNow };
   }
 
-  let revealPlayed = false;
-  let stampShownFor = null;
-  const pipsShown = new Set();
-  const revealTimers = [];
+  function updateTimer() {
+    if (!view || view.phase !== 'playing' || !view.roundEndsAt) return;
+    const msLeft = Math.max(0, view.roundEndsAt - serverClock.now());
+    timer.update(msLeft / (view.roundSecs * 1000), Math.ceil(msLeft / 1000));
+    // Out of time: send whatever is on the canvas / in the box (the server fills gaps later).
+    if (msLeft === 0 && taskCache.submitNow && view.myTask && !view.myTask.alreadySubmitted) {
+      const fn = taskCache.submitNow;
+      taskCache.submitNow = null;
+      fn();
+    }
+  }
 
-  // Sounds for the difference between two consecutive views.
   function feedback(prev, next) {
     if (!prev || !next) return;
     if (next.phase !== prev.phase) {
       if (next.phase === 'playing') sfx.play('go');
       else if (next.phase === 'reveal') sfx.play('chime');
-      else if (next.phase === 'waiting') { pipsShown.clear(); revealTimers.splice(0).forEach(clearTimeout); }
       return;
     }
-    if (next.phase !== 'playing') return;
-    if (next.currentRound !== prev.currentRound) {
+    if (next.phase === 'playing' && next.currentRound !== prev.currentRound) {
       sfx.play('whoosh');
-      setTimeout(() => sfx.play('turn'), 150);
-      return;
+      timer.reset();
+    } else if (next.phase === 'playing' && next.myTask && next.myTask.alreadySubmitted && !(prev.myTask && prev.myTask.alreadySubmitted)) {
+      sfx.play('pop');
     }
-    const mine = next.myTask && next.myTask.alreadySubmitted && !(prev.myTask && prev.myTask.alreadySubmitted);
-    if (mine) sfx.play('pop');
-    else if (next.submittedSeatIdxs.length > prev.submittedSeatIdxs.length) sfx.play('blip');
+    if (next.phase === 'reveal' && prev.reveal && next.reveal && (next.reveal.step !== prev.reveal.step || next.reveal.bookIdx !== prev.reveal.bookIdx)) {
+      sfx.play(next.reveal.done ? 'win' : next.reveal.step === 0 ? 'turn' : 'pop');
+    }
   }
 
   function render() {
@@ -231,162 +290,123 @@ export function mount(container, api) {
       root.textContent = 'Loading...';
       return;
     }
-
-    if (view.phase !== 'playing') taskCache = { key: null, el: null };
-    if (view.phase !== 'reveal') revealPlayed = false;
+    if (view.phase !== 'playing') taskCache = { key: null, el: null, submitNow: null };
     const mySeat = mySeatIndex();
-    const status = document.createElement('div');
-    if (view.phase === 'waiting') {
-      status.textContent = `Waiting for players (${view.seats.length}/8 seated, need 3+ to start).`;
-    } else if (view.phase === 'playing') {
-      status.textContent = `Round ${view.currentRound + 1} / ${view.totalRounds} — ${view.submittedSeatIdxs.length}/${view.seats.length} submitted`;
-    } else if (view.phase === 'reveal') {
-      status.textContent = 'The chains are complete! Here\'s how they went:';
-    }
-    root.appendChild(status);
-
-    const seatRow = document.createElement('div');
-    seatRow.style.display = 'flex';
-    seatRow.style.gap = '8px';
-    seatRow.style.flexWrap = 'wrap';
-    if (mySeat === -1 && view.phase === 'waiting' && view.seats.length < 8) {
-      const btn = document.createElement('button');
-      btn.textContent = 'SIT DOWN';
-      btn.addEventListener('click', () => api.sendAction({ kind: 'sit' }));
-      seatRow.appendChild(btn);
-    }
-    if (mySeat !== -1 && view.phase === 'waiting') {
-      const leaveBtn = document.createElement('button');
-      leaveBtn.textContent = 'LEAVE SEAT';
-      leaveBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
-      seatRow.appendChild(leaveBtn);
-    }
-    if (view.phase === 'waiting' && view.seats.length >= 3 && mySeat !== -1) {
-      const startBtn = document.createElement('button');
-      startBtn.textContent = 'START GAME';
-      startBtn.addEventListener('click', () => api.sendAction({ kind: 'startGame' }));
-      seatRow.appendChild(startBtn);
-    }
-    root.appendChild(seatRow);
 
     if (view.phase === 'waiting') {
-      const players = document.createElement('div');
-      players.style.fontSize = '0.85em';
-      players.textContent = view.seats.map((id) => nicknameFor(id)).join(', ');
-      root.appendChild(players);
+      const card = el('div', 'gp-card');
+      card.appendChild(el('div', 'gp-label', 'DRAWING PHONE'));
+      card.appendChild(el('div', null, `${view.seats.length}/8 seated — need 3+ to start. One round per player.`));
+      const players = el('div', 'gp-row');
+      view.seats.forEach((id) => players.appendChild(el('span', 'gp-pip done', nicknameFor(id))));
+      card.appendChild(players);
+      const row = el('div', 'gp-row');
+      if (mySeat === -1 && view.seats.length < 8) {
+        const btn = el('button', null, 'SIT DOWN');
+        btn.addEventListener('click', () => api.sendAction({ kind: 'sit' }));
+        row.appendChild(btn);
+      }
+      if (mySeat !== -1) {
+        const leaveBtn = el('button', null, 'LEAVE SEAT');
+        leaveBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
+        row.appendChild(leaveBtn);
+        for (const secs of ROUND_SECS) {
+          const b = el('button', null, `${secs}s${secs === view.roundSecs ? ' ✓' : ''}`);
+          b.title = 'time per round';
+          b.addEventListener('click', () => api.sendAction({ kind: 'setRoundSecs', secs }));
+          row.appendChild(b);
+        }
+        if (view.seats.length >= 3) {
+          const startBtn = el('button', null, 'START GAME');
+          startBtn.addEventListener('click', () => api.sendAction({ kind: 'startGame' }));
+          row.appendChild(startBtn);
+        }
+      } else {
+        card.appendChild(el('div', null, `${view.roundSecs}s per round`));
+      }
+      card.appendChild(row);
+      root.appendChild(card);
+      return;
     }
 
     if (view.phase === 'playing') {
-      const pips = document.createElement('div');
-      pips.style.display = 'flex';
-      pips.style.gap = '6px';
-      pips.style.flexWrap = 'wrap';
-      pips.style.justifyContent = 'center';
-      pips.style.fontSize = '0.8em';
+      root.appendChild(el('div', 'gp-label', `ROUND ${view.currentRound + 1} / ${view.totalRounds}`));
+      root.appendChild(timer.el);
+      updateTimer();
+      const pips = el('div', 'gp-row');
       const done = new Set(view.submittedSeatIdxs);
-      view.seats.forEach((id, i) => {
-        const pip = document.createElement('span');
-        pip.style.padding = '2px 8px';
-        pip.style.borderRadius = '10px';
-        pip.style.border = `1px solid ${done.has(i) ? '#39ff14' : '#444'}`;
-        pip.style.color = done.has(i) ? '#39ff14' : '';
-        pip.style.opacity = done.has(i) ? '1' : '0.55';
-        pip.textContent = `${done.has(i) ? '✓ ' : '✎ '}${nicknameFor(id)}`;
-        if (done.has(i) && !pipsShown.has(`${view.currentRound}:${i}`)) {
-          pip.style.display = 'inline-block';
-          pip.className = 'dfx-bump';
-          pipsShown.add(`${view.currentRound}:${i}`);
-        }
-        pips.appendChild(pip);
-      });
+      view.seats.forEach((id, i) => pips.appendChild(el('span', `gp-pip${done.has(i) ? ' done' : ''}`, `${done.has(i) ? '✓' : '✎'} ${nicknameFor(id)}`)));
       root.appendChild(pips);
-    }
 
-    if (view.phase === 'playing' && mySeat !== -1) {
-      const task = view.myTask;
-      if (task.alreadySubmitted) {
-        const stamp = document.createElement('div');
-        stamp.className = 'dfx-stamp';
-        stamp.textContent = '✓ SUBMITTED';
-        if (stampShownFor === view.currentRound) stamp.style.animation = 'none';
-        stampShownFor = view.currentRound;
-        root.appendChild(stamp);
-        const waiting = document.createElement('div');
-        waiting.textContent = 'Waiting for everyone else...';
-        waiting.style.opacity = '0.8';
-        root.appendChild(waiting);
+      if (mySeat === -1) {
+        root.appendChild(el('div', 'gp-blank', 'Game in progress — you can sit in next game.'));
+      } else if (view.myTask.alreadySubmitted) {
+        const key = `done:${view.currentRound}`;
+        if (taskCache.key !== key) {
+          const card = el('div', 'gp-card');
+          const stamp = el('div', 'dfx-stamp', '✓ SUBMITTED');
+          stamp.addEventListener('animationend', () => { stamp.style.animation = 'none'; }, { once: true });
+          card.append(stamp, el('div', null, 'Waiting for everyone else...'));
+          taskCache = { key, el: card, submitNow: null };
+        }
+        root.appendChild(taskCache.el);
       } else {
-        const key = `${view.currentRound}:${task.taskType}`;
-        if (taskCache.key !== key) taskCache = { key, el: buildTask(task) };
+        const key = `${view.currentRound}:${view.myTask.taskType}`;
+        if (taskCache.key !== key) taskCache = { key, ...buildTask(view.myTask) };
         root.appendChild(taskCache.el);
         if (focused) focused.focus();
       }
+      return;
     }
 
-    if (view.phase === 'reveal') {
-      const animate = !revealPlayed;
-      revealPlayed = true;
-      view.books.forEach((book, bookIdx) => {
-        const bookBox = document.createElement('div');
-        bookBox.style.display = 'flex';
-        bookBox.style.flexDirection = 'column';
-        bookBox.style.alignItems = 'center';
-        bookBox.style.gap = '6px';
-        bookBox.style.border = '1px solid #1f8f0c';
-        bookBox.style.padding = '10px';
-        bookBox.style.width = '100%';
-        bookBox.style.boxSizing = 'border-box';
-        const title = document.createElement('div');
-        title.textContent = `${nicknameFor(view.seats[bookIdx])}'s chain:`;
-        title.style.fontWeight = 'bold';
-        bookBox.appendChild(title);
-        if (animate) { bookBox.className = 'dfx-pop'; bookBox.style.animationDelay = `${bookIdx * 0.25}s`; }
-        book.forEach((entry, entryIdx) => {
-          const row = document.createElement('div');
-          if (animate) {
-            const delay = bookIdx * 0.25 + 0.3 + entryIdx * 0.45;
-            row.className = 'dfx-pop';
-            row.style.animationDelay = `${delay}s`;
-            if (bookIdx === 0) revealTimers.push(setTimeout(() => sfx.play(entryIdx % 2 ? 'pop' : 'blip'), delay * 1000));
-          }
-          row.style.display = 'flex';
-          row.style.flexDirection = 'column';
-          row.style.alignItems = 'center';
-          row.style.gap = '2px';
-          const who = document.createElement('div');
-          who.style.fontSize = '0.75em';
-          who.style.opacity = '0.7';
-          who.textContent = nicknameFor(view.seats[entry.authorIdx]);
-          row.appendChild(who);
-          row.appendChild(renderPreviousEntry(entry));
-          bookBox.appendChild(row);
-        });
-        root.appendChild(bookBox);
-      });
-      const again = document.createElement('button');
-      again.textContent = 'PLAY AGAIN';
-      if (animate) {
-        const longest = Math.max(0, ...view.books.map((b, i) => i * 0.25 + 0.3 + b.length * 0.45));
-        revealTimers.push(setTimeout(() => sfx.play('win'), longest * 1000));
-        again.className = 'dfx-pop';
-        again.style.animationDelay = `${longest}s`;
-      }
-      again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
-      root.appendChild(again);
+    // Reveal: one book at a time, links appearing as anyone presses NEXT.
+    const rv = view.reveal;
+    const card = el('div', 'gp-card');
+    card.appendChild(el('div', 'gp-label', `CHAIN ${rv.bookIdx + 1} / ${view.seats.length}`));
+    card.appendChild(el('div', null, `${nicknameFor(view.seats[rv.bookIdx])}'s book`));
+    const chain = el('div', 'gp-chain');
+    rv.entries.forEach((entry, i) => {
+      const link = el('div', 'gp-link');
+      const verb = entry.type === 'prompt' ? 'wrote' : entry.type === 'drawing' ? 'drew' : 'guessed';
+      link.append(el('div', 'gp-who', `${nicknameFor(view.seats[entry.authorIdx])} ${verb}`), renderEntry(entry));
+      if (i === rv.entries.length - 1 && revealKey !== `${rv.bookIdx}:${i}`) popOnce(link);
+      chain.appendChild(link);
+    });
+    revealKey = `${rv.bookIdx}:${rv.entries.length - 1}`;
+    card.appendChild(chain);
+    root.appendChild(card);
+    const row = el('div', 'gp-row');
+    if (!rv.done && mySeat !== -1) {
+      const lastOfBook = rv.step === view.totalRounds - 1;
+      const next = el('button', null, lastOfBook ? 'NEXT CHAIN ▶' : 'NEXT ▶');
+      next.addEventListener('click', () => api.sendAction({ kind: 'revealNext' }));
+      row.appendChild(next);
     }
+    if (rv.done) {
+      const again = el('button', null, 'PLAY AGAIN');
+      again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
+      row.appendChild(again);
+    }
+    root.appendChild(row);
+    // Keep the newest link in view as the chain grows.
+    const lastLink = chain.lastElementChild;
+    if (lastLink && lastLink.classList.contains('dfx-pop')) setTimeout(() => lastLink.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
   }
 
   render();
+  tickHandle = setInterval(updateTimer, 250);
 
   return {
     applySnapshot(snapshot) {
       view = snapshot;
+      if (view) serverClock.sync(view.serverNow);
       render();
     },
     applyEvent(data) {
       if (data && data.kind === 'state') {
         const prevView = view;
         view = data;
+        serverClock.sync(view.serverNow);
         feedback(prevView, view);
         render();
       }
@@ -396,7 +416,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
-      revealTimers.splice(0).forEach(clearTimeout);
+      clearInterval(tickHandle);
       container.innerHTML = '';
     },
   };

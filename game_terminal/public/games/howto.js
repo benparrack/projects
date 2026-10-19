@@ -252,13 +252,14 @@ export const HOWTO = {
     about: 'Drawing telephone for 3-8 players: prompts turn into drawings and back into guesses.',
     rules: [
       'Round 1: everyone writes a secret prompt that starts their own book.',
-      'Each round every book passes one seat over; you draw or describe only the previous entry.',
-      'Rounds alternate drawing and guessing until every book has visited every player.',
-      'Then all the chains are revealed to everyone — no points, just the laughs.',
+      'Each round the books are passed around in a new shuffled order; you draw or describe only the previous entry.',
+      'Rounds alternate drawing and guessing, one round per player. Each round is timed (60/90/120s) and sends whatever you have when time runs out.',
+      'Then the chains are revealed one link at a time, for everyone together — no points, just the laughs.',
     ],
     controls: [
-      'Type your prompt or guess and press SUBMIT.',
-      'Draw on the canvas, then DONE — SUBMIT DRAWING.',
+      'Type your prompt or guess and press DONE.',
+      'Draw with the colours and brush sizes; UNDO (Ctrl+Z) and CLEAR; then DONE.',
+      'In the reveal, anyone presses NEXT to show the next link.',
     ],
   },
   gomoku: {
