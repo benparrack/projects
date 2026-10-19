@@ -407,6 +407,11 @@ export function mount(container, api) {
   seatRow.appendChild(leaveSeatBtn);
   seatRow.appendChild(rematchBtn);
   seatRow.appendChild(lobbySettingsBtn);
+  const watchBtn = document.createElement('button');
+  watchBtn.textContent = '👁 SPECTATE';
+  watchBtn.hidden = true;
+  watchBtn.addEventListener('click', () => { spectating = true; if (latestState) applyState(latestState); });
+  seatRow.appendChild(watchBtn);
   lobby.appendChild(seatRow);
 
   // CPU opponent: fills whichever seat is free; its level can be changed while it's seated.
@@ -450,6 +455,8 @@ export function mount(container, api) {
   lobbySettingsBtn.addEventListener('click', () => openSettingsPanel());
 
   let mySeat = null;
+  let spectating = false;
+  let specSeat = 'a';
   let latestState = null;
   let arena = null; // set once the full-viewport arena is mounted
   let arenaMounting = false;
@@ -463,6 +470,9 @@ export function mount(container, api) {
     if (!st) return null;
     if (st.seats.a === myClientId()) return 'a';
     if (st.seats.b === myClientId()) return 'b';
+    // Spectators borrow the watched seat as "mine" so the camera, HUD and shot effects all follow it.
+    if (spectating && st.phase !== 'waiting') return specSeat;
+    spectating = false;
     return null;
   }
 
@@ -476,8 +486,9 @@ export function mount(container, api) {
     seatBBtn.textContent = st.seats.b ? `SEAT B: ${nicknameFor(st, 'b')}` : 'SIT — SEAT B';
     seatABtn.disabled = !!st.seats.a;
     seatBBtn.disabled = !!st.seats.b;
-    leaveSeatBtn.hidden = !mySeat;
-    rematchBtn.hidden = !(st.phase === 'game_over' && mySeat);
+    leaveSeatBtn.hidden = !mySeat || spectating;
+    rematchBtn.hidden = !(st.phase === 'game_over' && mySeat && !spectating);
+    watchBtn.hidden = !!mySeat || !(st.phase === 'playing' || st.phase === 'round_intro');
     renderBotRow(st);
 
     if (st.phase === 'game_over') {
@@ -746,7 +757,7 @@ export function mount(container, api) {
     controls.appendChild(leaveRoomArenaBtn);
     overlayRoot.appendChild(controls);
     settingsArenaBtn.addEventListener('click', () => openSettingsPanel());
-    leaveSeatArenaBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
+    leaveSeatArenaBtn.addEventListener('click', () => (spectating ? stopSpectating() : api.sendAction({ kind: 'leaveSeat' })));
     leaveRoomArenaBtn.addEventListener('click', () => {
       if (typeof api.leaveRoom === 'function') api.leaveRoom();
     });
@@ -879,7 +890,7 @@ export function mount(container, api) {
       oppGroup: opponent.group, oppAvatar: opponent, selfAvatar: self, updateAvatarPose,
       oppGunRig, selfGunRig, viewmodelGunRig,
       tracerPool,
-      crosshair, scope, hitmarker, damageFlash, lowHp, scorePill, banner, bannerText, rematchBtn, unlockHint,
+      crosshair, scope, hitmarker, damageFlash, lowHp, scorePill, banner, bannerText, rematchBtn, unlockHint, leaveSeatArenaBtn,
       meBarFill, meLabel, oppBarFill, oppLabel, ammoEl, wslots,
       onResize,
     };
@@ -957,8 +968,22 @@ export function mount(container, api) {
     api.sendAction({ kind: 'slide' });
   }
 
+  function switchSpectated() {
+    specSeat = specSeat === 'a' ? 'b' : 'a';
+    if (latestState) applyState(latestState);
+  }
+  function stopSpectating() {
+    spectating = false;
+    if (latestState) applyState(latestState);
+  }
+
   function onKeyDown(ev) {
     if (settingsOpen) return;
+    if (spectating) {
+      if (ev.code === 'Escape' || ev.code === 'KeyQ') stopSpectating();
+      else if ((ev.code === 'Space' || ev.code === 'Tab') && !ev.repeat) { ev.preventDefault(); switchSpectated(); }
+      return;
+    }
     const kb = settings.keybinds;
     if (ev.code === kb.weapon1 || ev.code === kb.weapon2 || ev.code === kb.weapon3) {
       const weapon = ev.code === kb.weapon1 ? 'pistol' : ev.code === kb.weapon2 ? 'shotgun' : 'sniper';
@@ -1001,7 +1026,7 @@ export function mount(container, api) {
     }
   }
   function onKeyUp(ev) {
-    if (settingsOpen) return;
+    if (settingsOpen || spectating) return;
     if (ev.code === settings.keybinds.crouch) {
       predicted.crouching = false;
       api.sendAction({ kind: 'crouch', on: false });
@@ -1013,8 +1038,9 @@ export function mount(container, api) {
     }
   }
 
+  let zeroMoveStreak = 0;
   function onMouseMove(ev) {
-    if (!arena || document.pointerLockElement !== arena.canvas) return;
+    if (!arena || spectating || document.pointerLockElement !== arena.canvas) return;
     const sensitivity = zoomed ? settings.scopedSensitivity : settings.sensitivity;
     // Process every coalesced sub-event, not just the final movementX/Y — the browser can batch
     // several raw high-frequency mouse samples into one dispatched 'mousemove' event, and reading
@@ -1024,6 +1050,16 @@ export function mount(container, api) {
     // the view has to "catch up" after a fast flick, since it restores the actual sample timing.
     const events = typeof ev.getCoalescedEvents === 'function' ? ev.getCoalescedEvents() : [];
     const samples = events.length ? events : [ev];
+    // A long run of zero-delta moves while locked means the lock is wedged (the Firefox/X11
+    // stuck-at-screen-edge bug, or raw input not delivering). Drop the lock so one click re-locks
+    // it, which also re-centres the OS cursor.
+    zeroMoveStreak = ev.movementX || ev.movementY ? 0 : zeroMoveStreak + 1;
+    if (zeroMoveStreak >= 30) {
+      zeroMoveStreak = 0;
+      arena.unlockHint.textContent = 'MOUSE STUCK? CLICK TO RE-AIM';
+      document.exitPointerLock();
+      return;
+    }
     for (const sample of samples) {
       predicted.yaw -= sample.movementX * sensitivity;
       predicted.pitch -= sample.movementY * sensitivity;
@@ -1034,11 +1070,10 @@ export function mount(container, api) {
   }
 
   function lockPointer() {
-    // Some Linux/GPU driver combos reject the whole request when unadjustedMovement is
-    // unsupported rather than silently ignoring it (ported from 3dgames/shooter/game.js's
-    // lockPointer, which hit exactly this on this machine) — retry without it on rejection.
-    const p = arena.canvas.requestPointerLock({ unadjustedMovement: true });
-    if (p && p.catch) p.catch(() => arena.canvas.requestPointerLock());
+    // Plain lock, no { unadjustedMovement: true }: on some Linux setups that raw-input mode is
+    // granted but then delivers no mouse deltas at all (playtest: "mouse gets locked and doesn't
+    // actually move").
+    arena.canvas.requestPointerLock();
   }
 
   let zoomed = false;
@@ -1062,6 +1097,7 @@ export function mount(container, api) {
 
   function onCanvasMouseDown(ev) {
     if (!arena) return;
+    if (spectating) { switchSpectated(); return; }
     if (document.pointerLockElement !== arena.canvas) {
       lockPointer();
       return;
@@ -1099,7 +1135,8 @@ export function mount(container, api) {
     if (!arena) return;
     const locked = document.pointerLockElement === arena.canvas;
     arena.unlockHint.hidden = locked;
-    if (!locked) setZoomed(false);
+    if (locked) arena.unlockHint.textContent = 'CLICK TO AIM';
+    else setZoomed(false);
   }
 
   function applyViewMode() {
@@ -1234,8 +1271,10 @@ export function mount(container, api) {
   }
 
   function opponentRenderPose() {
+    return seatRenderPose(opponentSeat());
+  }
+  function seatRenderPose(seat) {
     if (!currentView) return null;
-    const seat = opponentSeat();
     const cur = currentView.players[seat];
     if (!cur) return null;
     if (!previousView || previousView === currentView) return cur;
@@ -1260,7 +1299,12 @@ export function mount(container, api) {
       const pct = clamp((me.hp / me.maxHp) * 100, 0, 100);
       arena.meBarFill.style.width = `${pct}%`;
       arena.meBarFill.classList.toggle('low', pct <= 30);
-      arena.meLabel.textContent = `YOU — ${Math.round(me.hp)}/${me.maxHp}`;
+      arena.meLabel.textContent = `${spectating ? me.nickname || 'PLAYER' : 'YOU'} — ${Math.round(me.hp)}/${me.maxHp}`;
+      arena.leaveSeatArenaBtn.textContent = spectating ? 'STOP WATCHING' : 'LEAVE SEAT';
+      if (spectating) {
+        arena.unlockHint.hidden = false;
+        arena.unlockHint.textContent = `👁 WATCHING ${me.nickname || 'PLAYER'} — CLICK/SPACE: SWITCH · ESC: STOP`;
+      }
       arena.ammoEl.textContent = me.reloading ? 'RELOADING…' : `${me.ammo[me.weapon]} / ${me.magSize}`;
       for (const id of Object.keys(arena.wslots)) arena.wslots[id].classList.toggle('active', id === me.weapon);
     }
@@ -1277,7 +1321,7 @@ export function mount(container, api) {
       arena.banner.hidden = false;
       arena.rematchBtn.hidden = true;
       const w = currentView.lastRoundWinnerSeat;
-      const winnerNote = w ? (w === mySeat ? 'YOU WON THE ROUND' : 'YOU LOST THE ROUND') : 'GET READY';
+      const winnerNote = !w ? 'GET READY' : spectating ? `${(currentView.players[w] || {}).nickname || 'SEAT ' + w.toUpperCase()} WON THE ROUND` : w === mySeat ? 'YOU WON THE ROUND' : 'YOU LOST THE ROUND';
       if (secs !== lastCountSecs) {
         lastCountSecs = secs;
         if (secs > 0 && secs <= 3) sfx.play('beep');
@@ -1286,10 +1330,11 @@ export function mount(container, api) {
     } else if (currentView.phase === 'game_over') {
       lastCountSecs = null;
       arena.banner.hidden = false;
-      arena.rematchBtn.hidden = false;
+      arena.rematchBtn.hidden = spectating;
       const won = currentView.matchWinner === mySeat;
       const reasonNote = currentView.matchWinReason === 'opponent_disconnected' ? ' (OPPONENT DISCONNECTED)' : '';
-      arena.bannerText.innerHTML = `${won ? 'YOU WIN THE MATCH' : 'YOU LOSE THE MATCH'}${reasonNote}`;
+      const winnerName = (currentView.players[currentView.matchWinner] || {}).nickname || 'SEAT ' + String(currentView.matchWinner).toUpperCase();
+      arena.bannerText.textContent = `${spectating ? `${winnerName} WINS THE MATCH` : won ? 'YOU WIN THE MATCH' : 'YOU LOSE THE MATCH'}${reasonNote}`;
     } else {
       lastCountSecs = null;
       arena.banner.hidden = true;
@@ -1303,7 +1348,13 @@ export function mount(container, api) {
     const dt = lastFrameTime ? Math.min(0.05, (now - lastFrameTime) / 1000) : 0;
     lastFrameTime = now;
 
-    if (currentView && currentView.phase === 'playing') {
+    const watched = spectating && seatRenderPose(mySeat);
+    if (watched) {
+      // Spectating: no prediction, just ride the watched player's interpolated server pose.
+      Object.assign(predicted, { x: watched.x, y: watched.y, z: watched.z, yaw: watched.yaw, pitch: watched.pitch, crouching: watched.crouching, sliding: watched.sliding });
+      arena.yawObject.rotation.y = predicted.yaw;
+      arena.pitchObject.rotation.x = predicted.pitch;
+    } else if (currentView && currentView.phase === 'playing') {
       // Mirrors server/games/shooter.js's tick() movement exactly — velocity-based with
       // exponential smoothing toward the input-driven target, not snapping straight to speed.
       // Sliding holds velocity exactly at SLIDE_SPEED for its whole duration (no in-slide decay —
@@ -1452,6 +1503,7 @@ export function mount(container, api) {
     arena.canvas.addEventListener('contextmenu', onContextMenu);
 
     lookIntervalHandle = setInterval(() => {
+      if (spectating) return;
       const yawChanged = lastSentLook.yaw === null || Math.abs(predicted.yaw - lastSentLook.yaw) > LOOK_EPSILON;
       const pitchChanged = lastSentLook.pitch === null || Math.abs(predicted.pitch - lastSentLook.pitch) > LOOK_EPSILON;
       if (yawChanged || pitchChanged) {
@@ -1613,7 +1665,8 @@ export function mount(container, api) {
     if (roundEnded) {
       const iWon = st.wins[mySeat] > prev.wins[mySeat];
       const theyWon = st.wins[opp] > prev.wins[opp];
-      if (st.phase === 'game_over') {
+      if (spectating) sfx.play(st.phase === 'game_over' ? 'win' : 'kill');
+      else if (st.phase === 'game_over') {
         sfx.play(st.matchWinner === mySeat ? 'win' : 'lose');
         callout(st.matchWinner === mySeat ? 'VICTORY' : 'DEFEATED', st.matchWinner === mySeat);
       } else if (iWon) { sfx.play('kill'); callout('ELIMINATED', true); }
