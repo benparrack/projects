@@ -16,19 +16,18 @@ export async function renderWeeklyCard(mount, { auth, account, gameLabel, play }
     d = await res.json();
   } catch { mount.replaceChildren(); return; }
   const label = gameLabel(d.gameType).toUpperCase();
-  mount.replaceChildren(h('section.weekly-card', { 'aria-labelledby': 'weekly-title' },
+  // Compact one-liner at the bottom of the menu (a small friend group plays what it likes);
+  // the points table folds away behind a <details>.
+  mount.replaceChildren(h('section.weekly-card', { 'aria-label': 'Game of the week' },
     h('div.weekly-head',
-      h('h2#weekly-title.weekly-title', '★ GAME OF THE WEEK: ', h('span.weekly-game', label)),
+      h('span.weekly-title', '★ GAME OF THE WEEK: ', h('button.weekly-game', { type: 'button', title: account ? 'Win 3 pts · draw 1 · beat a bot 1' : 'Sign in to earn double XP and points.', onclick: () => play(d.gameType) }, label)),
       h('span.weekly-badge', '2× XP'),
       h('span.muted.weekly-left', { title: 'A new game every Monday at 00:00 UTC' }, `ends in ${left(d.endsAt - Date.now())}`)),
-    h('div.weekly-body',
-      h('button.weekly-play', { type: 'button', onclick: () => play(d.gameType) }, `▶ JOIN A ${label} ROOM`),
-      h('span.muted.weekly-rules', account ? 'Win 3 pts · draw 1 · beat a bot 1' : 'Sign in to earn double XP and points.')),
-    d.rows.length
-      ? h('ol.weekly-rows', { 'aria-label': `This week's ${label} table` }, d.rows.map((r) => h(`li.weekly-row${account && r.username === account.username ? '.lb-me' : ''}`,
+    d.rows.length ? h('details.weekly-details',
+      h('summary.muted', 'points table'),
+      h('ol.weekly-rows', { 'aria-label': `This week's ${label} table` }, d.rows.map((r) => h(`li.weekly-row${account && r.username === account.username ? '.lb-me' : ''}`,
         h('span.weekly-rank', `#${r.rank}`),
         avatarEl(r.avatar, 20, r.cosmetics),
         h('a.weekly-player', { href: `/u/${encodeURIComponent(r.username)}`, 'data-link': true, class: nameColor(r.cosmetics) }, r.username),
-        h('span.weekly-pts', `${r.points} pts`))))
-      : h('p.muted.weekly-empty', 'No points yet this week. Win one to top the table!')));
+        h('span.weekly-pts', `${r.points} pts`))))) : null));
 }
