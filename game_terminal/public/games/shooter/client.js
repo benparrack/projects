@@ -66,7 +66,7 @@ const TELEPORT_DIST_SQ = 3 * 3;
 const WEAPON_IDS = ['pistol', 'shotgun', 'sniper'];
 const WEAPON_KEYS = { Digit1: 'pistol', Digit2: 'shotgun', Digit3: 'sniper' };
 const WEAPON_LABELS = { pistol: 'PISTOL', shotgun: 'SHOTGUN', sniper: 'SNIPER' };
-const WEAPON_COLORS = { pistol: 0x9a9a9a, shotgun: 0xff9933, sniper: 0x33cc66 };
+const WEAPON_COLORS = { pistol: 0x50555e, shotgun: 0xc06a1c, sniper: 0x2a8a48 };
 
 // Per-browser player preferences (sensitivity + keybinds) — local to this device/browser, not
 // server state, so localStorage is the right place (matches this hub's general convention of
@@ -138,59 +138,86 @@ function keyLabel(code) {
 // Reused for three purposes: the local first-person viewmodel (attached to the camera), the
 // opponent's held weapon (attached to their avatar), and the local third-person avatar's held
 // weapon — same geometry, different parent/scale/position per use site.
+function canvasTexture(THREE, w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  draw(c.getContext('2d'));
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}
 function darkMat(THREE) {
   return new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.5, metalness: 0.3 });
 }
+function glowMat(THREE, color) {
+  return new THREE.MeshBasicMaterial({ color });
+}
+function box(THREE, mat, w, h, d, x, y, z, rx = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  m.rotation.x = rx;
+  return m;
+}
+function tube(THREE, mat, r1, r2, len, x, y, z, seg = 10) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, seg), mat);
+  m.rotation.x = Math.PI / 2;
+  m.position.set(x, y, z);
+  return m;
+}
 function buildPistolMesh(THREE, color) {
   const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.4 });
-  const slide = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.075, 0.3), mat);
-  slide.position.set(0, 0.05, -0.1);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.19, 0.09), darkMat(THREE));
-  grip.position.set(0, -0.08, 0.05);
-  grip.rotation.x = -0.28;
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.1, 8), darkMat(THREE));
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.05, -0.3);
-  g.add(slide, grip, barrel);
-  g.userData.muzzleZ = -0.35;
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.6 });
+  const dark = darkMat(THREE);
+  g.add(
+    box(THREE, mat, 0.085, 0.07, 0.3, 0, 0.055, -0.1), // slide
+    box(THREE, dark, 0.08, 0.035, 0.27, 0, 0.005, -0.09), // frame
+    box(THREE, dark, 0.075, 0.19, 0.09, 0, -0.08, 0.05, -0.28), // grip
+    box(THREE, dark, 0.012, 0.05, 0.08, 0, -0.035, -0.04), // trigger guard
+    box(THREE, dark, 0.02, 0.022, 0.02, 0, 0.1, -0.235), // front sight
+    box(THREE, dark, 0.05, 0.022, 0.02, 0, 0.1, 0.035), // rear sight
+    box(THREE, glowMat(THREE, 0x39ff14), 0.088, 0.008, 0.2, 0, 0.07, -0.1), // accent line
+    tube(THREE, dark, 0.018, 0.018, 0.06, 0, 0.05, -0.27, 8),
+  );
+  g.userData.muzzleZ = -0.32;
   return g;
 }
 function buildShotgunMesh(THREE, color) {
   const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.2 });
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.42, 8), mat);
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.06, -0.22);
-  const pump = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.14), darkMat(THREE));
-  pump.position.set(0, 0.025, -0.2);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.16, 0.08), darkMat(THREE));
-  grip.position.set(0, -0.06, 0.05);
-  grip.rotation.x = -0.3;
-  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.2), new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.75 }));
-  stock.position.set(0, 0.02, 0.23);
-  g.add(barrel, pump, grip, stock);
-  g.userData.muzzleZ = -0.43;
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.35 });
+  const dark = darkMat(THREE);
+  const wood = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.75 });
+  g.add(
+    tube(THREE, dark, 0.026, 0.026, 0.46, 0, 0.075, -0.24), // barrel
+    tube(THREE, dark, 0.02, 0.02, 0.4, 0, 0.03, -0.2), // magazine tube
+    box(THREE, mat, 0.08, 0.1, 0.22, 0, 0.05, 0.0), // receiver
+    box(THREE, wood, 0.08, 0.07, 0.16, 0, 0.035, -0.22), // pump
+    box(THREE, dark, 0.065, 0.16, 0.08, 0, -0.07, 0.07, -0.3), // grip
+    box(THREE, wood, 0.065, 0.1, 0.24, 0, 0.02, 0.24, 0.12), // stock
+    box(THREE, glowMat(THREE, 0xff9933), 0.02, 0.02, 0.02, 0, 0.11, -0.44), // bead sight
+  );
+  g.userData.muzzleZ = -0.48;
   return g;
 }
 function buildSniperMesh(THREE, color) {
   const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.4 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.09, 0.6), mat);
-  body.position.set(0, 0.04, -0.12);
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.02, 0.32, 8), darkMat(THREE));
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.04, -0.58);
-  const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.22, 10), darkMat(THREE));
-  scope.position.set(0, 0.12, -0.15);
-  scope.rotation.x = Math.PI / 2;
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.07), darkMat(THREE));
-  grip.position.set(0, -0.06, 0.1);
-  grip.rotation.x = -0.25;
-  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.22), darkMat(THREE));
-  stock.position.set(0, 0.03, 0.33);
-  g.add(body, barrel, scope, grip, stock);
-  g.userData.muzzleZ = -0.74;
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.45 });
+  const dark = darkMat(THREE);
+  g.add(
+    box(THREE, mat, 0.08, 0.09, 0.6, 0, 0.04, -0.12), // body
+    tube(THREE, dark, 0.016, 0.02, 0.36, 0, 0.045, -0.6, 8), // barrel
+    box(THREE, dark, 0.05, 0.05, 0.08, 0, 0.045, -0.8), // muzzle brake
+    tube(THREE, dark, 0.03, 0.03, 0.26, 0, 0.14, -0.14), // scope
+    tube(THREE, dark, 0.04, 0.03, 0.05, 0, 0.14, -0.29), // scope bell
+    tube(THREE, glowMat(THREE, 0x66ffcc), 0.034, 0.034, 0.005, 0, 0.14, -0.315), // lens glint
+    box(THREE, dark, 0.02, 0.05, 0.03, 0, 0.1, -0.08),
+    box(THREE, dark, 0.02, 0.05, 0.03, 0, 0.1, -0.2),
+    box(THREE, dark, 0.06, 0.15, 0.07, 0, -0.06, 0.1, -0.25), // grip
+    box(THREE, dark, 0.06, 0.1, 0.24, 0, 0.02, 0.34), // stock
+    box(THREE, dark, 0.012, 0.16, 0.012, 0.02, -0.06, -0.42, 0.4), // bipod legs
+    box(THREE, dark, 0.012, 0.16, 0.012, -0.02, -0.06, -0.42, 0.4),
+  );
+  g.userData.muzzleZ = -0.86;
   return g;
 }
 const GUN_BUILDERS = { pistol: buildPistolMesh, shotgun: buildShotgunMesh, sniper: buildSniperMesh };
@@ -768,9 +795,23 @@ export function mount(container, api) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0d0f14);
-    scene.fog = new THREE.Fog(0x0d0f14, 20, 55);
+    // Dusk sky gradient: drawn once to a canvas and used as a screen-space background.
+    scene.background = canvasTexture(THREE, 4, 256, (c) => {
+      const grad = c.createLinearGradient(0, 0, 0, 256);
+      grad.addColorStop(0, '#05060c');
+      grad.addColorStop(0.55, '#141a33');
+      grad.addColorStop(1, '#3a2340');
+      c.fillStyle = grad;
+      c.fillRect(0, 0, 4, 256);
+    });
+    scene.fog = new THREE.Fog(0x1a1630, 28, 70);
 
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 200);
     const pitchObject = new THREE.Object3D();
@@ -780,26 +821,72 @@ export function mount(container, api) {
     yawObject.add(pitchObject);
     scene.add(yawObject);
 
-    scene.add(new THREE.HemisphereLight(0x8899bb, 0x33291f, 0.9));
-    const sun = new THREE.DirectionalLight(0xfff2d9, 0.8);
-    sun.position.set(15, 25, 10);
+    scene.add(new THREE.HemisphereLight(0x9fb4ff, 0x2b2320, 0.75));
+    const sun = new THREE.DirectionalLight(0xffe2c0, 1.1);
+    sun.position.set(14, 26, 9);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 70 });
+    sun.shadow.bias = -0.0006;
     scene.add(sun);
 
+    // Concrete floor tiles with seams, repeated across the arena.
+    const floorTex = canvasTexture(THREE, 256, 256, (c) => {
+      c.fillStyle = '#2c3038';
+      c.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 1400; i++) {
+        const v = 36 + Math.floor(Math.random() * 22);
+        c.fillStyle = `rgba(${v},${v + 3},${v + 8},0.35)`;
+        c.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+      }
+      c.strokeStyle = '#1d2026';
+      c.lineWidth = 4;
+      c.strokeRect(0, 0, 256, 256);
+      c.strokeStyle = '#2a2e35';
+      c.lineWidth = 2;
+      c.beginPath(); c.moveTo(128, 0); c.lineTo(128, 256); c.moveTo(0, 128); c.lineTo(256, 128); c.stroke();
+    });
+    floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+    floorTex.repeat.set(ARENA_HALF / 2, ARENA_HALF / 2);
+    floorTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(ARENA_HALF * 2, ARENA_HALF * 2),
-      new THREE.MeshStandardMaterial({ color: 0x2a2e35, roughness: 0.95 })
+      new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.85, metalness: 0.1 })
     );
     ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
     scene.add(ground);
-    const gridHelper = new THREE.GridHelper(ARENA_HALF * 2, 22, 0x444a55, 0x22262e);
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
+    // Glowing spawn pads (seat A blue at +z, seat B red at -z) and a centre ring.
+    const padRing = (x, z, color, r) => {
+      const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.12, r, 48), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7 }));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(x, 0.02, z);
+      scene.add(m);
+    };
+    padRing(0, 8, 0x39a0ff, 1.6);
+    padRing(0, -8, 0xff4d4d, 1.6);
+    padRing(0, 0, 0x39ff14, 3);
 
     // Collected for the third-person aim-convergence raycast (see computeEffectiveAim) — a purely
     // client-side visual aid, not a substitute for the server's own authoritative hit geometry.
     const raycastTargets = [ground];
 
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x1c1f26, roughness: 0.9 });
+    const panelTex = canvasTexture(THREE, 256, 256, (c) => {
+      c.fillStyle = '#4a5260';
+      c.fillRect(0, 0, 256, 256);
+      c.strokeStyle = '#262a32';
+      c.lineWidth = 3;
+      for (let y = 0; y <= 256; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(256, y); c.stroke(); }
+      for (let x = 0; x <= 256; x += 128) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, 256); c.stroke(); }
+      c.fillStyle = '#6a7384';
+      for (let y = 8; y < 256; y += 64) for (let x = 8; x < 256; x += 128) { c.fillRect(x, y, 4, 4); c.fillRect(x + 108, y, 4, 4); }
+    });
+    panelTex.wrapS = panelTex.wrapT = THREE.RepeatWrapping;
+    const wallTex = panelTex.clone();
+    wallTex.needsUpdate = true;
+    wallTex.repeat.set(ARENA_HALF / 3, WALL_HEIGHT / 3);
+    const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.8, metalness: 0.25 });
+    const trimMat = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
     [
       { x: 0, z: -ARENA_HALF, w: ARENA_HALF * 2, d: 1 },
       { x: 0, z: ARENA_HALF, w: ARENA_HALF * 2, d: 1 },
@@ -808,55 +895,127 @@ export function mount(container, api) {
     ].forEach((w) => {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(w.w, WALL_HEIGHT, w.d), wallMat);
       mesh.position.set(w.x, WALL_HEIGHT / 2, w.z);
+      mesh.receiveShadow = true;
       scene.add(mesh);
       raycastTargets.push(mesh);
+      // Neon trim along the top edge and at knee height (decorative; inside the wall's own volume).
+      for (const y of [0.45, WALL_HEIGHT - 0.15]) {
+        const trim = new THREE.Mesh(new THREE.BoxGeometry(w.w === 1 ? 1.04 : w.w, 0.06, w.d === 1 ? 1.04 : w.d), trimMat);
+        trim.position.set(w.x, y, w.z);
+        scene.add(trim);
+      }
     });
+    // Wall lamps high above head height, so they never get in the way of play.
+    for (const [x, z] of [[-11, -ARENA_HALF + 0.55], [11, -ARENA_HALF + 0.55], [-11, ARENA_HALF - 0.55], [11, ARENA_HALF - 0.55]]) {
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.18, 0.25), new THREE.MeshBasicMaterial({ color: 0xffe2b0 }));
+      lamp.position.set(x, 4.6, z);
+      scene.add(lamp);
+      const light = new THREE.PointLight(0xffd29a, 0.9, 16, 2);
+      light.position.set(x, 4.3, z + (z < 0 ? 0.8 : -0.8));
+      scene.add(light);
+    }
 
-    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x3a4048, roughness: 0.8 });
+    const pillarTex = panelTex.clone();
+    pillarTex.needsUpdate = true;
+    pillarTex.repeat.set(1, 1.5);
+    const pillarMat = new THREE.MeshStandardMaterial({ map: pillarTex, color: 0xc8d0e0, roughness: 0.7, metalness: 0.3 });
+    const capMat = new THREE.MeshStandardMaterial({ color: 0x15181d, roughness: 0.5, metalness: 0.6 });
+    const bandMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
     for (const p of PILLARS) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(p.hx * 2, p.height, p.hz * 2), pillarMat);
       mesh.position.set(p.x, p.height / 2, p.z);
+      mesh.castShadow = mesh.receiveShadow = true;
       scene.add(mesh);
       raycastTargets.push(mesh);
+      // Purely visual trims hugging the pillar (a few cm proud), never part of the hit geometry.
+      for (const [y, h, mat] of [[0.12, 0.24, capMat], [p.height - 0.08, 0.16, capMat], [p.height * 0.62, 0.07, bandMat]]) {
+        const trim = new THREE.Mesh(new THREE.BoxGeometry(p.hx * 2 + 0.06, h, p.hz * 2 + 0.06), mat);
+        trim.position.set(p.x, y, p.z);
+        scene.add(trim);
+      }
     }
 
-    // Builds an avatar: two spheres matching the server's hit-test spheres exactly (body/head Y
-    // smoothly lerped between standing/low-profile each frame — see updateAvatarPose), plus a
-    // small "visor" box offset forward so facing direction reads visually.
-    function buildAvatar(bodyColor, headColor) {
+    // Builds an armoured soldier sized to the server's hit-test spheres (torso around the body
+    // sphere, helmet around the head sphere). `upper` holds everything above the hips and slides
+    // down for crouch/slide (see updateAvatarPose); the legs swing with distance travelled.
+    function buildAvatar(teamColor, accentColor) {
       const group = new THREE.Object3D();
-      const body = new THREE.Mesh(new THREE.SphereGeometry(BODY_HITBOX_RADIUS, 16, 12), new THREE.MeshStandardMaterial({ color: bodyColor }));
-      body.position.y = BODY_HITBOX_Y;
-      const head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_HITBOX_RADIUS, 12, 10), new THREE.MeshStandardMaterial({ color: headColor }));
-      head.position.y = EYE_HEIGHT;
-      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.1, 0.08), new THREE.MeshStandardMaterial({ color: 0x1a1a1a }));
-      visor.position.set(0, EYE_HEIGHT, -0.22);
-      group.add(body, head, visor);
-      return { group, body, head, visor };
+      const suit = new THREE.MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.8 });
+      const armor = new THREE.MeshStandardMaterial({ color: teamColor, roughness: 0.45, metalness: 0.3 });
+      const glow = new THREE.MeshBasicMaterial({ color: accentColor });
+      const part = (geo, mat, x, y, z, parent) => {
+        const m = new THREE.Mesh(geo, mat);
+        m.position.set(x, y, z);
+        m.castShadow = true;
+        parent.add(m);
+        return m;
+      };
+      const HIP_Y = 0.86;
+      const legs = [];
+      for (const side of [-1, 1]) {
+        const hip = new THREE.Object3D();
+        hip.position.set(side * 0.14, HIP_Y, 0);
+        group.add(hip);
+        part(new THREE.CylinderGeometry(0.095, 0.08, 0.5, 10), suit, 0, -0.25, 0, hip);
+        part(new THREE.CylinderGeometry(0.08, 0.07, 0.36, 10), suit, 0, -0.62, 0, hip);
+        part(new THREE.BoxGeometry(0.16, 0.12, 0.28), armor, 0, -0.8, -0.04, hip); // boot
+        part(new THREE.BoxGeometry(0.15, 0.14, 0.06), armor, 0, -0.46, -0.08, hip); // knee pad
+        legs.push(hip);
+      }
+      const upper = new THREE.Object3D();
+      group.add(upper);
+      part(new THREE.BoxGeometry(0.44, 0.16, 0.26), suit, 0, HIP_Y + 0.02, 0, upper); // pelvis
+      part(new THREE.BoxGeometry(0.58, 0.52, 0.32), armor, 0, 1.18, 0, upper); // chest plate
+      part(new THREE.BoxGeometry(0.6, 0.05, 0.34), glow, 0, 1.0, 0, upper); // belt light
+      part(new THREE.BoxGeometry(0.36, 0.3, 0.16), suit, 0, 1.18, 0.22, upper); // backpack
+      part(new THREE.BoxGeometry(0.06, 0.18, 0.04), glow, 0, 1.24, 0.31, upper); // pack light
+      for (const side of [-1, 1]) part(new THREE.SphereGeometry(0.13, 10, 8), armor, side * 0.34, 1.4, 0, upper); // shoulders
+      part(new THREE.CylinderGeometry(0.07, 0.08, 0.14, 8), suit, 0, 1.5, 0, upper); // neck
+      // Arms reach forward to the held gun (gun rig sits at x 0.28, y 1.05, z -0.15).
+      const armR = part(new THREE.CylinderGeometry(0.065, 0.055, 0.55, 8), suit, 0.3, 1.2, -0.18, upper);
+      armR.rotation.x = 1.1;
+      const armL = part(new THREE.CylinderGeometry(0.065, 0.055, 0.6, 8), suit, -0.08, 1.2, -0.25, upper);
+      armL.rotation.set(1.2, 0, -0.9);
+      const head = part(new THREE.SphereGeometry(HEAD_HITBOX_RADIUS * 0.95, 16, 12), suit, 0, EYE_HEIGHT, 0, upper);
+      const helmet = new THREE.Mesh(new THREE.SphereGeometry(HEAD_HITBOX_RADIUS * 1.08, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), armor);
+      helmet.castShadow = true;
+      head.add(helmet);
+      helmet.position.y = 0.02;
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.1), glow);
+      visor.position.set(0, -0.01, -0.17);
+      head.add(visor);
+      return { group, upper, legs, head, visor, stride: 0, swing: 0, lastX: null, lastZ: null };
     }
 
-    // Lerps an avatar's body/head local Y between standing and the server's crouch-adjusted
-    // hitbox positions (CROUCH_BODY_HITBOX_Y/CROUCH_EYE_HEIGHT) by `amount` (0=standing,
-    // 1=fully low profile) — purely a visual smoothing pass (playtest feedback: instantly
-    // snapping height on crouch/slide transitions read as janky); the server's own hit-test still
-    // treats crouching/sliding as an instant boolean, so this never desyncs from actual hit-reg,
-    // it just softens how the transition *looks*.
     function updateAvatarPose(avatar, amount) {
-      avatar.body.position.y = lerp(BODY_HITBOX_Y, CROUCH_BODY_HITBOX_Y, amount);
-      avatar.head.position.y = lerp(EYE_HEIGHT, CROUCH_EYE_HEIGHT, amount);
-      avatar.visor.position.y = avatar.head.position.y;
+      avatar.upper.position.y = -lerp(0, BODY_HITBOX_Y - CROUCH_BODY_HITBOX_Y, amount);
+      avatar.head.position.y = lerp(EYE_HEIGHT, CROUCH_EYE_HEIGHT, amount) - avatar.upper.position.y;
+      // Walk cycle from how far the avatar moved since last frame (works for both the predicted
+      // local avatar and the interpolated opponent without needing their velocity).
+      const p = avatar.group.position;
+      const moved = avatar.lastX === null ? 0 : Math.hypot(p.x - avatar.lastX, p.z - avatar.lastZ);
+      avatar.lastX = p.x;
+      avatar.lastZ = p.z;
+      const grounded = p.y < 0.05;
+      avatar.swing += ((moved > 0.004 && moved < 1 && grounded ? 1 : 0) - avatar.swing) * 0.15;
+      avatar.stride += Math.min(moved, 1) * 3.2;
+      const a = Math.sin(avatar.stride) * 0.7 * avatar.swing;
+      const bend = amount * 1.1;
+      avatar.legs[0].rotation.x = a - bend;
+      avatar.legs[1].rotation.x = -a - bend;
+      avatar.legs.forEach((leg) => { leg.scale.y = 1 - amount * 0.35; });
     }
 
-    const opponent = buildAvatar(0xff4d4d, 0xff8a8a);
+    const opponent = buildAvatar(0xc81e1e, 0xff5040);
     scene.add(opponent.group);
-    const oppGunRig = buildHeldGunRig(THREE, opponent.group, { x: 0.28, y: 1.05, z: -0.15 }, 1);
+    const oppGunRig = buildHeldGunRig(THREE, opponent.upper, { x: 0.28, y: 1.05, z: -0.15 }, 1);
 
     // Local third-person avatar: hidden by default (first-person mode), shown when the player
     // toggles third person (KeyV) so they can see their own character.
-    const self = buildAvatar(0x39a0ff, 0x7fc4ff);
+    const self = buildAvatar(0x1f6fe0, 0x5ad0ff);
     self.group.visible = false;
     scene.add(self.group);
-    const selfGunRig = buildHeldGunRig(THREE, self.group, { x: 0.28, y: 1.05, z: -0.15 }, 1);
+    const selfGunRig = buildHeldGunRig(THREE, self.upper, { x: 0.28, y: 1.05, z: -0.15 }, 1);
 
     // First-person viewmodel: attached to the camera itself (camera-relative offset ported from
     // source's gunGroup.position), only shown while NOT in third-person mode.
