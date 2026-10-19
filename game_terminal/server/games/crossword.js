@@ -29,8 +29,8 @@ const { reportRanked } = require('./wordResults');
 const TYPE = 'crossword';
 const COLOR_PALETTE = ['#00eaff', '#ff2fb0', '#ffb000', '#8c52ff', '#00ffa2', '#ff4d4d', '#ffee58', '#39ff14'];
 const SIZES = {
-  mini: { label: 'MINI', words: [5, 7], maxDim: 7, len: [3, 5], attempts: 24 },
-  medium: { label: 'MEDIUM', words: [9, 12], maxDim: 10, len: [3, 6], attempts: 14 },
+  mini: { label: 'MINI', words: [6, 8], maxDim: 7, len: [3, 5], attempts: 60 },
+  medium: { label: 'MEDIUM', words: [10, 13], maxDim: 10, len: [3, 6], attempts: 30 },
   large: { label: 'LARGE', words: [14, 18], maxDim: 13, len: [3, 7], attempts: 8 },
 };
 const DEFAULT_SIZE = 'medium';
@@ -256,9 +256,13 @@ function makePuzzle(size, seed) {
   for (let attempt = 0; attempt < cfg.attempts; attempt++) {
     const lay = tryLayout(cfg, rand);
     const area = (lay.maxR - lay.minR + 1) * (lay.maxC - lay.minC + 1);
-    const score = lay.words.length * 100 + lay.crossings * 12 - area * 0.5;
+    // Words crossed at most once give solvers little help from other answers: penalise them hard.
+    const xs = lay.words.map(() => 0);
+    for (const cell of lay.cells.values()) if (cell.a != null && cell.d != null) { xs[cell.a]++; xs[cell.d]++; }
+    const lone = xs.filter((x) => x <= 1).length;
+    const score = lay.words.length * 100 + lay.crossings * 12 - area * 0.5 - lone * 120;
     if (!best || score > best.score) best = { lay, score };
-    if (lay.words.length >= cfg.words[1] && lay.crossings >= lay.words.length) break;
+    if (lay.words.length >= cfg.words[1] && lone === 0) break;
   }
   return { size, seed, ...finalize(best.lay, rand) };
 }

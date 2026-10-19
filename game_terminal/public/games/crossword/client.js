@@ -749,6 +749,8 @@ export function mount(container, api) {
       if (view.cols) buildGrid();
     } else {
       indexBoard();
+      // Answers only arrive once the round ends; words was copied at round start.
+      for (const cl of view.clues) if (cl.answer && words[cl.id]) words[cl.id].answer = cl.answer;
       const solved = (view.board && view.board.solved) || {};
       for (const [idStr, by] of Object.entries(solved)) {
         const id = Number(idStr);
