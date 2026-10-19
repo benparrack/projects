@@ -629,7 +629,7 @@ export const HOWTO = {
     rules: [
       'Each word must start with the last letter of the previous word; no repeats.',
       'Words must be real and at least the room\'s minimum length (3, 4 or 5).',
-      'Running out of time costs a life; the turn clock shrinks every lap.',
+      'Running out of time costs a life. Any number of players (and bots) can join.',
       'A wrong word costs no life, just 2 seconds off your clock.',
       'Last player with lives left wins; solo, it\'s a survival run.',
     ],

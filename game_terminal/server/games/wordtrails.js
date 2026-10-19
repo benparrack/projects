@@ -1,7 +1,7 @@
 // Word Trails: a last-letter word chain. Players take turns adding a word that starts with the
 // LAST letter of the previous word (TRAIL → LEMON → NEST → ...). No repeats, every word must be in
 // the shared dictionary (server/games/words.js) and at least the room's minimum length. Each turn
-// is timed and the clock gets shorter as the trail grows; running out of time costs a life, and
+// is timed (the clock the room picked, every turn); running out of time costs a life, and
 // the last player with lives left wins. A wrong submission (not a word / wrong letter / already
 // used / too short) doesn't cost a life — typos happen — but it burns PENALTY_MS off your clock.
 // Played solo, it's a survival run: how long a trail can you build before your lives run out?
@@ -11,7 +11,7 @@
 // get turnEndsAt + serverNow and animate the clock themselves.
 //
 // Bots (any number, + ADD BOT) know a vocabulary sized by level, take a level-dependent time to
-// "think" (which eventually loses to the shrinking clock for weaker bots), and sometimes blank on
+// "think", get more tired every lap (so long rounds still end), and sometimes blank on
 // a letter. Expert plays from the full dictionary and steers the trail onto letters with the
 // fewest words left (trap letters like X, Q, Z, J).
 
@@ -25,8 +25,6 @@ const TYPE = 'wordtrails';
 const TICK_MS = 100;
 const COUNTDOWN_MS = 3000;
 const PENALTY_MS = 2000;
-const MIN_TURN_MS = 4000;
-const SHRINK_PER_LAP_MS = 750; // each full lap of the table takes this much off the turn clock
 const AFTER_LIFE_LOST_MS = 1200; // short beat after a timeout so everyone sees who lost the life
 const MAX_WORD_LEN = 24;
 const COLOR_PALETTE = ['#00eaff', '#ff2fb0', '#39ff14', '#ffb000', '#8c52ff', '#ff4d4d', '#ffee58', '#00ffa2'];
@@ -97,10 +95,8 @@ function freshPlayer(clientId, nickname, colorIdx) {
   };
 }
 
-function turnMsFor(st) {
-  const laps = Math.floor(st.chain.length / Math.max(1, st.order.length));
-  return Math.max(MIN_TURN_MS, st.settings.turnSecs * 1000 - laps * SHRINK_PER_LAP_MS);
-}
+// Playtest: a clock that shrank every lap left ~5s on the 12s setting, so the turn time is fixed.
+const turnMsFor = (st) => st.settings.turnSecs * 1000;
 
 const required = (st) => {
   const last = st.chain[st.chain.length - 1];
@@ -498,5 +494,5 @@ module.exports = {
   },
 
   // Exposed for tests.
-  _internals: { planBot, RARE, checkWord, chooseBotWord, turnMsFor, vocab, BOT, OPTIONS, PENALTY_MS, MIN_TURN_MS, AFTER_LIFE_LOST_MS, COUNTDOWN_MS },
+  _internals: { planBot, RARE, checkWord, chooseBotWord, turnMsFor, vocab, BOT, OPTIONS, PENALTY_MS, AFTER_LIFE_LOST_MS, COUNTDOWN_MS },
 };

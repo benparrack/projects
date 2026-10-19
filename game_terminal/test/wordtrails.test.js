@@ -156,13 +156,10 @@ test('timeout costs a life, same letter passes on; elimination ends the round', 
   assert.strictEqual(v2.required, letter);
 });
 
-test('turn clock shrinks each lap, floored', () => {
-  const st = { chain: [{}], order: ['a', 'b'], settings: { turnSecs: 8 } };
-  const t0 = I.turnMsFor(st);
-  st.chain = new Array(9).fill({});
-  assert.ok(I.turnMsFor(st) < t0);
+test('turn clock stays at the chosen time however long the trail gets', () => {
+  const st = { chain: [{}], order: ['a', 'b'], settings: { turnSecs: 12 } };
   st.chain = new Array(500).fill({});
-  assert.strictEqual(I.turnMsFor(st), I.MIN_TURN_MS);
+  assert.strictEqual(I.turnMsFor(st), 12000);
 });
 
 test('leaving on your turn hands the turn on; last one standing wins', () => {
