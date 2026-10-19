@@ -232,6 +232,10 @@ views.overview = function () {
   const pi = $("#project").value ? d.projects.indexOf($("#project").value) : -1;
   const growth = [], dayTok = {};
   let run = 0;
+  // days whose transcripts Claude Code pruned, estimated from its /stats cache (unknown per project)
+  const hist = pi >= 0 ? {} : d.history || {};
+  const histTok = Object.values(hist).reduce((a, v) => a + v, 0);
+  for (const [k, v] of Object.entries(hist)) dayTok[k] = v;
   for (const r of d.rows) {
     if (pi >= 0 && r[C.project] !== pi) continue;
     const k = dayKey(r[0]);
@@ -323,7 +327,7 @@ views.overview = function () {
   </div>
   <div class="card">
     <div class="card-h"><h2>Tokens over time</h2><span class="muted">all time, cumulative${pi >= 0 ? " · " + esc(d.projects[pi]) : ""}</span>
-      <div class="right muted">${tok(lifetime)} total · ${tok(weekTok)} in the last 7 days${eta ? ` · ${tok(nextM)} in ~${eta} day${eta === 1 ? "" : "s"} at this pace` : ""}</div></div>
+      <div class="right muted">${tok(lifetime)} total${histTok ? ` <span data-tip="${esc(tipRows("Estimated", [["", "Before your oldest log", tok(histTok)], ["", "Source", "Claude Code /stats, de-duplicated"]]))}">(~${tok(histTok)} estimated)</span>` : ""} · ${tok(weekTok)} in the last 7 days${eta ? ` · ${tok(nextM)} in ~${eta} day${eta === 1 ? "" : "s"} at this pace` : ""}</div></div>
     ${growthChart}
   </div>
   <div class="card mt">

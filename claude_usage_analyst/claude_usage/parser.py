@@ -399,6 +399,15 @@ def default_root():
     return Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")) / "projects"
 
 
+def load_stats_daily():
+    """{local day: tokens} from Claude Code's own /stats cache, which outlives pruned transcripts."""
+    try:
+        with open(default_root().parent / "stats-cache.json") as f:
+            return {d["date"]: sum(d["tokensByModel"].values()) for d in json.load(f)["dailyModelTokens"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
 def cache_path():
     base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
     return base / "claude-usage" / "parse-cache.pickle"

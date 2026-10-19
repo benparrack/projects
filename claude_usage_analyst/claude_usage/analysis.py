@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from . import pricing
+from .parser import load_stats_daily
 
 HOME = str(Path.home())
 BLOCK_SECONDS = 5 * 3600
@@ -51,6 +52,22 @@ def floor10(ts):
 
 def req_ctx(r):
     return r["in"] + r["cw5"] + r["cw1"] + r["cr"]
+
+def backfill(stats_daily, ours):
+    """Estimated tokens for days whose transcripts Claude Code pruned.
+
+    /stats sums every streamed line (each repeats the message's usage, ~2x),
+    so it is scaled by the ratio seen on full days both sources still cover.
+    """
+    if not ours:
+        return {}
+    first = min(ours)  # may be partly pruned, so it is filled but not used for the ratio
+    full = [d for d in stats_daily if ours.get(d) and d != first]
+    if not full:
+        return {}
+    ratio = sum(ours[d] for d in full) / sum(stats_daily[d] for d in full)
+    return {d: gap for d, v in stats_daily.items()
+            if d <= first and (gap := round(v * ratio) - ours.get(d, 0)) > 0}
 
 
 class Analysis:
@@ -813,7 +830,14 @@ class Analysis:
             "models": list(models),
             "sessions": [self.session_summary(self.sessions[sid]) for sid in sids],
             "prompts_by_day": self._prompts_by_day(),
+            "history": backfill(load_stats_daily(), self._tokens_by_day()),
         }
+
+    def _tokens_by_day(self):
+        out = defaultdict(int)
+        for r in self.requests:
+            out[time.strftime("%Y-%m-%d", time.localtime(r["ts"]))] += r["in"] + r["cw5"] + r["cw1"] + r["cr"] + r["out"]
+        return out
 
     def _prompts_by_day(self):
         c = Counter()

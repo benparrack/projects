@@ -157,6 +157,15 @@ class ParserTests(unittest.TestCase):
             fx.cleanup()
 
 
+class BackfillTests(unittest.TestCase):
+    def test_scales_stats_and_fills_only_pruned_days(self):
+        from claude_usage.analysis import backfill
+        stats = {"09-01": 100, "09-02": 80, "09-03": 200, "09-04": 400}
+        ours = {"09-02": 10, "09-03": 100, "09-04": 200}  # 09-02 partly pruned; /stats is 2x
+        self.assertEqual(backfill(stats, ours), {"09-01": 50, "09-02": 30})
+        self.assertEqual(backfill(stats, {}), {})
+
+
 class AnalysisTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
