@@ -174,6 +174,8 @@ export function mount(container, api) {
   const wordChoiceEl = document.createElement('div');
   wordChoiceEl.style.display = 'flex';
   wordChoiceEl.style.gap = '8px';
+  wordChoiceEl.style.flexWrap = 'wrap';
+  wordChoiceEl.style.justifyContent = 'center';
 
   const guessForm = document.createElement('form');
   guessForm.style.display = 'flex';
@@ -194,6 +196,26 @@ export function mount(container, api) {
     if (!text) return;
     api.sendAction({ kind: 'guess', text });
     guessInput.value = '';
+  });
+
+  const customForm = document.createElement('form');
+  customForm.style.display = 'flex';
+  customForm.style.gap = '4px';
+  const customInput = document.createElement('input');
+  customInput.placeholder = 'or your own word...';
+  customInput.maxLength = 24;
+  customInput.autocomplete = 'off';
+  customInput.style.width = '150px';
+  const customBtn = document.createElement('button');
+  customBtn.type = 'submit';
+  customBtn.textContent = 'USE';
+  customForm.append(customInput, customBtn);
+  customForm.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const word = customInput.value.trim();
+    if (word.length < 2) return;
+    api.sendAction({ kind: 'chooseWord', word, custom: true });
+    customInput.value = '';
   });
 
   const logEl = document.createElement('div');
@@ -231,7 +253,6 @@ export function mount(container, api) {
   function render() {
     if (!view) {
       statusEl.textContent = 'Loading...';
-      wordChoiceEl.hidden = true;
       guessForm.style.display = 'none';
       return;
     }
@@ -258,6 +279,12 @@ export function mount(container, api) {
           btn.addEventListener('click', () => api.sendAction({ kind: 'chooseWord', word }));
           wordChoiceEl.appendChild(btn);
         }
+        // Or draw your own word (playtest ask). Kept focused across re-renders.
+        const typed = customInput.value;
+        const had = document.activeElement === customInput;
+        wordChoiceEl.appendChild(customForm);
+        customInput.value = typed;
+        if (had) customInput.focus();
       } else {
         statusEl.textContent = `Waiting for ${drawerName} to pick a word...`;
       }

@@ -5,12 +5,27 @@
 
 const { report } = require('../report');
 
-const WORDS = [
-  'dog', 'cat', 'house', 'tree', 'car', 'sun', 'moon', 'star', 'fish', 'bird',
-  'apple', 'banana', 'pizza', 'guitar', 'robot', 'rainbow', 'umbrella', 'mountain', 'river', 'boat',
-  'airplane', 'bicycle', 'clock', 'chair', 'table', 'book', 'phone', 'camera', 'rocket', 'castle',
-  'dragon', 'snowman', 'balloon', 'butterfly', 'elephant', 'spider', 'ghost', 'pirate', 'wizard', 'volcano',
-];
+// Offered as one easy, one medium, one hard (playtest: "the words are very basic").
+const WORDS = {
+  easy: [
+    'guitar', 'robot', 'rainbow', 'umbrella', 'volcano', 'bicycle', 'rocket', 'castle', 'dragon', 'snowman',
+    'butterfly', 'spider', 'ghost', 'pirate', 'wizard', 'penguin', 'cactus', 'lighthouse', 'octopus', 'tornado',
+    'skateboard', 'helicopter', 'anchor', 'mermaid', 'dinosaur', 'campfire', 'treasure chest', 'igloo', 'trophy', 'parachute',
+  ],
+  medium: [
+    'traffic jam', 'sunburn', 'haunted house', 'roller coaster', 'time machine', 'scarecrow', 'quicksand', 'lawn mower',
+    'jellyfish', 'fire drill', 'snow globe', 'vending machine', 'hot air balloon', 'sandcastle', 'zombie', 'birthday cake',
+    'black hole', 'escalator', 'shipwreck', 'werewolf', 'magnet', 'fireworks', 'submarine', 'telescope', 'shadow puppet',
+    'wind turbine', 'yo-yo', 'tightrope', 'pinball', 'ventriloquist', 'avalanche', 'barbecue', 'treadmill', 'sleepwalking',
+  ],
+  hard: [
+    'gravity', 'jealousy', 'deja vu', 'procrastination', 'echo', 'nostalgia', 'insomnia', 'brain freeze', 'gossip',
+    'evolution', 'photosynthesis', 'sarcasm', 'inflation', 'hibernation', 'stage fright', 'butterfly effect', 'peer pressure',
+    'jet lag', 'writer\'s block', 'social media', 'reflection', 'friction', 'camouflage', 'karma', 'dream', 'democracy',
+    'awkward silence', 'teleport', 'ice age', 'midlife crisis', 'cliffhanger', 'hiccups', 'recycling', 'wifi',
+  ],
+};
+const CUSTOM_WORD_RE = /^[\p{L}' -]{2,24}$/u; // a drawer-typed word: letters, spaces, ' and - only
 
 const ROUND_MS = 80000; // time to draw + guess, once a word is chosen
 const CHOOSE_MS = 15000; // time the drawer gets to pick a word before one is auto-picked
@@ -28,14 +43,8 @@ function normalize(s) {
   return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function pickRandomWords(n) {
-  const pool = WORDS.slice();
-  const out = [];
-  for (let i = 0; i < n && pool.length; i++) {
-    const idx = Math.floor(Math.random() * pool.length);
-    out.push(pool.splice(idx, 1)[0]);
-  }
-  return out;
+function pickRandomWords() {
+  return ['easy', 'medium', 'hard'].map((k) => WORDS[k][Math.floor(Math.random() * WORDS[k].length)]);
 }
 
 function buildView(room, forClientId) {
@@ -139,7 +148,7 @@ function startNewRound(room) {
   const idx = st.drawerClientId ? st.playerOrder.indexOf(st.drawerClientId) : -1;
   st.drawerClientId = st.playerOrder[(idx + 1) % st.playerOrder.length];
   st.drewThisRotation.push(st.drawerClientId);
-  st.wordOptions = pickRandomWords(3);
+  st.wordOptions = pickRandomWords();
   st.word = null;
   st.history = [];
   st.correctGuessers = [];
@@ -262,8 +271,9 @@ module.exports = {
     if (data.kind === 'chooseWord') {
       if (st.phase !== 'choosing_word') return;
       if (ctx.senderId !== st.drawerClientId) return;
-      const word = typeof data.word === 'string' ? data.word : '';
-      if (!st.wordOptions.includes(word)) {
+      let word = typeof data.word === 'string' ? data.word : '';
+      if (data.custom) word = normalize(word);
+      if (data.custom ? !CUSTOM_WORD_RE.test(word) : !st.wordOptions.includes(word)) {
         ctx.sendTo(ctx.senderId, {
           v: 1,
           type: 'game.event',
