@@ -9,9 +9,9 @@ const MAX_WORD_LENGTH = 40;
 // missing even "and"). A picked word/phrase is accepted only if every space-separated token is a
 // real dictionary word.
 
-// Scoring (total wins per player, kept for as long as they stay in the room): when the guessers
-// solve the word, the guesser who revealed the final letter gets the win; when they run out of
-// guesses, the picker gets it (they stumped the room).
+// Guessers race (playtest: "compete to guess first instead of together"): each has their own
+// letters and gallows. The first to solve gets the win; once every guesser who started is hanged,
+// the picker gets it (they stumped the room). Wins are kept while a player stays in the room.
 
 // --- CPU players. A bot can be the word picker (so one person can play solo) or a fellow guesser.
 // As picker its level sets the word: short and friendly on Easy, up to short words full of rare
@@ -42,7 +42,8 @@ function wordsOfLen(n) {
   return BY_LEN.get(n);
 }
 
-function botGuess(st, level) {
+function botGuess(word, board, level) {
+  const st = { word, guessedLetters: board.guessed };
   const left = [...EN_FREQ].filter((ch) => !st.guessedLetters.includes(ch));
   if (level === 'easy') return Math.random() < 0.5 ? left[Math.floor(Math.random() * left.length)] : left[Math.floor(Math.random() * Math.min(8, left.length))];
   if (level === 'medium') return left[Math.random() < 0.8 ? 0 : Math.min(left.length - 1, 1 + Math.floor(Math.random() * 3))];
@@ -83,7 +84,7 @@ function scheduleBots(room) {
   let actor = null; let delay = 0;
   if (st.phase === 'waiting' && isBotId(st.pickerClientId)) { actor = st.pickerClientId; delay = 1200; }
   else if (st.phase === 'guessing') {
-    const guessers = st.pickerOrder.filter((id) => isBotId(id) && id !== st.pickerClientId);
+    const guessers = st.pickerOrder.filter((id) => isBotId(id) && id !== st.pickerClientId && !boardFor(st, id).out);
     if (guessers.length) {
       actor = guessers[Math.floor(Math.random() * guessers.length)];
       const humans = st.pickerOrder.filter((id) => !isBotId(id) && id !== st.pickerClientId).length;
@@ -97,7 +98,7 @@ function scheduleBots(room) {
     const ctx = { senderId: actor, sendTo: (id, env) => room.sendTo(id, env), broadcast: (env) => room.broadcast(env) };
     const level = botLevel(actor);
     if (phase === 'waiting') module.exports.onMessage(room, { clientId: actor }, { kind: 'setWord', word: botPick(level) }, ctx);
-    else module.exports.onMessage(room, { clientId: actor }, { kind: 'guessLetter', letter: botGuess(st, level) }, ctx);
+    else module.exports.onMessage(room, { clientId: actor }, { kind: 'guessLetter', letter: botGuess(st.word, boardFor(st, actor), level) }, ctx);
   }, delay);
 }
 
@@ -105,6 +106,12 @@ function scheduleBots(room) {
 function unknownWords(cleaned) {
   return cleaned.toLowerCase().split(' ').filter(Boolean).filter((tok) => !DICTIONARY.has(tok));
 }
+
+function boardFor(st, id) {
+  if (!st.boards[id]) st.boards[id] = { guessed: [], wrong: 0, out: false };
+  return st.boards[id];
+}
+const revealedCount = (word, board) => [...word].filter((ch) => ch !== ' ' && board.guessed.includes(ch)).length;
 
 function addWin(st, id) {
   if (!id) return;
@@ -119,9 +126,47 @@ function scoreboard(st) {
     .map(({ clientId, wins }) => ({ clientId, wins }));
 }
 
+function endRound(room, winner) {
+  const st = room.state;
+  clearTimeout(st._afkTimer);
+  st.phase = 'round_over';
+  st.lastResult = winner === st.pickerClientId ? 'lose' : 'win';
+  st.roundWinner = winner;
+  addWin(st, winner);
+  // Result: the solver first, then the picker, then everyone else (by letters revealed). No score.
+  reportRanked(room, st.pickerOrder.map((id) => ({
+    id,
+    rank: id === winner ? 1000 : id === st.pickerClientId ? 500 : (st.boards[id] ? revealedCount(st.word, st.boards[id]) : 0),
+    level: isBotId(id) ? botLevel(id) : undefined,
+  })));
+}
+
+// Picker wins once every guesser is hanged. Guessers who haven't guessed at all get AFK_MS to
+// start before the round ends without them.
+const AFK_MS = 20000;
+function checkAllHanged(room) {
+  const st = room.state;
+  if (st.phase !== 'guessing') return;
+  const guessers = st.pickerOrder.filter((id) => id !== st.pickerClientId);
+  const started = guessers.filter((id) => st.boards[id]);
+  if (!started.length || !started.every((id) => st.boards[id].out)) return;
+  clearTimeout(st._afkTimer);
+  if (started.length === guessers.length) { endRound(room, st.pickerClientId); return; }
+  const word = st.word;
+  st._afkTimer = setTimeout(() => {
+    if (room.state !== st || st.phase !== 'guessing' || st.word !== word) return;
+    const left = st.pickerOrder.filter((id) => id !== st.pickerClientId);
+    if (left.every((id) => !st.boards[id] || st.boards[id].out)) {
+      endRound(room, st.pickerClientId);
+      broadcastState(room, { sendTo: (id, env) => room.sendTo(id, env) });
+    }
+  }, AFK_MS);
+}
+
 function buildView(room, forClientId) {
   const st = room.state;
   const isPicker = forClientId != null && forClientId === st.pickerClientId;
+  const mine = (!isPicker && st.boards[forClientId]) || { guessed: [], wrong: 0, out: false };
   // Even the picker only sees the shared guess-progress mask (not the full word) during play —
   // both so their screen shows "current state" progress like everyone else's (playtest ask), and
   // so it isn't a shoulder-surfing giveaway to guessers sitting next to them. The picker separately
@@ -130,7 +175,7 @@ function buildView(room, forClientId) {
   const mask = st.word
     ? st.word.split('').map((ch) => {
         if (ch === ' ') return ' ';
-        if (revealAll || st.guessedLetters.includes(ch)) return ch;
+        if (revealAll || mine.guessed.includes(ch)) return ch;
         return null;
       })
     : [];
@@ -141,8 +186,13 @@ function buildView(room, forClientId) {
     letterCount: st.word ? st.word.replace(/ /g, '').length : 0,
     wordCounts,
     mask,
-    guessedLetters: st.guessedLetters,
-    wrongGuesses: st.wrongGuesses,
+    guessedLetters: mine.guessed,
+    wrongGuesses: mine.wrong,
+    out: mine.out,
+    // Everyone's race progress (counts only, never which letters).
+    racers: st.word ? Object.entries(st.boards).filter(([id]) => st.pickerOrder.includes(id)).map(([id, b]) => ({
+      clientId: id, revealed: revealedCount(st.word, b), wrong: b.wrong, out: b.out,
+    })) : [],
     maxWrongGuesses: st.maxWrongGuesses,
     isPicker,
     pickerWord: isPicker ? st.word : null,
@@ -171,9 +221,9 @@ function broadcastState(room, ctx) {
 
 function resetRound(st) {
   st.phase = 'waiting';
+  clearTimeout(st._afkTimer);
   st.word = null;
-  st.guessedLetters = [];
-  st.wrongGuesses = 0;
+  st.boards = {};
   st.lastResult = null;
   st.roundWinner = null;
 }
@@ -188,8 +238,7 @@ module.exports = {
       pickerOrder: [],
       pickerClientId: null,
       word: null,
-      guessedLetters: [],
-      wrongGuesses: 0,
+      boards: {}, // { clientId: { guessed: [letters], wrong, out } } — one per racing guesser
       maxWrongGuesses: MAX_WRONG_GUESSES,
       lastResult: null,
       roundWinner: null,
@@ -229,6 +278,8 @@ module.exports = {
       if (isBotId(st.pickerClientId)) { resetRound(st); st.pickerClientId = null; }
     }
 
+    delete st.boards[client.clientId];
+    checkAllHanged(room);
     if (st.pickerClientId === client.clientId) {
       resetRound(st);
       st.pickerClientId = st.pickerOrder.length > 0 ? st.pickerOrder[0] : null;
@@ -294,8 +345,7 @@ module.exports = {
         return;
       }
       st.word = cleaned;
-      st.guessedLetters = [];
-      st.wrongGuesses = 0;
+      st.boards = {};
       st.lastResult = null;
       st.phase = 'guessing';
       broadcastState(room, ctx);
@@ -307,30 +357,16 @@ module.exports = {
       if (ctx.senderId === st.pickerClientId) return;
       const letter = typeof data.letter === 'string' ? data.letter.trim().toUpperCase() : '';
       if (!/^[A-Z]$/.test(letter)) return;
-      if (st.guessedLetters.includes(letter)) return;
-      st.guessedLetters.push(letter);
-      if (!st.word.includes(letter)) st.wrongGuesses += 1;
+      if (!st.pickerOrder.includes(ctx.senderId)) return;
+      const board = boardFor(st, ctx.senderId);
+      if (board.out || board.guessed.includes(letter)) return;
+      board.guessed.push(letter);
+      if (!st.word.includes(letter)) board.wrong += 1;
+      if (board.wrong >= st.maxWrongGuesses) board.out = true;
 
       const uniqueLetters = new Set(st.word.replace(/ /g, '').split(''));
-      const allGuessed = [...uniqueLetters].every((ch) => st.guessedLetters.includes(ch));
-      if (allGuessed) {
-        st.phase = 'round_over';
-        st.lastResult = 'win';
-        st.roundWinner = ctx.senderId;
-        addWin(st, ctx.senderId);
-      } else if (st.wrongGuesses >= st.maxWrongGuesses) {
-        st.phase = 'round_over';
-        st.lastResult = 'lose';
-        st.roundWinner = st.pickerClientId;
-        addWin(st, st.pickerClientId);
-      }
-      // Result: the guessers (one team, sharing a place) vs the picker. No score.
-      if (st.phase === 'round_over') {
-        const guessersWon = st.lastResult === 'win';
-        reportRanked(room, st.pickerOrder.map((id) => ({
-          id, rank: (id === st.pickerClientId) !== guessersWon ? 1 : 0, level: isBotId(id) ? botLevel(id) : undefined,
-        })));
-      }
+      if ([...uniqueLetters].every((ch) => board.guessed.includes(ch))) endRound(room, ctx.senderId);
+      else checkAllHanged(room);
       broadcastState(room, ctx);
       return;
     }

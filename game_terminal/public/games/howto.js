@@ -273,12 +273,12 @@ export const HOWTO = {
     ],
   },
   hangman: {
-    about: 'One player picks a secret word or phrase; everyone else guesses it letter by letter.',
+    about: 'One player picks a secret word or phrase; everyone else races to guess it letter by letter.',
     rules: [
       'The picker enters a real word or phrase; bots can pick so you can play solo.',
-      'Guessers call letters; 6 wrong guesses and the guessers lose.',
-      'Solved: the guesser who revealed the final letter gets the win.',
-      'Out of guesses: the picker gets the win. The picker role rotates each round.',
+      'Each guesser has their own letters and gallows; 6 wrong guesses and you are hanged.',
+      'The first guesser to solve it gets the win. The race panel shows everyone\'s progress.',
+      'Everyone hanged: the picker gets the win. The picker role rotates each round.',
     ],
     controls: [
       'Picker: type the word and press SET WORD.',

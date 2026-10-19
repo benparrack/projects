@@ -57,15 +57,21 @@ test('only picker can set word; picker cannot guess', () => {
   assert.strictEqual(room.state.phase, 'waiting');
   act(room, 'p', { kind: 'setWord', word: 'cat' });
   act(room, 'p', { kind: 'guessLetter', letter: 'c' });
-  assert.deepStrictEqual(room.state.guessedLetters, []);
+  assert.ok(!room.state.boards.p);
 });
 
-test('solver gets the win; scores in view sorted', () => {
+test('guessers race on their own boards; first solver gets the win; scores in view sorted', () => {
   const room = makeRoom(); join(room, 'p'); join(room, 'a'); join(room, 'b');
   act(room, 'p', { kind: 'setWord', word: 'cat' });
   act(room, 'a', { kind: 'guessLetter', letter: 'c' });
   act(room, 'b', { kind: 'guessLetter', letter: 'a' });
+  act(room, 'b', { kind: 'guessLetter', letter: 'z' });
   act(room, 'a', { kind: 'guessLetter', letter: 't' });
+  assert.strictEqual(room.state.phase, 'guessing', "b's A doesn't count for a");
+  assert.deepStrictEqual(lastView(room, 'a').mask, ['C', null, 'T']);
+  assert.deepStrictEqual(lastView(room, 'b').mask, [null, 'A', null]);
+  assert.deepStrictEqual(lastView(room, 'p').racers, [{ clientId: 'a', revealed: 2, wrong: 0, out: false }, { clientId: 'b', revealed: 1, wrong: 1, out: false }]);
+  act(room, 'a', { kind: 'guessLetter', letter: 'a' });
   assert.strictEqual(room.state.lastResult, 'win');
   assert.strictEqual(room.state.wins.a, 1);
   assert.ok(!room.state.wins.b);
@@ -82,6 +88,19 @@ test('picker gets the win when guessers run out; word revealed in mask', () => {
   assert.strictEqual(room.state.lastResult, 'lose');
   assert.strictEqual(room.state.wins.p, 1);
   assert.strictEqual(lastView(room, 'g').mask.join(''), 'CAT');
+});
+
+test('a hanged guesser is out while others keep racing; picker wins once all are hanged', () => {
+  const room = makeRoom(); join(room, 'p'); join(room, 'a'); join(room, 'b');
+  act(room, 'p', { kind: 'setWord', word: 'cat' });
+  for (const l of 'zqxjkv') act(room, 'a', { kind: 'guessLetter', letter: l });
+  assert.strictEqual(room.state.phase, 'guessing');
+  assert.strictEqual(lastView(room, 'a').out, true);
+  act(room, 'a', { kind: 'guessLetter', letter: 'c' });
+  assert.ok(!room.state.boards.a.guessed.includes('C'), 'hanged players cannot guess');
+  for (const l of 'zqxjkv') act(room, 'b', { kind: 'guessLetter', letter: l });
+  assert.strictEqual(room.state.lastResult, 'lose');
+  assert.strictEqual(room.state.wins.p, 1);
 });
 
 test('wins persist across rounds; picker rotates', () => {
@@ -143,7 +162,7 @@ async function asyncTests() {
     assert.strictEqual(room.state.phase, 'round_over');
     const who = room.state.lastResult === 'win' ? bot : 'h';
     assert.strictEqual(room.state.wins[who], 1);
-    console.log('ok   expert bot guesser finished round:', room.state.lastResult, `(${room.state.guessedLetters.join('')})`);
+    console.log('ok   expert bot guesser finished round:', room.state.lastResult, `(${room.state.boards[bot].guessed.join('')})`);
   } catch (e) { failures++; console.log('FAIL bot guesser', e.message); }
   leave(room, 'h');
 }

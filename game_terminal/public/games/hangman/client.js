@@ -1,4 +1,4 @@
-// Hangman — one player picks a word, everyone else guesses letters.
+// Hangman — one player picks a word, everyone else races to guess it on their own board.
 // Server plugin: ../../../server/games/hangman.js (authoritative word, per-recipient masked views).
 import { sfx } from '../sfx.js';
 import { createBotBar } from '../tickBots.js';
@@ -125,6 +125,31 @@ export function mount(container, api) {
     return board;
   }
 
+  // Everyone's race progress: letters found and wrong guesses (never which letters).
+  function renderRace() {
+    const racers = (view.racers || []).slice().sort((a, b) => b.revealed - a.revealed || a.wrong - b.wrong);
+    const board = document.createElement('div');
+    board.className = 'hm-board';
+    const h = document.createElement('h4');
+    h.textContent = 'RACE';
+    board.appendChild(h);
+    if (!racers.length) board.appendChild(document.createTextNode('nobody has guessed yet'));
+    for (const r of racers) {
+      const row = document.createElement('div');
+      row.className = 'hm-row';
+      if (r.clientId === api.getClientId()) row.classList.add('me');
+      const name = document.createElement('span');
+      name.textContent = nicknameFor(r.clientId);
+      const prog = document.createElement('span');
+      prog.className = 'hm-wins';
+      prog.textContent = r.out ? `💀 ${r.revealed}/${view.letterCount}` : `${r.revealed}/${view.letterCount} · ${'✗'.repeat(r.wrong) || '—'}`;
+      if (r.out) row.style.opacity = '0.5';
+      row.append(name, prog);
+      board.appendChild(row);
+    }
+    return board;
+  }
+
   function render() {
     root.innerHTML = '';
     if (!view) {
@@ -232,9 +257,8 @@ export function mount(container, api) {
         // all — playtest report: "can't see other person's guesses as word-maker". Now shows the
         // same letter grid the guessers see (read-only: pickers can't click to guess).
         const hint = document.createElement('div');
-        hint.textContent = 'Others are guessing your word:';
+        hint.textContent = 'Others are racing to guess your word:';
         root.appendChild(hint);
-        root.appendChild(renderLetterGrid(false));
 
         // The word line above now only shows guess progress (blanks), same as everyone else's
         // screen — both to mirror the live state for the picker and to avoid it being a
@@ -255,18 +279,25 @@ export function mount(container, api) {
           root.appendChild(reveal);
         }
       } else {
-        root.appendChild(renderLetterGrid(true));
+        if (view.out) {
+          const out = document.createElement('div');
+          out.textContent = 'HANGED 💀 — waiting for the others to finish';
+          out.style.color = '#ff6b6b';
+          root.appendChild(out);
+        }
+        root.appendChild(renderLetterGrid(!view.out));
       }
+      root.appendChild(renderRace());
     } else if (view.phase === 'round_over') {
       const result = document.createElement('div');
       result.style.fontSize = '1.2em';
-      result.textContent = view.result === 'win' ? 'SOLVED! 🎉' : 'OUT OF GUESSES 💀';
+      result.textContent = view.result === 'win' ? 'SOLVED! 🎉' : 'EVERYONE HANGED 💀';
       root.appendChild(result);
       if (view.roundWinner) {
         const who = document.createElement('div');
         const me = view.roundWinner === api.getClientId();
         who.textContent = view.result === 'win'
-          ? `${me ? 'You' : nicknameFor(view.roundWinner)} solved it — +1 win`
+          ? `${me ? 'You' : nicknameFor(view.roundWinner)} solved it first — +1 win`
           : `${me ? 'You' : nicknameFor(view.roundWinner)} stumped the room — +1 win`;
         who.style.color = me ? '#b6ff9e' : '';
         root.appendChild(who);
@@ -283,7 +314,7 @@ export function mount(container, api) {
   }
 
   function onKeydown(ev) {
-    if (!view || view.phase !== 'guessing' || view.isPicker) return;
+    if (!view || view.phase !== 'guessing' || view.isPicker || view.out) return;
     const letter = ev.key.toUpperCase();
     if (LETTERS.includes(letter)) api.sendAction({ kind: 'guessLetter', letter });
   }
