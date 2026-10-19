@@ -768,7 +768,7 @@ export function mount(container, api) {
     const p = pulling ? pull : kbPower;
     powerFill.style.width = `${Math.round(p * 100)}%`;
     powerFill.style.opacity = pulling ? 1 : 0.4;
-    powerLbl.textContent = `${Math.round(p * 100)}%`;
+    powerLbl.textContent = pulling ? (p < 0.03 ? 'release = cancel' : `${Math.round(p * 100)}% · Esc cancels`) : `${Math.round(p * 100)}%`;
     powerEl.classList.toggle('off', !myTurn());
   }
 
@@ -937,7 +937,7 @@ export function mount(container, api) {
 
   let pullStart = { x: 0, y: 0 };
   powerEl.addEventListener('pointerdown', (ev) => {
-    if (!myTurn()) return;
+    if (!myTurn() || ev.button === 2) return;
     powerEl.setPointerCapture(ev.pointerId);
     pulling = true;
     pullStart = { x: ev.clientX, y: ev.clientY };
@@ -969,7 +969,16 @@ export function mount(container, api) {
     }
   };
   powerEl.addEventListener('pointerup', releasePower);
-  powerEl.addEventListener('pointercancel', () => { pulling = false; pull = 0; drawPower(); draw(); });
+  // Cancel a pull to re-aim: Esc, right-click, or drag back to 0 and let go.
+  const cancelPull = () => {
+    if (!pulling) return;
+    pulling = false; pull = 0;
+    drawPower(); sendAim(true); draw();
+  };
+  powerEl.addEventListener('pointercancel', cancelPull);
+  powerEl.addEventListener('contextmenu', (ev) => { ev.preventDefault(); cancelPull(); });
+  const escKey = (ev) => { if (ev.key === 'Escape' && pulling) { ev.preventDefault(); cancelPull(); } };
+  window.addEventListener('keydown', escKey);
 
   function setSpinFrom(ev) {
     const r = spinCanvas.getBoundingClientRect();
@@ -1121,6 +1130,17 @@ export function mount(container, api) {
       racks.appendChild(r);
       return;
     }
+    if (!view.groups.p1 && !view.groups.p2) {
+      // Open table (e.g. right after the break): every ball, potted ones dimmed.
+      const r = document.createElement('div');
+      r.className = 'pl-rack';
+      const lbl = document.createElement('span');
+      lbl.textContent = 'OPEN TABLE:';
+      r.appendChild(lbl);
+      for (let n = 1; n <= 15; n++) r.appendChild(miniBall(n, !onTable.has(n)));
+      racks.appendChild(r);
+      return;
+    }
     for (const s of ['p1', 'p2']) {
       const r = document.createElement('div');
       r.className = 'pl-rack';
@@ -1251,6 +1271,7 @@ export function mount(container, api) {
       clearTimeout(flashTimer);
       clearTimeout(toastTimer);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', escKey);
       window.removeEventListener('resize', resize);
       results.destroy();
       container.innerHTML = '';
