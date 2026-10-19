@@ -26,7 +26,7 @@ const CSP = [
   "script-src 'self' https://www.gstatic.com https://apis.google.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob: https://*.googleusercontent.com",
+  "img-src 'self' data: blob: https://*.googleusercontent.com https://image.tmdb.org",
   "connect-src 'self' ws: wss: blob: data: https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com",
   "frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com",
   "worker-src 'self' blob:",

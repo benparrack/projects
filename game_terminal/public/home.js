@@ -57,7 +57,7 @@ export function renderActivity(mount, payload, { gameLabel, openFriends }) {
 
 // Solo: games built to be played alone for a personal best (no opponent or bot needed).
 // One click opens a private room.
-const SOLO = ['wordle', 'crossword', 'anagrams', 'wordhunt', 'wordbites', 'wordscapes', 'wordsearch', 'wordtrails', 'mazedash', 'slope', 'bowling', 'skeeball', 'basketball', 'archery', 'minigolf', 'blackjack'];
+const SOLO = ['wordle', 'framed', 'crossword', 'anagrams', 'wordhunt', 'wordbites', 'wordscapes', 'wordsearch', 'wordtrails', 'mazedash', 'slope', 'bowling', 'skeeball', 'basketball', 'archery', 'minigolf', 'blackjack'];
 
 export function renderSoloCard(mount, { account, gameLabel, play }) {
   let open = true;
