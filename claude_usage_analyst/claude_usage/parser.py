@@ -458,18 +458,15 @@ class Scanner:
         """Return {path: record} and whether anything changed."""
         sig = sig if sig is not None else self.signature()
         changed = False
-        seen = set()
         for path, mtime, size in sig:
-            seen.add(path)
             cur = self.records.get(path)
             if cur and cur[0] == mtime and cur[1] == size:
                 continue
             self.records[path] = (mtime, size, parse_file(path))
             changed = True
-        for path in list(self.records):
-            if path not in seen:
-                del self.records[path]
-                changed = True
+        # Records of deleted transcripts are kept: Claude Code prunes old ones
+        # (cleanupPeriodDays), and dropping them made all-time totals shrink.
+        # So bumping CACHE_VERSION also wipes that history.
         if changed:
             self._save()
         return {p: v[2] for p, v in self.records.items()}, changed

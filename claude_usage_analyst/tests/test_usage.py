@@ -146,6 +146,16 @@ class ParserTests(unittest.TestCase):
         _, changed = s.scan()
         self.assertFalse(changed)
 
+    def test_deleted_transcripts_stay_counted(self):
+        fx = Fixture()
+        try:
+            before = fx.records()
+            for p in before:
+                os.remove(p)
+            self.assertEqual(fx.records().keys(), before.keys())
+        finally:
+            fx.cleanup()
+
 
 class AnalysisTests(unittest.TestCase):
     @classmethod
