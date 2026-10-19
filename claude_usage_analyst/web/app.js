@@ -235,6 +235,7 @@ views.overview = function () {
   // days whose transcripts Claude Code pruned, estimated from its /stats cache (unknown per project)
   const hist = pi >= 0 ? {} : d.history || {};
   const histTok = Object.values(hist).reduce((a, v) => a + v, 0);
+  const allTime = $("#range").value === "0";
   for (const [k, v] of Object.entries(hist)) dayTok[k] = v;
   for (const r of d.rows) {
     if (pi >= 0 && r[C.project] !== pi) continue;
@@ -322,7 +323,7 @@ views.overview = function () {
     <div class="tile"><div class="k">Sessions</div><div class="v">${sess.size}</div><div class="d">${prompts} prompts typed</div></div>
     <div class="tile"><div class="k">Cost per prompt</div><div class="v">${money(prompts ? total / prompts : null)}</div><div class="d">${prompts ? (rows.length / prompts).toFixed(1) : "–"} requests per prompt</div></div>
     <div class="tile"><div class="k">Spent on cache reads</div><div class="v">${pct(total ? (cr / total) * 100 : null)}</div><div class="d">re-reading context each turn</div></div>
-    <div class="tile"><div class="k">Total tokens</div><div class="v">${tok(totalTok)}</div><div class="d" data-tip="${esc(tipRows("Tokens in range", [["var(--s1)", "Cache reads", tok(rows.reduce((a, r) => a + r[C.cr], 0))], ["var(--s2)", "Cache writes", tok(rows.reduce((a, r) => a + r[C.cw], 0))], ["var(--s3)", "Output", tok(out)], ["var(--s4)", "Fresh input", tok(rows.reduce((a, r) => a + r[C.in], 0))]]))}">${tok(lifetime)} all time</div></div>
+    <div class="tile"><div class="k">Total tokens</div><div class="v">${tok(totalTok + (allTime ? histTok : 0))}</div><div class="d" data-tip="${esc(tipRows("Tokens in range", [["var(--s1)", "Cache reads", tok(rows.reduce((a, r) => a + r[C.cr], 0))], ["var(--s2)", "Cache writes", tok(rows.reduce((a, r) => a + r[C.cw], 0))], ["var(--s3)", "Output", tok(out)], ["var(--s4)", "Fresh input", tok(rows.reduce((a, r) => a + r[C.in], 0))], ...(!allTime || !histTok ? [] : [["", "Estimated, before oldest log", tok(histTok)]])]))}">${tok(lifetime)} all time</div></div>
     <div class="tile"><div class="k">Output tokens</div><div class="v">${tok(out)}</div><div class="d">what drives your Pro limit</div></div>
   </div>
   <div class="card">
