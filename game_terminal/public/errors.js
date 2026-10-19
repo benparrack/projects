@@ -14,6 +14,7 @@ function report(message, source, line, stack) {
 
 window.addEventListener('error', (e) => {
   if (!e.message) return; // failed <img>/<script> loads also fire 'error', with no message
+  if (e.message.startsWith('ResizeObserver loop')) return; // benign browser warning, not a bug
   report(e.message, e.filename, e.lineno, e.error && e.error.stack);
 });
 window.addEventListener('unhandledrejection', (e) => {
