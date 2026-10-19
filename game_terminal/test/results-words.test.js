@@ -121,15 +121,15 @@ test('wordscapes race: finisher first, then by words found; next level reports a
   assert.deepStrictEqual(room.results[1].placements, [['A', 'B']]);
 });
 
-test('hangman: guessers (one team) vs picker, both outcomes', () => {
+test('hangman race: first solver, then picker, then the rest; picker wins when all hang', () => {
   const room = makeRoom('hangman', ['A', 'B', 'C']);
   join('hangman', room);
   room.act('A', { kind: 'setWord', word: 'cat' });
   for (const l of 'CAT') room.act('B', { kind: 'guessLetter', letter: l });
-  assert.deepStrictEqual(only(room).placements, [['B', 'C'], ['A']]);
+  assert.deepStrictEqual(only(room).placements, [['B'], ['A'], ['C']]);
   room.act('A', { kind: 'nextRound' }); // B picks
   room.act('B', { kind: 'setWord', word: 'dog' });
-  for (const l of 'QWERTY') room.act('C', { kind: 'guessLetter', letter: l });
+  for (const id of ['C', 'A']) for (const l of 'QWERTY') room.act(id, { kind: 'guessLetter', letter: l });
   assert.strictEqual(room.results.length, 2);
   assert.deepStrictEqual(room.results[1].placements, [['B'], ['A', 'C']]);
   clearTimeout(room.state._botTimer);
