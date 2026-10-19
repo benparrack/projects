@@ -57,6 +57,12 @@ function call(api, url) {
   assert.strictEqual((await call(api, '/api/nope')).status, 404);
   assert.strictEqual((await call(api, '/api/config')).body.authMode, 'dev');
 
+  // A new record shows on the all-time board right away (cached boards are dropped on write).
+  assert.strictEqual((await call(api, '/api/leaderboard/slope?by=best')).body.rows[0].value, 99);
+  const fresh = createResults({ db, registry, onStatsWritten: api.dropBoards });
+  await fresh.record(room('slope', [people[0]]), { placements: [['A']], scores: { A: 150 } });
+  assert.strictEqual((await call(api, '/api/leaderboard/slope?by=best')).body.rows[0].value, 150);
+
   // Replays: stored for plugins with replayFrames, served as frames, uids stripped.
   const real = require('../server/games');
   const rdb = createMemoryDb();

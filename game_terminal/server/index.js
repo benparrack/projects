@@ -29,7 +29,7 @@ const accounts = createAccounts(db);
 const daily = createDaily(db);
 const activity = createActivity(db);
 const weekly = createWeekly(db);
-const results = createResults({ db, registry: gameRegistry, daily, weekly, onRecorded: (summary) => activity.counted(summary.gameType).catch((err) => console.error('activity: count failed', err)) });
+const results = createResults({ db, registry: gameRegistry, daily, weekly, onRecorded: (summary) => activity.counted(summary.gameType).catch((err) => console.error('activity: count failed', err)), onStatsWritten: (gameType) => handleApi.dropBoards(gameType) });
 const social = createSocial(db, accounts);
 const parties = new Parties();
 const chat = createChat(db);

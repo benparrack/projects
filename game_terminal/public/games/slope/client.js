@@ -244,11 +244,9 @@ export function mount(container, api) {
   const skinBtn = document.createElement('button');
   skinBtn.style.cssText = 'position:absolute;bottom:64px;left:12px;font:bold 12px monospace;padding:5px 9px;background:rgba(6,2,18,0.75);color:#fff;border:1px solid #555;border-radius:4px;cursor:pointer;z-index:2';
   root.appendChild(skinBtn);
-  let globalRows = null; let globalAt = 0;
+  let globalRows = null; let globalRound = -1;
   function loadGlobal() {
-    if (Date.now() - globalAt < 20000) return;
-    globalAt = Date.now();
-    fetch('/api/leaderboard/slope?by=best').then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && !destroyed) globalRows = d.rows || []; }).catch(() => {});
+    fetch('/api/leaderboard/slope?by=best', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && !destroyed) globalRows = d.rows || []; }).catch(() => {});
   }
   loadGlobal();
   hintEl.textContent = '← → / A D to steer · tap left/right side on touch · N names';
@@ -842,7 +840,8 @@ export function mount(container, api) {
     setDom(liveEl, 'innerHTML', live.length > 1 || phase !== 'racing'
       ? `<b>THIS RUN</b><br>${live.map((r) => `<span style="opacity:${r.alive ? 1 : 0.45}">${r.you ? '▶ ' : ''}${esc(r.name)} ${r.s}${r.alive ? '' : ' ✕'}</span>`).join('<br>')}`
       : '');
-    if (phase === 'results') loadGlobal();
+    // Once per round, after the server has had a moment to save the results.
+    if (phase === 'results' && view.roundId !== globalRound) { globalRound = view.roundId; setTimeout(loadGlobal, 1500); }
     const room = view.best && view.best.length
       ? `<b>ROOM BEST</b><br>${view.best.map((b, i) => `${i + 1}. ${esc(b.nickname)} ${b.score}`).join('<br>')}`
       : '';

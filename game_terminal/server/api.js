@@ -164,7 +164,7 @@ function createApi({ db, accounts, daily = null, weekly = null, live = null, aut
     console.error(`client error: ${clean(e.message, 300)} @ ${clean(e.source, 120)}:${clean(e.line, 8)} | page ${clean(e.page, 80)} | ${clean(e.ua, 120)}${e.stack ? ` | ${clean(e.stack, 600)}` : ''}`);
   }
 
-  return async function handleApi(req, res) {
+  async function handleApi(req, res) {
     const pathname = req.url.split('?')[0];
     if (!pathname.startsWith('/api/')) return false;
     if (pathname === '/api/client-error' && req.method === 'POST') { await clientError(req, res); return true; }
@@ -183,7 +183,10 @@ function createApi({ db, accounts, daily = null, weekly = null, live = null, aut
     }
     json(res, 404, { error: 'Not found.' });
     return true;
-  };
+  }
+  // A new result can change a game's boards; drop them so the next read is fresh.
+  handleApi.dropBoards = (gameType) => { for (const k of boards.keys()) if (k.startsWith(`${gameType}|`)) boards.delete(k); };
+  return handleApi;
 }
 
 // uids never leave the server; profiles are addressed by username.

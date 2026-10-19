@@ -20,7 +20,7 @@ const { matchXp, grantXp, levelFor, newAchievements, ACHIEVEMENT_LIST } = requir
 const newId = () => `${Date.now().toString(36)}${crypto.randomBytes(5).toString('hex')}`;
 const pairKey = (a, b) => [a, b].sort().join('_');
 
-function createResults({ db, registry, daily = null, weekly = null, now = () => Date.now(), onRecorded = () => {} }) {
+function createResults({ db, registry, daily = null, weekly = null, now = () => Date.now(), onRecorded = () => {}, onStatsWritten = () => {} }) {
   // Serialises read-modify-write per stats doc. Single Render instance, so this is enough.
   const queues = new Map();
   function serial(key, fn) {
@@ -144,6 +144,7 @@ function createResults({ db, registry, daily = null, weekly = null, now = () => 
     if (summary.replay) writes.push(db.set(`matches/${id}`, { gameType: room.gameType, endedAt, players: summary.players, replay: result.replay }));
     const settled = await Promise.allSettled(writes);
     for (const r of settled) if (r.status === 'rejected') console.error('results: write failed', r.reason);
+    onStatsWritten(room.gameType);
     // Daily challenge run: score the claimed attempt (once) before XP so the streak counts.
     const dailyOut = {};
     if (daily && room.daily && kind === 'solo') {
