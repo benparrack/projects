@@ -54,6 +54,11 @@ const BOT_LEVELS = {
 const TER_DIST = new Int32Array(GRID_W * GRID_H);
 const TER_OWNER = new Int8Array(GRID_W * GRID_H);
 const FLOOD_SEEN = new Uint8Array(GRID_W * GRID_H);
+// Reused queues + hoisted neighbour list: per-cell array allocations in the fills below caused
+// the GC pauses behind the "lag spike mid-game every round" report.
+const QA = new Int32Array(GRID_W * GRID_H);
+const QB = new Int32Array(GRID_W * GRID_H);
+const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const LEFT_OF = { up: 'left', left: 'down', down: 'right', right: 'up' };
 const RIGHT_OF = { up: 'right', right: 'down', down: 'left', left: 'up' };
 
@@ -68,16 +73,17 @@ function steerBots(st) {
 
   function flood(g, x, y, cap) {
     const seen = FLOOD_SEEN.fill(0);
-    const q = [y * W + x]; seen[q[0]] = 1;
+    let top = 0;
+    QA[top++] = y * W + x; seen[y * W + x] = 1;
     let n = 0;
-    while (q.length && n < cap) {
-      const i = q.pop(); n++;
+    while (top && n < cap) {
+      const i = QA[--top]; n++;
       const cx = i % W; const cy = (i - cx) / W;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (const [dx, dy] of NB) {
         const nx = cx + dx; const ny = cy + dy;
         if (!free(nx, ny, g)) continue;
         const k = ny * W + nx;
-        if (!seen[k]) { seen[k] = 1; q.push(k); }
+        if (!seen[k]) { seen[k] = 1; QA[top++] = k; }
       }
     }
     return n;
@@ -86,28 +92,29 @@ function steerBots(st) {
   function territory(g, me, x, y) {
     const dist = TER_DIST.fill(-1);
     const owner = TER_OWNER.fill(-1);
-    let q = [];
-    const push = (k, o) => { dist[k] = 0; owner[k] = o; q.push(k); };
+    let q = QA; let qn = 0;
+    const push = (k, o) => { dist[k] = 0; owner[k] = o; q[qn++] = k; };
     push(y * W + x, 0);
     for (const r of rivals(me)) {
       const k = r.y * W + r.x;
       if (dist[k] === -1) push(k, 1);
     }
     let mine = 0; let d = 0;
-    while (q.length) {
-      const nq = [];
+    while (qn) {
+      const nq = q === QA ? QB : QA; let nn = 0;
       d++;
-      for (const i of q) {
+      for (let j = 0; j < qn; j++) {
+        const i = q[j];
         const cx = i % W; const cy = (i - cx) / W;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        for (const [dx, dy] of NB) {
           const nx = cx + dx; const ny = cy + dy;
           if (!free(nx, ny, g)) continue;
           const k = ny * W + nx;
-          if (dist[k] === -1) { dist[k] = d; owner[k] = owner[i]; nq.push(k); if (owner[i] === 0) mine++; }
+          if (dist[k] === -1) { dist[k] = d; owner[k] = owner[i]; nq[nn++] = k; if (owner[i] === 0) mine++; }
           else if (dist[k] === d && owner[k] !== owner[i]) { if (owner[k] === 0) mine--; owner[k] = 2; }
         }
       }
-      q = nq;
+      q = nq; qn = nn;
     }
     return mine;
   }
@@ -304,10 +311,10 @@ function stepPlaying(st) {
   // Occupied set as of BEFORE this tick's moves — every trail cell (dead or alive players
   // both count as permanent walls, per the design: crashed light-cycles leave their wall up
   // for survivors, same as the arcade original).
-  const occupied = new Set();
+  const occupied = new Uint8Array(GRID_W * GRID_H);
   for (const p of st.players.values()) {
     if (!p.inRound) continue;
-    for (const c of p.trail) occupied.add(cellKey(c.x, c.y));
+    for (const c of p.trail) occupied[c.y * GRID_W + c.x] = 1;
   }
 
   const movers = [...st.players.values()].filter((p) => p.inRound && p.alive);
@@ -330,7 +337,7 @@ function stepPlaying(st) {
     const { x: nx, y: ny } = nextCells.get(p.clientId);
     const key = cellKey(nx, ny);
     const outOfBounds = nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H;
-    const hitWall = !outOfBounds && occupied.has(key);
+    const hitWall = !outOfBounds && occupied[ny * GRID_W + nx] === 1;
     const headOn = !outOfBounds && claimCount.get(key) > 1; // two+ movers landing on the same new cell this tick
 
     if (outOfBounds || hitWall || headOn) {

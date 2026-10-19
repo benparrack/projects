@@ -351,6 +351,9 @@ export function mount(container, api) {
     function cellPt(x, y) {
       return [x * CELL_PX + CELL_PX / 2, y * CELL_PX + CELL_PX / 2];
     }
+    // Straight runs only need their corners: a path through every cell got slow to stroke
+    // (4 passes, round joins) as trails grew, a mid-round frame-rate dip.
+    const corner = (tr, i) => tr[i + 1].x - tr[i].x !== tr[i].x - tr[i - 1].x || tr[i + 1].y - tr[i].y !== tr[i].y - tr[i - 1].y;
 
     for (const p of view.players) {
       if (!p.head && p.status !== 'dead') continue;
@@ -395,6 +398,7 @@ export function mount(container, api) {
           // the head dot always advance in lockstep.
           const settledCount = trail.length - 1;
           for (let i = 1; i < settledCount; i++) {
+            if (i < settledCount - 1 && !corner(trail, i)) continue;
             const [x, y] = cellPt(trail[i].x, trail[i].y);
             ctx.lineTo(x, y);
           }
@@ -403,6 +407,7 @@ export function mount(container, api) {
           // Dead: no further interpolation happening (hx/hy already settled at the crash cell),
           // so draw straight through every committed cell including the last.
           for (let i = 1; i < trail.length; i++) {
+            if (i < trail.length - 1 && !corner(trail, i)) continue;
             const [x, y] = cellPt(trail[i].x, trail[i].y);
             ctx.lineTo(x, y);
           }
