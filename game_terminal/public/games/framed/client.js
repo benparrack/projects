@@ -1,6 +1,6 @@
-// Framed — guess the movie (released 2000 or later) from its stills. Everyone gets the same movie
-// and six tries; each wrong guess or SKIP unlocks the next frame. Pick a title from the suggestions
-// and press ENTER. Fewest frames wins. Click the frame numbers to look back at earlier frames.
+// Framed — guess the movie (released 2000 or later) from frames of it. Everyone gets the same movie
+// and six tries; each wrong guess or SKIP unlocks the next frame. Type, then ENTER (or click) guesses
+// the highlighted suggestion; ↑/↓ moves it. Fewest frames wins. The frame numbers flip back.
 // Server plugin: ../../../server/games/framed.js (holds the answer; sends frames as you unlock them).
 import { sfx } from '../sfx.js';
 import { createResults } from '../resultsPanel.js';
@@ -23,7 +23,13 @@ const CSS = `
 .fr-tab.skip { border-color: #777; color: #aaa; }
 .fr-tab.hit { border-color: #39ff14; color: #39ff14; }
 .fr-tab.on, .fr-tab.on:hover { background: var(--fg, #39ff14); color: #000; }
-.fr-form { display: flex; gap: 6px; }
+.fr-form { display: flex; gap: 6px; position: relative; }
+.fr-sugg { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; list-style: none; margin: 0; padding: 0;
+  background: #050a05; border: 1px solid var(--fg, #39ff14); box-shadow: 0 6px 18px rgba(0,0,0,.7); max-height: 300px; overflow-y: auto; }
+.fr-sugg[hidden] { display: none; }
+.fr-sugg li { padding: 7px 10px; cursor: pointer; border-bottom: 1px solid rgba(57,255,20,.12); }
+.fr-sugg li.on { background: var(--fg, #39ff14); color: #000; }
+.fr-sugg li.none { cursor: default; opacity: .6; }
 .fr-form input { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; background: #000; color: var(--fg, #39ff14);
   border: 1px solid var(--fg-dim, #1f8f0c); }
 .fr-form input:focus { outline: none; border-color: var(--fg, #39ff14); }
@@ -60,7 +66,28 @@ const el = (tag, cls, text) => {
   return e;
 };
 
-let listSeq = 0;
+// Loose title search: case, accents and punctuation don't matter, "&" = "and", and the words you
+// type can come in any order ("return king" finds The Return of the King). Best matches first:
+// title starts with it, then a word starts with it, then it appears anywhere, then all words match.
+const norm = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+function searchTitles(titles, q, limit = 8) {
+  const nq = norm(q);
+  if (!nq) return [];
+  const words = nq.split(' ');
+  const hits = [];
+  for (const t of titles) {
+    const nt = norm(t);
+    const tw = nt.split(' ');
+    let rank;
+    if (nt.startsWith(nq)) rank = 0;
+    else if ((' ' + nt).includes(' ' + nq)) rank = 1;
+    else if (nt.includes(nq)) rank = 2;
+    else if (words.every((w) => tw.some((x) => x.startsWith(w)))) rank = 3;
+    else continue;
+    hits.push({ t, rank });
+  }
+  return hits.sort((a, b) => a.rank - b.rank || a.t.length - b.t.length).slice(0, limit).map((h) => h.t);
+}
 
 export function mount(container, api) {
   ensureStyles();
@@ -83,20 +110,20 @@ export function mount(container, api) {
   const tabs = el('div', 'fr-tabs');
   const form = el('form', 'fr-form');
   const input = el('input');
-  const listId = `fr-titles-${++listSeq}`;
-  const datalist = el('datalist');
-  datalist.id = listId;
+  const sugg = el('ul', 'fr-sugg');
+  sugg.hidden = true;
+  sugg.setAttribute('role', 'listbox');
   Object.assign(input, { placeholder: 'Search for a movie…', autocomplete: 'off', spellcheck: false });
-  input.setAttribute('list', listId);
   input.setAttribute('aria-label', 'Movie title');
+  input.setAttribute('role', 'combobox');
   const guessBtn = el('button', null, 'GUESS');
   guessBtn.type = 'submit';
   const skipBtn = el('button', null, 'SKIP');
   skipBtn.type = 'button';
-  form.append(input, datalist, guessBtn, skipBtn);
+  form.append(input, guessBtn, skipBtn, sugg);
   const toastEl = el('div', 'fr-toast');
   const log = el('ul', 'fr-log');
-  play.append(frameBox, tabs, form, toastEl, log, el('div', 'fr-credit', 'Stills via TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.'));
+  play.append(frameBox, tabs, form, toastEl, log, el('div', 'fr-credit', 'Frames from official trailers. Movie data from TMDB; this product uses the TMDB API but is not endorsed or certified by TMDB.'));
   const side = el('div', 'fr-side');
   const body = el('div', 'fr-body');
   body.append(play, side);
@@ -112,6 +139,36 @@ export function mount(container, api) {
     toastTimer = setTimeout(() => { toastEl.textContent = ''; }, 2200);
   }
 
+  let hits = [];
+  let hi = 0;
+  function renderSugg() {
+    const tried = new Set(view ? view.myGuesses.map((g) => g.guess) : []);
+    hits = searchTitles(titles.filter((t) => !tried.has(t)), input.value);
+    hi = Math.min(hi, Math.max(0, hits.length - 1));
+    sugg.hidden = !input.value.trim() || document.activeElement !== input;
+    sugg.replaceChildren(...(hits.length ? hits.map((t, i) => {
+      const li = el('li', i === hi ? 'on' : '', t);
+      li.setAttribute('role', 'option');
+      // mousedown, not click, so the input keeps focus.
+      li.addEventListener('mousedown', (e) => { e.preventDefault(); input.value = t; renderSugg(); form.requestSubmit(); });
+      return li;
+    }) : [el('li', 'none', 'No movie by that name in the list')]));
+  }
+  input.addEventListener('input', () => { hi = 0; renderSugg(); });
+  input.addEventListener('focus', renderSugg);
+  input.addEventListener('blur', () => { sugg.hidden = true; });
+  input.addEventListener('keydown', (e) => {
+    if (sugg.hidden || !hits.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      hi = (hi + (e.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length;
+      renderSugg();
+      sugg.children[hi].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Escape') sugg.hidden = true;
+    // ENTER guesses the highlighted suggestion (the top one unless you arrowed to another).
+    else if (e.key === 'Enter') input.value = hits[hi];
+  });
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const guess = input.value.trim();
@@ -119,6 +176,7 @@ export function mount(container, api) {
     // Exact (case-insensitive) title match only, so a half-typed name never burns a frame.
     const match = titles.find((t) => t.toLowerCase() === guess.toLowerCase());
     if (!match) { toast('Pick a movie from the suggestions'); sfx.play('error'); return; }
+    sugg.hidden = true;
     api.sendAction({ kind: 'guess', guess: match });
   });
   skipBtn.addEventListener('click', () => { if (canGuess()) api.sendAction({ kind: 'guess', guess: '' }); });
@@ -200,7 +258,6 @@ export function mount(container, api) {
     view = data;
     if (data.titles) {
       titles = data.titles;
-      datalist.replaceChildren(...titles.map((t) => { const o = el('option'); o.value = t; return o; }));
     }
     const newRound = view.roundId !== roundSeen;
     roundSeen = view.roundId;

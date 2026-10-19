@@ -36,7 +36,7 @@ const viewOf = (plugin, room, id) => plugin.serializeSnapshot(room, { clientId: 
   act(framed, room, 'a', { kind: 'guess', guess: movie.title });
   assert.strictEqual(viewOf(framed, room, 'a').phase, 'results');
   assert.strictEqual(viewOf(framed, room, 'a').frames.length, 6);
-  assert.ok(framed._internals.MOVIES.every((m) => m.year >= 2000 && m.frames.length === 6));
+  assert.ok(framed._internals.MOVIES.every((m) => m.year >= 2000 && m.dir));
 }
 
 console.log('framed: all tests passed');
