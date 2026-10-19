@@ -453,6 +453,8 @@ export const HOWTO = {
       'Eliminate your opponent to win the round.',
       'First to 3 round wins takes the match.',
       'Three weapons: pistol, shotgun and sniper.',
+      'Lose a round and you pick a catch-up perk for the rest of the match: faster reloads, double jump or +25 armour.',
+      'Not seated? Join a running room to spectate either player.',
     ],
     controls: [
       'Click to lock the mouse and aim; WASD to move; left-click fires, hold right-click to scope.',

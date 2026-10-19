@@ -66,6 +66,12 @@ const TELEPORT_DIST_SQ = 3 * 3;
 const WEAPON_IDS = ['pistol', 'shotgun', 'sniper'];
 const WEAPON_KEYS = { Digit1: 'pistol', Digit2: 'shotgun', Digit3: 'sniper' };
 const WEAPON_LABELS = { pistol: 'PISTOL', shotgun: 'SHOTGUN', sniper: 'SNIPER' };
+const PERK_INFO = {
+  reload: { icon: '⚡', name: 'FAST HANDS', desc: 'reloads 40% faster' },
+  doublejump: { icon: '🦘', name: 'DOUBLE JUMP', desc: 'jump again in mid-air' },
+  armor: { icon: '🛡', name: 'ARMOUR', desc: '+25 max HP' },
+};
+const perkIcons = (p) => (p && p.perks && p.perks.length ? ' ' + p.perks.map((k) => PERK_INFO[k].icon).join('') : '');
 const WEAPON_COLORS = { pistol: 0x50555e, shotgun: 0xc06a1c, sniper: 0x2a8a48 };
 
 // Per-browser player preferences (sensitivity + keybinds) — local to this device/browser, not
@@ -376,6 +382,10 @@ const HUD_STYLE = `
 .shooter-damage-flash { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 40%, rgba(255,0,0,0.35) 100%); opacity: 0; }
 .shooter-damage-flash.show { opacity: 1; transition: opacity 0.05s linear; }
 .shooter-damage-flash.fade { opacity: 0; transition: opacity 0.4s ease-out; }
+.shooter-perks { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.shooter-perk { pointer-events: auto; font-family: monospace; background: rgba(0,0,0,0.7); color: #ffe066; border: 1px solid #ffe066; padding: 8px 12px; cursor: pointer; font-size: 13px; width: 150px; }
+.shooter-perk:hover { background: rgba(255,224,102,0.15); }
+.shooter-perk small { display: block; color: #ccc; font-size: 11px; margin-top: 4px; }
 .shooter-rematch-btn { margin-top: 12px; pointer-events: auto; font-family: monospace; background: rgba(0,0,0,0.6); color: #39ff14; border: 1px solid #39ff14; padding: 8px 18px; cursor: pointer; font-size: 14px; }
 .shooter-settings-overlay { position: fixed; inset: 0; z-index: 20000; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; font-family: monospace; color: #d7ffe0; }
 .shooter-settings-panel { background: #0b0f10; border: 1px solid #2a2f36; padding: 20px 24px; width: min(440px, 90vw); max-height: 85vh; overflow-y: auto; }
@@ -722,6 +732,10 @@ export function mount(container, api) {
     rematchBtn.hidden = true;
     rematchBtn.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
     banner.appendChild(rematchBtn);
+    const perkBox = document.createElement('div');
+    perkBox.className = 'shooter-perks';
+    perkBox.hidden = true;
+    banner.appendChild(perkBox);
     overlayRoot.appendChild(banner);
 
     const unlockHint = document.createElement('div');
@@ -1049,7 +1063,7 @@ export function mount(container, api) {
       oppGroup: opponent.group, oppAvatar: opponent, selfAvatar: self, updateAvatarPose,
       oppGunRig, selfGunRig, viewmodelGunRig,
       tracerPool,
-      crosshair, scope, hitmarker, damageFlash, lowHp, scorePill, banner, bannerText, rematchBtn, unlockHint, leaveSeatArenaBtn,
+      crosshair, scope, hitmarker, damageFlash, lowHp, scorePill, banner, bannerText, rematchBtn, perkBox, unlockHint, leaveSeatArenaBtn,
       meBarFill, meLabel, oppBarFill, oppLabel, ammoEl, wslots,
       onResize,
     };
@@ -1164,7 +1178,16 @@ export function mount(container, api) {
     if (ev.code === kb.jump && !ev.repeat) {
       // Predict the jump impulse locally for immediate feedback; the server independently
       // validates groundedness and is authoritative for the actual result.
-      if (predicted.y <= 0.001 && predicted.velY <= 0) { predicted.velY = JUMP_VELOCITY; sfx.play('jump'); }
+      const meNow = latestState && latestState.players[mySeat];
+      if (predicted.y <= 0.001 && predicted.velY <= 0) {
+        predicted.velY = JUMP_VELOCITY;
+        predicted.airJump = !!(meNow && meNow.perks && meNow.perks.includes('doublejump'));
+        sfx.play('jump');
+      } else if (predicted.airJump && predicted.y > 0.001) {
+        predicted.velY = JUMP_VELOCITY;
+        predicted.airJump = false;
+        sfx.play('jump');
+      }
       api.sendAction({ kind: 'jump' });
       return;
     }
@@ -1458,7 +1481,7 @@ export function mount(container, api) {
       const pct = clamp((me.hp / me.maxHp) * 100, 0, 100);
       arena.meBarFill.style.width = `${pct}%`;
       arena.meBarFill.classList.toggle('low', pct <= 30);
-      arena.meLabel.textContent = `${spectating ? me.nickname || 'PLAYER' : 'YOU'} — ${Math.round(me.hp)}/${me.maxHp}`;
+      arena.meLabel.textContent = `${spectating ? me.nickname || 'PLAYER' : 'YOU'} — ${Math.round(me.hp)}/${me.maxHp}${perkIcons(me)}`;
       arena.leaveSeatArenaBtn.textContent = spectating ? 'STOP WATCHING' : 'LEAVE SEAT';
       if (spectating) {
         arena.unlockHint.hidden = false;
@@ -1471,7 +1494,7 @@ export function mount(container, api) {
       const pct = clamp((opp.hp / opp.maxHp) * 100, 0, 100);
       arena.oppBarFill.style.width = `${pct}%`;
       arena.oppBarFill.classList.toggle('low', pct <= 30);
-      arena.oppLabel.textContent = `${opp.nickname || 'OPPONENT'} — ${Math.round(opp.hp)}/${opp.maxHp}`;
+      arena.oppLabel.textContent = `${opp.nickname || 'OPPONENT'} — ${Math.round(opp.hp)}/${opp.maxHp}${perkIcons(opp)}`;
     }
     arena.scorePill.textContent = `ROUND ${currentView.round} — WINS: A ${currentView.wins.a} / B ${currentView.wins.b} (TO ${currentView.winsNeeded})`;
 
@@ -1486,8 +1509,28 @@ export function mount(container, api) {
         if (secs > 0 && secs <= 3) sfx.play('beep');
         arena.bannerText.innerHTML = `${winnerNote}<div class="sub">NEXT ROUND IN</div><div class="shooter-count">${secs || 'GO'}</div>`;
       }
+      const picking = !spectating && currentView.perkPick === mySeat;
+      if (picking && arena.perkBox.hidden) {
+        // Free the mouse so the perk buttons can be clicked; one click on the arena re-aims.
+        if (document.pointerLockElement) document.exitPointerLock();
+        const owned = currentView.perks[mySeat] || [];
+        arena.perkBox.replaceChildren(...currentView.perkChoices.filter((k) => !owned.includes(k)).map((k) => {
+          const b = document.createElement('button');
+          b.className = 'shooter-perk';
+          b.innerHTML = `${PERK_INFO[k].icon} ${PERK_INFO[k].name}<small>${PERK_INFO[k].desc}</small>`;
+          b.addEventListener('click', (e) => { e.stopPropagation(); api.sendAction({ kind: 'pickPerk', perk: k }); });
+          return b;
+        }));
+        const head = document.createElement('div');
+        head.className = 'sub';
+        head.style.width = '100%';
+        head.textContent = 'CATCH-UP PERK — PICK ONE (KEPT ALL MATCH)';
+        arena.perkBox.prepend(head);
+      }
+      arena.perkBox.hidden = !picking;
     } else if (currentView.phase === 'game_over') {
       lastCountSecs = null;
+      arena.perkBox.hidden = true;
       arena.banner.hidden = false;
       arena.rematchBtn.hidden = spectating;
       const won = currentView.matchWinner === mySeat;
@@ -1497,6 +1540,7 @@ export function mount(container, api) {
     } else {
       lastCountSecs = null;
       arena.banner.hidden = true;
+      arena.perkBox.hidden = true;
       arena.rematchBtn.hidden = true;
     }
     arena.lowHp.hidden = !(me && me.alive && currentView.phase === 'playing' && me.hp / me.maxHp <= 0.3);

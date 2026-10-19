@@ -49,6 +49,12 @@ const BODY_HITBOX_Y = 1.0;
 const HEAD_HITBOX_RADIUS = 0.22;
 const WINS_NEEDED = 3;
 const ROUND_INTRO_MS = 3000;
+// Catch-up perks: the loser of each round picks one, kept for the rest of the match. Their intro
+// is longer so there's time to choose; no pick by then gets a random one.
+const PERKS = ['reload', 'doublejump', 'armor'];
+const PERK_INTRO_MS = 5000;
+const PERK_RELOAD_MULT = 0.6;
+const PERK_ARMOR_HP = 25;
 
 // Pillar layout ported verbatim from 3dgames/shooter/game.js PILLAR_LAYOUT.
 const PILLARS = [
@@ -210,9 +216,9 @@ function driveBot(room, ctx, seat, now) {
   }
   me.zoomed = me.weapon === 'sniper' && visible && lv.weapons;
   const w = WEAPONS[me.weapon];
-  if (me.ammo[me.weapon] <= 0 && me.reloadEndsAt[me.weapon] === null) me.reloadEndsAt[me.weapon] = now + w.reloadTime;
+  if (me.ammo[me.weapon] <= 0 && me.reloadEndsAt[me.weapon] === null) me.reloadEndsAt[me.weapon] = now + reloadMs(me, me.weapon);
   // Reload a half-empty gun while the enemy is out of sight.
-  if (!visible && me.ammo[me.weapon] < w.magSize / 2 && me.reloadEndsAt[me.weapon] === null) me.reloadEndsAt[me.weapon] = now + w.reloadTime;
+  if (!visible && me.ammo[me.weapon] < w.magSize / 2 && me.reloadEndsAt[me.weapon] === null) me.reloadEndsAt[me.weapon] = now + reloadMs(me, me.weapon);
 
   // Movement: close in when out of view or out of the weapon's range, back off when too close,
   // and strafe side to side while shooting.
@@ -242,7 +248,12 @@ function driveBot(room, ctx, seat, now) {
   if (visible && now - b.seenAt >= lv.react && onTarget && inRange) resolveFire(room, ctx, seat, me, null);
 }
 
-function freshPlayer(spawn) {
+function reloadMs(p, id) {
+  return WEAPONS[id].reloadTime * (p.perks.includes('reload') ? PERK_RELOAD_MULT : 1);
+}
+
+function freshPlayer(spawn, perks = []) {
+  const maxHp = MAX_HP + (perks.includes('armor') ? PERK_ARMOR_HP : 0);
   const ammo = {};
   const reloadEndsAt = {};
   for (const id of WEAPON_IDS) {
@@ -255,7 +266,8 @@ function freshPlayer(spawn) {
     crouching: false,
     sliding: false, slideStartedAt: 0, lastSlideAt: 0,
     zoomed: false,
-    hp: MAX_HP, alive: true,
+    hp: maxHp, maxHp, alive: true,
+    perks, airJump: false,
     weapon: 'pistol',
     ammo,
     // Per-weapon, not a single scalar: a reload keeps counting down even while a different
@@ -290,7 +302,7 @@ function buildStatePayload(room) {
       x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch,
       velX: p.velX, velZ: p.velZ,
       crouching: p.crouching, sliding: p.sliding, zoomed: p.zoomed,
-      hp: p.hp, maxHp: MAX_HP, alive: p.alive,
+      hp: p.hp, maxHp: p.maxHp, alive: p.alive, perks: p.perks,
       weapon: p.weapon, ammo: p.ammo, magSize: WEAPONS[p.weapon].magSize,
       // Reload status shown to the client is just for the currently-equipped weapon, even though
       // reloadEndsAt is tracked per-weapon server-side (see freshPlayer).
@@ -310,6 +322,9 @@ function buildStatePayload(room) {
     matchWinner: st.matchWinner,
     matchWinReason: st.matchWinReason,
     roundEndsAt: st.roundEndsAt,
+    perks: st.perks,
+    perkPick: st.perkPick,
+    perkChoices: PERKS,
     players,
   };
 }
@@ -322,14 +337,32 @@ function sendStateTo(room, clientId) {
   room.sendTo(clientId, { v: 1, type: 'game.event', payload: { gameType: 'shooter', data: buildStatePayload(room) } });
 }
 
-function startRoundIntro(st) {
+function availablePerks(st, seat) {
+  return PERKS.filter((k) => !st.perks[seat].includes(k));
+}
+
+function givePerk(st, seat, perk) {
+  st.perks[seat].push(perk);
+  st.perkPick = null;
+}
+
+function startRoundIntro(st, loserSeat = null) {
   st.phase = 'round_intro';
-  st.roundEndsAt = Date.now() + ROUND_INTRO_MS;
+  st.perkPick = loserSeat && availablePerks(st, loserSeat).length ? loserSeat : null;
+  if (st.perkPick && st.seats[st.perkPick] === BOT) {
+    const opts = availablePerks(st, st.perkPick);
+    givePerk(st, st.perkPick, opts[Math.floor(Math.random() * opts.length)]);
+  }
+  st.roundEndsAt = Date.now() + (st.perkPick ? PERK_INTRO_MS : ROUND_INTRO_MS);
 }
 
 function beginRound(st) {
-  st.players.a = freshPlayer(SPAWNS.a);
-  st.players.b = freshPlayer(SPAWNS.b);
+  if (st.perkPick) {
+    const opts = availablePerks(st, st.perkPick);
+    givePerk(st, st.perkPick, opts[Math.floor(Math.random() * opts.length)]);
+  }
+  st.players.a = freshPlayer(SPAWNS.a, [...st.perks.a]);
+  st.players.b = freshPlayer(SPAWNS.b, [...st.perks.b]);
   st.phase = 'playing';
   st.roundEndsAt = null;
 }
@@ -354,12 +387,15 @@ function resetMatch(st) {
   st.matchWinner = null;
   st.matchWinReason = null;
   st.players = { a: null, b: null };
+  st.perks = { a: [], b: [] };
+  st.perkPick = null;
 }
 
 module.exports = {
   type: 'shooter',
   stats: { rated: true },
   tickIntervalMs: TICK_MS,
+  _test: { startRoundIntro, beginRound, reloadMs },
 
   createInitialState() {
     const st = { phase: 'waiting', seats: { a: null, b: null } };
@@ -466,6 +502,12 @@ module.exports = {
     }
 
     const seat = st.seats.a === senderId ? 'a' : st.seats.b === senderId ? 'b' : null;
+    if (data.kind === 'pickPerk') {
+      if (st.phase !== 'round_intro' || !seat || st.perkPick !== seat || !availablePerks(st, seat).includes(data.perk)) return;
+      givePerk(st, seat, data.perk);
+      broadcastState(room, ctx);
+      return;
+    }
     if (!seat || st.phase !== 'playing') return;
     const player = st.players[seat];
     if (!player || !player.alive) return;
@@ -491,7 +533,13 @@ module.exports = {
     }
 
     if (data.kind === 'jump') {
-      if (player.y <= 0.001 && player.velY <= 0) player.velY = JUMP_VELOCITY;
+      if (player.y <= 0.001 && player.velY <= 0) {
+        player.velY = JUMP_VELOCITY;
+        player.airJump = player.perks.includes('doublejump');
+      } else if (player.airJump && player.y > 0.001) {
+        player.velY = JUMP_VELOCITY;
+        player.airJump = false;
+      }
       return;
     }
 
@@ -529,7 +577,7 @@ module.exports = {
       const id = player.weapon;
       const w = WEAPONS[id];
       if (player.reloadEndsAt[id] !== null || player.ammo[id] >= w.magSize) return;
-      player.reloadEndsAt[id] = Date.now() + w.reloadTime;
+      player.reloadEndsAt[id] = Date.now() + reloadMs(player, id);
       return;
     }
 
@@ -675,7 +723,7 @@ function resolveFire(room, ctx, seat, shooter, originOverride) {
   shooter.ammo[id] -= 1;
   shooter.lastFireAt = now;
   if (shooter.ammo[id] <= 0) {
-    shooter.reloadEndsAt[id] = now + w.reloadTime;
+    shooter.reloadEndsAt[id] = now + reloadMs(shooter, id);
   }
 
   const targetSeat = otherSeat(seat);
@@ -770,7 +818,7 @@ function resolveFire(room, ctx, seat, shooter, originOverride) {
       reportMatch(room, seat);
     } else {
       st.round += 1;
-      startRoundIntro(st);
+      startRoundIntro(st, targetSeat);
     }
     broadcastState(room, ctx);
   }
