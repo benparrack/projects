@@ -6,18 +6,26 @@ import { sfx } from '../sfx.js';
 import { createFx, flashEl, sharpCanvas } from '../canvasFx.js';
 import { createBotBar } from '../tickBots.js';
 
-const GRID_W = 128;
-const GRID_H = 96;
-const CELL_PX = 5;
-const CANVAS_WIDTH = GRID_W * CELL_PX;
-const CANVAS_HEIGHT = GRID_H * CELL_PX;
+// The canvas stays 640x480; the grid size comes from the server (normal 128x96 or large map), so
+// the cell size and stroke widths are rescaled from it in setGrid().
+let GRID_W = 128;
+let GRID_H = 96;
+let CELL_PX = 5;
+const CANVAS_WIDTH = 640;
+const CANVAS_HEIGHT = 480;
 // Trail stroke width and head-dot radius used to be derived from CELL_PX (which doubled as both
 // "grid step size" and "how chunky a rendered cell looks"), but now that CELL_PX is halved for
 // finer movement steps, deriving visual thickness from it would make the trail/ball render half
 // as thick too. Keep the same on-screen sizes as before (8px trail, 3.5px ball radius) by making
 // them their own constants instead.
-const TRAIL_WIDTH_PX = 8;
-const BALL_RADIUS_PX = 3.5;
+let TRAIL_WIDTH_PX = 8;
+let BALL_RADIUS_PX = 3.5;
+function setGrid(w, h) {
+  if (!w || w === GRID_W) return;
+  GRID_W = w; GRID_H = h; CELL_PX = CANVAS_WIDTH / w;
+  TRAIL_WIDTH_PX = 8 * CELL_PX / 5;
+  BALL_RADIUS_PX = 3.5 * Math.max(0.8, CELL_PX / 5);
+}
 // Must match server/games/tron.js's TICK_MS by hand (no shared module in this repo) — used to
 // blend the rendered head position between the previous and most-recent tick, same pattern
 // slither.js/slope.js use to avoid raw-broadcast jitter.
@@ -538,6 +546,8 @@ export function mount(container, api) {
     }
     viewReceivedAt = performance.now();
     lastView = view;
+    setGrid(view.gridW, view.gridH);
+    mapBtn.textContent = `MAP: ${view.mapSize === 'large' ? 'LARGE' : 'NORMAL'}${view.gridW !== (view.mapSize === 'large' ? 192 : 128) ? ' (next round)' : ''}`;
     renderPlayers(view);
     botBar.update(view.players);
     statusEl.textContent = statusLabel(view);
@@ -551,6 +561,10 @@ export function mount(container, api) {
   wrap.insertBefore(statusEl, body);
   const botBar = createBotBar(api);
   wrap.insertBefore(botBar.el, body);
+  const mapBtn = document.createElement('button');
+  mapBtn.style.fontSize = '0.85em';
+  mapBtn.addEventListener('click', () => api.sendAction({ kind: 'setMap', size: lastView && lastView.mapSize === 'large' ? 'normal' : 'large' }));
+  wrap.insertBefore(mapBtn, body);
 
   function applySnapshotView(snapshot) {
     trailMap.clear();

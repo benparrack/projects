@@ -14,6 +14,10 @@
 const TICK_MS = 25;
 const GRID_W = 128;
 const GRID_H = 96;
+// Room's arena size, picked by any player and applied from the next round (playtest: "option
+// for a bigger map"). Same tick speed, so a large map is a longer round, not a faster one.
+const MAP_SIZES = { normal: { w: GRID_W, h: GRID_H }, large: { w: 192, h: 144 } };
+const MAX_CELLS = 192 * 144;
 const CELL_PX = 5; // client-side only in spirit, but kept here as documentation of the pairing
 const SPAWN_MARGIN = 12;
 const COUNTDOWN_MS = 3000;
@@ -28,7 +32,8 @@ const DIR_OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
 // Corner presets for the first 4 players, each facing inward along the arena's long edges
 // rather than straight at a wall. Players 5+ fall back to randomized-but-retried positions
 // (pickFallbackSpawn) — Tron classically supports more than 4 light-cycles in a big arena.
-function cornerSpawns() {
+function cornerSpawns(st) {
+  const GRID_W = st.gridW; const GRID_H = st.gridH;
   return [
     { x: SPAWN_MARGIN, y: SPAWN_MARGIN, dir: 'right' },
     { x: GRID_W - 1 - SPAWN_MARGIN, y: GRID_H - 1 - SPAWN_MARGIN, dir: 'left' },
@@ -51,13 +56,13 @@ const BOT_LEVELS = {
   hard: { look: 0, fill: 4000, headOn: true, voronoi: false, wander: 0.01, lag: 0 },
   expert: { look: 0, fill: 4000, headOn: true, voronoi: true, wander: 0, lag: 0 },
 };
-const TER_DIST = new Int32Array(GRID_W * GRID_H);
-const TER_OWNER = new Int8Array(GRID_W * GRID_H);
-const FLOOD_SEEN = new Uint8Array(GRID_W * GRID_H);
+const TER_DIST = new Int32Array(MAX_CELLS);
+const TER_OWNER = new Int8Array(MAX_CELLS);
+const FLOOD_SEEN = new Uint8Array(MAX_CELLS);
 // Reused queues + hoisted neighbour list: per-cell array allocations in the fills below caused
 // the GC pauses behind the "lag spike mid-game every round" report.
-const QA = new Int32Array(GRID_W * GRID_H);
-const QB = new Int32Array(GRID_W * GRID_H);
+const QA = new Int32Array(MAX_CELLS);
+const QB = new Int32Array(MAX_CELLS);
 const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const LEFT_OF = { up: 'left', left: 'down', down: 'right', right: 'up' };
 const RIGHT_OF = { up: 'right', right: 'down', down: 'left', left: 'up' };
@@ -65,7 +70,7 @@ const RIGHT_OF = { up: 'right', right: 'down', down: 'left', left: 'up' };
 function steerBots(st) {
   const bots = [...st.players.values()].filter((p) => p.bot && p.inRound && p.alive);
   if (!bots.length) return;
-  const W = GRID_W; const H = GRID_H;
+  const W = st.gridW; const H = st.gridH;
   const grid = new Uint8Array(W * H);
   for (const p of st.players.values()) if (p.inRound) for (const c of p.trail) grid[c.y * W + c.x] = 1;
   const free = (x, y, g = grid) => x >= 0 && y >= 0 && x < W && y < H && !g[y * W + x];
@@ -132,6 +137,7 @@ function steerBots(st) {
         }
       }
     }
+    const near = lv.voronoi && rivals(b).some((r) => Math.abs(r.x - b.x) + Math.abs(r.y - b.y) < 40);
     const opts = [b.dir, LEFT_OF[b.dir], RIGHT_OF[b.dir]].map((dir, k) => {
       const v = DIR_VECTORS[dir];
       const x = b.x + v.dx; const y = b.y + v.dy;
@@ -145,7 +151,8 @@ function steerBots(st) {
         grid[y * W + x] = 1;
         const room = flood(grid, x, y, lv.fill);
         score = room * 10;
-        if (lv.voronoi && room > 40) score = room * 2 + territory(grid, b, x, y) * 10;
+        // Territory only matters near a rival; skipping the full-grid BFS otherwise keeps ticks cheap.
+        if (lv.voronoi && room > 40 && near) score = room * 2 + territory(grid, b, x, y) * 10;
         grid[y * W + x] = 0;
       }
       if (danger[y * W + x]) score -= 5e5;
@@ -168,6 +175,7 @@ function cellKey(x, y) {
 // resolve facing toward the arena center (whichever axis has the bigger offset wins, matching
 // pickSpawnPoint's "good enough" philosophy in slither.js rather than a fully general solver).
 function pickFallbackSpawn(st, attempt) {
+  const GRID_W = st.gridW; const GRID_H = st.gridH;
   const x = SPAWN_MARGIN + Math.floor(Math.random() * (GRID_W - SPAWN_MARGIN * 2));
   const y = SPAWN_MARGIN + Math.floor(Math.random() * (GRID_H - SPAWN_MARGIN * 2));
   const cx = GRID_W / 2;
@@ -209,8 +217,9 @@ function buildTrailsMap(st) {
 
 function baseView(st, now) {
   return {
-    gridW: GRID_W,
-    gridH: GRID_H,
+    gridW: st.gridW,
+    gridH: st.gridH,
+    mapSize: st.mapSize,
     roundId: st.roundId,
     phase: st.phase,
     countdownRemainingMs: st.phase === 'countdown' ? Math.max(0, st.countdownEndAt - now) : null,
@@ -234,11 +243,13 @@ function broadcastTick(room, ctx, now) {
 function lockInRoundParticipants(st) {
   for (const p of st.players.values()) p.inRound = true;
   st.roundId = (st.roundId || 0) + 1;
+  st.gridW = MAP_SIZES[st.mapSize].w;
+  st.gridH = MAP_SIZES[st.mapSize].h;
 }
 
 function spawnParticipants(st) {
   st.outOrder = [];
-  const corners = cornerSpawns();
+  const corners = cornerSpawns(st);
   let idx = 0;
   const occupied = new Set();
   for (const p of st.players.values()) {
@@ -308,6 +319,7 @@ function resetScores(st) {
 }
 
 function stepPlaying(st) {
+  const GRID_W = st.gridW; const GRID_H = st.gridH;
   // Occupied set as of BEFORE this tick's moves — every trail cell (dead or alive players
   // both count as permanent walls, per the design: crashed light-cycles leave their wall up
   // for survivors, same as the arcade original).
@@ -369,6 +381,9 @@ module.exports = {
       players: new Map(),
       phase: 'waiting',
       roundId: 0,
+      mapSize: 'normal',
+      gridW: GRID_W,
+      gridH: GRID_H,
       countdownEndAt: null,
       roundOverAt: null,
       winnerId: null,
@@ -430,6 +445,10 @@ module.exports = {
     }
     if (data.kind === 'removeBot') {
       if (isBotId(data.clientId)) room.state.players.delete(data.clientId);
+      return;
+    }
+    if (data.kind === 'setMap') {
+      if (!p.bot && MAP_SIZES[data.size]) room.state.mapSize = data.size;
       return;
     }
     if (data.kind === 'resetScores') {
