@@ -75,23 +75,66 @@ function tileTexture(THREE) {
 // Ball skin: a glossy green marble with one bright band. The sphere is turned so the band runs
 // along the rolling direction (it stays put while the ball spins); a few faint low-contrast dots
 // are the only hint of the spin, so fast rolling doesn't strobe.
-function ballTexture(THREE) {
+// Ball skins: dark/mid body colours, the band/pattern colour, the glow, and a pattern.
+// Picked with the SKIN button (saved per browser); others see your ghost in the mid colour.
+const SKINS = [
+  { id: 'lime', name: 'LIME', dark: '#0c2a0c', mid: '#1f6b18', hi: '#b6ff9c', glow: '#39ff14', pat: 'dots' },
+  { id: 'ice', name: 'ICE', dark: '#062433', mid: '#1b7fa8', hi: '#d8f6ff', glow: '#00eaff', pat: 'stripes' },
+  { id: 'magma', name: 'MAGMA', dark: '#2a0700', mid: '#a32a00', hi: '#ffcf40', glow: '#ff6a00', pat: 'cracks' },
+  { id: 'grape', name: 'GRAPE', dark: '#1a0633', mid: '#5b1fa8', hi: '#e2b8ff', glow: '#8c52ff', pat: 'dots' },
+  { id: 'gold', name: 'GOLD', dark: '#3a2a00', mid: '#b88a00', hi: '#fff3b0', glow: '#ffd000', pat: 'stripes' },
+  { id: 'candy', name: 'CANDY', dark: '#ffffff', mid: '#ff2f6b', hi: '#ffffff', glow: '#ff2fb0', pat: 'swirl' },
+  { id: 'checker', name: 'CHECKER', dark: '#111111', mid: '#eeeeee', hi: '#ff2fb0', glow: '#ffffff', pat: 'checker' },
+  { id: 'void', name: 'VOID', dark: '#000000', mid: '#14002a', hi: '#ff2fb0', glow: '#ff2fb0', pat: 'stars' },
+];
+const SKIN_KEY = 'gt.slope.skin';
+const skinById = (id) => SKINS.find((k) => k.id === id) || SKINS[0];
+function readSkin() {
+  try { return skinById(localStorage.getItem(SKIN_KEY)).id; } catch { return SKINS[0].id; }
+}
+
+function ballTexture(THREE, skin = SKINS[0]) {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 128;
   const g = c.getContext('2d');
   const grad = g.createLinearGradient(0, 0, 0, 128);
-  grad.addColorStop(0, '#0c2a0c');
-  grad.addColorStop(0.5, '#1f6b18');
-  grad.addColorStop(1, '#0c2a0c');
+  grad.addColorStop(0, skin.dark);
+  grad.addColorStop(0.5, skin.mid);
+  grad.addColorStop(1, skin.dark);
   g.fillStyle = grad;
   g.fillRect(0, 0, 256, 128);
-  g.fillStyle = 'rgba(12, 40, 12, 0.55)';
-  for (let i = 0; i < 10; i++) {
-    g.beginPath();
-    g.arc((i * 83) % 256, 20 + ((i * 37) % 30) + (i % 2) * 60, 6, 0, Math.PI * 2);
-    g.fill();
+  g.fillStyle = skin.hi;
+  g.strokeStyle = skin.hi;
+  if (skin.pat === 'dots') {
+    g.globalAlpha = 0.35;
+    for (let i = 0; i < 10; i++) {
+      g.beginPath();
+      g.arc((i * 83) % 256, 20 + ((i * 37) % 30) + (i % 2) * 60, 6, 0, Math.PI * 2);
+      g.fill();
+    }
+  } else if (skin.pat === 'stripes') {
+    g.globalAlpha = 0.5;
+    for (let x = 0; x < 256; x += 32) g.fillRect(x, 0, 8, 128);
+  } else if (skin.pat === 'cracks') {
+    g.globalAlpha = 0.8; g.lineWidth = 3;
+    for (let i = 0; i < 14; i++) {
+      g.beginPath();
+      let x = (i * 53) % 256; let y = (i * 29) % 128;
+      g.moveTo(x, y);
+      for (let k = 0; k < 4; k++) { x += 10 + ((i + k) % 3) * 6; y += ((i * k) % 5) * 6 - 12; g.lineTo(x, y); }
+      g.stroke();
+    }
+  } else if (skin.pat === 'swirl') {
+    g.fillStyle = skin.mid;
+    for (let x = -128; x < 256; x += 32) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 16, 0); g.lineTo(x + 144, 128); g.lineTo(x + 128, 128); g.fill(); }
+  } else if (skin.pat === 'checker') {
+    g.fillStyle = skin.dark;
+    for (let y = 0; y < 128; y += 32) for (let x = (y / 32) % 2 ? 32 : 0; x < 256; x += 64) g.fillRect(x, y, 32, 32);
+  } else if (skin.pat === 'stars') {
+    for (let i = 0; i < 40; i++) { g.globalAlpha = 0.4 + (i % 3) * 0.2; g.fillRect((i * 97) % 256, (i * 41) % 128, 2, 2); }
   }
-  g.fillStyle = '#b6ff9c';
+  g.globalAlpha = 1;
+  g.fillStyle = skin.hi;
   g.fillRect(0, 59, 256, 10);
   return new THREE.CanvasTexture(c);
 }
@@ -196,6 +239,18 @@ export function mount(container, api) {
   const liveEl = mk('top:10px;left:12px;font-size:12.5px;color:#9ef;text-shadow:0 0 4px #000;line-height:1.45');
   const centerEl = mk('top:42%;left:50%;transform:translate(-50%,-50%);font-size:44px;font-weight:bold;color:#fff;text-align:center;white-space:pre-line;text-shadow:0 0 18px #ff2fb0,0 0 3px #000');
   const hintEl = mk('bottom:10px;left:50%;transform:translateX(-50%);font-size:12px;color:#aaa;text-shadow:0 0 3px #000;white-space:nowrap');
+  // Skin picker (cycles) and the site-wide board under the room board.
+  let skin = readSkin();
+  const skinBtn = document.createElement('button');
+  skinBtn.style.cssText = 'position:absolute;bottom:64px;left:12px;font:bold 12px monospace;padding:5px 9px;background:rgba(6,2,18,0.75);color:#fff;border:1px solid #555;border-radius:4px;cursor:pointer;z-index:2';
+  root.appendChild(skinBtn);
+  let globalRows = null; let globalAt = 0;
+  function loadGlobal() {
+    if (Date.now() - globalAt < 20000) return;
+    globalAt = Date.now();
+    fetch('/api/leaderboard/slope?by=best').then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && !destroyed) globalRows = d.rows || []; }).catch(() => {});
+  }
+  loadGlobal();
   hintEl.textContent = '← → / A D to steer · tap left/right side on touch · N names';
   hintEl.style.maxWidth = 'calc(100% - 20px)'; hintEl.style.overflow = 'hidden'; hintEl.style.textOverflow = 'ellipsis';
   const botBar = createBotBar(api);
@@ -269,7 +324,7 @@ export function mount(container, api) {
   const ghosts = new Map(); // clientId -> { mesh, label, cur, tgt }
   let ball = null; let alive = false;
   let acc = 0; let lastFrame = 0; let lastSend = 0;
-  let camPos = null; let shake = 0; let deathAt = 0;
+  let camPos = null; let shake = 0; let deathAt = 0; let deathS = 0; let watching = null;
   let zoomV = 17; let boostFlash = 0;
   const prev = { s: 0, x: 0, y: 0, roll: 0 }; // ball state one physics step back, for interpolation
   const drawn = { s: 0, x: 0, y: 0, roll: 0 }; // what we actually render this frame
@@ -303,11 +358,11 @@ export function mount(container, api) {
     obsMat.warn = new THREE.MeshBasicMaterial({ color: '#ff1e3c', transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     obsMat.pad = new THREE.MeshBasicMaterial({ map: boostTexture(THREE), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 
-    const bt = ballTexture(THREE);
-    ballMesh = new THREE.Mesh(new THREE.SphereGeometry(Sim.R, 32, 18).rotateZ(Math.PI / 2), new THREE.MeshStandardMaterial({ map: bt, emissive: '#1b5e12', emissiveMap: bt, metalness: 0.3, roughness: 0.35 }));
+    ballMesh = new THREE.Mesh(new THREE.SphereGeometry(Sim.R, 32, 18).rotateZ(Math.PI / 2), new THREE.MeshStandardMaterial({ emissive: '#ffffff', metalness: 0.3, roughness: 0.35 }));
     scene.add(ballMesh);
     glow = new THREE.PointLight('#39ff14', 1.2, 9);
     scene.add(glow);
+    applySkin();
 
     sun = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.MeshBasicMaterial({ map: sunTexture(THREE), transparent: true, fog: false, depthWrite: false }));
     scene.add(sun);
@@ -533,8 +588,12 @@ export function mount(container, api) {
       if (p.clientId === me || !p.inRound) continue;
       seen.add(p.clientId);
       let g = ghosts.get(p.clientId);
+      if (g && g.mesh.userData.skin !== (p.skin || null)) { dropGhost(g); ghosts.delete(p.clientId); g = null; } // they changed skin
       if (!g) {
-        const mesh = new THREE.Mesh(new THREE.SphereGeometry(Sim.R, 20, 12), new THREE.MeshStandardMaterial({ color: p.color, emissive: p.color, emissiveIntensity: 0.6, transparent: true, opacity: 0.75 }));
+        const sk = p.skin ? skinById(p.skin) : null;
+        const gt = sk ? ballTexture(THREE, sk) : null;
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(Sim.R, 20, 12), new THREE.MeshStandardMaterial({ color: gt ? '#ffffff' : p.color, map: gt, emissive: gt ? '#ffffff' : p.color, emissiveMap: gt, emissiveIntensity: 0.6, transparent: true, opacity: 0.75 }));
+        mesh.userData.skin = p.skin || null;
         const label = nameSprite(THREE, p.nickname, p.color);
         scene.add(mesh); scene.add(label);
         g = { mesh, label, cur: { s: p.s, x: p.x, y: p.y }, tgt: { s: p.s, x: p.x, y: p.y }, vs: 0, at: performance.now() };
@@ -546,15 +605,41 @@ export function mount(container, api) {
       g.tgt = { s: p.s, x: p.x, y: p.y };
       g.at = now;
       g.alive = p.alive;
+      g.name = p.nickname;
       g.mesh.material.opacity = p.alive ? 0.75 : 0.25;
     }
     for (const [id, g] of ghosts) {
       if (seen.has(id)) continue;
-      scene.remove(g.mesh); scene.remove(g.label);
-      g.mesh.geometry.dispose(); g.mesh.material.dispose(); g.label.material.map.dispose(); g.label.material.dispose();
+      dropGhost(g);
       ghosts.delete(id);
     }
   }
+  function dropGhost(g) {
+    scene.remove(g.mesh); scene.remove(g.label);
+    if (g.mesh.material.map) g.mesh.material.map.dispose();
+    g.mesh.geometry.dispose(); g.mesh.material.dispose(); g.label.material.map.dispose(); g.label.material.dispose();
+  }
+  function applySkin() {
+    const sk = skinById(skin);
+    skinBtn.textContent = `SKIN: ${sk.name} ▸`;
+    if (ballMesh) {
+      if (ballMesh.material.map) ballMesh.material.map.dispose();
+      const t = ballTexture(THREE, sk);
+      ballMesh.material.map = t; ballMesh.material.emissiveMap = t;
+      ballMesh.material.emissive.set(sk.mid);
+      ballMesh.material.needsUpdate = true;
+      glow.color.set(sk.glow);
+    }
+  }
+  skinBtn.textContent = `SKIN: ${skinById(skin).name} ▸`;
+  skinBtn.addEventListener('click', () => {
+    skin = SKINS[(SKINS.findIndex((k) => k.id === skin) + 1) % SKINS.length].id;
+    try { localStorage.setItem(SKIN_KEY, skin); } catch { /* private mode */ }
+    if (THREE) applySkin();
+    api.sendAction({ kind: 'skin', id: skin });
+    skinBtn.blur(); // keep arrow keys steering, not re-pressing the button
+  });
+  let skinSentAt = 0;
   function drawGhosts(dt) {
     for (const g of ghosts.values()) {
       // Extrapolate along the run a little so 10Hz updates still look smooth.
@@ -615,6 +700,7 @@ export function mount(container, api) {
         if (wasAlive && !ball.alive) {
           alive = false;
           deathAt = performance.now();
+          deathS = Math.floor(ball.s);
           sfx.play('crash');
           api.sendAction({ kind: 'died', s: ball.s, x: ball.x, y: ball.y, cause: ball.cause });
           const score = Math.floor(ball.s);
@@ -639,11 +725,18 @@ export function mount(container, api) {
       drawn.roll = prev.roll + (ball.roll - prev.roll) * a;
     }
 
-    // Who does the camera follow? Us, or while spectating, the leader.
+    // Who does the camera follow? Us, or while spectating (not in this run, or 1.5s after we
+    // crashed), the leading rider still alive.
     let focus = ball ? { s: drawn.s, x: drawn.x, y: drawn.y, vs: ball.vs, mine: true } : null;
-    if (!meInRound() && view.players.length) {
-      const lead = [...ghosts.values()].sort((a, b) => b.cur.s - a.cur.s)[0];
-      if (lead) focus = { s: lead.cur.s, x: lead.cur.x, y: lead.cur.y, vs: 25, alive: true };
+    watching = null;
+    const spectating = !meInRound() || (ball && !ball.alive && performance.now() - deathAt > 1500);
+    if (spectating && view.phase === 'racing') {
+      const gs = [...ghosts.values()].sort((a, b) => (b.alive - a.alive) || (b.cur.s - a.cur.s));
+      const lead = gs[0];
+      if (lead && (lead.alive || !meInRound())) {
+        watching = lead;
+        focus = { s: lead.cur.s, x: lead.cur.x, y: lead.cur.y, vs: lead.vs || 25, alive: true };
+      }
     }
     if (focus) syncWorld(focus.s);
 
@@ -714,10 +807,13 @@ export function mount(container, api) {
     const phase = view.phase;
     const me = view.players.find((p) => p.clientId === api.getClientId());
     const inRound = me && me.inRound;
-    const score = ball && inRound ? Math.floor(ball.s) : 0;
-    setDom(scoreEl, 'textContent', inRound ? String(score) : 'SPECTATING');
+    // A crashed ball keeps falling (and drifting forward) for the camera: freeze the score.
+    const myScore = () => (ball ? (ball.alive ? Math.floor(ball.s) : deathS) : 0);
+    const score = inRound ? myScore() : 0;
+    setDom(scoreEl, 'textContent', inRound && !watching ? String(score) : 'SPECTATING');
     const kmh = ball ? Math.round(ball.vs * 3.6) : 0;
-    setDom(subEl, 'textContent', inRound ? `${kmh} km/h · BEST ${best}` : 'You\'ll join the next run');
+    setDom(subEl, 'textContent', watching ? `watching ${watching.name || '?'}${inRound ? ` · you: ${score}` : ''}`
+      : inRound ? `${kmh} km/h · BEST ${best}` : 'You\'ll join the next run');
 
     let msg = '';
     if (phase === 'countdown') {
@@ -729,7 +825,7 @@ export function mount(container, api) {
       lastCountdown = null;
       if (inRound && ball && !ball.alive) {
         const why = ball.cause === 'block' ? 'SMASHED' : ball.cause === 'wall' ? 'CRASHED' : 'FELL OFF';
-        msg = `${why}\n${Math.floor(ball.s)}${newBestThisRun ? '\nNEW BEST!' : ''}`;
+        if (!watching) msg = `${why}\n${deathS}${newBestThisRun ? '\nNEW BEST!' : ''}`;
       }
     } else if (phase === 'results') {
       const left = Math.max(0, Math.ceil((view.phaseEndsAt - clock.now()) / 1000));
@@ -741,14 +837,21 @@ export function mount(container, api) {
 
     const live = view.players.filter((p) => p.inRound).map((p) => ({
       name: p.nickname, you: p.clientId === api.getClientId(), alive: p.clientId === api.getClientId() ? !!(ball && ball.alive) : p.alive,
-      s: p.clientId === api.getClientId() && ball ? Math.floor(ball.s) : p.score,
+      s: p.clientId === api.getClientId() && ball ? myScore() : p.score,
     })).sort((a, b) => b.s - a.s);
     setDom(liveEl, 'innerHTML', live.length > 1 || phase !== 'racing'
       ? `<b>THIS RUN</b><br>${live.map((r) => `<span style="opacity:${r.alive ? 1 : 0.45}">${r.you ? '▶ ' : ''}${esc(r.name)} ${r.s}${r.alive ? '' : ' ✕'}</span>`).join('<br>')}`
       : '');
-    setDom(boardEl, 'innerHTML', view.best && view.best.length
+    if (phase === 'results') loadGlobal();
+    const room = view.best && view.best.length
       ? `<b>ROOM BEST</b><br>${view.best.map((b, i) => `${i + 1}. ${esc(b.nickname)} ${b.score}`).join('<br>')}`
-      : '');
+      : '';
+    const site = globalRows
+      ? `<div style="color:#ffb000;margin-top:8px"><b>ALL-TIME (SITE)</b><br>${globalRows.length
+        ? globalRows.slice(0, 8).map((r) => `${r.rank}. ${esc(r.username)} ${r.value}`).join('<br>')
+        : '<span style="opacity:.7">no scores yet</span>'}<br><span style="opacity:.6;font-size:10.5px">sign in to get on it</span></div>`
+      : '';
+    setDom(boardEl, 'innerHTML', room + site);
   }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -757,6 +860,9 @@ export function mount(container, api) {
     view = v;
     clock.sync(v.serverNow);
     botBar.update(v.players);
+    // Tell the server our skin once it knows us (and again if it ever forgets, e.g. a rejoin).
+    const meP = v.players.find((p) => p.clientId === api.getClientId());
+    if (meP && meP.skin !== skin && Date.now() - skinSentAt > 2000) { skinSentAt = Date.now(); api.sendAction({ kind: 'skin', id: skin }); }
     if (!THREE || !Sim) return;
     if (v.seed != null && (v.seed !== trackSeed || v.roundId !== roundId)) {
       roundId = v.roundId;

@@ -26,6 +26,7 @@ function playerView(p) {
     nickname: p.nickname,
     bot: p.bot || undefined,
     color: p.color,
+    skin: p.skin || undefined,
     inRound: p.inRound,
     alive: p.alive,
     s: Math.round(p.s * 100) / 100,
@@ -171,6 +172,12 @@ module.exports = {
       p.x = x; p.y = y;
       p.lastPosAt = now;
       if (data.kind === 'died') die(st, p, ['fall', 'block', 'wall'].includes(data.cause) ? data.cause : 'fall');
+      return;
+    }
+
+    if (data.kind === 'skin') {
+      // Cosmetic only; the client maps unknown ids to the default skin.
+      if (typeof data.id === 'string' && /^[a-z]{1,12}$/.test(data.id)) p.skin = data.id;
       return;
     }
 
