@@ -648,7 +648,15 @@ function renderGameList() {
         const li = document.createElement('li');
         li.textContent = game.label;
         li.dataset.type = game.type;
-        if (game.type === state.selectedGameType) li.classList.add('selected');
+        if (game.type === state.selectedGameType) {
+          li.classList.add('selected');
+          // Join right from the row: the room buttons sit below a long list.
+          const go = h('button.row-join', { type: 'button' }, '▶ JOIN');
+          go.addEventListener('click', (ev) => { ev.stopPropagation(); els.btnJoinPublic.click(); });
+          const more = h('button.row-join.row-more', { type: 'button', title: 'Ranked, private room, join by code' }, 'MORE ▾');
+          more.addEventListener('click', (ev) => { ev.stopPropagation(); els.btnJoinPublic.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+          li.append(go, more);
+        }
         li.addEventListener('click', (ev) => {
           ev.stopPropagation();
           state.selectedGameType = game.type;
