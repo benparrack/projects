@@ -41,7 +41,8 @@ const CSS = `
 .rl-chip.mine { background: #ffbf00; color: #000; border-color: #000; }
 .rl-chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .rl-pick { width: 40px; height: 40px; border-radius: 50%; padding: 0; font-weight: bold; border: 3px dashed #fff; color: #fff; }
-.rl-pick.c1 { background: #ddd; color: #111; border-color: #888; } .rl-pick.c5 { background: #e04848; } .rl-pick.c25 { background: #2f9e44; } .rl-pick.c100 { background: #222; }
+.rl-pick.c1 { background: #ddd; color: #111; border-color: #888; } .rl-pick.c2 { background: #e8b923; color: #111; } .rl-pick.c5 { background: #e04848; }
+.rl-pick.c10 { background: #2a6fdb; } .rl-pick.c25 { background: #2f9e44; } .rl-pick.c50 { background: #f08c00; } .rl-pick.c100 { background: #222; }
 .rl-pick[aria-pressed="true"] { transform: translateY(-4px); box-shadow: 0 0 0 3px #ffd23f; }
 .rl-players { font-size: .85em; width: min(100%, 560px); }
 @media (max-width: 560px) {
@@ -123,16 +124,13 @@ export function mount(container, api) {
   }
 
   function spinTo(n) {
-    // Land on n at least two laps on from where the strip is now.
-    const cur = Math.round(stripPos / CELL);
+    // Rewind to the same number on lap 2 (no animation), then land on n at least two laps on.
+    // Searching from wherever the last spin stopped ran off the end of the strip and looped forever.
+    const cur = (Math.round(stripPos / CELL) % WHEEL.length) + WHEEL.length;
+    place(cur * CELL + CELL / 2, false);
+    void track.offsetWidth;
     let target = cur + WHEEL.length * 2;
     while (strip[target] !== n) target++;
-    if (target >= strip.length - 2) { // ran out of strip: jump back by whole laps without animating first
-      const back = WHEEL.length * 3;
-      place(stripPos - back * CELL + CELL / 2, false);
-      void track.offsetWidth;
-      target -= back;
-    }
     stripPos = target * CELL;
     landed = false;
     place(stripPos + CELL / 2, true);
