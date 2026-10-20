@@ -58,51 +58,60 @@ const BOT_LEVELS = {
 };
 const TER_DIST = new Int32Array(MAX_CELLS);
 const TER_OWNER = new Int8Array(MAX_CELLS);
-const FLOOD_SEEN = new Uint8Array(MAX_CELLS);
-// Reused queues + hoisted neighbour list: per-cell array allocations in the fills below caused
+// Generation stamps instead of clearing whole-grid buffers before every search: a cell counts as
+// seen/reached only if its stamp is the current search's. Those fills dominated tick time, and
+// Render's small CPU share turned that into missed ticks (5 expert bots: 40 -> ~19 ticks/s).
+const FLOOD_SEEN = new Uint32Array(MAX_CELLS);
+const TER_SEEN = new Uint32Array(MAX_CELLS);
+let searchGen = 0;
+function nextGen() {
+  if (++searchGen === 0xffffffff) { FLOOD_SEEN.fill(0); TER_SEEN.fill(0); searchGen = 1; }
+  return searchGen;
+}
+// Bots re-plan every BOT_THINK_EVERY ticks (staggered), and dodge right away when blocked or a rival head is close.
+const BOT_THINK_EVERY = 3;
+// Reused queues: per-cell array allocations in the fills below caused
 // the GC pauses behind the "lag spike mid-game every round" report.
 const QA = new Int32Array(MAX_CELLS);
 const QB = new Int32Array(MAX_CELLS);
-const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const LEFT_OF = { up: 'left', left: 'down', down: 'right', right: 'up' };
 const RIGHT_OF = { up: 'right', right: 'down', down: 'left', left: 'up' };
 
 function steerBots(st) {
   const bots = [...st.players.values()].filter((p) => p.bot && p.inRound && p.alive);
   if (!bots.length) return;
-  const W = st.gridW; const H = st.gridH;
-  const grid = new Uint8Array(W * H);
+  const W = st.gridW; const H = st.gridH; const WH = W * H;
+  const grid = new Uint8Array(WH);
   for (const p of st.players.values()) if (p.inRound) for (const c of p.trail) grid[c.y * W + c.x] = 1;
   const free = (x, y, g = grid) => x >= 0 && y >= 0 && x < W && y < H && !g[y * W + x];
   const rivals = (me) => [...st.players.values()].filter((p) => p !== me && p.inRound && p.alive);
 
   function flood(g, x, y, cap) {
-    const seen = FLOOD_SEEN.fill(0);
+    const seen = FLOOD_SEEN; const gen = nextGen();
     let top = 0;
-    QA[top++] = y * W + x; seen[y * W + x] = 1;
+    QA[top++] = y * W + x; seen[y * W + x] = gen;
     let n = 0;
     while (top && n < cap) {
       const i = QA[--top]; n++;
-      const cx = i % W; const cy = (i - cx) / W;
-      for (const [dx, dy] of NB) {
-        const nx = cx + dx; const ny = cy + dy;
-        if (!free(nx, ny, g)) continue;
-        const k = ny * W + nx;
-        if (!seen[k]) { seen[k] = 1; QA[top++] = k; }
+      const cx = i % W;
+      // Neighbours by index (left, right, up, down), skipping off-grid ones: this loop is the hot path.
+      for (let m = 0; m < 4; m++) {
+        const k = m === 0 ? (cx > 0 ? i - 1 : -1) : m === 1 ? (cx < W - 1 ? i + 1 : -1) : m === 2 ? i - W : i + W;
+        if (k < 0 || k >= WH || g[k] || seen[k] === gen) continue;
+        seen[k] = gen; QA[top++] = k;
       }
     }
     return n;
   }
   // Cells I reach strictly before every rival (multi-source BFS), from my candidate next cell.
   function territory(g, me, x, y) {
-    const dist = TER_DIST.fill(-1);
-    const owner = TER_OWNER.fill(-1);
+    const dist = TER_DIST; const owner = TER_OWNER; const seen = TER_SEEN; const gen = nextGen();
     let q = QA; let qn = 0;
-    const push = (k, o) => { dist[k] = 0; owner[k] = o; q[qn++] = k; };
+    const push = (k, o) => { seen[k] = gen; dist[k] = 0; owner[k] = o; q[qn++] = k; };
     push(y * W + x, 0);
     for (const r of rivals(me)) {
       const k = r.y * W + r.x;
-      if (dist[k] === -1) push(k, 1);
+      if (seen[k] !== gen) push(k, 1);
     }
     let mine = 0; let d = 0;
     while (qn) {
@@ -110,12 +119,11 @@ function steerBots(st) {
       d++;
       for (let j = 0; j < qn; j++) {
         const i = q[j];
-        const cx = i % W; const cy = (i - cx) / W;
-        for (const [dx, dy] of NB) {
-          const nx = cx + dx; const ny = cy + dy;
-          if (!free(nx, ny, g)) continue;
-          const k = ny * W + nx;
-          if (dist[k] === -1) { dist[k] = d; owner[k] = owner[i]; nq[nn++] = k; if (owner[i] === 0) mine++; }
+        const cx = i % W;
+        for (let m = 0; m < 4; m++) {
+          const k = m === 0 ? (cx > 0 ? i - 1 : -1) : m === 1 ? (cx < W - 1 ? i + 1 : -1) : m === 2 ? i - W : i + W;
+          if (k < 0 || k >= WH || g[k]) continue;
+          if (seen[k] !== gen) { seen[k] = gen; dist[k] = d; owner[k] = owner[i]; nq[nn++] = k; if (owner[i] === 0) mine++; }
           else if (dist[k] === d && owner[k] !== owner[i]) { if (owner[k] === 0) mine--; owner[k] = 2; }
         }
       }
@@ -128,6 +136,11 @@ function steerBots(st) {
     const lv = BOT_LEVELS[b.bot] || BOT_LEVELS.hard;
     if (b.turnQueue.length) continue;
     if (lv.lag && Math.random() < lv.lag) continue; // slow reactions
+    if (b.think === undefined) b.think = Math.floor(Math.random() * BOT_THINK_EVERY);
+    const ahead = DIR_VECTORS[b.dir];
+    const plan = ++b.think % BOT_THINK_EVERY === 0;
+    // Off-plan ticks only dodge (wall ahead, head-on); the costly territory search waits for a plan tick.
+    if (!plan && free(b.x + ahead.dx, b.y + ahead.dy) && !rivals(b).some((r) => Math.abs(r.x - b.x) + Math.abs(r.y - b.y) <= 3)) continue;
     const danger = new Uint8Array(W * H);
     if (lv.headOn) {
       for (const r of rivals(b)) {
@@ -137,7 +150,7 @@ function steerBots(st) {
         }
       }
     }
-    const near = lv.voronoi && rivals(b).some((r) => Math.abs(r.x - b.x) + Math.abs(r.y - b.y) < 40);
+    const near = plan && lv.voronoi && rivals(b).some((r) => Math.abs(r.x - b.x) + Math.abs(r.y - b.y) < 40);
     const opts = [b.dir, LEFT_OF[b.dir], RIGHT_OF[b.dir]].map((dir, k) => {
       const v = DIR_VECTORS[dir];
       const x = b.x + v.dx; const y = b.y + v.dy;
