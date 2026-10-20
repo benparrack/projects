@@ -142,8 +142,10 @@ button:disabled { opacity: 0.4; cursor: default; }
   border-top: 1px solid rgba(31, 143, 12, 0.3);
 }
 .game-sublist li:first-child { border-top: none; }
-.game-sublist li.casino-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; cursor: default; padding-top: 6px; padding-bottom: 6px; background: rgba(255, 191, 0, 0.06); }
-.game-sublist li.casino-bar:hover { background: rgba(255, 191, 0, 0.06); }
+.game-sublist li.casino-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; cursor: default; padding-top: 10px; padding-bottom: 10px; background: radial-gradient(ellipse at 20% 0%, #1d5a2a, #0b2a12 70%); border-top: 2px solid #8a6a2a; border-bottom: 2px solid #8a6a2a; }
+.game-sublist li.casino-bar:hover { background: radial-gradient(ellipse at 20% 0%, #1d5a2a, #0b2a12 70%); }
+.casino-bar .casino-balance { font-family: Georgia, 'Times New Roman', serif; font-size: 1.5em; text-shadow: 0 0 10px rgba(255,210,63,.4), 0 2px 0 #3a2508; }
+.casino-bar summary { font-family: Georgia, 'Times New Roman', serif; letter-spacing: 1px; }
 .casino-balance { color: #ffbf00; font-size: 1.15em; font-weight: bold; }
 .casino-note { font-size: 0.85em; }
 .casino-btn { padding: 3px 10px; font-size: 0.9em; }
@@ -159,6 +161,15 @@ ol.casino-items li { display: list-item; } ol.casino-items li span + span { floa
 .casino-items li.casino-on { color: #ffbf00; }
 .casino-boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 16px; }
 .casino-error { flex-basis: 100%; color: #ff4d4d; }
+/* Casino tables (.cz on a game root): brass-and-wood buttons and gold serif titles instead of terminal green.
+   :where() keeps these at element specificity so each game's own chip/button classes still win. */
+.cz { color: #efe3bf; }
+:where(.cz) button { background: linear-gradient(180deg, #3a2a10, #1a1206); border: 1px solid #c9a24a; color: #f3d98a; border-radius: 7px; font-weight: bold; letter-spacing: 1px; box-shadow: inset 0 1px 0 rgba(255,235,170,.25), 0 2px 4px rgba(0,0,0,.5); }
+:where(.cz) button:hover:not(:disabled) { background: linear-gradient(180deg, #ffe08a, #c9a24a); color: #1a1200; }
+:where(.cz) button:active:not(:disabled) { transform: translateY(1px); }
+:where(.cz) :is(input[type="number"], select) { background: #120c04; color: #f3d98a; border: 1px solid #8a6a2a; border-radius: 5px; padding: 4px 6px; font-family: inherit; }
+:where(.cz) input[type="range"] { accent-color: #ffd23f; }
+.cz-title { font-family: Georgia, 'Times New Roman', serif; color: #ffd23f; letter-spacing: 2px; font-weight: bold; text-shadow: 0 0 10px rgba(255,210,63,.35), 0 2px 0 #5a3a12; }
 /* Casino shop skins: body[data-*] is set from the equipped items (hub.js), tables pick them up. */
 .pk-felt { padding: 10px 18px; border-radius: 40px; }
 body[data-felt="felt-blue"] :is(.bj-felt, .rl-felt, .pk-felt) { background: radial-gradient(ellipse at 50% 0%, #1d4f8a 0%, #0f2f5a 50%, #081a33 100%); }

@@ -59,5 +59,5 @@ export function casinoBar(cs, { onStipend, onWork, onBuy, onEquip }) {
   if (cs.error && ERRORS[cs.error]) parts.push(h('div.casino-note.casino-error', ERRORS[cs.error]));
   parts.push(shop(cs, onBuy, onEquip));
   if (cs.boards) parts.push(boards(cs.boards));
-  return h('li.casino-bar', ...parts);
+  return h('li.casino-bar.cz', ...parts);
 }

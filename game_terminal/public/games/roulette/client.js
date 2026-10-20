@@ -81,7 +81,7 @@ export function mount(container, api) {
   const style = document.createElement('style');
   style.textContent = CSS;
   const root = document.createElement('div');
-  root.className = 'rl-root';
+  root.className = 'rl-root cz';
   container.append(style, root);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const name = (id) => (roster.find((r) => r.clientId === id) || {}).nickname || 'someone';

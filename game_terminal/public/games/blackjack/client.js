@@ -111,8 +111,8 @@ const CSS = `
 .bj-ins { font-size: .7em; color: #7fd7ff; }
 
 .bj-panel {
-  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px; border: 1px solid #1f8f0c; border-radius: 8px;
-  background: linear-gradient(180deg, rgba(57,255,20,.05), rgba(0,0,0,0));
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px; border: 1px solid #8a6a2a; border-radius: 10px;
+  background: linear-gradient(180deg, #1c1408, #0b0803); box-shadow: 0 4px 12px rgba(0,0,0,.5);
 }
 .bj-row { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
 .bj-bigbet { font-size: 1.05em; }
@@ -128,10 +128,10 @@ const CSS = `
 .bj-toast { font-size: .82em; color: #ff8a8a; min-height: 1.1em; text-align: center; }
 
 .bj-board { width: 100%; border-collapse: collapse; font-size: .8em; }
-.bj-board th, .bj-board td { padding: 3px 6px; text-align: right; border-bottom: 1px solid rgba(57,255,20,.12); white-space: nowrap; }
+.bj-board th, .bj-board td { padding: 3px 6px; text-align: right; border-bottom: 1px solid rgba(201,162,74,.2); white-space: nowrap; }
 @media (max-width: 420px) { .bj-board th, .bj-board td { padding: 3px 3px; } }
 .bj-board th:first-child, .bj-board td:first-child { text-align: left; }
-.bj-board th { opacity: .65; font-weight: normal; }
+.bj-board th { opacity: .8; font-weight: normal; color: #c9a24a; }
 .bj-board tr.me td { color: #b8ffa8; }
 .bj-pos { color: #39ff14; } .bj-neg { color: #ff6b6b; }
 .bj-banner {
@@ -190,7 +190,7 @@ export function mount(container, api) {
   const clock = makeServerClock();
   const timerEls = []; // { bar, text, deadline, span }
 
-  const root = el('div', 'bj');
+  const root = el('div', 'bj cz');
   const results = createResults(container);
   container.appendChild(root);
 
