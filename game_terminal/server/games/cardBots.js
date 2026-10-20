@@ -327,7 +327,7 @@ function pokerBrain() {
     return s;
   }
   return {
-    sitData: (st) => (st.phase === 'waiting' && st.seats.length < 6 ? { kind: 'sit' } : null),
+    sitData: (st) => (st.seats.length < 6 ? { kind: 'sit' } : null), // cash table: any time
     random(st, i) {
       const h = st.hand;
       if (st.phase !== 'playing' || !h || h.toAct !== i) return null;
@@ -342,7 +342,7 @@ function pokerBrain() {
       const canRaise = h.bets[i] + st.chips[i] > h.currentBet;
       const raiseTo = (mult) => ({
         kind: 'raise',
-        amount: h.currentBet + Math.max(BIG_BLIND, Math.round((pot * mult) / 10) * 10),
+        amount: h.currentBet + Math.max(BIG_BLIND, Math.round((pot * mult) / BIG_BLIND) * BIG_BLIND),
       });
       if (level === 'expert') {
         // Real equity vs. the players still in, compared with pot odds; value-bet strong hands in

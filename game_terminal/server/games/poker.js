@@ -1,6 +1,7 @@
-// Texas Hold'em — 2-6 players, fixed blinds, chip stacks persist across hands within one game
-// (a "game" ends when only one player still has chips). Full side-pot handling for multi-way
-// all-ins and a standard 7-card hand evaluator (best 5 of hole+community).
+// Texas Hold'em cash table, 2-6 players, $1/$2 blinds, in the CASINO: you sit down with a buy-in
+// from your casino balance (room.wallet, see server/casino/wallet.js) and standing up cashes your
+// stack back out. Hands deal on their own a few seconds apart. Bots play with house money. Full
+// side-pot handling for multi-way all-ins and a standard 7-card hand evaluator.
 //
 // Deliberate simplifications for a casual friend implementation: no antes; minimum raise is
 // always "current bet + one big blind" rather than tracking the exact previous raise size; an
@@ -8,14 +9,18 @@
 // street (a minor deviation from strict tournament rules that doesn't matter for casual play).
 
 const { createDeck, shuffle, rankValue } = require('./cardCommon');
-const { seatResult } = require('./cardBots');
-const { report } = require('../report');
 
-const MIN_SEATS = 2;
 const MAX_SEATS = 6;
-const STARTING_CHIPS = 1000;
-const SMALL_BLIND = 10;
-const BIG_BLIND = 20;
+const SMALL_BLIND = 1;
+const BIG_BLIND = 2;
+const MIN_BUY = 20; // 10 big blinds, so the daily stipend alone still gets you a seat
+const MAX_BUY = 200; // 100 big blinds
+const BOT_BUY = 200; // house money
+const NEXT_HAND_MS = 6000; // the result stays up this long before the next deal
+const START_MS = 3000; // a fresh table waits this long after the second seat fills
+
+let clock = () => Date.now();
+const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
 
 // --- Hand evaluation: returns a comparable tuple [category, ...tiebreakers], higher = better ---
 
@@ -157,8 +162,10 @@ function startHand(st) {
     if (st.chips[seat] === 0) h.allIn[seat] = true;
   };
 
-  const sbIdx = n === 2 ? st.dealerIdx : (st.dealerIdx + 1) % n;
-  const bbIdx = n === 2 ? (st.dealerIdx + 1) % n : (st.dealerIdx + 2) % n;
+  const funded = (i) => st.chips[i] > 0;
+  const headsUp = st.chips.filter((c) => c > 0).length === 2;
+  const sbIdx = headsUp ? st.dealerIdx : nextActiveSeat(st, st.dealerIdx, funded);
+  const bbIdx = nextActiveSeat(st, sbIdx, funded);
   postBlind(sbIdx, SMALL_BLIND);
   postBlind(bbIdx, BIG_BLIND);
   h.currentBet = BIG_BLIND;
@@ -238,8 +245,7 @@ function concludeHandByFold(st, winnerSeat) {
   payouts[winnerSeat] = total;
   st.chips[winnerSeat] += total;
   h.lastResult = { kind: 'fold', winnerSeat, payouts, revealedHands: [] };
-  st.phase = 'hand_over';
-  checkGameOver(st);
+  endHand(st, payouts);
 }
 
 function concludeHandByShowdown(st) {
@@ -251,20 +257,40 @@ function concludeHandByShowdown(st) {
     best: evaluate7([...h.holeCards[seat], ...h.community]),
   }));
   h.lastResult = { kind: 'showdown', payouts, revealedHands };
-  st.phase = 'hand_over';
-  checkGameOver(st);
+  endHand(st, payouts);
 }
 
-function checkGameOver(st) {
-  const stillIn = st.seats.map((_, i) => i).filter((i) => st.chips[i] > 0);
-  // Bust order for the final standings, latest first; seats busted in the same hand tie.
-  const out = st.out.flat();
-  const busted = st.seats.filter((id, i) => st.chips[i] <= 0 && !out.includes(id));
-  if (busted.length) st.out.unshift(busted);
-  if (stillIn.length <= 1) {
-    st.phase = 'game_over';
-    st.winnerSeat = stillIn.length === 1 ? stillIn[0] : null;
+function endHand(st, payouts) {
+  st.phase = 'hand_over';
+  st.nextAt = clock() + NEXT_HAND_MS;
+  st.seats.forEach((id, i) => {
+    const put = st.hand.totalContributed[i];
+    if (put > 0) st.moneyNotes.push({ id, wagered: put, won: payouts[i] - put });
+  });
+}
+
+// Between hands: drop the seats people left, top up broke bots with house money, move the
+// button, and deal if two stacks can play.
+function deal(st) {
+  for (const id of st.leaving) {
+    const i = st.seats.indexOf(id);
+    if (i === -1) continue;
+    st.seats.splice(i, 1);
+    st.chips.splice(i, 1);
+    if (i < st.dealerIdx) st.dealerIdx--;
   }
+  st.leaving = [];
+  st.seats.forEach((id, i) => { if (isBot(id) && st.chips[i] < BIG_BLIND) st.chips[i] = BOT_BUY; });
+  st.nextAt = null;
+  const funded = st.chips.filter((c) => c > 0).length;
+  if (funded < 2 || !st.seats.some((id) => !isBot(id))) {
+    st.phase = 'waiting';
+    st.hand = null;
+    return false;
+  }
+  st.dealerIdx = nextActiveSeat(st, st.hand ? st.dealerIdx : -1, (i) => st.chips[i] > 0);
+  startHand(st);
+  return true;
 }
 
 // Runs remaining streets straight through with no further betting once every non-folded player
@@ -305,8 +331,13 @@ function buildPublicState(room, forClientId) {
     phase: st.phase,
     seats: st.seats,
     chips: st.chips,
+    leaving: st.leaving,
     dealerIdx: st.dealerIdx,
-    winnerSeat: st.winnerSeat,
+    nextAt: st.nextAt,
+    serverNow: clock(),
+    blinds: [SMALL_BLIND, BIG_BLIND],
+    buyIn: [MIN_BUY, MAX_BUY],
+    balance: room.wallet && forClientId ? room.wallet.balance(forClientId) : null,
     hand: h
       ? {
           stage: h.stage,
@@ -325,27 +356,119 @@ function buildPublicState(room, forClientId) {
   };
 }
 
-// Every game_over is followed by a broadcast, so report there — once: the flag re-arms on the
-// next broadcast outside game_over (a new game).
-function reportIfOver(room) {
+// Keeps the wallet in step with the table: lifetime bet totals, stacks between hands (a restart
+// refunds that much), and paying out whatever a player who left mid-hand won after leaving.
+// Casino games don't report() results: no XP, achievements or stats from gambling.
+function settleMoney(room) {
   const st = room.state;
-  if (st.phase !== 'game_over') { st.reported = false; return; }
-  if (st.reported) return;
-  st.reported = true;
-  // A tournament: last stack standing wins, the rest rank by when they busted.
-  report(room, seatResult(st.seats, [[st.seats[st.winnerSeat]], ...st.out]));
+  const w = room.wallet;
+  const notes = st.moneyNotes;
+  st.moneyNotes = [];
+  if (!w) return;
+  for (const n of notes) if (!isBot(n.id)) w.noteBet(n.id, n.wagered, n.won);
+  if (st.phase === 'playing') return;
+  st.seats.forEach((id, i) => {
+    if (isBot(id)) return;
+    if (!st.leaving.includes(id)) { w.sync(id, st.chips[i]); return; }
+    if (st.chips[i] > 0) w.cashOut(id, st.chips[i]);
+    st.chips[i] = 0;
+  });
 }
 
-function broadcastState(room, ctx) {
-  reportIfOver(room);
+function broadcastState(room) {
+  settleMoney(room);
   for (const clientId of room.clients.keys()) {
-    ctx.sendTo(clientId, { v: 1, type: 'game.event', payload: { gameType: 'poker', data: { kind: 'state', ...buildPublicState(room, clientId) } } });
+    room.sendTo(clientId, { v: 1, type: 'game.event', payload: { gameType: 'poker', data: { kind: 'state', ...buildPublicState(room, clientId) } } });
   }
+}
+
+function reject(room, id, reason) {
+  if (isBot(id)) return;
+  room.sendTo(id, { v: 1, type: 'game.event', payload: { gameType: 'poker', data: { kind: 'moveRejected', reason } } });
+}
+
+// Sit down (or back down, after leaving mid-hand) with a buy-in from the casino balance. Mid-hand
+// arrivals sit folded until the next deal.
+function sit(room, id, amount) {
+  const st = room.state;
+  const w = room.wallet;
+  const back = st.leaving.includes(id);
+  if (st.seats.includes(id) && !back) return 'already_seated';
+  if (!back && st.seats.length >= MAX_SEATS) return 'table_full';
+  let chips = BOT_BUY;
+  if (!isBot(id)) {
+    const want = Math.min(MAX_BUY, Math.max(MIN_BUY, Math.floor(Number(amount)) || MAX_BUY));
+    if (w) {
+      if (!w.ready(id)) return 'wallet_loading';
+      if (w.balance(id) < MIN_BUY) return 'broke';
+      chips = w.buyIn(id, want);
+    } else chips = want;
+  }
+  if (back) {
+    st.leaving = st.leaving.filter((x) => x !== id);
+    st.chips[st.seats.indexOf(id)] += chips;
+    return null;
+  }
+  st.seats.push(id);
+  st.chips.push(chips);
+  const h = st.hand;
+  if (h && st.phase === 'playing') {
+    h.holeCards.push([]);
+    h.folded.push(true);
+    h.allIn.push(false);
+    h.bets.push(0);
+    h.totalContributed.push(0);
+  }
+  return null;
+}
+
+// Top a stack back up to the buy-in you ask for (never over the max), outside a live hand.
+function rebuy(room, id, amount) {
+  const st = room.state;
+  const i = st.seats.indexOf(id);
+  if (i === -1 || st.leaving.includes(id) || isBot(id)) return 'not_seated';
+  if (st.phase === 'playing' && !st.hand.folded[i]) return 'in_hand';
+  const add = Math.min(MAX_BUY - st.chips[i], Math.max(1, Math.floor(Number(amount)) || MAX_BUY));
+  if (add <= 0) return 'at_max';
+  const w = room.wallet;
+  if (!w) { st.chips[i] += add; return null; }
+  if (!w.ready(id)) return 'wallet_loading';
+  const got = w.buyIn(id, add);
+  if (!got) return 'broke';
+  st.chips[i] += got;
+  w.sync(id, st.chips[i]);
+  return null;
+}
+
+// Stand up: chips behind go straight back to the balance; a live hand is folded unless it's
+// all-in (that one plays out and anything it wins is paid out when the hand ends).
+function leave(room, id) {
+  const st = room.state;
+  const i = st.seats.indexOf(id);
+  if (i === -1 || st.leaving.includes(id)) return 'not_seated';
+  if (room.wallet && !isBot(id)) room.wallet.cashOut(id, st.chips[i]);
+  st.chips[i] = 0;
+  const h = st.hand;
+  if (st.phase !== 'playing' || !h) {
+    st.seats.splice(i, 1);
+    st.chips.splice(i, 1);
+    if (i < st.dealerIdx) st.dealerIdx--;
+    if (st.chips.filter((c) => c > 0).length < 2) { st.phase = 'waiting'; st.hand = null; st.nextAt = null; }
+    return null;
+  }
+  st.leaving.push(id);
+  if (h.folded[i] || h.allIn[i]) return null;
+  h.folded[i] = true;
+  if (h.toAct === i) afterAction(st);
+  else if (activeSeats(st).length === 1) concludeHandByFold(st, activeSeats(st)[0]);
+  return null;
 }
 
 module.exports = {
   type: 'poker',
-  stats: { rated: true },
+  casino: true,
+  stats: { none: true },
+  tickIntervalMs: 500,
   HAND_NAMES,
   evaluate5,
   evaluate7,
@@ -353,138 +476,107 @@ module.exports = {
   buildSidePots,
 
   createInitialState() {
-    return { phase: 'waiting', seats: [], chips: [], dealerIdx: 0, winnerSeat: null, hand: null, out: [] };
+    return { phase: 'waiting', seats: [], chips: [], dealerIdx: 0, hand: null, leaving: [], nextAt: null, moneyNotes: [] };
   },
 
-  isRoomFull(room) {
-    return room.state.seats.length >= MAX_SEATS;
+  isRoomFull() {
+    return false; // spectators welcome; seats are capped in sit()
   },
 
   serializeSnapshot(room, client) {
     return buildPublicState(room, client ? client.clientId : null);
   },
 
-  onLeave(room, client) {
+  // Deals the next hand on its own: a few seconds after a hand ends, or after a second stack sits.
+  tick(room) {
     const st = room.state;
-    const idx = st.seats.indexOf(client.clientId);
-    if (idx === -1) return;
-    st.seats.splice(idx, 1);
-    st.chips.splice(idx, 1);
-    st.phase = 'waiting';
-    st.hand = null;
-    for (const clientId of room.clients.keys()) {
-      room.sendTo(clientId, { v: 1, type: 'game.event', payload: { gameType: 'poker', data: { kind: 'state', ...buildPublicState(room, clientId) } } });
+    if (st.phase === 'playing') return;
+    const now = clock();
+    if (st.nextAt == null) {
+      if (st.phase === 'waiting' && st.chips.filter((c) => c > 0).length >= 2 && st.seats.some((id) => !isBot(id))) { st.nextAt = now + START_MS; broadcastState(room); }
+      return;
     }
+    if (now < st.nextAt) return;
+    deal(st);
+    broadcastState(room);
+  },
+
+  onLeave(room, client) {
+    leave(room, client.clientId);
+    // Nobody human left: bots stand up too.
+    if (![...room.clients.keys()].some((id) => !isBot(id))) for (const id of room.state.seats.filter(isBot)) leave(room, id);
+    broadcastState(room);
   },
 
   onMessage(room, client, data, ctx) {
     if (!data || typeof data.kind !== 'string') return;
     const st = room.state;
-
-    if (data.kind === 'sit') {
-      if (st.phase !== 'waiting' || st.seats.length >= MAX_SEATS || st.seats.includes(ctx.senderId)) return;
-      st.seats.push(ctx.senderId);
-      st.chips.push(STARTING_CHIPS);
-      broadcastState(room, ctx);
-      return;
-    }
-
-    if (data.kind === 'leaveSeat') {
-      const idx = st.seats.indexOf(ctx.senderId);
-      if (idx === -1) return;
-      st.seats.splice(idx, 1);
-      st.chips.splice(idx, 1);
-      st.phase = 'waiting';
-      st.hand = null;
-      broadcastState(room, ctx);
-      return;
-    }
-
-    if (data.kind === 'startGame') {
-      if (st.phase !== 'waiting' || st.seats.length < MIN_SEATS) return;
-      st.dealerIdx = 0;
-      st.winnerSeat = null;
-      st.out = [];
-      startHand(st);
-      broadcastState(room, ctx);
-      return;
-    }
-
-    if (data.kind === 'resetGame') {
-      if (st.phase !== 'game_over') return;
-      if (st.seats.length >= MIN_SEATS) {
-        st.chips = st.seats.map(() => STARTING_CHIPS);
-        st.dealerIdx = 0;
-        st.winnerSeat = null;
-        st.out = [];
-        startHand(st);
-      } else {
-        st.phase = 'waiting';
-      }
-      broadcastState(room, ctx);
-      return;
-    }
-
-    if (data.kind === 'nextHand') {
-      if (st.phase !== 'hand_over') return;
-      st.dealerIdx = (st.dealerIdx + 1) % st.seats.length;
-      startHand(st);
-      broadcastState(room, ctx);
-      return;
-    }
-
-    const seatIdx = st.seats.indexOf(ctx.senderId);
-    if (seatIdx === -1 || st.phase !== 'playing' || !st.hand || seatIdx !== st.hand.toAct) return;
-    const h = st.hand;
-
-    if (data.kind === 'fold') {
-      h.folded[seatIdx] = true;
-      h.actedThisRound.add(seatIdx);
-      afterAction(st);
-      broadcastState(room, ctx);
-      return;
-    }
-
-    if (data.kind === 'check') {
-      if (h.bets[seatIdx] !== h.currentBet) return;
-      h.actedThisRound.add(seatIdx);
-      afterAction(st);
-      broadcastState(room, ctx);
-      return;
-    }
-
-    if (data.kind === 'call') {
-      const need = h.currentBet - h.bets[seatIdx];
-      const pay = Math.min(need, st.chips[seatIdx]);
-      st.chips[seatIdx] -= pay;
-      h.bets[seatIdx] += pay;
-      h.totalContributed[seatIdx] += pay;
-      if (st.chips[seatIdx] === 0) h.allIn[seatIdx] = true;
-      h.actedThisRound.add(seatIdx);
-      afterAction(st);
-      broadcastState(room, ctx);
-      return;
-    }
-
-    if (data.kind === 'raise') {
-      const raiseTo = Number(data.amount);
-      if (!Number.isFinite(raiseTo)) return;
-      const maxPossible = h.bets[seatIdx] + st.chips[seatIdx];
-      const minLegal = Math.min(h.currentBet + BIG_BLIND, maxPossible);
-      const target = Math.min(raiseTo, maxPossible);
-      if (target < minLegal || target <= h.currentBet) return;
-      const pay = target - h.bets[seatIdx];
-      st.chips[seatIdx] -= pay;
-      h.bets[seatIdx] = target;
-      h.totalContributed[seatIdx] += pay;
-      h.currentBet = target;
-      if (st.chips[seatIdx] === 0) h.allIn[seatIdx] = true;
-      // A raise reopens the action — everyone else must act again on this new bet level.
-      h.actedThisRound = new Set([seatIdx]);
-      afterAction(st);
-      broadcastState(room, ctx);
-    }
+    const id = ctx.senderId;
+    let err = null;
+    if (data.kind === 'sit') err = sit(room, id, data.amount);
+    else if (data.kind === 'rebuy') err = rebuy(room, id, data.amount);
+    else if (data.kind === 'leaveSeat') err = leave(room, id);
+    else if (data.kind === 'startGame' || data.kind === 'nextHand') {
+      // "Deal now": skip the wait (bots press it once they've seen the result).
+      if (st.phase === 'playing' || !st.seats.includes(id)) return;
+      if (!deal(st)) err = 'need_players';
+    } else err = act(st, st.seats.indexOf(id), data);
+    if (err) { reject(room, id, err); return; }
+    broadcastState(room);
   },
 
   _internal: { evaluate7, compareHandTuples, BIG_BLIND },
+  _test: { setClock(fn) { clock = fn; }, SMALL_BLIND, BIG_BLIND, MIN_BUY, MAX_BUY, BOT_BUY, NEXT_HAND_MS, START_MS },
 };
+
+// fold / check / call / raise for the seat to act. Returns an error string or null.
+function act(st, seatIdx, data) {
+  if (seatIdx === -1 || st.phase !== 'playing' || !st.hand || seatIdx !== st.hand.toAct) return 'not_your_turn';
+  const h = st.hand;
+
+  if (data.kind === 'fold') {
+    h.folded[seatIdx] = true;
+    h.actedThisRound.add(seatIdx);
+    afterAction(st);
+    return null;
+  }
+
+  if (data.kind === 'check') {
+    if (h.bets[seatIdx] !== h.currentBet) return 'cannot_check';
+    h.actedThisRound.add(seatIdx);
+    afterAction(st);
+    return null;
+  }
+
+  if (data.kind === 'call') {
+    const need = h.currentBet - h.bets[seatIdx];
+    const pay = Math.min(need, st.chips[seatIdx]);
+    st.chips[seatIdx] -= pay;
+    h.bets[seatIdx] += pay;
+    h.totalContributed[seatIdx] += pay;
+    if (st.chips[seatIdx] === 0) h.allIn[seatIdx] = true;
+    h.actedThisRound.add(seatIdx);
+    afterAction(st);
+    return null;
+  }
+
+  if (data.kind === 'raise') {
+    const raiseTo = Math.floor(Number(data.amount));
+    if (!Number.isFinite(raiseTo)) return 'bad_amount';
+    const maxPossible = h.bets[seatIdx] + st.chips[seatIdx];
+    const minLegal = Math.min(h.currentBet + BIG_BLIND, maxPossible);
+    const target = Math.min(raiseTo, maxPossible);
+    if (target < minLegal || target <= h.currentBet) return 'bad_amount';
+    const pay = target - h.bets[seatIdx];
+    st.chips[seatIdx] -= pay;
+    h.bets[seatIdx] = target;
+    h.totalContributed[seatIdx] += pay;
+    h.currentBet = target;
+    if (st.chips[seatIdx] === 0) h.allIn[seatIdx] = true;
+    // A raise reopens the action — everyone else must act again on this new bet level.
+    h.actedThisRound = new Set([seatIdx]);
+    afterAction(st);
+    return null;
+  }
+  return 'unknown';
+}

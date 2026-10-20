@@ -410,15 +410,16 @@ export const HOWTO = {
     ],
   },
   poker: {
-    about: 'Texas Hold\'em for 2-6 players with fixed 10/20 blinds.',
+    about: 'Texas Hold\'em cash table for 2-6 players, $1/$2 blinds, played with your casino balance.',
     rules: [
-      'Everyone starts with 1000 chips; stacks carry over hand to hand.',
+      'Sit down with a buy-in of $20 to $200 from your balance; standing up cashes your stack back out.',
       'Two hole cards each plus five shared cards; best 5-card hand wins the pot.',
       'Minimum raise is the current bet plus one big blind; side pots handle all-ins.',
-      'The game ends when only one player still has chips.',
+      'Hands deal on their own a few seconds apart. Bust out and you can REBUY from your balance or leave.',
+      'Leaving mid-hand folds your hand (an all-in plays out and any win is paid to your balance). No house rake; bots play with house money.',
     ],
     controls: [
-      'Sit down, then START GAME with 2+ players.',
+      'Pick a buy-in and SIT DOWN; play starts once two stacks are seated (DEAL NOW skips the wait).',
       'FOLD, CHECK / CALL, RAISE TO (set the amount) or ALL IN on your turn.',
     ],
   },

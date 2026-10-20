@@ -8,7 +8,7 @@ const WEEK = 7 * DAY;
 const BOARD_SIZE = 10;
 const BOARD_TTL_MS = 60 * 1000;
 // Fixed order so adding games to the site never reshuffles the rotation mid-week.
-const POOL = ['chess', 'connect4', 'poker', 'checkers', 'slither', 'reversi', 'pool', 'crazyeights', 'minigolf', 'backgammon',
+const POOL = ['chess', 'connect4', 'tron', 'checkers', 'slither', 'reversi', 'pool', 'crazyeights', 'minigolf', 'backgammon',
   'dotsboxes', 'tanks', 'gomoku', 'hearts', 'seabattle', 'blockade', 'mancala', 'spades', 'minesweeper', 'scrabble'];
 
 function weekOf(ts) {

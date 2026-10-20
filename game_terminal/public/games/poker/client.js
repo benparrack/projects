@@ -1,9 +1,18 @@
-// Texas Hold'em — 2-6 players, fixed blinds (10/20), chip stacks persist hand to hand.
+// Texas Hold'em cash table in the CASINO: $1/$2 blinds, buy in from your casino balance.
 // Server plugin: ../../../server/games/poker.js
 
 import { renderCard, isBot, botName, botSeatControls } from '../cardCommon.js';
-import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
+
+const money = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+const REJECT = {
+  broke: 'Not enough in your casino balance for that buy-in. Claim the daily stipend or work a shift in the CASINO menu.',
+  wallet_loading: 'Opening your casino balance… try again in a second.',
+  table_full: 'The table is full.',
+  in_hand: 'Finish this hand first.',
+  at_max: 'Your stack is already at the maximum buy-in.',
+  need_players: 'Need two stacks at the table to deal.',
+};
 
 // Mirrors server/games/poker.js's HAND_NAMES (category index -> display name) — duplicated here
 // since it's just a tiny display lookup, not game logic that needs to stay authoritative.
@@ -14,9 +23,10 @@ export function mount(container, api) {
   let roster = [];
   let raiseAmount = null;
   let confirmingFold = false; // FOLD sits right next to CALL — this guards against a misclick
+  let buyIn = null; // chosen buy-in amount, defaults to the max you can afford
+  let notice = '';
 
   const root = document.createElement('div');
-  const results = createResults(container);
   root.style.display = 'flex';
   root.style.flexDirection = 'column';
   root.style.gap = '10px';
@@ -37,11 +47,6 @@ export function mount(container, api) {
   }
 
   function render() {
-    results.update(view && view.phase === 'game_over' ? seatResults({
-      seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
-      value: (i) => `${view.chips[i]} chips`, rank: (i) => -view.chips[i],
-      winTitle: `${nameAt(view.winnerSeat)} WINS!`, subtitle: 'Took every chip on the table', onRematch: () => api.sendAction({ kind: 'resetGame' }),
-    }) : null);
     root.innerHTML = '';
     if (!view) {
       root.textContent = 'Loading...';
@@ -51,42 +56,79 @@ export function mount(container, api) {
     const mySeat = mySeatIndex();
     const h = view.hand;
 
+    const [sb, bb] = view.blinds;
+    const [minBuy, maxBuy] = view.buyIn;
+    const top = document.createElement('div');
+    top.className = 'casino-balance';
+    top.textContent = `${money(sb)}/${money(bb)} NO LIMIT${view.balance != null ? ` · BALANCE ${money(view.balance)}` : ''}`;
+    root.appendChild(top);
+
     const status = document.createElement('div');
+    const dealIn = view.nextAt ? Math.max(0, Math.ceil((view.nextAt - Date.now()) / 1000)) : null;
     if (view.phase === 'waiting') {
-      status.textContent = `Waiting for players (${view.seats.length}/6 seated, need 2+ to start).`;
+      status.textContent = dealIn != null ? `Dealing in ${dealIn}s…` : `Waiting for players (${view.seats.length}/6 seated, need 2 stacks to deal).`;
     } else if (view.phase === 'playing') {
-      status.textContent = `${h.stage.toUpperCase()} — ${nameAt(h.toAct)}${h.toAct === mySeat ? ' (you)' : ''} to act — pot: ${h.potTotal}`;
+      status.textContent = `${h.stage.toUpperCase()} — ${nameAt(h.toAct)}${h.toAct === mySeat ? ' (you)' : ''} to act — pot: ${money(h.potTotal)}`;
     } else if (view.phase === 'hand_over') {
       const r = h.lastResult;
-      status.textContent = r.kind === 'fold' ? `${nameAt(r.winnerSeat)} wins the pot — everyone else folded.` : 'Showdown!';
-    } else if (view.phase === 'game_over') {
-      status.textContent = `${nameAt(view.winnerSeat)} WINS — took all the chips!`;
+      status.textContent = (r.kind === 'fold' ? `${nameAt(r.winnerSeat)} wins ${money(r.payouts[r.winnerSeat])}, everyone else folded.` : 'Showdown!')
+        + (dealIn != null ? ` Next hand in ${dealIn}s.` : '');
     }
     root.appendChild(status);
+    if (notice) {
+      const n = document.createElement('div');
+      n.textContent = notice;
+      n.style.color = '#ff4d4d';
+      root.appendChild(n);
+    }
 
     const seatRow = document.createElement('div');
     seatRow.style.display = 'flex';
     seatRow.style.gap = '8px';
     seatRow.style.flexWrap = 'wrap';
-    if (mySeat === -1 && view.phase === 'waiting' && view.seats.length < 6) {
-      const btn = document.createElement('button');
-      btn.textContent = 'SIT DOWN (1000 chips)';
-      btn.addEventListener('click', () => api.sendAction({ kind: 'sit' }));
-      seatRow.appendChild(btn);
+    const leftTable = mySeat !== -1 && view.leaving.includes(api.getClientId());
+    const myChips = mySeat !== -1 && !leftTable ? view.chips[mySeat] : 0;
+    // Buy-in picker: SIT DOWN when standing, REBUY to top up a short stack between hands.
+    const room = mySeat === -1 || leftTable ? maxBuy : maxBuy - myChips;
+    const canTopUp = mySeat !== -1 && !leftTable && room > 0 && (view.phase !== 'playing' || h.folded[mySeat]);
+    if (((mySeat === -1 && view.seats.length < 6) || leftTable || canTopUp)) {
+      const afford = view.balance == null ? room : Math.min(room, Math.floor(view.balance));
+      const lo = mySeat === -1 || leftTable ? minBuy : 1;
+      if (afford >= lo) {
+        buyIn = Math.max(lo, Math.min(buyIn ?? afford, afford));
+        const amt = document.createElement('input');
+        amt.type = 'number';
+        amt.min = String(lo);
+        amt.max = String(afford);
+        amt.value = String(buyIn);
+        amt.style.width = '70px';
+        amt.setAttribute('aria-label', 'Buy-in amount');
+        amt.addEventListener('input', () => { buyIn = Math.max(lo, Math.min(Number(amt.value) || lo, afford)); });
+        const btn = document.createElement('button');
+        btn.textContent = mySeat === -1 || leftTable ? 'SIT DOWN WITH $' : myChips === 0 ? 'REBUY $' : 'TOP UP $';
+        btn.addEventListener('click', () => { api.sendAction({ kind: mySeat === -1 || leftTable ? 'sit' : 'rebuy', amount: buyIn }); buyIn = null; });
+        seatRow.append(btn, amt);
+      } else if (mySeat === -1 || myChips === 0) {
+        const broke = document.createElement('span');
+        broke.textContent = `You need ${money(lo)} to sit. Stipend and shifts are in the CASINO menu.`;
+        seatRow.appendChild(broke);
+      }
     }
-    if (mySeat !== -1 && view.phase === 'waiting') {
+    if (mySeat !== -1 && !leftTable) {
       const leaveBtn = document.createElement('button');
-      leaveBtn.textContent = 'LEAVE SEAT';
+      const inHand = view.phase === 'playing' && !h.folded[mySeat] && !h.allIn[mySeat];
+      leaveBtn.textContent = inHand ? 'LEAVE (folds hand)' : 'LEAVE SEAT';
       leaveBtn.addEventListener('click', () => api.sendAction({ kind: 'leaveSeat' }));
       seatRow.appendChild(leaveBtn);
     }
-    if (view.phase === 'waiting' && view.seats.length >= 2 && mySeat !== -1) {
+    if (view.phase !== 'playing' && mySeat !== -1 && view.chips.filter((c) => c > 0).length >= 2) {
       const startBtn = document.createElement('button');
-      startBtn.textContent = 'START GAME';
+      startBtn.textContent = 'DEAL NOW';
       startBtn.addEventListener('click', () => api.sendAction({ kind: 'startGame' }));
       seatRow.appendChild(startBtn);
     }
-    seatRow.appendChild(botSeatControls(api, view.seats, 6, view.phase));
+    // Bots can join between or during hands (they sit out until the next deal).
+    seatRow.appendChild(botSeatControls(api, view.seats, 6, 'waiting'));
     root.appendChild(seatRow);
 
     // Seats around the table: chips, current bet, dealer marker, folded/all-in state.
@@ -105,17 +147,17 @@ export function mount(container, api) {
       col.style.border = h && h.toAct === i && view.phase === 'playing' ? '2px solid #39ff14' : '1px solid transparent';
       col.style.opacity = h && h.folded[i] ? '0.4' : '1';
       const name = document.createElement('div');
-      name.textContent = `${i === view.dealerIdx ? '(D) ' : ''}${nicknameFor(clientId)}${clientId === api.getClientId() ? ' (you)' : ''}`;
+      name.textContent = `${i === view.dealerIdx && h ? '(D) ' : ''}${nicknameFor(clientId)}${clientId === api.getClientId() ? ' (you)' : ''}${view.leaving.includes(clientId) ? ' (left)' : ''}`;
       name.style.fontSize = '0.85em';
       col.appendChild(name);
       const chips = document.createElement('div');
-      chips.textContent = `${view.chips[i]} chips`;
+      chips.textContent = view.chips[i] > 0 ? money(view.chips[i]) : 'busted';
       chips.style.fontSize = '0.8em';
       chips.style.opacity = '0.8';
       col.appendChild(chips);
       if (h) {
         const bet = document.createElement('div');
-        bet.textContent = h.folded[i] ? 'folded' : h.allIn[i] ? 'ALL IN' : h.bets[i] > 0 ? `bet ${h.bets[i]}` : '';
+        bet.textContent = h.folded[i] ? 'folded' : h.allIn[i] ? 'ALL IN' : h.bets[i] > 0 ? `bet ${money(h.bets[i])}` : '';
         bet.style.fontSize = '0.75em';
         bet.style.color = '#ffb000';
         col.appendChild(bet);
@@ -137,7 +179,7 @@ export function mount(container, api) {
       for (let i = h.community.length; i < 5; i++) communityRow.appendChild(renderCard(null, { faceDown: true }));
       table.appendChild(communityRow);
       const potLabel = document.createElement('div');
-      potLabel.textContent = `Pot: ${h.potTotal}`;
+      potLabel.textContent = `Pot: ${money(h.potTotal)}`;
       potLabel.style.opacity = '0.8';
       table.appendChild(potLabel);
       root.appendChild(table);
@@ -156,7 +198,7 @@ export function mount(container, api) {
         row.style.gap = '6px';
         const label = document.createElement('span');
         const won = h.lastResult.payouts[entry.seat] > 0;
-        label.textContent = `${nameAt(entry.seat)}${won ? ' 🏆' : ''}: ${HAND_NAMES[entry.best[0]]}`;
+        label.textContent = `${nameAt(entry.seat)}${won ? ` 🏆 +${money(h.lastResult.payouts[entry.seat])}` : ''}: ${HAND_NAMES[entry.best[0]]}`;
         label.style.fontWeight = won ? 'bold' : 'normal';
         row.appendChild(label);
         for (const card of entry.cards) row.appendChild(renderCard(card, { small: true }));
@@ -181,7 +223,7 @@ export function mount(container, api) {
       const toCall = h.currentBet - h.bets[mySeat];
       const myStack = view.chips[mySeat];
       const maxRaiseTo = h.bets[mySeat] + myStack;
-      const minRaiseTo = Math.min(h.currentBet + 20, maxRaiseTo);
+      const minRaiseTo = Math.min(h.currentBet + bb, maxRaiseTo);
       if (raiseAmount === null) raiseAmount = minRaiseTo;
 
       const actions = document.createElement('div');
@@ -217,7 +259,7 @@ export function mount(container, api) {
       }
 
       const callBtn = document.createElement('button');
-      callBtn.textContent = toCall <= 0 ? 'CHECK' : `CALL ${toCall}`;
+      callBtn.textContent = toCall <= 0 ? 'CHECK' : `CALL ${money(Math.min(toCall, myStack))}`;
       callBtn.addEventListener('click', () => api.sendAction({ kind: toCall <= 0 ? 'check' : 'call' }));
       actions.appendChild(callBtn);
 
@@ -265,37 +307,43 @@ export function mount(container, api) {
       raiseAmount = null;
       confirmingFold = false;
     }
+  }
 
-    if (view.phase === 'hand_over') {
-      const nextBtn = document.createElement('button');
-      nextBtn.textContent = 'NEXT HAND';
-      nextBtn.addEventListener('click', () => api.sendAction({ kind: 'nextHand' }));
-      root.appendChild(nextBtn);
-    }
-    if (view.phase === 'game_over') {
-      const again = document.createElement('button');
-      again.textContent = 'NEW GAME';
-      again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
-      root.appendChild(again);
-    }
+  // Move the server's deal time onto our clock.
+  function localClock(v) {
+    if (v && v.nextAt) v.nextAt += Date.now() - v.serverNow;
+    return v;
   }
 
   render();
+  // Re-render each second so the "next hand in Ns" countdown moves.
+  const countdown = setInterval(() => { if (view && view.nextAt) render(); }, 1000);
 
   return {
     applySnapshot(snapshot) {
-      view = snapshot;
+      view = localClock(snapshot);
       render();
     },
     applyEvent(data) {
+      if (data && data.kind === 'moveRejected') {
+        sfx.play('error');
+        notice = REJECT[data.reason] || '';
+        render();
+        return;
+      }
       if (data && data.kind === 'state') {
+        notice = '';
         const prevView = view;
+        // Count down against our clock, offset by the server's.
+        localClock(data);
         view = data;
         tableSounds(prevView, data, (v) => {
           const me = v.seats.indexOf(api.getClientId());
           const h = v.hand || {};
           return { played: (h.community || []).length, hand: (h.myHoleCards || []).length * 2,
-            myTurn: me >= 0 && h.toAct === me && v.winnerSeat == null, result: seatResult(v.winnerSeat, me) };
+            myTurn: me >= 0 && h.toAct === me && v.phase === 'playing',
+            result: v.phase === 'hand_over' && me >= 0 && h.totalContributed && h.totalContributed[me] > 0
+              ? seatResult(h.lastResult.payouts[me] > h.totalContributed[me] ? me : -2, me) : null };
         });
         if (prevView && prevView.hand && data.hand && data.hand.potTotal > prevView.hand.potTotal) sfx.play('chips');
         render();
@@ -306,7 +354,7 @@ export function mount(container, api) {
       render();
     },
     unmount() {
-      results.destroy();
+      clearInterval(countdown);
       container.innerHTML = '';
     },
   };

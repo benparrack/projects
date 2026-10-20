@@ -68,7 +68,6 @@ const CATEGORIES = [
       { type: 'war', label: 'WAR' },
       { type: 'crazyeights', label: 'CRAZY EIGHTS' },
       { type: 'bs', label: 'BS (CHEAT)' },
-      { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
       { type: 'spades', label: 'SPADES' },
       { type: 'hearts', label: 'HEARTS' },
     ],
@@ -80,6 +79,7 @@ const CATEGORIES = [
     games: [
       { type: 'blackjack', label: 'BLACKJACK' },
       { type: 'slots', label: 'SLOTS' },
+      { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
       { type: 'roulette', label: 'ROULETTE' },
     ],
   },

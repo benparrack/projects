@@ -47,8 +47,8 @@ async function waitFor(fn, ms = 8000) {
 
 test('stats metadata', () => {
   assert.deepStrictEqual(war.stats, { rated: false });
-  assert.deepStrictEqual(blackjack.stats, { none: true }); // casino: no results/XP
-  for (const p of [crazyeights, bs, poker, spades, hearts, minesweeper, filler, seabattle]) assert.strictEqual(p.stats.rated, true, p.type);
+  for (const p of [blackjack, poker]) assert.deepStrictEqual(p.stats, { none: true }, p.type); // casino: no results/XP
+  for (const p of [crazyeights, bs, spades, hearts, minesweeper, filler, seabattle]) assert.strictEqual(p.stats.rated, true, p.type);
   assert.strictEqual(hearts.stats.score.better, 'low');
   assert.strictEqual(filler.stats.score.better, 'high');
 });
@@ -101,21 +101,6 @@ test('bs: a final play that stands wins; a bot seat id maps to BOT with its leve
   assert.strictEqual(room.results.length, 0);
   room.act('bot-Ace~expert', { kind: 'passChallenge' });
   assert.deepStrictEqual(room.results, [{ placements: [['A'], ['BOT']], botLevel: 'expert' }]);
-});
-
-test('poker: last stack standing wins; players busted in the same hand tie', () => {
-  const room = makeRoom(poker);
-  for (const id of ['A', 'B', 'C']) room.act(id, { kind: 'sit' });
-  room.state.chips = [1000, 10, 20]; // B and C are all-in on the blinds
-  room.act('A', { kind: 'startGame' });
-  const h = room.state.hand;
-  h.holeCards = [[c('A', 'S'), c('A', 'H')], [c(7, 'C'), c(2, 'D')], [c(8, 'C'), c(3, 'D')]];
-  h.deck = [c('J', 'S'), c('Q', 'D'), c('Q', 'C'), c('K', 'H'), c('K', 'S')]; // board K K Q Q J
-  room.act('A', { kind: 'call' });
-  assert.strictEqual(room.state.phase, 'game_over');
-  assert.deepStrictEqual(room.results, [{ placements: [['A'], ['B', 'C']] }]);
-  room.act('A', { kind: 'resetGame' });
-  assert.strictEqual(room.results.length, 1);
 });
 
 test('spades: partners share a place; team score per player', () => {

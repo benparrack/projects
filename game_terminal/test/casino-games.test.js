@@ -1,10 +1,11 @@
-// Slots and roulette: exact slot return, jackpot wiring, roulette bets/settling, money conserved.
+// Slots, roulette and the poker cash table: exact slot return, jackpot wiring, roulette bets/settling, money conserved.
 // Run: node test/casino-games.test.js
 'use strict';
 
 const assert = require('assert');
 const slots = require('../server/games/slots');
 const roulette = require('../server/games/roulette');
+const poker = require('../server/games/poker');
 const { createWallet } = require('../server/casino/wallet');
 const { createMemoryDb } = require('../server/db');
 const { roomWallet } = require('../server/roomManager');
@@ -143,6 +144,67 @@ test('roulette: limits, unaffordable chips, and leaving mid-betting refunds', ()
   roulette.onLeave(room, { clientId: 'A' });
   assert.deepStrictEqual([room.bal('A').balance, room.bal('A').atTables], [START_BALANCE, 0]);
   assert.strictEqual(room.state.deadline, null);
+});
+
+const card = (rank, suit) => ({ rank: String(rank), suit });
+
+test('poker: buy-ins come off the balance, an all-in settles to the stacks, money is conserved', () => {
+  const room = makeRoom(poker, ['A', 'B']);
+  assert.strictEqual(room.act('A', { kind: 'sit', amount: 50 }), null);
+  assert.strictEqual(room.act('B', { kind: 'sit', amount: 5 }), null); // under the minimum: buys the minimum
+  assert.deepStrictEqual([room.bal('B').balance, room.bal('B').atTables], [START_BALANCE - poker._test.MIN_BUY, poker._test.MIN_BUY]);
+  room.act('B', { kind: 'rebuy', amount: 30 });
+  assert.strictEqual(room.state.chips[1], 50);
+  assert.strictEqual(room.act('A', { kind: 'startGame' }), null);
+  const h = room.state.hand;
+  h.holeCards = [[card('A', 'S'), card('A', 'H')], [card(7, 'C'), card(2, 'D')]];
+  h.deck = [card('J', 'S'), card('Q', 'D'), card('Q', 'C'), card('K', 'H'), card('K', 'S')];
+  assert.strictEqual(room.act('A', { kind: 'raise', amount: 50 }), null); // A is the small blind, first to act heads-up
+  assert.strictEqual(room.act('B', { kind: 'call' }), null);
+  assert.strictEqual(room.state.phase, 'hand_over');
+  assert.deepStrictEqual(room.state.chips, [100, 0]);
+  assert.deepStrictEqual([room.bal('A').balance, room.bal('A').atTables], [START_BALANCE - 50, 100]);
+  assert.deepStrictEqual([room.bal('B').balance, room.bal('B').atTables], [START_BALANCE - 50, 0]);
+  assert.strictEqual(room.act('A', { kind: 'leaveSeat' }), null);
+  assert.deepStrictEqual([room.bal('A').balance, room.bal('A').atTables], [START_BALANCE + 50, 0]);
+  assert.deepStrictEqual(room.state.seats, ['B']);
+  assert.strictEqual(room.state.phase, 'waiting');
+});
+
+test('poker: leaving mid-hand folds and cashes out the chips behind; the seat goes at the next deal', () => {
+  let now = 5e9;
+  poker._test.setClock(() => now);
+  const room = makeRoom(poker, ['A', 'B']);
+  room.act('A', { kind: 'sit', amount: 50 });
+  room.act('B', { kind: 'sit', amount: 50 });
+  room.act('A', { kind: 'startGame' });
+  assert.strictEqual(room.act('B', { kind: 'leaveSeat' }), null); // B is the big blind, not to act
+  assert.strictEqual(room.state.phase, 'hand_over'); // A wins the blinds by default
+  assert.deepStrictEqual(room.state.chips, [52, 0]);
+  assert.strictEqual(room.bal('B').balance, START_BALANCE - 2);
+  assert.strictEqual(room.bal('A').balance + room.bal('A').atTables + room.bal('B').balance, 2 * START_BALANCE);
+  now += poker._test.NEXT_HAND_MS;
+  poker.tick(room);
+  assert.deepStrictEqual(room.state.seats, ['A']);
+  assert.strictEqual(room.state.phase, 'waiting');
+});
+
+test('poker: bots sit with house money, latecomers sit out the hand, and hands deal on their own', () => {
+  let now = 6e9;
+  poker._test.setClock(() => now);
+  const room = makeRoom(poker, ['A', 'C']);
+  room.act('A', { kind: 'sit', amount: 40 });
+  room.act('bot-Ace~easy', { kind: 'sit' });
+  assert.strictEqual(room.state.chips[1], poker._test.BOT_BUY);
+  poker.tick(room);
+  assert.strictEqual(room.state.phase, 'waiting');
+  now += poker._test.START_MS;
+  poker.tick(room);
+  assert.strictEqual(room.state.phase, 'playing');
+  room.act('C', { kind: 'sit', amount: 40 });
+  assert.strictEqual(room.state.hand.folded[2], true);
+  assert.strictEqual(room.act('C', { kind: 'check' }), 'not_your_turn');
+  assert.strictEqual(room.act('A', { kind: 'sit', amount: 40 }), 'already_seated');
 });
 
 (async () => {
