@@ -7,6 +7,7 @@ const slots = require('../server/games/slots');
 const roulette = require('../server/games/roulette');
 const poker = require('../server/games/poker');
 const diner = require('../server/games/diner');
+const blackjack = require('../server/games/blackjack');
 const { createWallet } = require('../server/casino/wallet');
 const { createMemoryDb } = require('../server/db');
 const { roomWallet } = require('../server/roomManager');
@@ -255,6 +256,18 @@ test('diner: junk serves, bogus tickets and walking out earn nothing; the daily 
   assert.strictEqual(room.bal('A').balance, START_BALANCE);
   for (let i = 0; i < 6; i++) room.w.payShift('g:A', 1);
   assert.strictEqual(room.act('A', { kind: 'start' }), 'shift_cap');
+});
+
+test('high-roller blackjack: needs $1,000 or the VIP key to sit; tips cost the smallest chip', () => {
+  const room = makeRoom(blackjack.highRoller, ['A']);
+  assert.strictEqual(room.act('A', { kind: 'sit' }), 'vip_only');
+  room.w.payShift('g:A', 1000);
+  assert.strictEqual(room.act('A', { kind: 'sit' }), null);
+  assert.strictEqual(room.state.lim.min, 25);
+  assert.strictEqual(room.act('A', { kind: 'bet', amount: 5 }), 'bad_amount');
+  assert.strictEqual(room.act('A', { kind: 'tip' }), null);
+  assert.strictEqual(room.state.players.A.bankroll, START_BALANCE + 1000 - 25);
+  assert.strictEqual(room.sent.at(-1).m.payload.gameType, 'blackjack_hr');
 });
 
 (async () => {

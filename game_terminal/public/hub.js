@@ -78,6 +78,7 @@ const CATEGORIES = [
     casino: true,
     games: [
       { type: 'blackjack', label: 'BLACKJACK' },
+      { type: 'blackjack_hr', label: 'HIGH ROLLER BLACKJACK ($1,000+ or VIP key)' },
       { type: 'slots', label: 'SLOTS' },
       { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
       { type: 'roulette', label: 'ROULETTE' },
@@ -569,7 +570,10 @@ function handleServerMessage(type, payload) {
       break;
 
     case ServerMessage.CASINO_STATE:
-      state.casino = payload;
+      // Leaderboards only come with the lobby opening; keep them through shop updates.
+      state.casino = { ...payload, boards: payload.boards || (state.casino && state.casino.boards) };
+      // Equipped skins, read by the casino tables' CSS (style.css). Stays set after leaving the lobby.
+      for (const slot of ['felt', 'back', 'slots']) document.body.dataset[slot] = (payload.equipped && payload.equipped[slot]) || '';
       renderGameList();
       break;
 
@@ -688,6 +692,8 @@ function renderGameList() {
         subList.appendChild(casinoBar(state.casino, {
           onStipend: () => { sfx.play('chips'); send(ClientMessage.CASINO_STIPEND, {}); },
           onWork: () => { state.selectedGameType = 'diner'; els.btnJoinPublic.click(); },
+          onBuy: (item) => { sfx.play('chips'); send(ClientMessage.CASINO_BUY, { item }); },
+          onEquip: (item) => { sfx.play('click'); send(ClientMessage.CASINO_EQUIP, { item }); },
         }));
       }
       for (const game of cat.games) {

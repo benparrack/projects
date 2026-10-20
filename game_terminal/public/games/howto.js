@@ -80,7 +80,16 @@ export const HOWTO = {
       'Bet with the chip buttons, then DEAL (Space/Enter).',
       'HIT / STAND / DOUBLE / SPLIT buttons, or keys H, S, D, P.',
       'HINTS toggles basic-strategy advice.',
+      'TIP DEALER between hands gives the dealer your smallest chip. Just for fun.',
     ],
+  },
+  blackjack_hr: {
+    about: 'The high-roller room: the same blackjack with $25-$2,500 bets and chips up to $1,000.',
+    rules: [
+      'Open to anyone with $1,000+ in the casino (balance plus money at tables), or who owns the VIP key from the casino SHOP.',
+      'Everything else plays like BLACKJACK: 6 decks, 3:2 blackjacks, dealer stands on soft 17.',
+    ],
+    controls: ['Same as BLACKJACK.'],
   },
   diner: {
     about: 'Terminal Diner: a three-minute burger shift that pays into your casino balance. The way back from broke.',

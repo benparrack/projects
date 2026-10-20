@@ -436,6 +436,8 @@ function walletRoom(ids) {
   room.code = 'T1';
   room.wallet = {
     ready: () => true,
+    flair: () => '',
+    vip: () => false,
     buyIn: (id, n) => wallet.buyIn(`g:${id}`, 'T1', n),
     sync: (id, s) => wallet.sync(`g:${id}`, 'T1', s),
     cashOut: (id, s) => wallet.cashOut(`g:${id}`, 'T1', s),

@@ -495,11 +495,17 @@ wss.on('connection', (ws, req) => {
       }
 
       case ClientMessage.CASINO_OPEN:
-      case ClientMessage.CASINO_STIPEND: {
+      case ClientMessage.CASINO_STIPEND:
+      case ClientMessage.CASINO_BUY:
+      case ClientMessage.CASINO_EQUIP: {
         const key = session.uid && session.user && session.user.username ? session.uid : `g:${session.clientId}`;
-        if (key === session.uid) await wallet.load(key);
+        if (key === session.uid) await wallet.load(key, session.user.username);
+        let error = null;
         if (type === ClientMessage.CASINO_STIPEND) wallet.claimStipend(key);
-        send(ws, ServerMessage.CASINO_STATE, wallet.view(key));
+        if (type === ClientMessage.CASINO_BUY) error = wallet.buy(key, payload && payload.item);
+        if (type === ClientMessage.CASINO_EQUIP) error = wallet.equip(key, payload && payload.item);
+        const boards = type === ClientMessage.CASINO_OPEN ? await wallet.leaderboards() : undefined;
+        send(ws, ServerMessage.CASINO_STATE, { ...wallet.view(key), boards, error });
         break;
       }
 

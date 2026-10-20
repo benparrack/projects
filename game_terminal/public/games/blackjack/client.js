@@ -11,10 +11,11 @@ import { handValue, cardValue, basicStrategy, adviceLabel } from './strategy.js'
 
 const HINT_KEY = 'gt.blackjack.hints';
 
+const TIP_THANKS = ['Much obliged!', 'Thank you kindly!', 'Good luck to you!', 'A true gentleman of the felt.'];
 const REJECT = {
   not_betting: 'Bets are closed', not_seated: 'Sit down first', already_ready: 'Bet locked in — wait for the deal',
   bad_amount: 'Invalid chip', over_max: 'Table max is $100', insufficient: 'Not enough chips', no_last_bet: 'No previous bet',
-  under_min: 'Minimum bet is $2', no_rebuy: 'No rebuys — visit the CASINO lobby',
+  under_min: 'Minimum bet is $2', vip_only: 'High rollers only: $1,000+ in the casino, or the VIP key from the casino SHOP.', no_rebuy: 'No rebuys — visit the CASINO lobby',
   broke: 'You\'re broke: claim the daily stipend or work a shift in the CASINO lobby', wallet_loading: 'Loading your balance, try again', no_insurance: 'Insurance is closed',
   not_your_turn: "It's not your turn", cant_double: "Can't double this hand", cant_split: "Can't split this hand",
   split_aces: 'Split aces get one card', table_full: 'Table is full', already_seated: 'Already seated',
@@ -197,7 +198,8 @@ export function mount(container, api) {
   function nameFor(id) {
     if (isBot(id)) return botName(id);
     const r = roster.find((x) => x.clientId === id);
-    return r ? r.nickname : 'someone';
+    const flair = view && view.players[id] && view.players[id].flair;
+    return `${r ? r.nickname : 'someone'}${flair ? ` ${flair}` : ''}`;
   }
   const mySeat = () => (view ? view.seats.indexOf(me()) : -1);
   const myEntry = () => (view && view.round ? view.round.entries.find((e) => e.id === me()) : null);
@@ -504,6 +506,13 @@ export function mount(container, api) {
       leave.style.padding = '3px 10px';
       leave.addEventListener('click', () => send({ kind: 'leaveSeat' }));
       leaveRow.appendChild(leave);
+      if (view.phase === 'betting') {
+        const tip = el('button', null, `TIP DEALER $${view.chips[0]}`);
+        tip.style.fontSize = '.75em';
+        tip.style.padding = '3px 10px';
+        tip.addEventListener('click', () => send({ kind: 'tip' }));
+        leaveRow.appendChild(tip);
+      }
       panel.appendChild(leaveRow);
     }
     parent.appendChild(panel);
@@ -643,6 +652,7 @@ export function mount(container, api) {
     if (fresh) {
       if (ev.kind === 'shuffle') sfx.play('whoosh');
       if (ev.kind === 'deal') sfx.play('deal');
+      if (ev.kind === 'tip') { sfx.play('chips'); showToast(`${nameFor(ev.id)} tipped the dealer $${ev.amount}. "${TIP_THANKS[ev.id.length % TIP_THANKS.length]}"`); }
       if (ev.kind === 'dealerBlackjack') pendingBanner = { text: 'DEALER BLACKJACK', color: '#ff4d4d' };
       if (ev.kind === 'bust' && ev.who === me()) sfx.play('crash');
       if (ev.kind === 'timeout' && ev.who === me()) showToast('Time up — you stood.');
@@ -685,7 +695,7 @@ export function mount(container, api) {
         root.classList.remove('bj-flash');
         void root.offsetWidth;
         root.classList.add('bj-flash');
-        showToast(REJECT[data.reason] || 'Not allowed');
+        showToast(view && data.reason === 'over_max' ? `Table max is $${view.maxBet}` : view && data.reason === 'under_min' ? `Minimum bet is $${view.minBet}` : REJECT[data.reason] || 'Not allowed');
       }
     },
     applyRoster(newRoster) {

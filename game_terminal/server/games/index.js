@@ -79,6 +79,7 @@ const registry = {
   [mazedash.type]: mazedash,
   [gameboy.type]: gameboy,
   [blackjack.type]: blackjack,
+  [blackjack.highRoller.type]: blackjack.highRoller,
   [diner.type]: diner,
   [slots.type]: slots,
   [roulette.type]: roulette,

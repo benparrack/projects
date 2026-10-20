@@ -147,7 +147,7 @@ export function mount(container, api) {
       col.style.border = h && h.toAct === i && view.phase === 'playing' ? '2px solid #39ff14' : '1px solid transparent';
       col.style.opacity = h && h.folded[i] ? '0.4' : '1';
       const name = document.createElement('div');
-      name.textContent = `${i === view.dealerIdx && h ? '(D) ' : ''}${nicknameFor(clientId)}${clientId === api.getClientId() ? ' (you)' : ''}${view.leaving.includes(clientId) ? ' (left)' : ''}`;
+      name.textContent = `${i === view.dealerIdx && h ? '(D) ' : ''}${nicknameFor(clientId)}${view.flair && view.flair[clientId] ? ` ${view.flair[clientId]}` : ''}${clientId === api.getClientId() ? ' (you)' : ''}${view.leaving.includes(clientId) ? ' (left)' : ''}`;
       name.style.fontSize = '0.85em';
       col.appendChild(name);
       const chips = document.createElement('div');
@@ -168,6 +168,7 @@ export function mount(container, api) {
 
     if (h && (view.phase === 'playing' || view.phase === 'hand_over')) {
       const table = document.createElement('div');
+      table.className = 'pk-felt';
       table.style.display = 'flex';
       table.style.flexDirection = 'column';
       table.style.alignItems = 'center';

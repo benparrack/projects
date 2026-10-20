@@ -332,6 +332,7 @@ function buildPublicState(room, forClientId) {
     seats: st.seats,
     chips: st.chips,
     leaving: st.leaving,
+    flair: st.flair,
     dealerIdx: st.dealerIdx,
     nextAt: st.nextAt,
     serverNow: clock(),
@@ -402,6 +403,7 @@ function sit(room, id, amount) {
       if (!w.ready(id)) return 'wallet_loading';
       if (w.balance(id) < MIN_BUY) return 'broke';
       chips = w.buyIn(id, want);
+      st.flair[id] = w.flair(id);
     } else chips = want;
   }
   if (back) {
@@ -476,7 +478,7 @@ module.exports = {
   buildSidePots,
 
   createInitialState() {
-    return { phase: 'waiting', seats: [], chips: [], dealerIdx: 0, hand: null, leaving: [], nextAt: null, moneyNotes: [] };
+    return { phase: 'waiting', seats: [], chips: [], dealerIdx: 0, hand: null, leaving: [], nextAt: null, moneyNotes: [], flair: {} };
   },
 
   isRoomFull() {

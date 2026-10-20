@@ -6,7 +6,7 @@
 const assert = require('assert');
 const { createWallet } = require('../server/casino/wallet');
 const { createMemoryDb } = require('../server/db');
-const { START_BALANCE, STIPEND, SHIFT_CAP, JACKPOT_SEED } = require('../server/casino/economy');
+const { START_BALANCE, STIPEND, SHIFT_CAP, JACKPOT_SEED, SHOP, VIP_BALANCE } = require('../server/casino/economy');
 
 let failures = 0;
 const tests = [];
@@ -103,6 +103,46 @@ test('jackpot: accounts feed it and win it, guests do neither, it survives a res
   await after.load('u1');
   assert.strictEqual(after.hitJackpot('u1', 1), (JACKPOT_SEED + 1) / 2);
   assert.strictEqual(after.jackpot(), JACKPOT_SEED);
+});
+
+test('shop: buy once, equip/unequip, guests and the broke cannot buy; tier and charm make the flair', async () => {
+  const db = createMemoryDb();
+  const w = createWallet(db);
+  await w.load('u1', 'ann');
+  const price = (id) => SHOP.find((x) => x.id === id).price;
+  assert.strictEqual(w.buy('u1', 'nope'), 'unknown');
+  assert.strictEqual(w.buy('u1', 'charm-clover'), null);
+  assert.strictEqual(w.view('u1').balance, START_BALANCE - price('charm-clover'));
+  assert.strictEqual(w.view('u1').equipped.charm, 'charm-clover'); // bought = worn
+  assert.strictEqual(w.buy('u1', 'charm-clover'), 'owned');
+  assert.strictEqual(w.buy('u1', 'felt-gold'), 'broke');
+  assert.strictEqual(w.flair('u1'), '🥉🍀');
+  assert.strictEqual(w.equip('u1', 'charm-clover'), null);
+  assert.strictEqual(w.view('u1').equipped.charm, undefined);
+  assert.strictEqual(w.equip('u1', 'felt-gold'), 'unknown'); // not owned
+  w.noteBet('u1', 5000);
+  assert.strictEqual(w.view('u1').tier.name, 'Gold');
+  assert.strictEqual(w.flair('u1'), '🥇');
+  assert.strictEqual(w.buy('g:x', 'charm-clover'), 'guest');
+  assert.strictEqual(w.flair('g:x'), '');
+});
+
+test('VIP: $1,000 across balance and tables, or the key; leaderboards read the db', async () => {
+  const db = createMemoryDb();
+  const w = createWallet(db);
+  await w.load('u1', 'ann');
+  await w.load('u2', 'bob');
+  assert.strictEqual(w.vip('u1'), false);
+  w.payShift('u1', VIP_BALANCE);
+  w.buyIn('u1', 'R', 500); // money at a table still counts
+  assert.strictEqual(w.vip('u1'), true);
+  w.cashOut('u1', 'R', 0);
+  assert.strictEqual(w.vip('u1'), false);
+  w.noteBet('u2', 10, 40);
+  await w.flush();
+  const b = await w.leaderboards();
+  assert.deepStrictEqual(b.richest.map((r) => r.name), ['ann', 'bob']);
+  assert.deepStrictEqual(b.biggestWin, [{ name: 'bob', value: 40, tier: '🥉' }]);
 });
 
 (async () => {

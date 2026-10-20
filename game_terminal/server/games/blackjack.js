@@ -30,6 +30,9 @@ const BOT_BANKROLL = 250;
 const MIN_BET = 2;
 const MAX_BET = 100;
 const CHIPS = [1, 5, 25, 100];
+const LIMITS = { type: TYPE, min: MIN_BET, max: MAX_BET, chips: CHIPS, bot: BOT_BANKROLL, vip: false };
+// The high-roller room: same game, bigger chips, and you need $1,000+ or the VIP key to sit.
+const HIGH_ROLLER = { type: 'blackjack_hr', min: 25, max: 2500, chips: [25, 100, 500, 1000], bot: 5000, vip: true };
 const MAX_HANDS = 4;
 
 const BET_MS = 15000; // after the first chip goes down
@@ -172,10 +175,10 @@ function playerRec(st, id, bankroll = 0) {
   return st.players[id];
 }
 
-function createInitialState() {
+function createInitialState(lim) {
   const st = {
     phase: 'waiting', seats: [], players: {}, round: null, deadline: null, nextStepAt: null,
-    botNextAt: null, seq: 0, roundNo: 0, lastEvent: null,
+    lim, botNextAt: null, seq: 0, roundNo: 0, lastEvent: null,
     shoe: [], shoeSize: 0, cutAt: 0, runningCount: 0, reshuffleNext: false, shoeNo: 0, shoeRounds: 0,
   };
   newShoe(st);
@@ -210,7 +213,7 @@ function buildView(st) {
   const players = {};
   for (const id of shown) {
     const p = st.players[id];
-    if (p) players[id] = { bankroll: p.bankroll, bet: p.bet, ready: p.ready, lastBet: p.lastBet, net: p.net, shoeNet: p.shoeNet, rebuys: p.rebuys, stats: p.stats };
+    if (p) players[id] = { bankroll: p.bankroll, bet: p.bet, ready: p.ready, lastBet: p.lastBet, net: p.net, shoeNet: p.shoeNet, rebuys: p.rebuys, stats: p.stats, flair: p.flair || null };
   }
   let round = null;
   if (r) {
@@ -226,7 +229,7 @@ function buildView(st) {
     phase: st.phase, seats: st.seats, players, round, deadline: st.deadline, serverNow: clock(),
     shoeLeft: st.shoe.length, shoeSize: st.shoeSize, cutAt: st.cutAt, reshuffleNext: st.reshuffleNext,
     shoeNo: st.shoeNo, shoeRounds: st.shoeRounds, roundNo: st.roundNo, seq: st.seq, lastEvent: st.lastEvent,
-    minBet: MIN_BET, maxBet: MAX_BET, chips: CHIPS,
+    minBet: st.lim.min, maxBet: st.lim.max, chips: st.lim.chips,
   };
 }
 
@@ -254,18 +257,18 @@ function broadcast(room) {
   const st = room.state;
   settleMoney(room);
   st.seq++;
-  room.broadcast({ v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'state', ...buildView(st) } } });
+  room.broadcast({ v: 1, type: 'game.event', payload: { gameType: st.lim.type, data: { kind: 'state', ...buildView(st) } } });
 }
 
 function reject(room, id, reason) {
   if (isBot(id)) return;
-  room.sendTo(id, { v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'moveRejected', reason } } });
+  room.sendTo(id, { v: 1, type: 'game.event', payload: { gameType: room.state.lim.type, data: { kind: 'moveRejected', reason } } });
 }
 
 // ---------------------------------------------------------------------------------------------
 // Round flow
 
-const canAffordBet = (p) => p.bankroll >= MIN_BET;
+const canAffordBet = (st, p) => p.bankroll >= st.lim.min;
 
 function enterBetting(st) {
   st.phase = st.seats.length ? 'betting' : 'waiting';
@@ -283,17 +286,17 @@ function enterBetting(st) {
 function shouldStartRound(st, now) {
   if (st.phase !== 'betting') return false;
   const ps = st.seats.map((id) => playerRec(st, id));
-  const anyBet = ps.some((p) => p.bet >= MIN_BET);
+  const anyBet = ps.some((p) => p.bet >= st.lim.min);
   if (!anyBet) return false;
   if (st.deadline != null && now >= st.deadline) return true;
-  return ps.every((p) => (p.ready && p.bet >= MIN_BET) || (!canAffordBet(p) && p.bet === 0));
+  return ps.every((p) => (p.ready && p.bet >= st.lim.min) || (!canAffordBet(st, p) && p.bet === 0));
 }
 
 function startRound(st, now) {
   const entries = [];
   for (const id of st.seats) {
     const p = playerRec(st, id);
-    if (p.bet < MIN_BET) { p.bet = 0; p.ready = false; continue; }
+    if (p.bet < st.lim.min) { p.bet = 0; p.ready = false; continue; }
     p.bankroll -= p.bet;
     entries.push({ id, insurance: null, insDecided: false, left: false, hands: [{ cards: [], bet: p.bet, doubled: false, done: false, result: null, payout: 0, fromSplit: false, splitAces: false }] });
     p.lastBet = p.bet;
@@ -488,7 +491,7 @@ function afterSettle(st, now) {
   // Broke bots buy back in so a bot table never stalls.
   for (const id of st.seats) {
     const p = playerRec(st, id);
-    if (isBot(id) && p.bankroll < MIN_BET) { p.bankroll += BOT_BANKROLL; p.rebuys++; }
+    if (isBot(id) && p.bankroll < st.lim.min) { p.bankroll += st.lim.bot; p.rebuys++; }
   }
   if (st.reshuffleNext) {
     st.round = null;
@@ -554,6 +557,17 @@ function act(st, id, data, now) {
   const kind = data.kind;
   const seated = st.seats.includes(id);
 
+  // A tip for the dealer between hands: the money's gone, the table gets a thank-you. Pure flavour.
+  if (kind === 'tip') {
+    if (!seated) return 'not_seated';
+    const p = playerRec(st, id);
+    const amount = st.lim.chips[0];
+    if (st.phase !== 'betting' || p.bankroll - p.bet < amount) return 'insufficient';
+    p.bankroll -= amount;
+    event(st, 'tip', { id, amount });
+    return null;
+  }
+
   if (kind === 'bet' || kind === 'clearBet' || kind === 'rebet' || kind === 'deal') {
     if (st.phase !== 'betting') return 'not_betting';
     if (!seated) return 'not_seated';
@@ -562,20 +576,20 @@ function act(st, id, data, now) {
     if (p.ready) return 'already_ready';
     if (kind === 'bet') {
       const amount = Number(data.amount);
-      if (!CHIPS.includes(amount)) return 'bad_amount';
-      if (p.bet + amount > MAX_BET) return 'over_max';
+      if (!st.lim.chips.includes(amount)) return 'bad_amount';
+      if (p.bet + amount > st.lim.max) return 'over_max';
       if (p.bet + amount > p.bankroll) return 'insufficient';
       p.bet += amount;
     } else if (kind === 'rebet') {
-      if (p.lastBet < MIN_BET) return 'no_last_bet';
-      const amt = Math.min(p.lastBet, p.bankroll, MAX_BET);
-      if (amt < MIN_BET) return 'insufficient';
+      if (p.lastBet < st.lim.min) return 'no_last_bet';
+      const amt = Math.min(p.lastBet, p.bankroll, st.lim.max);
+      if (amt < st.lim.min) return 'insufficient';
       p.bet = amt;
     } else {
-      if (p.bet < MIN_BET) return 'under_min';
+      if (p.bet < st.lim.min) return 'under_min';
       p.ready = true;
     }
-    if (st.deadline == null && p.bet >= MIN_BET) st.deadline = now + BET_MS;
+    if (st.deadline == null && p.bet >= st.lim.min) st.deadline = now + BET_MS;
     return null;
   }
 
@@ -583,8 +597,8 @@ function act(st, id, data, now) {
     if (!isBot(id)) return 'no_rebuy';
     const p = playerRec(st, id);
     const inRound = st.round && st.round.entries.some((e) => e.id === id);
-    if (p.bankroll >= MIN_BET || p.bet > 0 || inRound) return 'not_broke';
-    p.bankroll += BOT_BANKROLL;
+    if (p.bankroll >= st.lim.min || p.bet > 0 || inRound) return 'not_broke';
+    p.bankroll += st.lim.bot;
     p.rebuys++;
     return null;
   }
@@ -706,7 +720,7 @@ function addBot(st, level) {
   const used = new Set(st.seats.filter(isBot).map(botBase));
   const name = BOT_NAMES.find((n) => !used.has(n));
   if (!name) return 'table_full';
-  return sit(st, `bot-${name}~${normLevel(level)}`, BOT_BANKROLL);
+  return sit(st, `bot-${name}~${normLevel(level)}`, st.lim.bot);
 }
 
 // A human sits down with their whole casino balance (plus anything still on this table from a
@@ -716,13 +730,16 @@ function sitHuman(room, st, id) {
   if (st.seats.length >= MAX_SEATS) return 'table_full';
   const w = room.wallet;
   if (w && !w.ready(id)) return 'wallet_loading';
+  if (st.lim.vip && w && !w.vip(id)) return 'vip_only';
   const chips = w ? w.buyIn(id, 'all') : st.players[id] ? 0 : START_BANKROLL;
-  if ((st.players[id] ? st.players[id].bankroll : 0) + chips < MIN_BET) {
+  if ((st.players[id] ? st.players[id].bankroll : 0) + chips < st.lim.min) {
     if (chips) w.cashOut(id, chips + (st.players[id] ? st.players[id].bankroll : 0));
     if (st.players[id] && !(st.round && st.round.entries.some((e) => e.id === id))) delete st.players[id];
     return 'broke';
   }
-  return sit(st, id, chips);
+  const err = sit(st, id, chips);
+  if (!err && w) playerRec(st, id).flair = w.flair(id);
+  return err;
 }
 
 // Nobody left to watch: play out any round in progress (everyone stands), so stood-up players'
@@ -745,7 +762,7 @@ function botBet(st, id) {
     const units = tc <= 0 ? 1 : tc === 1 ? 2 : tc === 2 ? 4 : tc === 3 ? 6 : 8;
     amt = 5 * units;
   } else amt = 5;
-  return Math.floor(Math.max(MIN_BET, Math.min(amt, p.bankroll, MAX_BET)));
+  return Math.floor(Math.max(st.lim.min, Math.min(amt, p.bankroll, st.lim.max)));
 }
 
 // The action a bot wants to take right now, or null.
@@ -755,8 +772,8 @@ function botDecision(st, id) {
   if (!p) return null;
   if (st.phase === 'betting' && st.seats.includes(id)) {
     if (p.ready) return null;
-    if (p.bankroll < MIN_BET && p.bet === 0) return { kind: 'rebuy' };
-    if (p.bet < MIN_BET) return { kind: 'setBet', amount: botBet(st, id) };
+    if (p.bankroll < st.lim.min && p.bet === 0) return { kind: 'rebuy' };
+    if (p.bet < st.lim.min) return { kind: 'setBet', amount: botBet(st, id) };
     return { kind: 'deal' };
   }
   if (st.phase === 'insurance') {
@@ -838,14 +855,14 @@ function tick(room) {
   if (changed) broadcast(room);
 }
 
-module.exports = {
+const plugin = {
   type: TYPE,
   casino: true,
   stats: { none: true }, // casino: no results, XP or leaderboards
   tickIntervalMs: 100,
   tick,
 
-  createInitialState,
+  createInitialState: () => createInitialState(LIMITS), // the room manager passes its own args
 
   isRoomFull(room) {
     return room.state.seats.length >= MAX_SEATS;
@@ -897,3 +914,6 @@ module.exports = {
     step, MIN_BET, MAX_BET, START_BANKROLL, BOT_BANKROLL, CHIPS, BET_MS, TURN_MS, INS_MS,
   },
 };
+
+module.exports = plugin;
+module.exports.highRoller = { ...plugin, type: HIGH_ROLLER.type, createInitialState: () => createInitialState(HIGH_ROLLER) };
