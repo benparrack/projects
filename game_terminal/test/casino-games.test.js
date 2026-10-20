@@ -141,7 +141,7 @@ test('roulette: limits, unaffordable chips, and leaving mid-betting refunds', ()
   assert.strictEqual(room.act('A', { kind: 'bet', spot: 'red', amount: 1 }), 'broke'); // 100 on the felt, 0 left
   room.act('A', { kind: 'clear' });
   for (let i = 0; i < 4; i++) room.act('A', { kind: 'bet', spot: 'n:3', amount: 5 });
-  assert.strictEqual(room.act('A', { kind: 'bet', spot: 'n:3', amount: 100 }), 'spot_max');
+  assert.strictEqual(room.act('A', { kind: 'bet', spot: 'n:3', amount: 1000 }), 'spot_max');
   assert.strictEqual(room.act('A', { kind: 'bet', spot: 'n:3', amount: 3 }), 'bad_amount');
   roulette.onLeave(room, { clientId: 'A' });
   assert.deepStrictEqual([room.bal('A').balance, room.bal('A').atTables], [START_BALANCE, 0]);

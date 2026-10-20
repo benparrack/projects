@@ -11,8 +11,8 @@ const money = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDi
 const CELL = 46; // px per number on the wheel strip
 const REJECT = {
   broke: 'Not enough in your casino balance. Claim the daily stipend or work a shift in the CASINO menu.',
-  spot_max: 'That spot is at the $100 limit.',
-  round_max: "You're at the $500 limit for this spin.",
+  spot_max: 'That spot is at the $1,000 limit.',
+  round_max: "You're at the $2,500 limit for this spin.",
   not_betting: 'No more bets: the wheel is spinning.',
   wallet_loading: 'Opening your casino balance… try again in a second.',
   nothing: 'No bets to do that with.',
@@ -41,8 +41,9 @@ const CSS = `
 .rl-chip.mine { background: #ffbf00; color: #000; border-color: #000; }
 .rl-chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .rl-pick { width: 40px; height: 40px; border-radius: 50%; padding: 0; font-weight: bold; border: 3px dashed #fff; color: #fff; }
-.rl-pick.c1 { background: #ddd; color: #111; border-color: #888; } .rl-pick.c2 { background: #e8b923; color: #111; } .rl-pick.c5 { background: #e04848; }
+.rl-pick.c1 { background: #ddd; color: #111; border-color: #888; } .rl-pick.c5 { background: #e04848; }
 .rl-pick.c10 { background: #2a6fdb; } .rl-pick.c25 { background: #2f9e44; } .rl-pick.c50 { background: #f08c00; } .rl-pick.c100 { background: #222; }
+.rl-pick.c250 { background: #d6336c; } .rl-pick.c500 { background: #7048e8; } .rl-pick.c1000 { background: #e8b923; color: #111; font-size: .8em; }
 .rl-pick[aria-pressed="true"] { transform: translateY(-4px); box-shadow: 0 0 0 3px #ffd23f; }
 .rl-players { font-size: .85em; width: min(100%, 560px); }
 @media (max-width: 560px) {
@@ -184,7 +185,7 @@ export function mount(container, api) {
 
     chipsRow.replaceChildren();
     for (const c of view.chips) {
-      const b = el('button', `rl-pick c${c}`, String(c));
+      const b = el('button', `rl-pick c${c}`, c >= 1000 ? `${c / 1000}k` : String(c));
       b.type = 'button';
       b.setAttribute('aria-pressed', String(c === chip));
       b.addEventListener('click', () => { chip = c; sfx.play('click'); render(); });

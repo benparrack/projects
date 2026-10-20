@@ -117,7 +117,7 @@ export const HOWTO = {
       'Straight up on a number pays 35:1. Dozens and columns (2:1) pay 2:1. Red/black, odd/even, 1-18/19-36 pay 1:1.',
       'Zero loses every outside bet. That is the house edge: 2.7%.',
       'The first chip on the felt starts a 20 second clock; the wheel spins when it runs out, or once everyone who bet presses DONE.',
-      'Up to $100 on one spot and $500 a spin. Bets come off your casino balance as you place them.',
+      'Up to $1,000 on one spot and $2,500 a spin. Bets come off your casino balance as you place them.',
     ],
     controls: ['Pick a chip, then click the felt to put it down. CLEAR takes your bets back, REBET repeats last spin.'],
   },

@@ -8,9 +8,9 @@ const crypto = require('crypto');
 
 const TYPE = 'roulette';
 const MAX_PLAYERS = 8;
-const CHIPS = [1, 2, 5, 10, 25, 50, 100];
-const MAX_SPOT = 100; // per spot per round
-const MAX_ROUND = 500; // per player per round
+const CHIPS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
+const MAX_SPOT = 1000; // per spot per round
+const MAX_ROUND = 2500; // per player per round
 const BET_MS = 20000; // from the first chip down
 const SPIN_MS = 6000;
 const RESULT_MS = 4000;
