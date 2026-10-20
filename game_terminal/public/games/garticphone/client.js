@@ -6,7 +6,7 @@
 
 import { makeServerClock } from '../serverClock.js';
 import { sfx } from '../sfx.js';
-import { timerBar, scribble } from '../drawFx.js';
+import { timerBar, scribble, burst } from '../drawFx.js';
 
 const CANVAS_WIDTH = 480;
 const CANVAS_HEIGHT = 320;
@@ -14,6 +14,7 @@ const MAX_DRAWING_LEN = 60000; // kept in sync by hand with server/games/garticp
 const COLORS = ['#111111', '#ffffff', '#ff4d4d', '#ffb000', '#ffe14d', '#39ff14', '#1f8f0c', '#00e5ff', '#4d79ff', '#a64dff', '#ff4dd2', '#8b5a2b'];
 const SIZES = [3, 7, 14, 28];
 const ROUND_SECS = [60, 90, 120];
+const SUSPENSE_MS = 1300; // drumroll before each revealed link lands (server ignores NEXT for this long)
 
 const CSS = `
 .gp-card { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; padding: 14px; border: 1px solid #1f8f0c; border-radius: 10px; background: rgba(57,255,20,.04); }
@@ -35,6 +36,21 @@ const CSS = `
 .gp-chain { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
 .gp-link { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 .gp-who { font-size: .8em; opacity: .7; }
+.gp-tool.on { box-shadow: 0 0 0 2px #39ff14; color: #39ff14; }
+.gp-custom { width: 30px; height: 28px; padding: 0; border: 2px solid #333; border-radius: 6px; background: none; cursor: pointer; }
+.gp-wait { font-size: 1.3em; letter-spacing: 2px; color: #00e5ff; padding: 26px 0; animation: gp-throb .5s ease-in-out infinite alternate; }
+.gp-wait span { display: inline-block; animation: gp-dot .9s ease-in-out infinite; }
+.gp-wait span:nth-child(2) { animation-delay: .15s; } .gp-wait span:nth-child(3) { animation-delay: .3s; }
+.gp-wipe { animation: gp-wipe 1s cubic-bezier(.5,0,.3,1) both; }
+.gp-type span { opacity: 0; animation: gp-letter .05s linear forwards; }
+.gp-title { font-size: 1.6em; font-weight: bold; letter-spacing: 4px; color: #ffe14d; text-shadow: 0 0 14px rgba(255,225,77,.6); }
+.gp-final { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 18px; border: 2px dashed #ffb000; border-radius: 10px; }
+.gp-end { font-size: 2.4em; font-weight: bold; letter-spacing: 8px; color: #ff4dd2; text-shadow: 0 0 18px rgba(255,77,210,.7); }
+@keyframes gp-throb { from { opacity: .55; } to { opacity: 1; } }
+@keyframes gp-dot { 0%, 100% { transform: none; } 50% { transform: translateY(-6px); } }
+@keyframes gp-wipe { from { clip-path: inset(0 100% 0 0); filter: brightness(2); } to { clip-path: inset(0 0 0 0); filter: none; } }
+@keyframes gp-letter { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .gp-wait, .gp-wait span, .gp-wipe, .gp-type span { animation: none; opacity: 1; } }
 `;
 
 export function mount(container, api) {
@@ -46,6 +62,8 @@ export function mount(container, api) {
   // broadcasts new state) doesn't wipe your half-finished drawing or typed text.
   let taskCache = { key: null, el: null, submitNow: null };
   let revealKey = null;
+  let suspenseUntil = 0;
+  let landed = true;
 
   const style = document.createElement('style');
   style.textContent = CSS;
@@ -95,9 +113,37 @@ export function mount(container, api) {
     const cctx = canvas.getContext('2d');
     let color = COLORS[0];
     let size = SIZES[1];
-    const strokes = [];
+    let tool = 'pen'; // pen | eraser | fill
+    const strokes = []; // pen strokes, plus { fill } and { clear } steps so undo/redo cover them too
+    const undone = [];
+
+    // Bucket fill: flood the region of similar colour (loose tolerance swallows antialiased edges).
+    function floodFill(x0, y0, hex) {
+      const W = canvas.width; const H = canvas.height;
+      const img = cctx.getImageData(0, 0, W, H); const d = img.data;
+      const x = Math.floor(x0); const y = Math.floor(y0);
+      const at = (y * W + x) * 4;
+      const t = [d[at], d[at + 1], d[at + 2]];
+      const n = parseInt(hex.slice(1), 16); const c = [n >> 16, (n >> 8) & 255, n & 255];
+      if (Math.abs(t[0] - c[0]) + Math.abs(t[1] - c[1]) + Math.abs(t[2] - c[2]) < 8) return;
+      const seen = new Uint8Array(W * H);
+      const stack = [y * W + x]; seen[y * W + x] = 1;
+      while (stack.length) {
+        const i = stack.pop(); const o = i * 4;
+        if (Math.abs(d[o] - t[0]) + Math.abs(d[o + 1] - t[1]) + Math.abs(d[o + 2] - t[2]) > 120) continue;
+        d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+        const cx = i % W;
+        if (cx > 0 && !seen[i - 1]) { seen[i - 1] = 1; stack.push(i - 1); }
+        if (cx < W - 1 && !seen[i + 1]) { seen[i + 1] = 1; stack.push(i + 1); }
+        if (i >= W && !seen[i - W]) { seen[i - W] = 1; stack.push(i - W); }
+        if (i < W * (H - 1) && !seen[i + W]) { seen[i + W] = 1; stack.push(i + W); }
+      }
+      cctx.putImageData(img, 0, 0);
+    }
 
     function drawStroke(s) {
+      if (s.clear) { cctx.fillStyle = '#fff'; cctx.fillRect(0, 0, canvas.width, canvas.height); return; }
+      if (s.fill) { floodFill(s.x, s.y, s.color); return; }
       cctx.strokeStyle = s.color;
       cctx.fillStyle = s.color;
       cctx.lineWidth = s.size;
@@ -126,11 +172,16 @@ export function mount(container, api) {
       const b = el('button', 'gp-swatch');
       b.style.background = c;
       b.title = c;
-      b.addEventListener('click', () => { color = c; swatches.forEach((s) => s.classList.toggle('on', s === b)); });
+      b.addEventListener('click', () => { color = c; swatches.forEach((s) => s.classList.toggle('on', s === b)); if (tool === 'eraser') pickTool('pen'); });
       tools.appendChild(b);
       return b;
     });
     swatches[0].classList.add('on');
+    const custom = el('input', 'gp-custom');
+    custom.type = 'color';
+    custom.title = 'any colour';
+    custom.addEventListener('input', () => { color = custom.value; swatches.forEach((s) => s.classList.remove('on')); if (tool === 'eraser') pickTool('pen'); });
+    tools.appendChild(custom);
     const sizeBtns = SIZES.map((sz) => {
       const b = el('button', 'gp-size');
       const dot = el('span');
@@ -142,11 +193,29 @@ export function mount(container, api) {
       return b;
     });
     sizeBtns[1].classList.add('on');
-    const undoBtn = el('button', null, 'UNDO');
-    undoBtn.addEventListener('click', () => { strokes.pop(); redraw(); });
+    const toolBtns = {};
+    for (const [t, label] of [['pen', '✎ PEN'], ['eraser', '⌫ ERASER'], ['fill', '▧ FILL']]) {
+      const b = el('button', 'gp-tool', label);
+      b.addEventListener('click', () => pickTool(t));
+      toolBtns[t] = b;
+    }
+    function pickTool(t) {
+      tool = t;
+      for (const [k, b] of Object.entries(toolBtns)) b.classList.toggle('on', k === t);
+      canvas.style.cursor = t === 'fill' ? 'cell' : 'crosshair';
+    }
+    pickTool('pen');
+    const add = (step) => { strokes.push(step); undone.length = 0; };
+    const undoBtn = el('button', null, '↶ UNDO');
+    undoBtn.title = 'Ctrl+Z';
+    undoBtn.addEventListener('click', () => { if (strokes.length) { undone.push(strokes.pop()); redraw(); } });
+    const redoBtn = el('button', null, '↷ REDO');
+    redoBtn.title = 'Ctrl+Y / Ctrl+Shift+Z';
+    redoBtn.addEventListener('click', () => { if (undone.length) { strokes.push(undone.pop()); redraw(); } });
     const clearBtn = el('button', null, 'CLEAR');
-    clearBtn.addEventListener('click', () => { strokes.length = 0; sfx.play('whoosh'); redraw(); });
-    tools.append(undoBtn, clearBtn);
+    clearBtn.addEventListener('click', () => { if (!strokes.length) return; add({ clear: true }); sfx.play('whoosh'); redraw(); });
+    const tools2 = el('div', 'gp-tools');
+    tools2.append(toolBtns.pen, toolBtns.eraser, toolBtns.fill, undoBtn, redoBtn, clearBtn);
 
     let cur = null;
     function pos(ev) {
@@ -155,8 +224,9 @@ export function mount(container, api) {
     }
     canvas.addEventListener('pointerdown', (ev) => {
       ev.preventDefault();
-      cur = { color, size, pts: [pos(ev)] };
-      strokes.push(cur);
+      if (tool === 'fill') { const p = pos(ev); const step = { fill: true, x: p.x, y: p.y, color }; add(step); drawStroke(step); sfx.play('pop'); return; }
+      cur = { color: tool === 'eraser' ? '#ffffff' : color, size, pts: [pos(ev)] };
+      add(cur);
       canvas.setPointerCapture(ev.pointerId);
       drawStroke(cur);
       scribble();
@@ -180,7 +250,10 @@ export function mount(container, api) {
     canvas.addEventListener('pointerup', stop);
     canvas.addEventListener('pointercancel', stop);
     document.addEventListener('keydown', (ev) => {
-      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'z' && wrap.isConnected) { ev.preventDefault(); undoBtn.click(); }
+      if (!(ev.ctrlKey || ev.metaKey) || !wrap.isConnected) return;
+      const k = ev.key.toLowerCase();
+      if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); undoBtn.click(); }
+      else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); redoBtn.click(); }
     });
 
     // PNG suits line art; very busy drawings fall back to lossy JPEG so they still fit the cap.
@@ -200,7 +273,7 @@ export function mount(container, api) {
     };
     doneBtn.addEventListener('click', send);
 
-    wrap.append(tools, canvas, doneBtn);
+    wrap.append(tools, tools2, canvas, doneBtn);
     return { el: wrap, submitNow: send };
   }
 
@@ -220,6 +293,18 @@ export function mount(container, api) {
     form.addEventListener('submit', (ev) => { ev.preventDefault(); send(); });
     setTimeout(() => input.focus(), 0);
     return { el: form, submitNow: send };
+  }
+
+  // Guesses/prompts type out letter by letter when they land.
+  function typeOut(node) {
+    const text = node.textContent;
+    node.textContent = '';
+    node.classList.add('gp-type');
+    [...text].forEach((ch, i) => {
+      const sp = el('span', null, ch);
+      sp.style.animationDelay = `${Math.min(i * 45, 2000)}ms`;
+      node.appendChild(sp);
+    });
   }
 
   function renderEntry(entry) {
@@ -279,7 +364,7 @@ export function mount(container, api) {
       sfx.play('pop');
     }
     if (next.phase === 'reveal' && prev.reveal && next.reveal && (next.reveal.step !== prev.reveal.step || next.reveal.bookIdx !== prev.reveal.bookIdx)) {
-      sfx.play(next.reveal.done ? 'win' : next.reveal.step === 0 ? 'turn' : 'pop');
+      sfx.play(next.reveal.step === 0 ? 'turn' : 'tick'); // drumroll starts; the landing sound plays in render()
     }
   }
 
@@ -359,38 +444,76 @@ export function mount(container, api) {
       return;
     }
 
-    // Reveal: one book at a time, links appearing as anyone presses NEXT.
+    // Reveal: one book at a time, links appearing as anyone presses NEXT. Each new link gets a short
+    // drumroll ("Ana is drawing...") before it lands; a finished chain gets a from/to stamp and confetti.
     const rv = view.reveal;
-    const card = el('div', 'gp-card');
+    const newestKey = `${rv.bookIdx}:${rv.entries.length - 1}`;
+    if (revealKey !== newestKey) {
+      revealKey = newestKey;
+      landed = false;
+      suspenseUntil = Date.now() + SUSPENSE_MS;
+      setTimeout(render, SUSPENSE_MS + 20);
+    }
+    const waiting = Date.now() < suspenseUntil;
+    const landingNow = !waiting && !landed;
+    if (landingNow) landed = true;
+    const chainDone = !waiting && rv.step === view.totalRounds - 1;
+    const card = el('div', 'gp-card dfx-stage');
+    if (rv.step === 0 && waiting) popOnce(card);
     card.appendChild(el('div', 'gp-label', `CHAIN ${rv.bookIdx + 1} / ${view.seats.length}`));
-    card.appendChild(el('div', null, `${nicknameFor(view.seats[rv.bookIdx])}'s book`));
+    card.appendChild(el('div', 'gp-title', `${nicknameFor(view.seats[rv.bookIdx])}'s book`.toUpperCase()));
     const chain = el('div', 'gp-chain');
     rv.entries.forEach((entry, i) => {
       const link = el('div', 'gp-link');
-      const verb = entry.type === 'prompt' ? 'wrote' : entry.type === 'drawing' ? 'drew' : 'guessed';
-      link.append(el('div', 'gp-who', `${nicknameFor(view.seats[entry.authorIdx])} ${verb}`), renderEntry(entry));
-      if (i === rv.entries.length - 1 && revealKey !== `${rv.bookIdx}:${i}`) popOnce(link);
+      const who = nicknameFor(view.seats[entry.authorIdx]);
+      const newest = i === rv.entries.length - 1;
+      if (newest && waiting) {
+        const verb = entry.type === 'prompt' ? 'wrote' : entry.type === 'drawing' ? 'is drawing' : 'thinks it is';
+        const wait = el('div', 'gp-wait', `${who} ${verb}`);
+        for (let d = 0; d < 3; d++) wait.appendChild(el('span', null, '.'));
+        link.appendChild(wait);
+      } else {
+        const verb = entry.type === 'prompt' ? 'wrote' : entry.type === 'drawing' ? 'drew' : 'guessed';
+        const body = renderEntry(entry);
+        if (newest && landingNow && entry.content != null) {
+          if (entry.type === 'drawing') body.classList.add('gp-wipe');
+          else typeOut(body);
+        }
+        link.append(el('div', 'gp-who', `${who} ${verb}`), body);
+      }
       chain.appendChild(link);
     });
-    revealKey = `${rv.bookIdx}:${rv.entries.length - 1}`;
     card.appendChild(chain);
+    if (chainDone) {
+      const first = rv.entries[0];
+      const last = rv.entries[rv.entries.length - 1];
+      const final = el('div', 'gp-final');
+      final.append(el('div', 'gp-label', 'IT STARTED AS'), renderEntry(first), el('div', 'gp-label', 'AND ENDED AS'), renderEntry(last));
+      if (landingNow) popOnce(final);
+      card.appendChild(final);
+    }
+    if (rv.done && !waiting) card.appendChild(el('div', landingNow ? 'gp-end dfx-stamp' : 'gp-end', 'THE END'));
     root.appendChild(card);
+    if (landingNow) {
+      sfx.play(rv.done ? 'win' : chainDone ? 'chime' : 'pop');
+      if (chainDone) setTimeout(() => burst(card, rv.done ? 60 : 32), 0);
+    }
     const row = el('div', 'gp-row');
     if (!rv.done && mySeat !== -1) {
       const lastOfBook = rv.step === view.totalRounds - 1;
       const next = el('button', null, lastOfBook ? 'NEXT CHAIN ▶' : 'NEXT ▶');
+      next.disabled = waiting;
       next.addEventListener('click', () => api.sendAction({ kind: 'revealNext' }));
       row.appendChild(next);
     }
-    if (rv.done) {
+    if (rv.done && !waiting) {
       const again = el('button', null, 'PLAY AGAIN');
       again.addEventListener('click', () => api.sendAction({ kind: 'resetGame' }));
       row.appendChild(again);
     }
     root.appendChild(row);
-    // Keep the newest link in view as the chain grows.
-    const lastLink = chain.lastElementChild;
-    if (lastLink && lastLink.classList.contains('dfx-pop')) setTimeout(() => lastLink.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
+    // Keep the newest link (and the from/to stamp) in view as the chain grows.
+    if (waiting || landingNow) setTimeout(() => (chainDone ? card.lastElementChild : chain.lastElementChild).scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
   }
 
   render();

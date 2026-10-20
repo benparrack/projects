@@ -14,7 +14,7 @@ const DEFAULT_ROUND_SECS = 90;
 // Clients auto-submit whatever they have when their clock hits zero; the server waits this much
 // longer before filling in anyone still missing.
 const GRACE_MS = 2500;
-const REVEAL_STEP_MIN_MS = 600; // ignore double-clicks on NEXT from several players at once
+const REVEAL_STEP_MIN_MS = 1300; // = client SUSPENSE_MS: NEXT is ignored during each link's drumroll (and double-clicks)
 
 function taskTypeForRound(round) {
   if (round === 0) return 'prompt';
