@@ -34,7 +34,7 @@ const social = createSocial(db, accounts);
 const parties = new Parties();
 const chat = createChat(db);
 const moderation = createModeration(db, accounts, { chat });
-const handleApi = createApi({ db, accounts, daily, weekly, live: async () => ({ online: wss.clients.size, rooms: roomManager.occupiedPublicRooms(), ...(await activity.stats()) }), authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
+const handleApi = createApi({ db, accounts, daily, weekly, live: async () => ({ online: peopleOnline(), rooms: roomManager.occupiedPublicRooms(), ...(await activity.stats()) }), authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
 console.log(`accounts: auth=${auth.mode} db=${db.backend}`);
 
 const roomManager = new RoomManager(gameRegistry, {
@@ -155,9 +155,16 @@ async function onlinePlayers(uid) {
     });
   }
   players.sort((a, b) => (b.friend - a.friend) || (!!b.playing - !!a.playing) || a.username.localeCompare(b.username));
-  let guests = 0;
-  for (const w of wss.clients) { const s = sessions.get(w); if (s && !s.uid) guests += 1; }
-  return { players, guests };
+  const guestIps = new Set();
+  for (const w of wss.clients) { const s = sessions.get(w); if (s && !s.uid) guestIps.add(s.ip); }
+  return { players, guests: guestIps.size };
+}
+
+// People, not sockets: extra tabs (or the app plus a tab) count once. Guests count once per IP.
+function peopleOnline() {
+  const people = new Set();
+  for (const w of wss.clients) { const s = sessions.get(w); if (s) people.add(s.uid || `ip:${s.ip}`); }
+  return people.size;
 }
 
 function notice(uid, payload) { for (const w of socketsOf(uid)) send(w, ServerMessage.SOCIAL_NOTICE, payload); }
@@ -356,8 +363,10 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => { const n = socketsPerIp.get(ip) - 1; if (n > 0) socketsPerIp.set(ip, n); else socketsPerIp.delete(ip); });
   let tokens = MSG_BURST;
   let refilled = Date.now();
-  const session = { clientId: crypto.randomUUID(), nickname: null, roomCode: null, uid: null, user: null };
+  const session = { clientId: crypto.randomUUID(), nickname: null, roomCode: null, uid: null, user: null, ip };
   sessions.set(ws, session);
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
 
   ws.on('message', async (raw) => {
     const t = Date.now();
@@ -794,6 +803,16 @@ wss.on('connection', (ws, req) => {
     if (session.uid) goOffline(ws, session.uid);
   });
 });
+
+// Drop sockets that stopped answering (phone slept, network changed): otherwise they linger as
+// "online" next to the reconnected one until TCP gives up. terminate() runs the normal close cleanup.
+setInterval(() => {
+  for (const w of wss.clients) {
+    if (!w.isAlive) { w.terminate(); continue; }
+    w.isAlive = false;
+    w.ping();
+  }
+}, 30000).unref();
 
 server.listen(PORT, () => {
   console.log(`game_terminal listening on http://localhost:${PORT}`);
