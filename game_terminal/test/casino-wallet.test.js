@@ -6,7 +6,7 @@
 const assert = require('assert');
 const { createWallet } = require('../server/casino/wallet');
 const { createMemoryDb } = require('../server/db');
-const { START_BALANCE, STIPEND, SHIFT_CAP } = require('../server/casino/economy');
+const { START_BALANCE, STIPEND, SHIFT_CAP, JACKPOT_SEED } = require('../server/casino/economy');
 
 let failures = 0;
 const tests = [];
@@ -84,6 +84,25 @@ test('guests get play money that never touches the db and is gone when dropped',
   assert.deepStrictEqual(await db.list('casino'), []);
   w.dropGuest('c1');
   assert.strictEqual(w.view('g:c1').balance, START_BALANCE);
+});
+
+test('jackpot: accounts feed it and win it, guests do neither, it survives a restart', async () => {
+  const db = createMemoryDb();
+  const w = createWallet(db);
+  await w.load('u1');
+  await w.flush();
+  w.feedJackpot('u1', 100);
+  w.feedJackpot('g:c1', 100);
+  assert.strictEqual(w.jackpot(), JACKPOT_SEED + 1);
+  assert.strictEqual(w.hitJackpot('g:c1', 1), 0);
+  assert.strictEqual(w.hitJackpot('u1', 0.5), (JACKPOT_SEED + 1) / 2);
+  await w.flush();
+  const after = createWallet(db);
+  await after.flush();
+  assert.strictEqual(after.jackpot(), (JACKPOT_SEED + 1) / 2);
+  await after.load('u1');
+  assert.strictEqual(after.hitJackpot('u1', 1), (JACKPOT_SEED + 1) / 2);
+  assert.strictEqual(after.jackpot(), JACKPOT_SEED);
 });
 
 (async () => {

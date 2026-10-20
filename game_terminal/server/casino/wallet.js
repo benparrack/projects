@@ -13,7 +13,7 @@
 // Keys: an account uid, or `g:<clientId>` for a guest.
 'use strict';
 
-const { START_BALANCE, STIPEND, SHIFT_CAP } = require('./economy');
+const { START_BALANCE, STIPEND, SHIFT_CAP, JACKPOT_SEED, JACKPOT_CUT } = require('./economy');
 
 const isGuest = (key) => key.startsWith('g:');
 const utcDay = (t) => new Date(t).toISOString().slice(0, 10);
@@ -31,6 +31,31 @@ function createWallet(db, { now = () => Date.now() } = {}) {
       .then(() => db.set(`casino/${key}`, snap))
       .catch((err) => console.error('casino: save failed', key, err));
     writes.set(key, tail);
+  }
+
+  // The progressive slots jackpot, shared by every account on the site (guests neither feed nor win it).
+  const jackpot = { amount: JACKPOT_SEED };
+  jackpot.tail = db.get('casinoMeta/jackpot').then((d) => { if (d) jackpot.amount = round2(d.amount + jackpot.amount - JACKPOT_SEED); })
+    .catch((err) => console.error('casino: jackpot load failed', err));
+  function saveJackpot() {
+    const amount = jackpot.amount;
+    jackpot.tail = jackpot.tail.then(() => db.set('casinoMeta/jackpot', { amount })).catch((err) => console.error('casino: jackpot save failed', err));
+  }
+  function feedJackpot(key, bet) {
+    if (isGuest(key)) return;
+    jackpot.amount = round2(jackpot.amount + bet * JACKPOT_CUT);
+    saveJackpot();
+  }
+  // Pays `share` (0-1) of the pot to this account's balance; the rest stays on top of a fresh seed.
+  function hitJackpot(key, share) {
+    const s = cache.get(key);
+    if (!s || isGuest(key)) return 0;
+    const won = round2(jackpot.amount * share);
+    jackpot.amount = round2(jackpot.amount - won + (share >= 1 ? JACKPOT_SEED : 0));
+    s.balance = round2(s.balance + won);
+    persist(key);
+    saveJackpot();
+    return won;
   }
 
   const fresh = () => ({ balance: START_BALANCE, atTable: {}, stipendDay: null, shifts: { day: null, n: 0 }, wagered: 0, biggestWin: 0, owned: {}, equipped: {} });
@@ -120,7 +145,7 @@ function createWallet(db, { now = () => Date.now() } = {}) {
     const s = state(key);
     if (!s) return null;
     const atTables = round2(Object.values(s.atTable).reduce((a, b) => a + b, 0));
-    return { guest: isGuest(key), balance: s.balance, atTables, stipend: isGuest(key) ? null : { amount: STIPEND, ready: stipendReady(s) }, shiftsLeft: shiftsLeft(s), wagered: s.wagered, biggestWin: s.biggestWin };
+    return { guest: isGuest(key), balance: s.balance, atTables, stipend: isGuest(key) ? null : { amount: STIPEND, ready: stipendReady(s) }, shiftsLeft: shiftsLeft(s), wagered: s.wagered, biggestWin: s.biggestWin, jackpot: jackpot.amount };
   }
 
   const dropGuest = (clientId) => cache.delete(`g:${clientId}`);
@@ -129,9 +154,9 @@ function createWallet(db, { now = () => Date.now() } = {}) {
     await writes.get(uid);
     await db.del(`casino/${uid}`);
   }
-  const flush = () => Promise.all([...writes.values()]);
+  const flush = () => Promise.all([...writes.values(), jackpot.tail]);
 
-  return { load, forget, buyIn, sync, cashOut, noteBet, claimStipend, payShift, view, dropGuest, flush, isLoaded: (key) => isGuest(key) || cache.has(key) };
+  return { load, forget, buyIn, sync, cashOut, noteBet, claimStipend, payShift, view, dropGuest, flush, feedJackpot, hitJackpot, jackpot: () => jackpot.amount, isLoaded: (key) => isGuest(key) || cache.has(key) };
 }
 
 module.exports = { createWallet, utcDay };

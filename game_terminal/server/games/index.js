@@ -53,6 +53,8 @@ const skeeball = require('./skeeball');
 const minesweeper = require('./minesweeper');
 const blockade = require('./blockade');
 const wordle = require('./wordle');
+const slots = require('./slots');
+const roulette = require('./roulette');
 
 const registry = {
   [drawing.type]: drawing,
@@ -76,6 +78,8 @@ const registry = {
   [mazedash.type]: mazedash,
   [gameboy.type]: gameboy,
   [blackjack.type]: blackjack,
+  [slots.type]: slots,
+  [roulette.type]: roulette,
   [gomoku.type]: gomoku,
   [dotsboxes.type]: dotsboxes,
   [mancala.type]: mancala,

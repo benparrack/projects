@@ -80,6 +80,11 @@ function roomWallet(room, wallet) {
     sync: (clientId, stack) => wallet.sync(key(clientId), room.code, stack),
     cashOut: (clientId, stack) => wallet.cashOut(key(clientId), room.code, stack),
     noteBet: (clientId, wagered, won) => wallet.noteBet(key(clientId), wagered, won),
+    guest: (clientId) => key(clientId).startsWith('g:'),
+    balance: (clientId) => { const v = wallet.view(key(clientId)); return v ? v.balance : 0; },
+    feedJackpot: (clientId, bet) => wallet.feedJackpot(key(clientId), bet),
+    hitJackpot: (clientId, share) => wallet.hitJackpot(key(clientId), share),
+    jackpot: () => wallet.jackpot(),
   };
 }
 
@@ -187,4 +192,4 @@ class RoomManager {
   }
 }
 
-module.exports = { Room, RoomManager };
+module.exports = { Room, RoomManager, roomWallet };

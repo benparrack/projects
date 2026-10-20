@@ -79,6 +79,8 @@ const CATEGORIES = [
     casino: true,
     games: [
       { type: 'blackjack', label: 'BLACKJACK' },
+      { type: 'slots', label: 'SLOTS' },
+      { type: 'roulette', label: 'ROULETTE' },
     ],
   },
   {

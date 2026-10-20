@@ -82,6 +82,26 @@ export const HOWTO = {
       'HINTS toggles basic-strategy advice.',
     ],
   },
+  slots: {
+    about: 'A 3-reel slot machine with one pay line, played straight from your casino balance.',
+    rules: [
+      'Bet $1, $2, $5 or $10 a spin. Three of a kind pays 10x-100x; cherries pay anywhere on the line (one 1x, two 3x).',
+      'Three ◆ win the progressive jackpot, shared by every signed-in player on the site. 1% of every spin feeds it.',
+      'A $10 bet wins the whole jackpot; smaller bets win their share of it ($5 wins half). Guests win a fixed 200x in play money.',
+      'The machine returns about 93% of what goes in, plus the jackpot. The house always wins in the long run.',
+    ],
+    controls: ['Pick a bet, then SPIN (or Space).'],
+  },
+  roulette: {
+    about: 'European roulette (single zero) on one wheel shared by everyone in the room.',
+    rules: [
+      'Straight up on a number pays 35:1. Dozens and columns (2:1) pay 2:1. Red/black, odd/even, 1-18/19-36 pay 1:1.',
+      'Zero loses every outside bet. That is the house edge: 2.7%.',
+      'The first chip on the felt starts a 20 second clock; the wheel spins when it runs out, or once everyone who bet presses DONE.',
+      'Up to $100 on one spot and $500 a spin. Bets come off your casino balance as you place them.',
+    ],
+    controls: ['Pick a chip, then click the felt to put it down. CLEAR takes your bets back, REBET repeats last spin.'],
+  },
   bowling: {
     about: 'Ten-pin bowling for two players, ten frames each with real pin physics.',
     rules: [

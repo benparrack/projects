@@ -12,5 +12,6 @@ export function casinoBar(cs, { onStipend }) {
   if (cs.guest) parts.push(h('span.muted.casino-note', 'PLAY MONEY · sign in to keep your winnings'));
   else if (cs.stipend && cs.stipend.ready) parts.push(h('button.casino-btn', { type: 'button', onclick: onStipend }, `CLAIM ${money(cs.stipend.amount)} DAILY`));
   else if (cs.stipend) parts.push(h('span.muted.casino-note', 'Daily stipend claimed · back tomorrow'));
+  if (cs.jackpot) parts.push(h('span.casino-note', { title: 'Progressive slots jackpot, shared by the whole site' }, `◆ SLOTS JACKPOT ${money(cs.jackpot)}`));
   return h('li.casino-bar', ...parts);
 }
