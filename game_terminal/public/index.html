@@ -79,14 +79,17 @@
 
       <div class="room-controls">
         <div class="room-row">
-          <button id="btn-join-public">JOIN PUBLIC ROOM</button>
+          <button id="btn-join-public" title="Join this game's public room. Anyone can drop in.">&#9654; PLAY</button>
           <button id="btn-join-ranked" class="btn-ranked" hidden title="Play other signed-in players for rating. No bots.">&#9733; RANKED</button>
         </div>
         <div class="room-row room-row-private">
-          <button id="btn-create-private">CREATE PRIVATE ROOM</button>
-          <label class="sr-only" for="join-code-input">Room code</label>
-          <input id="join-code-input" type="text" maxlength="10" autocomplete="off" placeholder="ROOM CODE">
-          <button id="btn-join-code">JOIN BY CODE</button>
+          <button id="btn-create-private" title="Open a private room and copy its invite link">INVITE A FRIEND</button>
+          <details class="join-code">
+            <summary>HAVE A CODE?</summary>
+            <label class="sr-only" for="join-code-input">Room code</label>
+            <input id="join-code-input" type="text" maxlength="10" autocomplete="off" placeholder="ROOM CODE">
+            <button id="btn-join-code">JOIN</button>
+          </details>
         </div>
       </div>
       <p id="menu-error" class="error" hidden></p>

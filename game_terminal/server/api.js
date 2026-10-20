@@ -56,7 +56,7 @@ function createApi({ db, accounts, daily = null, weekly = null, live = null, aut
 
   const routes = [
     // Homepage strip: people connected now, games finished today, most played this week.
-    [/^\/api\/live$/, async () => (live ? [200, await live(), 15] : [404, { error: 'Not found.' }])],
+    [/^\/api\/live$/, async () => (live ? [200, await live(), 5] : [404, { error: 'Not found.' }])],
     // Today's daily-challenge boards (top 50 per game, profiles joined, no uids).
     [/^\/api\/daily$/, async () => {
       if (!daily) return [404, { error: 'Not found.' }];

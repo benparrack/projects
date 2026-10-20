@@ -6,8 +6,9 @@ import { fmtScore } from './profile.js';
 let live = null; // { at, data }
 
 // openOnline (signed in only) makes "N online now" open the drawer's ONLINE NOW list.
-export async function renderLive(mount, { gameLabel, pick, openOnline }) {
-  if (!live || Date.now() - live.at > 30000) {
+// join(code) enters a public room someone is waiting in; onRooms(rooms) gets the occupied rooms for the game list badges.
+export async function renderLive(mount, { gameLabel, pick, openOnline, join, onRooms }) {
+  if (!live || Date.now() - live.at > 10000) {
     try {
       const res = await fetch('/api/live');
       if (!res.ok) throw new Error(res.status);
@@ -22,7 +23,19 @@ export async function renderLive(mount, { gameLabel, pick, openOnline }) {
       : stat(d.online, 'online now'),
     h('span.live-sep', { 'aria-hidden': 'true' }, '·'), stat(d.today, d.today === 1 ? 'game today' : 'games today'),
     d.topWeek ? [h('span.live-sep', { 'aria-hidden': 'true' }, '·'), h('span.live-stat', 'hot this week: ',
-      h('button.live-hot', { type: 'button', title: `${d.topWeek.plays.toLocaleString()} games in 7 days`, onclick: () => pick(d.topWeek.gameType) }, gameLabel(d.topWeek.gameType).toUpperCase()))] : null));
+      h('button.live-hot', { type: 'button', title: `${d.topWeek.plays.toLocaleString()} games in 7 days`, onclick: () => pick(d.topWeek.gameType) }, gameLabel(d.topWeek.gameType).toUpperCase()))] : null),
+    ...waitingChips(d.rooms || [], gameLabel, join));
+  onRooms(d.rooms || []);
+}
+
+// Open public rooms with people in them, most people first: with few players online, joining
+// someone beats picking a game blind and waiting alone.
+function waitingChips(rooms, gameLabel, join) {
+  const open = rooms.filter((r) => r.open).sort((a, b) => b.players - a.players).slice(0, 8);
+  if (!open.length) return [];
+  return [h('div.landing-chips.waiting-chips', h('span.muted', 'PLAYERS WAITING:'),
+    open.map((r) => h('button.landing-chip.waiting-chip', { type: 'button', onclick: () => join(r.code) },
+      h('span.live-dot', { 'aria-hidden': 'true' }), `${gameLabel(r.gameType)} · ${r.players} ${r.players === 1 ? 'waiting' : 'in room'}`)))];
 }
 
 const LINE = {

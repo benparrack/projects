@@ -217,6 +217,8 @@ const state = {
   auth: null, // from initAuth(): mode, user, getToken()…
   account: null, // own account from account.state (null for guests)
   setup: null, // open username-setup dialog, if any
+  liveRooms: [], // occupied public rooms from /api/live, for the game list badges
+  rosterHere: 0, // non-away players in the current room
 };
 
 function setStatus(text, cls) {
@@ -406,13 +408,22 @@ function ordinal(n) {
 
 // Menu extras: live strip, daily card, friends' activity (fetched fresh each time the menu shows).
 function refreshHome() {
-  renderLive(document.getElementById('live-slot'), { gameLabel, pick: pickGame, openOnline: state.account ? openOnline : null });
+  renderLiveStrip();
   renderDailyCard(document.getElementById('daily-slot'), dailyOpts());
   renderWeeklyCard(document.getElementById('weekly-slot'), { auth: state.auth, account: state.account, gameLabel, play: (type) => { pickGame(type); els.btnJoinPublic.click(); } });
   renderSoloCard(document.getElementById('solo-slot'), { account: state.account, gameLabel, play: (type) => { pickGame(type); els.btnCreatePrivate.click(); } });
   if (state.account) { send(ClientMessage.ACTIVITY_GET, {}); send(ClientMessage.ASYNC_LIST, {}); }
   else { document.getElementById('activity-slot').replaceChildren(); document.getElementById('turns-slot').replaceChildren(); }
 }
+
+function renderLiveStrip() {
+  renderLive(document.getElementById('live-slot'), {
+    gameLabel, pick: pickGame, openOnline: state.account ? openOnline : null, join: joinCode,
+    onRooms: (rooms) => { state.liveRooms = rooms; renderGameList(); },
+  });
+}
+// Keep "players waiting" fresh while someone sits on the menu deciding.
+setInterval(() => { if (!document.hidden && !document.getElementById('screen-menu').hidden) renderLiveStrip(); }, 15000);
 
 function joinCode(code) {
   if (location.pathname !== '/') history.pushState(null, '', '/');
@@ -484,6 +495,8 @@ function handleServerMessage(type, payload) {
       saveSession();
       els.roomCodeLabel.textContent = payload.daily ? `◆ DAILY ${payload.daily}` : payload.byTurns ? `${gameLabel(payload.gameType)} · BY TURNS vs ${payload.byTurns.opponent}` : payload.isPublic ? publicRoomLabel(payload) : payload.code;
       els.btnCopyLink.hidden = payload.isPublic || !!payload.daily || !!payload.byTurns;
+      if (state.copyInviteAfterJoin && !els.btnCopyLink.hidden) els.btnCopyLink.click();
+      state.copyInviteAfterJoin = false;
       document.body.classList.toggle('gt-byturns', !!payload.byTurns);
       renderRoster(payload.roster);
       // Chat needs accounts (to post, report and moderate), so accounts-off deploys have none.
@@ -511,7 +524,9 @@ function handleServerMessage(type, payload) {
     }
 
     case ServerMessage.ROOM_PRESENCE: {
+      const before = state.rosterHere;
       renderRoster(payload.roster);
+      if (state.rosterHere > before && document.hidden) flashJoin();
       if (state.activeGameHandle && typeof state.activeGameHandle.applyRoster === 'function') {
         state.activeGameHandle.applyRoster(payload.roster);
       }
@@ -615,6 +630,8 @@ function replayPendingJoin() {
   }
 }
 
+function livePlayers(type) { return state.liveRooms.reduce((n, r) => n + (r.gameType === type ? r.players : 0), 0); }
+
 function renderGameList() {
   updateRankedButton();
   els.gameList.innerHTML = '';
@@ -635,6 +652,8 @@ function renderGameList() {
     const name = document.createElement('span');
     name.textContent = `${cat.name} (${cat.games.length})`;
     header.appendChild(name);
+    const catLive = cat.games.reduce((n, g) => n + livePlayers(g.type), 0);
+    if (catLive) header.appendChild(h('span.game-live', { title: 'Players in public rooms now' }, `● ${catLive}`));
     header.addEventListener('click', () => {
       if (expanded) state.expandedCategories.delete(cat.name);
       else state.expandedCategories.add(cat.name);
@@ -649,12 +668,14 @@ function renderGameList() {
         const li = document.createElement('li');
         li.textContent = game.label;
         li.dataset.type = game.type;
+        const n = livePlayers(game.type);
+        if (n) li.appendChild(h('span.game-live', { title: 'Players in public rooms now' }, `● ${n}`));
         if (game.type === state.selectedGameType) {
           li.classList.add('selected');
           // Join right from the row: the room buttons sit below a long list.
-          const go = h('button.row-join', { type: 'button' }, '▶ JOIN');
+          const go = h('button.row-join', { type: 'button' }, '▶ PLAY');
           go.addEventListener('click', (ev) => { ev.stopPropagation(); els.btnJoinPublic.click(); });
-          const more = h('button.row-join.row-more', { type: 'button', title: 'Ranked, private room, join by code' }, 'MORE ▾');
+          const more = h('button.row-join.row-more', { type: 'button', title: 'Ranked, invite a friend, room code' }, 'MORE ▾');
           more.addEventListener('click', (ev) => { ev.stopPropagation(); els.btnJoinPublic.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
           li.append(go, more);
         }
@@ -672,8 +693,19 @@ function renderGameList() {
   }
 }
 
+// Someone joined while this tab was in the background: chime and blink the tab title until it's looked at.
+let flashTimer = null;
+function flashJoin() {
+  sfx.play('chime');
+  if (flashTimer) return;
+  const title = document.title;
+  flashTimer = setInterval(() => { document.title = document.title === title ? '● Player joined!' : title; }, 1000);
+  document.addEventListener('visibilitychange', () => { clearInterval(flashTimer); flashTimer = null; document.title = title; }, { once: true });
+}
+
 function renderRoster(roster) {
   setRoomRoster(roster);
+  state.rosterHere = roster.filter((e) => !e.away).length;
   els.rosterList.innerHTML = '';
   for (const entry of roster) {
     const li = document.createElement('li');
@@ -688,6 +720,9 @@ function renderRoster(roster) {
       li.title = 'Guest';
     }
     els.rosterList.appendChild(li);
+  }
+  if (state.rosterHere === 1 && state.currentRoom && state.currentRoom.isPublic && !state.currentRoom.ranked) {
+    els.rosterList.appendChild(h('li.muted.roster-alone', 'Waiting for players. People on the menu can see this room, and you\'ll hear a chime when someone joins.'));
   }
 }
 
@@ -775,8 +810,10 @@ function updateRankedButton() {
   els.btnJoinRanked.hidden = !(g && g.rated && state.auth.mode !== 'off');
 }
 
-els.btnCreatePrivate.addEventListener('click', () => {
+els.btnCreatePrivate.addEventListener('click', (ev) => {
   els.menuError.hidden = true;
+  // A real click is "invite a friend": copy the link once the room exists. Solo chips call .click() (untrusted) and skip it.
+  state.copyInviteAfterJoin = ev.isTrusted;
   send(ClientMessage.ROOM_CREATE, { gameType: state.selectedGameType, isPublic: false });
 });
 

@@ -34,7 +34,7 @@ const social = createSocial(db, accounts);
 const parties = new Parties();
 const chat = createChat(db);
 const moderation = createModeration(db, accounts, { chat });
-const handleApi = createApi({ db, accounts, daily, weekly, live: async () => ({ online: wss.clients.size, ...(await activity.stats()) }), authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
+const handleApi = createApi({ db, accounts, daily, weekly, live: async () => ({ online: wss.clients.size, rooms: roomManager.occupiedPublicRooms(), ...(await activity.stats()) }), authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
 console.log(`accounts: auth=${auth.mode} db=${db.backend}`);
 
 const roomManager = new RoomManager(gameRegistry, {

@@ -123,6 +123,18 @@ class RoomManager {
     return this.rooms.get(code) || null;
   }
 
+  // Casual public rooms with someone in them, for the menu's "waiting for you" chips and badges.
+  // open = a newcomer would get to play rather than spectate.
+  occupiedPublicRooms() {
+    const out = [];
+    for (const room of this.rooms.values()) {
+      if (!room.isPublic || room.ranked || room.clients.size === 0) continue;
+      const full = typeof room.plugin.isRoomFull === 'function' && room.plugin.isRoomFull(room);
+      out.push({ code: room.code, gameType: room.gameType, players: room.clients.size, open: !full });
+    }
+    return out;
+  }
+
   // `account` is { uid, profile } for signed-in players (profile = accounts.publicUser), else null.
   joinRoom(room, clientId, ws, nickname, account = null) {
     if (room.emptySince) room.emptySince = null; // cancel pending cleanup
