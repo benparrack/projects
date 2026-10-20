@@ -248,6 +248,12 @@ test('diner: junk serves, bogus tickets and walking out earn nothing; the daily 
   room.act('A', { kind: 'plate', slot: 0 }); // raw
   assert.strictEqual(room.act('A', { kind: 'serve', ticket: 99 }), 'no_ticket');
   assert.strictEqual(room.act('A', { kind: 'top', item: 'gold' }), 'bad_item');
+  room.act('A', { kind: 'top', item: 'bacon' });
+  room.act('A', { kind: 'top', item: 'onion' });
+  room.act('A', { kind: 'untop' });
+  assert.deepStrictEqual(room.state.build.toppings, ['bacon']);
+  room.act('A', { kind: 'untop' });
+  assert.strictEqual(room.act('A', { kind: 'untop' }), 'nothing');
   assert.strictEqual(room.act('A', { kind: 'serve', ticket: 1 }), null);
   assert.deepStrictEqual(room.state.served, [{ id: 1, score: 0, tip: 0 }]);
   assert.strictEqual(T.scoreOrder({ doneness: 'rare', toppings: ['a'], at: 0 }, { patty: { cooked: T.BURNT_MS }, toppings: ['a'] }, 0), 50); // toppings + half speed, no cook

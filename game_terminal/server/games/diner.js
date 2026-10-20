@@ -102,6 +102,10 @@ function act(room, id, data, now) {
       if (st.build.toppings.length >= MAX_STACK) return 'stack_full';
       st.build.toppings.push(data.item);
       return null;
+    case 'untop':
+      if (!st.build.toppings.length) return 'nothing';
+      st.build.toppings.pop();
+      return null;
     case 'trash':
       st.build = { patty: null, toppings: [] };
       return null;
