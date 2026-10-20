@@ -13,18 +13,6 @@ export const HOWTO = {
       'Type letters (or tap the on-screen keyboard); ENTER guesses, BACKSPACE deletes.',
     ],
   },
-  framed: {
-    about: 'Guess the movie from frames of it (taken at random moments). Every movie came out in 2000 or later.',
-    rules: [
-      'Everyone gets the same movie and six tries, starting from one frame.',
-      'Each wrong guess or skip unlocks the next frame.',
-      'Fewest frames wins; a tie goes to whoever got it first.',
-    ],
-    controls: [
-      'Type any part of the title; ENTER (or a click) guesses the highlighted suggestion, ↑/↓ picks another.',
-      'SKIP shows the next frame without guessing; click the frame numbers to look back.',
-    ],
-  },
   anagrams: {
     about: 'Everyone gets the same six letters and 60 seconds to make as many words as they can.',
     rules: [

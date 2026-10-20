@@ -1,4 +1,4 @@
-// Shared engine for "same puzzle, six tries" games (Wordle, Framed): everyone in the room gets the
+// Shared engine for "same puzzle, six tries" games (Wordle): everyone in the room gets the
 // same hidden answer and guesses at their own pace. Fewest guesses wins, and a tie goes to whoever
 // solved it first. The round ends once every player has solved it or run out of guesses. Answers
 // and other players' guesses stay server-side until the round is over.
