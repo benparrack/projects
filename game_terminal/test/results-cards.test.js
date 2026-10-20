@@ -47,7 +47,7 @@ async function waitFor(fn, ms = 8000) {
 
 test('stats metadata', () => {
   assert.deepStrictEqual(war.stats, { rated: false });
-  assert.deepStrictEqual(blackjack.stats.rated, false);
+  assert.deepStrictEqual(blackjack.stats, { none: true }); // casino: no results/XP
   for (const p of [crazyeights, bs, poker, spades, hearts, minesweeper, filler, seabattle]) assert.strictEqual(p.stats.rated, true, p.type);
   assert.strictEqual(hearts.stats.score.better, 'low');
   assert.strictEqual(filler.stats.score.better, 'high');
@@ -156,7 +156,7 @@ test('hearts: lowest first, equal scores tie', () => {
   }]);
 });
 
-test('blackjack: one single-player result per human at the end of a shoe', () => {
+test('blackjack (casino) never reports a result, even at the end of a shoe', () => {
   const T = blackjack._test;
   let now = 1e9;
   T.setClock(() => now);
@@ -167,16 +167,15 @@ test('blackjack: one single-player result per human at the end of a shoe', () =>
   const st = room.state;
   st.shoe = st.shoe.slice(-st.cutAt); // the cut card is already out: this round ends the shoe
   for (let i = 0; i < 300 && st.phase !== 'shoe_over'; i++) {
-    if (st.phase === 'betting' && !st.players.A.ready) { room.act('A', { kind: 'bet', amount: 100 }); room.act('A', { kind: 'deal' }); }
+    if (st.phase === 'betting' && !st.players.A.ready) { room.act('A', { kind: 'bet', amount: 25 }); room.act('A', { kind: 'deal' }); }
     if (st.phase === 'insurance') room.act('A', { kind: 'insurance', take: false });
     if (st.phase === 'playing') room.act('A', { kind: 'stand' });
     tick(500);
   }
   assert.strictEqual(st.phase, 'shoe_over');
-  assert.deepStrictEqual(room.results, [{ placements: [['A']], scores: { A: st.players.A.shoeNet } }]);
   tick(1000);
   room.act('A', { kind: 'continue' });
-  assert.strictEqual(room.results.length, 1);
+  assert.deepStrictEqual(room.results, []);
 });
 
 test('minesweeper: first to clear wins, vs bot carries its level', async () => {

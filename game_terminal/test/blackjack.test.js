@@ -61,7 +61,7 @@ function deal(room, bets, cards) {
   T.stackShoe(room.state, cards);
   for (const [id, amt] of Object.entries(bets)) {
     let left = amt;
-    for (const d of [500, 100, 25, 5]) while (left >= d) { ok(room, id, { kind: 'bet', amount: d }); left -= d; }
+    for (const d of [100, 25, 5, 1]) while (left >= d) { ok(room, id, { kind: 'bet', amount: d }); left -= d; }
   }
   for (const id of Object.keys(bets)) ok(room, id, { kind: 'deal' });
   wait(room, 450 * (Object.keys(bets).length + 1) * 2 + 100);
@@ -198,7 +198,8 @@ test('double takes one card and doubles the bet', () => {
 
 test('cannot double without the bankroll or after hitting', () => {
   const room = makeRoom();
-  deal(room, { A: 600 }, [c(2), c(9), c(3), c(8), c(2)]);
+  deal(room, { A: 100 }, [c(2), c(9), c(3), c(8), c(2)]);
+  room.state.players.A.bankroll = 50;
   rejects(room, 'A', { kind: 'double' }, 'cant_double');
   rejects(room, 'A', { kind: 'split' }, 'cant_split');
   ok(room, 'A', { kind: 'hit' });
@@ -354,11 +355,10 @@ test('invalid messages are rejected and never throw', () => {
   rejects(room, 'A', { kind: 'bet', amount: '25x' }, 'bad_amount');
   rejects(room, 'A', { kind: 'deal' }, 'under_min');
   rejects(room, 'C', { kind: 'bet', amount: 5 }, 'not_seated');
-  ok(room, 'A', { kind: 'bet', amount: 500 });
-  ok(room, 'A', { kind: 'bet', amount: 500 });
+  ok(room, 'A', { kind: 'bet', amount: 100 });
   rejects(room, 'A', { kind: 'bet', amount: 5 }, 'over_max');
   rejects(room, 'A', { kind: 'hit' }, 'not_your_turn');
-  rejects(room, 'A', { kind: 'rebuy' }, 'not_broke');
+  rejects(room, 'A', { kind: 'rebuy' }, 'no_rebuy');
   rejects(room, 'A', { kind: 'insurance', take: true }, 'no_insurance');
   rejects(room, 'C', { kind: 'removeBot', seat: 0 }, 'not_a_bot');
   rejects(room, 'C', { kind: 'leaveSeat' }, 'not_seated');
@@ -418,15 +418,72 @@ test('removing a bot mid-round lets its hand finish, then forgets it', () => {
   assert.ok(!room.state.players[bot]);
 });
 
-test('rebuy only when broke', () => {
+test('humans never rebuy at the table', () => {
   const room = makeRoom();
   ok(room, 'A', { kind: 'sit' });
-  room.state.players.A.bankroll = 7.5;
-  rejects(room, 'A', { kind: 'bet', amount: 25 }, 'insufficient');
-  ok(room, 'A', { kind: 'rebuy' });
-  assert.strictEqual(bank(room, 'A'), 1007.5);
-  assert.strictEqual(room.state.players.A.rebuys, 1);
-  rejects(room, 'A', { kind: 'rebuy' }, 'not_broke');
+  room.state.players.A.bankroll = 1.5;
+  rejects(room, 'A', { kind: 'bet', amount: 5 }, 'insufficient');
+  rejects(room, 'A', { kind: 'rebuy' }, 'no_rebuy');
+  assert.strictEqual(bank(room, 'A'), 1.5);
+});
+
+// The wallet side: a fake room.wallet backed by the real server/casino/wallet.js.
+function walletRoom(ids) {
+  const { createWallet } = require('../server/casino/wallet');
+  const { createMemoryDb } = require('../server/db');
+  const wallet = createWallet(createMemoryDb());
+  const room = makeRoom(ids);
+  room.code = 'T1';
+  room.wallet = {
+    ready: () => true,
+    buyIn: (id, n) => wallet.buyIn(`g:${id}`, 'T1', n),
+    sync: (id, s) => wallet.sync(`g:${id}`, 'T1', s),
+    cashOut: (id, s) => wallet.cashOut(`g:${id}`, 'T1', s),
+    noteBet: () => {},
+  };
+  room.balance = (id) => wallet.view(`g:${id}`);
+  return room;
+}
+
+test('wallet: sitting brings the whole balance, standing up returns the stack', () => {
+  const room = walletRoom(['A']);
+  ok(room, 'A', { kind: 'sit' });
+  assert.strictEqual(bank(room, 'A'), 100);
+  assert.deepStrictEqual([room.balance('A').balance, room.balance('A').atTables], [0, 100]);
+  ok(room, 'A', { kind: 'leaveSeat' });
+  assert.ok(!room.state.players.A);
+  assert.deepStrictEqual([room.balance('A').balance, room.balance('A').atTables], [100, 0]);
+});
+
+test('wallet: a hand in play when you stand up settles into your balance', () => {
+  const room = walletRoom(['A', 'B']);
+  deal(room, { A: 10, B: 10 }, [c(10), c(10), c(6), c(7), c(9), c(10), c(10)]);
+  room.clients.delete('A');
+  plugin.onLeave(room, { clientId: 'A' });
+  assert.strictEqual(room.balance('A').balance, 0, 'not paid out mid-hand');
+  ok(room, 'B', { kind: 'stand' });
+  settleRound(room);
+  wait(room, 6000);
+  assert.strictEqual(room.balance('A').balance, 110); // 19 beats the dealer's bust
+  assert.ok(!room.state.players.A);
+});
+
+test('wallet: last human leaving mid-hand still gets paid', () => {
+  const room = walletRoom(['A']);
+  deal(room, { A: 10 }, [c(10), c(9), c(10), c(7), c(10)]);
+  room.clients.delete('A');
+  plugin.onLeave(room, { clientId: 'A' });
+  assert.strictEqual(room.balance('A').balance, 110); // 20 stands; dealer 16 draws a 10 and busts
+});
+
+test('wallet: broke players cannot sit', () => {
+  const room = walletRoom(['A']);
+  ok(room, 'A', { kind: 'sit' });
+  room.state.players.A.bankroll = 1;
+  ok(room, 'A', { kind: 'leaveSeat' });
+  rejects(room, 'A', { kind: 'sit' }, 'broke');
+  assert.strictEqual(room.balance('A').balance, 1);
+  assert.deepStrictEqual(room.state.seats, []);
 });
 
 test('bots at every level play many rounds without stalling; chips are conserved', () => {
@@ -450,7 +507,7 @@ test('bots at every level play many rounds without stalling; chips are conserved
       for (const id of st.seats) {
         const p = st.players[id];
         assert.ok(p.bankroll >= 0 && Number.isFinite(p.bankroll));
-        assert.strictEqual(p.bankroll, 1000 * (1 + p.rebuys) + p.net, `chips not conserved for ${id}`);
+        assert.strictEqual(p.bankroll, T.BOT_BANKROLL * (1 + p.rebuys) + p.net, `chips not conserved for ${id}`);
       }
     }
   }
@@ -470,9 +527,9 @@ test('expert bot bet spread follows the true count', () => {
     st.runningCount = tc * (st.shoe.length / 52);
     return [T.botDecision(st, ex).amount, T.botDecision(st, hd).amount];
   };
-  assert.deepStrictEqual(bets(-3), [25, 25]);
-  assert.deepStrictEqual(bets(2), [100, 25]);
-  assert.deepStrictEqual(bets(5), [200, 25]);
+  assert.deepStrictEqual(bets(-3), [5, 5]);
+  assert.deepStrictEqual(bets(2), [20, 5]);
+  assert.deepStrictEqual(bets(5), [40, 5]);
 });
 
 test('basic strategy spot checks and count deviations', () => {

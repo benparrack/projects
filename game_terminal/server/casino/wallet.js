@@ -1,0 +1,137 @@
+// Casino money. One balance per account (casino/{uid}, a doc of its own so nothing casino ever
+// rides along with the users/{uid} profile), plus play money for guests that lives only in memory.
+//
+// The server is a single process, so memory is the source of truth once an account is loaded and
+// the db is just persistence: every change is synchronous (games call it from their tick/message
+// handlers) and the whole doc is written behind it, one write at a time per account.
+//
+// Money at a table: buying in moves it from `balance` to `atTable[roomCode]`; the table keeps
+// reporting its current stack (sync) and cashing out moves it back. The first load after a
+// restart folds any atTable leftovers back into the balance, so a crash costs at most the hand
+// in progress, never the stack.
+//
+// Keys: an account uid, or `g:<clientId>` for a guest.
+'use strict';
+
+const { START_BALANCE, STIPEND, SHIFT_CAP } = require('./economy');
+
+const isGuest = (key) => key.startsWith('g:');
+const utcDay = (t) => new Date(t).toISOString().slice(0, 10);
+const round2 = (n) => Math.round(n * 100) / 100;
+
+function createWallet(db, { now = () => Date.now() } = {}) {
+  const cache = new Map(); // key -> state
+  const loading = new Map(); // uid -> Promise
+  const writes = new Map(); // uid -> tail of its write chain
+
+  function persist(key) {
+    if (isGuest(key)) return;
+    const snap = structuredClone(cache.get(key));
+    const tail = (writes.get(key) || Promise.resolve())
+      .then(() => db.set(`casino/${key}`, snap))
+      .catch((err) => console.error('casino: save failed', key, err));
+    writes.set(key, tail);
+  }
+
+  const fresh = () => ({ balance: START_BALANCE, atTable: {}, stipendDay: null, shifts: { day: null, n: 0 }, wagered: 0, biggestWin: 0, owned: {}, equipped: {} });
+
+  async function load(uid) {
+    if (cache.has(uid)) return cache.get(uid);
+    if (!loading.has(uid)) {
+      loading.set(uid, (async () => {
+        const doc = { ...fresh(), ...((await db.get(`casino/${uid}`)) || {}) };
+        // Nothing can be live at a table before this process loaded the account: refund it.
+        for (const n of Object.values(doc.atTable || {})) doc.balance = round2(doc.balance + n);
+        doc.atTable = {};
+        if (!cache.has(uid)) { cache.set(uid, doc); persist(uid); }
+        loading.delete(uid);
+        return cache.get(uid);
+      })());
+    }
+    return loading.get(uid);
+  }
+
+  function state(key) {
+    if (!cache.has(key) && isGuest(key)) cache.set(key, fresh());
+    return cache.get(key) || null;
+  }
+
+  // Moves up to `n` (or everything with 'all') onto a table. Returns the amount moved (0 = none).
+  function buyIn(key, table, n) {
+    const s = state(key);
+    if (!s) return 0;
+    const amt = round2(n === 'all' ? s.balance : Math.min(n, s.balance));
+    if (amt <= 0) return 0;
+    s.balance = round2(s.balance - amt);
+    s.atTable[table] = round2((s.atTable[table] || 0) + amt);
+    persist(key);
+    return amt;
+  }
+
+  // The table's current stack for this player (persisted so a restart refunds it).
+  function sync(key, table, stack) {
+    const s = state(key);
+    if (!s || !(table in s.atTable) || s.atTable[table] === stack) return;
+    s.atTable[table] = round2(Math.max(0, stack));
+    persist(key);
+  }
+
+  function cashOut(key, table, stack) {
+    const s = cache.get(key);
+    if (!s) return;
+    delete s.atTable[table];
+    s.balance = round2(s.balance + Math.max(0, stack));
+    persist(key);
+  }
+
+  // Lifetime numbers for tiers and leaderboards: how much went on the felt, and the best single win.
+  function noteBet(key, wagered, won = 0) {
+    const s = cache.get(key);
+    if (!s || isGuest(key)) return;
+    s.wagered = round2(s.wagered + wagered);
+    if (won > s.biggestWin) s.biggestWin = round2(won);
+    persist(key);
+  }
+
+  const stipendReady = (s) => s.stipendDay !== utcDay(now());
+  function claimStipend(key) {
+    const s = cache.get(key);
+    if (!s || isGuest(key) || !stipendReady(s)) return false;
+    s.stipendDay = utcDay(now());
+    s.balance = round2(s.balance + STIPEND);
+    persist(key);
+    return true;
+  }
+
+  const shiftsLeft = (s) => (s.shifts.day === utcDay(now()) ? Math.max(0, SHIFT_CAP - s.shifts.n) : SHIFT_CAP);
+  // Pays a finished work shift. Guests can work too (play money); the daily cap is per account.
+  function payShift(key, n) {
+    const s = state(key);
+    if (!s || shiftsLeft(s) <= 0) return 0;
+    const day = utcDay(now());
+    s.shifts = { day, n: (s.shifts.day === day ? s.shifts.n : 0) + 1 };
+    s.balance = round2(s.balance + Math.max(0, n));
+    persist(key);
+    return n;
+  }
+
+  // What the casino lobby shows its owner.
+  function view(key) {
+    const s = state(key);
+    if (!s) return null;
+    const atTables = round2(Object.values(s.atTable).reduce((a, b) => a + b, 0));
+    return { guest: isGuest(key), balance: s.balance, atTables, stipend: isGuest(key) ? null : { amount: STIPEND, ready: stipendReady(s) }, shiftsLeft: shiftsLeft(s), wagered: s.wagered, biggestWin: s.biggestWin };
+  }
+
+  const dropGuest = (clientId) => cache.delete(`g:${clientId}`);
+  async function forget(uid) {
+    cache.delete(uid);
+    await writes.get(uid);
+    await db.del(`casino/${uid}`);
+  }
+  const flush = () => Promise.all([...writes.values()]);
+
+  return { load, forget, buyIn, sync, cashOut, noteBet, claimStipend, payShift, view, dropGuest, flush, isLoaded: (key) => isGuest(key) || cache.has(key) };
+}
+
+module.exports = { createWallet, utcDay };

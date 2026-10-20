@@ -4,6 +4,7 @@ import { HOWTO } from './games/howto.js';
 import { initAuth } from './auth.js';
 import { avatarEl, nameColor, setRoomRoster } from './avatars.js';
 import { h, toast, modal } from './ui.js';
+import { casinoBar } from './casino/lobby.js';
 import { INFO_PAGES, footerLinks } from './pages.js';
 import { renderProfile } from './profile.js';
 import { renderReplay } from './replay.js';
@@ -70,6 +71,13 @@ const CATEGORIES = [
       { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
       { type: 'spades', label: 'SPADES' },
       { type: 'hearts', label: 'HEARTS' },
+    ],
+  },
+  {
+    // Casino money lives only here and at these tables (see public/casino/).
+    name: 'CASINO',
+    casino: true,
+    games: [
       { type: 'blackjack', label: 'BLACKJACK' },
     ],
   },
@@ -219,6 +227,7 @@ const state = {
   setup: null, // open username-setup dialog, if any
   liveRooms: [], // occupied public rooms from /api/live, for the game list badges
   rosterHere: 0, // non-away players in the current room
+  casino: null, // casino.state while the CASINO category is open; null = ask again when it opens
 };
 
 function setStatus(text, cls) {
@@ -362,6 +371,7 @@ const settingsKey = () => JSON.stringify(state.account && [state.account.usernam
 
 function handleAccountState(p) {
   const prev = state.account;
+  if ((prev && prev.username) !== (p.user && p.user.username)) { state.casino = null; renderGameList(); }
   state.account = p.user;
   renderChip();
   setSignedIn(!!p.user);
@@ -468,6 +478,7 @@ function handleServerMessage(type, payload) {
   switch (type) {
     case ServerMessage.WELCOME: {
       state.clientId = payload.clientId;
+      state.casino = null;
       els.menuNickname.textContent = payload.nickname;
       renderGameList();
       // The old room chat box would ask for history before the rejoin below lands; ROOM_JOINED rebuilds it.
@@ -552,6 +563,11 @@ function handleServerMessage(type, payload) {
 
     case ServerMessage.ONLINE:
       handleOnline(payload);
+      break;
+
+    case ServerMessage.CASINO_STATE:
+      state.casino = payload;
+      renderGameList();
       break;
 
     case ServerMessage.ACTIVITY: {
@@ -664,6 +680,10 @@ function renderGameList() {
     if (expanded) {
       const subList = document.createElement('ul');
       subList.className = 'game-sublist';
+      if (cat.casino) {
+        if (state.casino === null && state.clientId) { state.casino = 'loading'; send(ClientMessage.CASINO_OPEN, {}); }
+        subList.appendChild(casinoBar(state.casino, { onStipend: () => { sfx.play('chips'); send(ClientMessage.CASINO_STIPEND, {}); } }));
+      }
       for (const game of cat.games) {
         const li = document.createElement('li');
         li.textContent = game.label;
@@ -832,6 +852,8 @@ function leaveRoom({ notify = true } = {}) {
   unmountGame();
   document.getElementById('room-chat').replaceChildren();
   state.currentRoom = null;
+  state.casino = null; // a table may have moved money
+  renderGameList();
   document.body.classList.remove('gt-byturns');
   saveSession();
   if (location.pathname !== '/') history.replaceState(null, '', '/');

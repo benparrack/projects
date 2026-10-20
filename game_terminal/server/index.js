@@ -19,6 +19,7 @@ const { createChat, toClient } = require('./chat');
 const { createModeration, isAdmin, unseenNotices } = require('./moderation');
 const { createWeekly } = require('./weekly');
 const { createAsyncGames, isAsyncCode } = require('./asyncGames');
+const { createWallet } = require('./casino/wallet');
 
 const PORT = process.env.PORT || 3000;
 const MAX_PAYLOAD = 64 * 1024;
@@ -34,10 +35,12 @@ const social = createSocial(db, accounts);
 const parties = new Parties();
 const chat = createChat(db);
 const moderation = createModeration(db, accounts, { chat });
+const wallet = createWallet(db);
 const handleApi = createApi({ db, accounts, daily, weekly, live: async () => ({ online: peopleOnline(), rooms: roomManager.occupiedPublicRooms(), ...(await activity.stats()) }), authMode: auth.mode, firebaseWebConfig: webConfig(), registry: gameRegistry });
 console.log(`accounts: auth=${auth.mode} db=${db.backend}`);
 
 const roomManager = new RoomManager(gameRegistry, {
+  wallet,
   onResult(room, result) {
     results.record(room, result).then((rec) => {
       if (!rec) return;
@@ -298,6 +301,7 @@ function greetAccount(ws, session) {
   send(ws, ServerMessage.WELCOME, { clientId: session.clientId, nickname: session.nickname });
   sendAccountState(ws, session);
   goOnline(ws, session.uid);
+  wallet.load(session.uid).catch((err) => console.error('casino: load failed', err));
 }
 
 // Play-by-turns games: only their two players (signed in) can open them; you take over your seat.
@@ -482,10 +486,20 @@ wss.on('connection', (ws, req) => {
         pushMany(exFriends);
         await chat.purgeUser(uid, exFriends.map((o) => `dm:${results.pairKey(uid, o)}`));
         await accounts.deleteAccount(uid);
+        await wallet.forget(uid);
         await auth.removeUser(uid).catch((err) => console.error('auth: removeUser failed', uid, err));
         session.uid = null;
         session.user = null;
         send(ws, ServerMessage.ACCOUNT_DELETED, {});
+        break;
+      }
+
+      case ClientMessage.CASINO_OPEN:
+      case ClientMessage.CASINO_STIPEND: {
+        const key = session.uid && session.user && session.user.username ? session.uid : `g:${session.clientId}`;
+        if (key === session.uid) await wallet.load(key);
+        if (type === ClientMessage.CASINO_STIPEND) wallet.claimStipend(key);
+        send(ws, ServerMessage.CASINO_STATE, wallet.view(key));
         break;
       }
 
@@ -800,6 +814,7 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     globalSubs.delete(ws);
     leaveCurrentRoom(session, session.clientId);
+    wallet.dropGuest(session.clientId);
     if (session.uid) goOffline(ws, session.uid);
   });
 });

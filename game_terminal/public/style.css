@@ -142,6 +142,11 @@ button:disabled { opacity: 0.4; cursor: default; }
   border-top: 1px solid rgba(31, 143, 12, 0.3);
 }
 .game-sublist li:first-child { border-top: none; }
+.game-sublist li.casino-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; cursor: default; padding-top: 6px; padding-bottom: 6px; background: rgba(255, 191, 0, 0.06); }
+.game-sublist li.casino-bar:hover { background: rgba(255, 191, 0, 0.06); }
+.casino-balance { color: #ffbf00; font-size: 1.15em; font-weight: bold; }
+.casino-note { font-size: 0.85em; }
+.casino-btn { padding: 3px 10px; font-size: 0.9em; }
 .game-sublist li:hover { background: rgba(31, 143, 12, 0.15); }
 .game-sublist li.selected { background: var(--fg-dim); color: #000; }
 .game-sublist li.selected { display: flex; align-items: center; gap: 8px; padding-top: 5px; padding-bottom: 5px; }

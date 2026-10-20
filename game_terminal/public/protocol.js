@@ -18,6 +18,8 @@ export const ClientMessage = {
   FRIEND_REQUEST: 'friend.request', // { username }
   FRIEND_ACCEPT: 'friend.accept', // { username }
   FRIEND_REMOVE: 'friend.remove', // { username } — unfriend, decline, or cancel a request
+  CASINO_OPEN: 'casino.open', // {} -> CASINO_STATE (the casino lobby opened; guests get play money)
+  CASINO_STIPEND: 'casino.stipend', // {} -> CASINO_STATE (claims today's stipend; accounts only)
   ACTIVITY_GET: 'activity.get', // {} -> activity (friends' recent moments; accounts only)
   ONLINE_GET: 'online.get', // {} -> online (everyone signed in right now; accounts only)
   USER_BLOCK: 'user.block', // { username, on }
@@ -53,6 +55,7 @@ export const ServerMessage = {
   ACCOUNT_DELETED: 'account.deleted', // {} — the account is gone; client signs out
   SOCIAL_STATE: 'social.state', // { friends, incoming, outgoing, blocked, recent, party } — accounts only
   SOCIAL_NOTICE: 'social.notice', // { kind: 'request'|'accepted'|'invite'|'party'|'follow'|'turn'|'ok'|'error', from?, message?, gameType?, code?, id? }
+  CASINO_STATE: 'casino.state', // { balance, atTables, guest, stipend: { amount, ready } | null, shiftsLeft, wagered, biggestWin } — only ever sent on request from the casino lobby
   ACTIVITY: 'activity', // { items: [{ at, kind, ..., user: { username, avatar, cosmetics } }], friends }
   ONLINE: 'online', // { players: [{ username, avatar, level, cosmetics, friend, playing?: { gameType, code? } }], guests }
   CHAT_MESSAGE: 'chat.message', // { channel, with?, msg: { id, at, from: { username, avatar, level, role? }, text } }

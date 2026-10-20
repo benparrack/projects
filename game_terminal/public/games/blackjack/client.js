@@ -13,8 +13,9 @@ const HINT_KEY = 'gt.blackjack.hints';
 
 const REJECT = {
   not_betting: 'Bets are closed', not_seated: 'Sit down first', already_ready: 'Bet locked in — wait for the deal',
-  bad_amount: 'Invalid chip', over_max: 'Table max is 1000', insufficient: 'Not enough chips', no_last_bet: 'No previous bet',
-  under_min: 'Minimum bet is 10', not_broke: 'You still have chips', no_insurance: 'Insurance is closed',
+  bad_amount: 'Invalid chip', over_max: 'Table max is $100', insufficient: 'Not enough chips', no_last_bet: 'No previous bet',
+  under_min: 'Minimum bet is $2', no_rebuy: 'No rebuys — visit the CASINO lobby',
+  broke: 'You\'re broke: claim the daily stipend or work a shift in the CASINO lobby', wallet_loading: 'Loading your balance, try again', no_insurance: 'Insurance is closed',
   not_your_turn: "It's not your turn", cant_double: "Can't double this hand", cant_split: "Can't split this hand",
   split_aces: 'Split aces get one card', table_full: 'Table is full', already_seated: 'Already seated',
   not_a_bot: 'Not a bot', bad_phase: 'Not now', unknown: 'Unknown action',
@@ -99,7 +100,7 @@ const CSS = `
     repeating-conic-gradient(var(--c) 0 20deg, #fff 20deg 40deg); color: #111; }
 .bj-chip:active:not(:disabled) { transform: translateY(1px) scale(.95); }
 .bj-chip.mini { width: 20px; height: 20px; font-size: .55em; cursor: default; box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.5); }
-.bj-chip.c5 { --c: #e04848; color: #fff; } .bj-chip.c25 { --c: #2f9e44; color: #fff; }
+.bj-chip.c1 { --c: #ddd; color: #111; } .bj-chip.c5 { --c: #e04848; color: #fff; } .bj-chip.c25 { --c: #2f9e44; color: #fff; }
 .bj-chip.c100 { --c: #222; color: #fff; } .bj-chip.c500 { --c: #7b3fd1; color: #fff; }
 .bj-chip.c5:hover, .bj-chip.c25:hover, .bj-chip.c100:hover, .bj-chip.c500:hover { color: #fff; }
 .bj-chip.in { animation: bj-chip-in .3s cubic-bezier(.2,1.4,.4,1); }
@@ -389,7 +390,7 @@ export function mount(container, api) {
         const b = el('button', null, 'SIT DOWN');
         b.addEventListener('click', () => { sfx.play('click'); send({ kind: 'sit' }); });
         s.appendChild(b);
-        s.appendChild(el('div', 'bj-seat-bank', `$${view.startBankroll} to start`));
+        s.appendChild(el('div', 'bj-seat-bank', 'brings your casino balance'));
       } else if (i === (mySeat() === -1 ? 1 : 0)) {
         s.appendChild(addBotButton(api));
       } else {
@@ -421,10 +422,7 @@ export function mount(container, api) {
     if (view.phase === 'betting' && p) {
       const broke = p.bankroll < view.minBet && p.bet === 0;
       if (broke) {
-        panel.appendChild(el('div', null, 'Out of chips!'));
-        const b = el('button', null, `REBUY $${view.startBankroll}`);
-        b.addEventListener('click', () => { sfx.play('chips'); send({ kind: 'rebuy' }); });
-        panel.appendChild(b);
+        panel.appendChild(el('div', null, 'Out of chips! Stand up, then claim the daily stipend or work a shift in the CASINO lobby.'));
       } else {
         const line = el('div', 'bj-bigbet');
         line.innerHTML = `Bet: <b>$${fmt(p.bet)}</b> · Bankroll $${fmt(p.bankroll - p.bet)} · min ${view.minBet} / max ${view.maxBet}`;

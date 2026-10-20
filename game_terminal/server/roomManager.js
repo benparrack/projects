@@ -67,16 +67,34 @@ class Room {
   }
 }
 
+// Casino plugins see money by clientId only; this maps it to the account (or guest) behind it.
+// `seen` still knows who a player was after they left, so a late cash-out lands with them.
+function roomWallet(room, wallet) {
+  const key = (clientId) => {
+    const c = room.clients.get(clientId) || room.seen.get(clientId);
+    return c && c.uid ? c.uid : `g:${clientId}`;
+  };
+  return {
+    ready: (clientId) => wallet.isLoaded(key(clientId)),
+    buyIn: (clientId, n) => wallet.buyIn(key(clientId), room.code, n),
+    sync: (clientId, stack) => wallet.sync(key(clientId), room.code, stack),
+    cashOut: (clientId, stack) => wallet.cashOut(key(clientId), room.code, stack),
+    noteBet: (clientId, wagered, won) => wallet.noteBet(key(clientId), wagered, won),
+  };
+}
+
 class RoomManager {
-  constructor(gameRegistry, { onResult } = {}) {
+  constructor(gameRegistry, { onResult, wallet } = {}) {
     this.gameRegistry = gameRegistry; // gameType -> plugin module
     this.rooms = new Map(); // code -> Room
     this.onResult = onResult || null; // (room, result) => void
+    this.wallet = wallet || null; // server/casino/wallet.js
   }
 
   makeRoom(code, gameType, isPublic, plugin) {
     const room = new Room(code, gameType, isPublic, plugin);
     if (this.onResult) room.onResult = (result) => this.onResult(room, result);
+    if (plugin.casino && this.wallet) room.wallet = roomWallet(room, this.wallet);
     this.rooms.set(code, room);
     return room;
   }

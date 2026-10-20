@@ -115,7 +115,7 @@ function createApi({ db, accounts, daily = null, weekly = null, live = null, aut
         progress: levelFor(found.user.xp || 0),
         cosmetics: cosmeticsFor(found.user, isAdmin(found.uid, found.user)),
         achievements: ACHIEVEMENT_LIST.map((a) => ({ ...a, at: (found.user.achievements || {})[a.id] || null })),
-        stats: stats.map(({ id, uid, ...s }) => ({ ...s, ...(s.rating != null ? { tier: tierOf(s.rating) } : {}), score: ((registry[s.gameType] || {}).stats || {}).score || null })),
+        stats: stats.filter((s) => !((registry[s.gameType] || {}).stats || {}).none).map(({ id, uid, ...s }) => ({ ...s, ...(s.rating != null ? { tier: tierOf(s.rating) } : {}), score: ((registry[s.gameType] || {}).stats || {}).score || null })),
         matches: matches.map(stripUids),
         seasons: seasons.map(({ id, uid, ...s }) => s).sort((a, b) => b.season.localeCompare(a.season, 'en', { numeric: true }) || a.rank - b.rank),
       }];

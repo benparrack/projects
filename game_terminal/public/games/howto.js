@@ -73,7 +73,8 @@ export const HOWTO = {
       'Get closer to 21 than the dealer without going over; blackjack pays 3:2.',
       '6-deck shoe; the dealer stands on soft 17 and peeks for blackjack.',
       'Double on any first two cards, split pairs up to 4 hands, insurance 2:1 vs a dealer ace.',
-      'Everyone starts with 1000 chips; a free rebuy is offered when you go broke.',
+      'Sitting down brings your whole casino balance to the table; standing up takes it back. Bets $2-$100.',
+      'No rebuys at the table: broke? Claim the daily stipend or work a shift from the CASINO lobby.',
     ],
     controls: [
       'Bet with the chip buttons, then DEAL (Space/Enter).',

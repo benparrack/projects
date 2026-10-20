@@ -3,8 +3,10 @@
 //   soft 17 and peeks for blackjack under an ace or a ten, blackjack pays 3:2, insurance 2:1 when
 //   the dealer shows an ace, double on any first two cards (also after a split), split equal-value
 //   pairs up to 4 hands, split aces get one card each and can't be re-split, no surrender.
-// Bankrolls (start 1000, free rebuy when broke) and stats persist in the room, keyed by client id,
-// so leaving a seat and sitting back down keeps your chips.
+// A casino game: sitting down brings your whole casino balance to the table (room.wallet, see
+// server/casino/wallet.js) and standing up — once any hand you still have in play settles — takes
+// the stack back. No free rebuys; broke players earn more in the casino lobby. Bots play on house
+// money and do rebuy. Without room.wallet (unit tests) a seat starts with START_BANKROLL.
 //
 // Everything time-based (dealing one card at a time, betting/insurance/turn timers, the dealer
 // drawing, bot "thinking") runs off the room tick, so there are no free-running timers that could
@@ -12,22 +14,22 @@
 // the shoe, and neither ever leaves the server until revealed: every client gets the same view.
 //
 // Messages (data.kind): sit, leaveSeat, addBot {level}, removeBot {seat}, bet {amount}, clearBet,
-// rebet, deal, rebuy, insurance {take}, hit, stand, double, split, continue.
+// rebet, deal, insurance {take}, hit, stand, double, split, continue.
 
 'use strict';
 
 const { createDeck, shuffle } = require('./cardCommon');
 const { normLevel } = require('./ai/levels');
-const { report } = require('../report');
 
 const TYPE = 'blackjack';
 const MAX_SEATS = 6;
 const DECKS = 6;
 const PENETRATION = 0.75;
-const START_BANKROLL = 1000;
-const MIN_BET = 10;
-const MAX_BET = 1000;
-const CHIPS = [5, 25, 100, 500];
+const START_BANKROLL = 1000; // test tables only (no wallet)
+const BOT_BANKROLL = 250;
+const MIN_BET = 2;
+const MAX_BET = 100;
+const CHIPS = [1, 5, 25, 100];
 const MAX_HANDS = 4;
 
 const BET_MS = 15000; // after the first chip goes down
@@ -160,10 +162,10 @@ const trueCount = (st) => st.runningCount / Math.max(0.5, st.shoe.length / 52);
 // ---------------------------------------------------------------------------------------------
 // State
 
-function playerRec(st, id) {
+function playerRec(st, id, bankroll = 0) {
   if (!st.players[id]) {
     st.players[id] = {
-      bankroll: START_BANKROLL, bet: 0, ready: false, lastBet: 0, net: 0, shoeNet: 0, rebuys: 0,
+      bankroll, bet: 0, ready: false, lastBet: 0, net: 0, shoeNet: 0, rebuys: 0,
       stats: { hands: 0, won: 0, lost: 0, push: 0, blackjacks: 0 },
     };
   }
@@ -224,23 +226,33 @@ function buildView(st) {
     phase: st.phase, seats: st.seats, players, round, deadline: st.deadline, serverNow: clock(),
     shoeLeft: st.shoe.length, shoeSize: st.shoeSize, cutAt: st.cutAt, reshuffleNext: st.reshuffleNext,
     shoeNo: st.shoeNo, shoeRounds: st.shoeRounds, roundNo: st.roundNo, seq: st.seq, lastEvent: st.lastEvent,
-    minBet: MIN_BET, maxBet: MAX_BET, chips: CHIPS, startBankroll: START_BANKROLL,
+    minBet: MIN_BET, maxBet: MAX_BET, chips: CHIPS,
   };
 }
 
-// A blackjack "match" is one shoe: each human who played it gets their own single-player result
-// with the shoe's net chips as the score (no opponent to place against — the dealer isn't one).
-// Reported on the first broadcast in shoe_over, once per shoe.
-function reportShoe(room) {
+// Keeps the wallet in step with the table: stacks between rounds (a restart refunds that much),
+// lifetime bet totals, and cashing out anyone who stood up once nothing of theirs is in play.
+// Casino games don't report() results: no XP, achievements or stats from gambling.
+function settleMoney(room) {
   const st = room.state;
-  if (st.phase !== 'shoe_over' || st.reportedShoe === st.shoeNo) return;
-  st.reportedShoe = st.shoeNo;
-  for (const id of st.shoePlayers) report(room, { placements: [[id]], scores: { [id]: st.players[id].shoeNet } });
+  const w = room.wallet;
+  const notes = st.moneyNotes || [];
+  st.moneyNotes = [];
+  if (!w) return;
+  for (const n of notes) w.noteBet(n.id, n.wagered, n.won);
+  const inRound = new Set(st.round ? st.round.entries.map((e) => e.id) : []);
+  for (const [id, p] of Object.entries(st.players)) {
+    if (isBot(id)) continue;
+    if (st.seats.includes(id)) { if (!st.round) w.sync(id, p.bankroll); continue; }
+    if (inRound.has(id)) continue;
+    w.cashOut(id, p.bankroll);
+    delete st.players[id];
+  }
 }
 
 function broadcast(room) {
   const st = room.state;
-  reportShoe(room);
+  settleMoney(room);
   st.seq++;
   room.broadcast({ v: 1, type: 'game.event', payload: { gameType: TYPE, data: { kind: 'state', ...buildView(st) } } });
 }
@@ -456,6 +468,10 @@ function settle(st, now) {
     }
     p.net += delta;
     p.shoeNet += delta;
+    if (!isBot(e.id)) {
+      const wagered = e.hands.reduce((a, h) => a + h.bet, 0) + (e.insurance || 0);
+      (st.moneyNotes = st.moneyNotes || []).push({ id: e.id, wagered, won: Math.max(0, delta) });
+    }
     p.bankroll = Math.round(p.bankroll * 2) / 2;
   }
   r.turn = null;
@@ -472,7 +488,7 @@ function afterSettle(st, now) {
   // Broke bots buy back in so a bot table never stalls.
   for (const id of st.seats) {
     const p = playerRec(st, id);
-    if (isBot(id) && p.bankroll < MIN_BET) { p.bankroll += START_BANKROLL; p.rebuys++; }
+    if (isBot(id) && p.bankroll < MIN_BET) { p.bankroll += BOT_BANKROLL; p.rebuys++; }
   }
   if (st.reshuffleNext) {
     st.round = null;
@@ -564,10 +580,11 @@ function act(st, id, data, now) {
   }
 
   if (kind === 'rebuy') {
+    if (!isBot(id)) return 'no_rebuy';
     const p = playerRec(st, id);
     const inRound = st.round && st.round.entries.some((e) => e.id === id);
     if (p.bankroll >= MIN_BET || p.bet > 0 || inRound) return 'not_broke';
-    p.bankroll += START_BANKROLL;
+    p.bankroll += BOT_BANKROLL;
     p.rebuys++;
     return null;
   }
@@ -642,11 +659,11 @@ function act(st, id, data, now) {
 // ---------------------------------------------------------------------------------------------
 // Seats
 
-function sit(st, id) {
+function sit(st, id, chips) {
   if (st.seats.includes(id)) return 'already_seated';
   if (st.seats.length >= MAX_SEATS) return 'table_full';
   st.seats.push(id);
-  playerRec(st, id);
+  playerRec(st, id).bankroll += chips;
   if (st.phase === 'waiting') enterBetting(st);
   return null;
 }
@@ -689,7 +706,30 @@ function addBot(st, level) {
   const used = new Set(st.seats.filter(isBot).map(botBase));
   const name = BOT_NAMES.find((n) => !used.has(n));
   if (!name) return 'table_full';
-  return sit(st, `bot-${name}~${normLevel(level)}`);
+  return sit(st, `bot-${name}~${normLevel(level)}`, BOT_BANKROLL);
+}
+
+// A human sits down with their whole casino balance (plus anything still on this table from a
+// hand they stood up during).
+function sitHuman(room, st, id) {
+  if (st.seats.includes(id)) return 'already_seated';
+  if (st.seats.length >= MAX_SEATS) return 'table_full';
+  const w = room.wallet;
+  if (w && !w.ready(id)) return 'wallet_loading';
+  const chips = w ? w.buyIn(id, 'all') : st.players[id] ? 0 : START_BANKROLL;
+  if ((st.players[id] ? st.players[id].bankroll : 0) + chips < MIN_BET) {
+    if (chips) w.cashOut(id, chips + (st.players[id] ? st.players[id].bankroll : 0));
+    if (st.players[id] && !(st.round && st.round.entries.some((e) => e.id === id))) delete st.players[id];
+    return 'broke';
+  }
+  return sit(st, id, chips);
+}
+
+// Nobody left to watch: play out any round in progress (everyone stands), so stood-up players'
+// hands settle and their chips get back to their balance before the room goes quiet.
+function finishRound(st) {
+  let t = clock();
+  for (let i = 0; i < 400 && st.round; i++) { t += 30000; step(st, t); }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -699,15 +739,13 @@ function botBet(st, id) {
   const p = playerRec(st, id);
   const level = botLevelOf(id);
   let amt;
-  if (level === 'easy') amt = [10, 25, 50, 75, 100][Math.floor(rng() * 5)];
+  if (level === 'easy') amt = [2, 5, 10, 15, 20][Math.floor(rng() * 5)];
   else if (level === 'expert') {
     const tc = Math.floor(trueCount(st));
     const units = tc <= 0 ? 1 : tc === 1 ? 2 : tc === 2 ? 4 : tc === 3 ? 6 : 8;
-    amt = 25 * units;
-  } else amt = 25;
-  amt = Math.max(MIN_BET, Math.min(amt, p.bankroll, MAX_BET));
-  amt = Math.floor(amt / 5) * 5;
-  return amt;
+    amt = 5 * units;
+  } else amt = 5;
+  return Math.floor(Math.max(MIN_BET, Math.min(amt, p.bankroll, MAX_BET)));
 }
 
 // The action a bot wants to take right now, or null.
@@ -802,7 +840,8 @@ function tick(room) {
 
 module.exports = {
   type: TYPE,
-  stats: { rated: false, score: { label: 'Shoe net', better: 'high', format: 'pts' } }, // vs the dealer
+  casino: true,
+  stats: { none: true }, // casino: no results, XP or leaderboards
   tickIntervalMs: 100,
   tick,
 
@@ -824,6 +863,7 @@ module.exports = {
     const humans = [...room.clients.keys()].filter((id) => !isBot(id));
     if (!humans.length) {
       for (const id of st.seats.filter(isBot)) changed = unseat(st, id, now) || changed;
+      finishRound(st);
     }
     if (changed) {
       step(st, now);
@@ -837,7 +877,7 @@ module.exports = {
     const id = ctx.senderId;
     const now = clock();
     let err = null;
-    if (data.kind === 'sit') err = sit(st, id);
+    if (data.kind === 'sit') err = sitHuman(room, st, id);
     else if (data.kind === 'leaveSeat') err = unseat(st, id, now) ? null : 'not_seated';
     else if (data.kind === 'addBot') err = addBot(st, data.level);
     else if (data.kind === 'removeBot') {
@@ -854,6 +894,6 @@ module.exports = {
     setClock(fn) { clock = fn; }, setRng(fn) { rng = fn; },
     // Put these cards on top of the shoe so they're drawn in this order.
     stackShoe(st, cards) { st.shoe = st.shoe.concat(cards.slice().reverse()); },
-    step, MIN_BET, MAX_BET, START_BANKROLL, CHIPS, BET_MS, TURN_MS, INS_MS,
+    step, MIN_BET, MAX_BET, START_BANKROLL, BOT_BANKROLL, CHIPS, BET_MS, TURN_MS, INS_MS,
   },
 };
