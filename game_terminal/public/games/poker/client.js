@@ -18,6 +18,67 @@ const REJECT = {
 // since it's just a tiny display lookup, not game logic that needs to stay authoritative.
 const HAND_NAMES = ['High Card', 'Pair', 'Two Pair', 'Three of a Kind', 'Straight', 'Flush', 'Full House', 'Four of a Kind', 'Straight Flush'];
 
+const CSS = `
+.pk { display: flex; flex-direction: column; gap: 10px; align-items: center; width: 100%; max-width: 760px; margin: 0 auto; }
+.pk-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; width: 100%; }
+.pk-bal { color: #ffd23f; font-weight: bold; }
+.pk-status { font-size: .95em; color: #e8dcb0; text-align: center; min-height: 1.3em; }
+.pk-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: center; }
+.pk-felt {
+  position: relative; width: calc(100% - 60px); aspect-ratio: 16 / 9; margin: 34px 30px 40px; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 40%, #1d6b2a 0%, #0f4a1b 55%, #082d10 100%);
+  border: 14px solid #5a3a12; box-shadow: inset 0 0 0 2px rgba(255,220,120,.25), inset 0 0 50px rgba(0,0,0,.6), 0 0 0 3px #2b1a06, 0 10px 28px rgba(0,0,0,.7);
+  border-image: none;
+}
+.pk-felt::before { content: ''; position: absolute; inset: 9%; border-radius: 50%; border: 1px solid rgba(255,220,120,.16); pointer-events: none; }
+.pk-center { position: absolute; left: 50%; top: 57%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pk-board { display: flex; gap: 4px; }
+.pk-pot { font-weight: bold; color: #ffe9a6; background: rgba(0,0,0,.5); border: 1px solid rgba(255,210,63,.5); border-radius: 12px; padding: 2px 12px; font-size: .9em; }
+.pk-logo { font-family: Georgia, serif; font-style: italic; letter-spacing: 3px; color: rgba(255,220,120,.35); font-size: 1.4em; white-space: nowrap; }
+.pk-seat {
+  position: absolute; transform: translate(-50%, -50%); width: 112px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 4px 6px 5px; border-radius: 10px; background: linear-gradient(180deg, #1c1408, #0b0803); border: 2px solid #8a6a2a;
+  box-shadow: 0 4px 10px rgba(0,0,0,.6); color: #f3e6c0; z-index: 2; transition: box-shadow .2s, opacity .2s;
+}
+.pk-seat.me { border-color: #39ff14; }
+.pk-seat.turn { border-color: #ffd23f; box-shadow: 0 0 0 2px #ffd23f, 0 0 20px rgba(255,210,63,.6); }
+.pk-seat.folded { opacity: .45; }
+.pk-seat.won { border-color: #ffd23f; box-shadow: 0 0 22px rgba(255,210,63,.8); animation: pk-won 1s ease-in-out 3; }
+@keyframes pk-won { 50% { box-shadow: 0 0 4px rgba(255,210,63,.3); } }
+.pk-hole { display: flex; gap: 2px; margin-top: -26px; min-height: 0; }
+.pk-hole:empty { display: none; }
+.pk-hole .gt-card.small { width: 30px; height: 42px; }
+.pk-name { font-size: .78em; font-weight: bold; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-stack { font-size: .75em; color: #ffd23f; }
+.pk-tag { font-size: .66em; font-weight: bold; letter-spacing: 1px; padding: 0 6px; border-radius: 4px; background: rgba(255,255,255,.12); max-width: 100%; text-align: center; }
+.pk-tag.win { background: #ffd23f; color: #1a1200; }
+.pk-dealer { position: absolute; right: -10px; top: -10px; width: 22px; height: 22px; border-radius: 50%; background: #fff; color: #111; font-weight: bold; font-size: .72em; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,.6); }
+.pk-bet { position: absolute; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; font-size: .75em; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; z-index: 1; }
+.pk-bet i { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle, #e04848 0 50%, transparent 52%), repeating-conic-gradient(#e04848 0 30deg, #fff 30deg 60deg); box-shadow: 0 2px 3px rgba(0,0,0,.6); }
+.pk-bet.r { left: 100%; margin-left: 6px; } .pk-bet.l { right: 100%; margin-right: 6px; }
+.pk-myhand { display: flex; gap: 6px; margin-top: -8px; }
+.pk-myhand .gt-card { transform: scale(1.15); margin: 0 6px; }
+.pk-myhand.folded { opacity: .45; }
+.pk-actions { padding: 10px; border-radius: 10px; background: linear-gradient(180deg, #1c1408, #0b0803); border: 1px solid #8a6a2a; }
+@media (max-width: 560px) {
+  .pk-felt { aspect-ratio: 1 / 1.3; width: calc(100% - 40px); margin: 30px 20px 40px; border-width: 10px; }
+  .pk-seat { width: 84px; padding: 3px 4px 4px; }
+  .pk-board .gt-card { width: 36px; height: 52px; }
+  .pk-board { gap: 2px; }
+  .pk-logo { font-size: 1em; }
+  .pk-center { top: 50%; }
+}
+`;
+
+let styled = false;
+function ensureStyles() {
+  if (styled) return;
+  styled = true;
+  const tag = document.createElement('style');
+  tag.textContent = CSS;
+  document.head.appendChild(tag);
+}
+
 export function mount(container, api) {
   let view = null;
   let roster = [];
@@ -26,11 +87,9 @@ export function mount(container, api) {
   let buyIn = null; // chosen buy-in amount, defaults to the max you can afford
   let notice = '';
 
+  ensureStyles();
   const root = document.createElement('div');
-  root.style.display = 'flex';
-  root.style.flexDirection = 'column';
-  root.style.gap = '10px';
-  root.style.alignItems = 'center';
+  root.className = 'pk cz';
   container.appendChild(root);
 
   function nicknameFor(clientId) {
@@ -59,11 +118,18 @@ export function mount(container, api) {
     const [sb, bb] = view.blinds;
     const [minBuy, maxBuy] = view.buyIn;
     const top = document.createElement('div');
-    top.className = 'casino-balance';
-    top.textContent = `${money(sb)}/${money(bb)} NO LIMIT${view.balance != null ? ` · BALANCE ${money(view.balance)}` : ''}`;
+    top.className = 'pk-top';
+    top.innerHTML = `<span class="cz-title">${money(sb)}/${money(bb)} NO LIMIT HOLD'EM</span>`;
+    if (view.balance != null) {
+      const bal = document.createElement('span');
+      bal.className = 'pk-bal';
+      bal.textContent = `BALANCE ${money(view.balance)}`;
+      top.appendChild(bal);
+    }
     root.appendChild(top);
 
     const status = document.createElement('div');
+    status.className = 'pk-status';
     const dealIn = view.nextAt ? Math.max(0, Math.ceil((view.nextAt - Date.now()) / 1000)) : null;
     if (view.phase === 'waiting') {
       status.textContent = dealIn != null ? `Dealing in ${dealIn}s…` : `Waiting for players (${view.seats.length}/6 seated, need 2 stacks to deal).`;
@@ -83,9 +149,7 @@ export function mount(container, api) {
     }
 
     const seatRow = document.createElement('div');
-    seatRow.style.display = 'flex';
-    seatRow.style.gap = '8px';
-    seatRow.style.flexWrap = 'wrap';
+    seatRow.className = 'pk-row';
     const leftTable = mySeat !== -1 && view.leaving.includes(api.getClientId());
     const myChips = mySeat !== -1 && !leftTable ? view.chips[mySeat] : 0;
     // Buy-in picker: SIT DOWN when standing, REBUY to top up a short stack between hands.
@@ -131,91 +195,88 @@ export function mount(container, api) {
     seatRow.appendChild(botSeatControls(api, view.seats, 6, 'waiting', 'hard'));
     root.appendChild(seatRow);
 
-    // Seats around the table: chips, current bet, dealer marker, folded/all-in state.
-    const seatsRow = document.createElement('div');
-    seatsRow.style.display = 'flex';
-    seatsRow.style.gap = '14px';
-    seatsRow.style.flexWrap = 'wrap';
-    seatsRow.style.justifyContent = 'center';
-    view.seats.forEach((clientId, i) => {
-      const col = document.createElement('div');
-      col.style.display = 'flex';
-      col.style.flexDirection = 'column';
-      col.style.alignItems = 'center';
-      col.style.gap = '2px';
-      col.style.padding = '6px';
-      col.style.border = h && h.toAct === i && view.phase === 'playing' ? '2px solid #39ff14' : '1px solid transparent';
-      col.style.opacity = h && h.folded[i] ? '0.4' : '1';
-      const name = document.createElement('div');
-      name.textContent = `${i === view.dealerIdx && h ? '(D) ' : ''}${nicknameFor(clientId)}${view.flair && view.flair[clientId] ? ` ${view.flair[clientId]}` : ''}${clientId === api.getClientId() ? ' (you)' : ''}${view.leaving.includes(clientId) ? ' (left)' : ''}`;
-      name.style.fontSize = '0.85em';
-      col.appendChild(name);
-      const chips = document.createElement('div');
-      chips.textContent = view.chips[i] > 0 ? money(view.chips[i]) : 'busted';
-      chips.style.fontSize = '0.8em';
-      chips.style.opacity = '0.8';
-      col.appendChild(chips);
-      if (h) {
-        const bet = document.createElement('div');
-        bet.textContent = h.folded[i] ? 'folded' : h.allIn[i] ? 'ALL IN' : h.bets[i] > 0 ? `bet ${money(h.bets[i])}` : '';
-        bet.style.fontSize = '0.75em';
-        bet.style.color = '#ffb000';
-        col.appendChild(bet);
-      }
-      seatsRow.appendChild(col);
-    });
-    root.appendChild(seatsRow);
-
+    // The table: an oval felt with the seats around the rail (you at the bottom), the board and pot
+    // in the middle, each seat's bet pushed out in front of it, and hands turned up at showdown.
+    const table = document.createElement('div');
+    table.className = 'pk-felt';
+    const center = document.createElement('div');
+    center.className = 'pk-center';
     if (h && (view.phase === 'playing' || view.phase === 'hand_over')) {
-      const table = document.createElement('div');
-      table.className = 'pk-felt';
-      table.style.display = 'flex';
-      table.style.flexDirection = 'column';
-      table.style.alignItems = 'center';
-      table.style.gap = '6px';
-      const communityRow = document.createElement('div');
-      communityRow.style.display = 'flex';
-      communityRow.style.gap = '4px';
-      for (const card of h.community) communityRow.appendChild(renderCard(card));
-      for (let i = h.community.length; i < 5; i++) communityRow.appendChild(renderCard(null, { faceDown: true }));
-      table.appendChild(communityRow);
-      const potLabel = document.createElement('div');
-      potLabel.textContent = `Pot: ${money(h.potTotal)}`;
-      potLabel.style.opacity = '0.8';
-      table.appendChild(potLabel);
-      root.appendChild(table);
+      const board = document.createElement('div');
+      board.className = 'pk-board';
+      for (const card of h.community) board.appendChild(renderCard(card));
+      for (let i = h.community.length; i < 5; i++) board.appendChild(renderCard(null, { faceDown: true }));
+      center.appendChild(board);
+      const pot = document.createElement('div');
+      pot.className = 'pk-pot';
+      pot.textContent = `POT ${money(h.potTotal)}`;
+      center.appendChild(pot);
+    } else {
+      center.innerHTML = '<div class="pk-logo">TEXAS HOLD\'EM</div>';
     }
-
-    if (view.phase === 'hand_over' && h.lastResult.kind === 'showdown') {
-      const reveal = document.createElement('div');
-      reveal.style.display = 'flex';
-      reveal.style.flexDirection = 'column';
-      reveal.style.alignItems = 'center';
-      reveal.style.gap = '4px';
-      for (const entry of h.lastResult.revealedHands) {
-        const row = document.createElement('div');
-        row.style.display = 'flex';
-        row.style.alignItems = 'center';
-        row.style.gap = '6px';
-        const label = document.createElement('span');
-        const won = h.lastResult.payouts[entry.seat] > 0;
-        label.textContent = `${nameAt(entry.seat)}${won ? ` 🏆 +${money(h.lastResult.payouts[entry.seat])}` : ''}: ${HAND_NAMES[entry.best[0]]}`;
-        label.style.fontWeight = won ? 'bold' : 'normal';
-        row.appendChild(label);
-        for (const card of entry.cards) row.appendChild(renderCard(card, { small: true }));
-        reveal.appendChild(row);
+    table.appendChild(center);
+    const revealed = view.phase === 'hand_over' && h && h.lastResult.kind === 'showdown' ? h.lastResult.revealedHands : [];
+    const payouts = view.phase === 'hand_over' && h ? h.lastResult.payouts : null;
+    const base = Math.max(0, mySeat);
+    view.seats.forEach((clientId, i) => {
+      const n = Math.max(2, view.seats.length);
+      const a = Math.PI / 2 + ((i - base + n) % n) * (2 * Math.PI / n); // you at the bottom, the rest spread clockwise
+      const pod = document.createElement('div');
+      pod.className = 'pk-seat';
+      if (clientId === api.getClientId()) pod.classList.add('me');
+      if (h && h.toAct === i && view.phase === 'playing') pod.classList.add('turn');
+      if (h && h.folded[i]) pod.classList.add('folded');
+      if (payouts && payouts[i] > 0) pod.classList.add('won');
+      pod.style.left = `${50 + 44 * Math.cos(a)}%`;
+      pod.style.top = `${50 + 42 * Math.sin(a)}%`;
+      const name = document.createElement('div');
+      name.className = 'pk-name';
+      name.textContent = `${nicknameFor(clientId)}${view.flair && view.flair[clientId] ? ` ${view.flair[clientId]}` : ''}${view.leaving.includes(clientId) ? ' (left)' : ''}`;
+      const stack = document.createElement('div');
+      stack.className = 'pk-stack';
+      stack.textContent = view.chips[i] > 0 ? money(view.chips[i]) : 'busted';
+      const shown = revealed.find((r) => r.seat === i);
+      const cards = document.createElement('div');
+      cards.className = 'pk-hole';
+      if (shown) for (const card of shown.cards) cards.appendChild(renderCard(card, { small: true }));
+      else if (h && view.phase !== 'waiting' && !h.folded[i] && clientId !== api.getClientId() && h.totalContributed && h.totalContributed[i] > 0) {
+        cards.append(renderCard(null, { faceDown: true, small: true }), renderCard(null, { faceDown: true, small: true }));
       }
-      root.appendChild(reveal);
-    }
+      pod.append(cards, name, stack);
+      const tag = shown ? HAND_NAMES[shown.best[0]] : h && h.allIn[i] && !h.folded[i] ? 'ALL IN' : h && h.folded[i] ? 'FOLD' : '';
+      if (payouts && payouts[i] > 0) {
+        const won = document.createElement('div');
+        won.className = 'pk-tag win';
+        won.textContent = `+${money(payouts[i])}${tag ? ` · ${tag}` : ''}`;
+        pod.appendChild(won);
+      } else if (tag) {
+        const t = document.createElement('div');
+        t.className = 'pk-tag';
+        t.textContent = tag;
+        pod.appendChild(t);
+      }
+      if (i === view.dealerIdx && h) {
+        const d = document.createElement('div');
+        d.className = 'pk-dealer';
+        d.textContent = 'D';
+        pod.appendChild(d);
+      }
+      if (h && view.phase === 'playing' && h.bets[i] > 0) {
+        // The bet sits beside the seat on the side facing the middle (seats at the right put it left).
+        const bet = document.createElement('div');
+        bet.className = `pk-bet ${Math.cos(a) > 0.2 ? 'l' : 'r'}`;
+        bet.innerHTML = '<i></i>';
+        bet.append(money(h.bets[i]));
+        pod.appendChild(bet);
+      }
+      table.appendChild(pod);
+    });
+    root.appendChild(table);
 
     if (mySeat !== -1 && h && h.myHoleCards && h.myHoleCards.length && view.phase !== 'waiting') {
-      const holeLabel = document.createElement('div');
-      holeLabel.textContent = 'Your hand:';
-      holeLabel.style.fontSize = '0.8em';
-      root.appendChild(holeLabel);
       const holeRow = document.createElement('div');
-      holeRow.style.display = 'flex';
-      holeRow.style.gap = '4px';
+      holeRow.className = 'pk-myhand';
+      if (h.folded[mySeat]) holeRow.classList.add('folded');
       for (const card of h.myHoleCards) holeRow.appendChild(renderCard(card));
       root.appendChild(holeRow);
     }
@@ -228,10 +289,7 @@ export function mount(container, api) {
       if (raiseAmount === null) raiseAmount = minRaiseTo;
 
       const actions = document.createElement('div');
-      actions.style.display = 'flex';
-      actions.style.gap = '8px';
-      actions.style.alignItems = 'center';
-      actions.style.flexWrap = 'wrap';
+      actions.className = 'pk-row pk-actions';
 
       const foldBtn = document.createElement('button');
       if (confirmingFold) {
