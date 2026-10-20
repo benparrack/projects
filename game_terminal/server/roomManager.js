@@ -85,6 +85,8 @@ function roomWallet(room, wallet) {
     feedJackpot: (clientId, bet) => wallet.feedJackpot(key(clientId), bet),
     hitJackpot: (clientId, share) => wallet.hitJackpot(key(clientId), share),
     jackpot: () => wallet.jackpot(),
+    payShift: (clientId, n) => wallet.payShift(key(clientId), n),
+    shiftsLeft: (clientId) => { const v = wallet.view(key(clientId)); return v ? v.shiftsLeft : 0; },
   };
 }
 

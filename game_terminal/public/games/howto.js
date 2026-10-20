@@ -82,6 +82,16 @@ export const HOWTO = {
       'HINTS toggles basic-strategy advice.',
     ],
   },
+  diner: {
+    about: 'Terminal Diner: a three-minute burger shift that pays into your casino balance. The way back from broke.',
+    rules: [
+      'Customers bring tickets: a doneness (rare, medium or well) and toppings listed bottom to top.',
+      'Grill a patty and TAKE OFF when the needle is in the right zone; it burns after 18s. Stack the toppings in order, then SERVE that ticket.',
+      'Each order scores doneness 40, toppings in order 40, speed 20 (only on a decent burger). Tips run up to $9 an order; customers walk out after 70s.',
+      'Serve 3+ orders for the $30 wage. A shift pays $120 at most, and 6 shifts a day are paid. Leaving mid-shift forfeits it.',
+    ],
+    controls: ['Q / W: patty on or off grill 1 / 2. 1-6: toppings. X: trash the board. SERVE on a ticket.'],
+  },
   slots: {
     about: 'A 3-reel slot machine with one pay line, played straight from your casino balance.',
     rules: [

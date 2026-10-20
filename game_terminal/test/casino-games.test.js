@@ -1,4 +1,4 @@
-// Slots, roulette and the poker cash table: exact slot return, jackpot wiring, roulette bets/settling, money conserved.
+// Slots, roulette, the poker cash table and diner shifts: exact slot return, jackpot wiring, roulette bets/settling, money conserved.
 // Run: node test/casino-games.test.js
 'use strict';
 
@@ -6,6 +6,7 @@ const assert = require('assert');
 const slots = require('../server/games/slots');
 const roulette = require('../server/games/roulette');
 const poker = require('../server/games/poker');
+const diner = require('../server/games/diner');
 const { createWallet } = require('../server/casino/wallet');
 const { createMemoryDb } = require('../server/db');
 const { roomWallet } = require('../server/roomManager');
@@ -205,6 +206,55 @@ test('poker: bots sit with house money, latecomers sit out the hand, and hands d
   assert.strictEqual(room.state.hand.folded[2], true);
   assert.strictEqual(room.act('C', { kind: 'check' }), 'not_your_turn');
   assert.strictEqual(room.act('A', { kind: 'sit', amount: 40 }), 'already_seated');
+});
+
+test('diner: a perfect shift earns the pay cap into the balance', () => {
+  const T = diner._test;
+  let now = 7e9;
+  T.setClock(() => now);
+  T.setRng(() => 0); // every ticket: rare, lettuce + tomato; a customer every 10s
+  const room = makeRoom(diner, ['A']);
+  assert.strictEqual(room.act('A', { kind: 'start' }), null);
+  const end = now + T.SHIFT_MS;
+  while (now < end - 7000) {
+    const t = room.state.tickets[0];
+    if (!t) { now += 500; T.step(room, now); continue; }
+    room.act('A', { kind: 'grill', slot: 0 });
+    now += 5500;
+    T.step(room, now);
+    room.act('A', { kind: 'plate', slot: 0 });
+    for (const item of t.toppings) room.act('A', { kind: 'top', item });
+    assert.strictEqual(room.act('A', { kind: 'serve', ticket: t.id }), null);
+  }
+  assert.ok(room.state.served.every((o) => o.score === 100), JSON.stringify(room.state.served));
+  now = end;
+  T.step(room, now);
+  assert.strictEqual(room.state.phase, 'done');
+  assert.deepStrictEqual(room.state.pay, { earned: T.PAY_CAP, paid: T.PAY_CAP, base: T.BASE_PAY });
+  assert.strictEqual(room.bal('A').balance, START_BALANCE + T.PAY_CAP);
+});
+
+test('diner: junk serves, bogus tickets and walking out earn nothing; the daily cap holds', () => {
+  const T = diner._test;
+  let now = 8e9;
+  T.setClock(() => now);
+  T.setRng(() => 0);
+  const room = makeRoom(diner, ['A']);
+  assert.strictEqual(room.act('A', { kind: 'serve', ticket: 1 }), 'not_on_shift');
+  room.act('A', { kind: 'start' });
+  assert.strictEqual(room.act('A', { kind: 'serve', ticket: 1 }), 'no_patty');
+  room.act('A', { kind: 'grill', slot: 0 });
+  room.act('A', { kind: 'plate', slot: 0 }); // raw
+  assert.strictEqual(room.act('A', { kind: 'serve', ticket: 99 }), 'no_ticket');
+  assert.strictEqual(room.act('A', { kind: 'top', item: 'gold' }), 'bad_item');
+  assert.strictEqual(room.act('A', { kind: 'serve', ticket: 1 }), null);
+  assert.deepStrictEqual(room.state.served, [{ id: 1, score: 0, tip: 0 }]);
+  assert.strictEqual(T.scoreOrder({ doneness: 'rare', toppings: ['a'], at: 0 }, { patty: { cooked: T.BURNT_MS }, toppings: ['a'] }, 0), 50); // toppings + half speed, no cook
+  diner.onLeave(room, { clientId: 'A' }); // walks out mid-shift
+  assert.strictEqual(room.state.phase, 'idle');
+  assert.strictEqual(room.bal('A').balance, START_BALANCE);
+  for (let i = 0; i < 6; i++) room.w.payShift('g:A', 1);
+  assert.strictEqual(room.act('A', { kind: 'start' }), 'shift_cap');
 });
 
 (async () => {

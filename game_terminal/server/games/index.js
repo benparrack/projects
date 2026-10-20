@@ -22,6 +22,7 @@ const slope = require('./slope');
 const mazedash = require('./mazedash');
 const gameboy = require('./gameboy');
 const blackjack = require('./blackjack');
+const diner = require('./diner');
 const gomoku = require('./gomoku');
 const dotsboxes = require('./dotsboxes');
 const mancala = require('./mancala');
@@ -78,6 +79,7 @@ const registry = {
   [mazedash.type]: mazedash,
   [gameboy.type]: gameboy,
   [blackjack.type]: blackjack,
+  [diner.type]: diner,
   [slots.type]: slots,
   [roulette.type]: roulette,
   [gomoku.type]: gomoku,

@@ -81,6 +81,7 @@ const CATEGORIES = [
       { type: 'slots', label: 'SLOTS' },
       { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
       { type: 'roulette', label: 'ROULETTE' },
+      { type: 'diner', label: 'WORK A SHIFT: TERMINAL DINER' },
     ],
   },
   {
@@ -684,7 +685,10 @@ function renderGameList() {
       subList.className = 'game-sublist';
       if (cat.casino) {
         if (state.casino === null && state.clientId) { state.casino = 'loading'; send(ClientMessage.CASINO_OPEN, {}); }
-        subList.appendChild(casinoBar(state.casino, { onStipend: () => { sfx.play('chips'); send(ClientMessage.CASINO_STIPEND, {}); } }));
+        subList.appendChild(casinoBar(state.casino, {
+          onStipend: () => { sfx.play('chips'); send(ClientMessage.CASINO_STIPEND, {}); },
+          onWork: () => { state.selectedGameType = 'diner'; els.btnJoinPublic.click(); },
+        }));
       }
       for (const game of cat.games) {
         const li = document.createElement('li');
