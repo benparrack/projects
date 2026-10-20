@@ -109,7 +109,7 @@ export const HOWTO = {
       'A $10 bet wins the whole jackpot; smaller bets win their share of it ($5 wins half). Guests win a fixed 200x in play money.',
       'The machine returns about 93% of what goes in, plus the jackpot. The house always wins in the long run.',
     ],
-    controls: ['Pick a bet, then SPIN (or Space).'],
+    controls: ['Pick a bet, then SPIN, pull the lever, or press Space. AUTO ×10 spins ten times in a row and stops on a big win or when the money runs short.'],
   },
   roulette: {
     about: 'European roulette (single zero) on one wheel shared by everyone in the room.',
