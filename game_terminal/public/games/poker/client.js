@@ -128,7 +128,7 @@ export function mount(container, api) {
       seatRow.appendChild(startBtn);
     }
     // Bots can join between or during hands (they sit out until the next deal).
-    seatRow.appendChild(botSeatControls(api, view.seats, 6, 'waiting'));
+    seatRow.appendChild(botSeatControls(api, view.seats, 6, 'waiting', 'hard'));
     root.appendChild(seatRow);
 
     // Seats around the table: chips, current bet, dealer marker, folded/all-in state.

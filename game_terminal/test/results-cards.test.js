@@ -163,6 +163,15 @@ test('blackjack (casino) never reports a result, even at the end of a shoe', () 
   assert.deepStrictEqual(room.results, []);
 });
 
+test('poker (casino): bots are hard or expert, never easier', () => {
+  installCardBots({ poker });
+  const room = makeRoom(poker);
+  room.act('A', { kind: 'addBot', level: 'easy' });
+  room.act('A', { kind: 'addBot', level: 'medium' });
+  room.act('A', { kind: 'addBot', level: 'expert' });
+  assert.deepStrictEqual(room.state.seats.filter((id) => id.startsWith('bot-')).map((id) => id.split('~')[1]), ['hard', 'hard', 'expert']);
+});
+
 test('minesweeper: first to clear wins, vs bot carries its level', async () => {
   const room = makeRoom(minesweeper);
   room.act('A', { kind: 'sit', seat: 'p1' });

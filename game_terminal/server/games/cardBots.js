@@ -12,6 +12,8 @@
 
 const { rankValue, SUITS, RANKS } = require('./cardCommon');
 const { normLevel, LEVELS } = require('./ai/levels');
+// The easiest level a brain allows (brain.minLevel), e.g. so nobody farms easy bots for casino money.
+const atLeast = (level, min) => (min && LEVELS.indexOf(level) < LEVELS.indexOf(min) ? min : level);
 
 const BOT_NAMES = ['Ace', 'Byte', 'Chip', 'Dot', 'Echo', 'Flux', 'Gizmo'];
 const POLL_MS = 250;
@@ -104,7 +106,7 @@ function withBots(plugin, brain) {
       const name = BOT_NAMES.find((n) => !used.has(n));
       const sit = name && brain.sitData(room.state, data.seat);
       if (!sit) return;
-      dispatch(room, brain.noLevels ? `bot-${name}` : `bot-${name}~${normLevel(data.level)}`, sit);
+      dispatch(room, brain.noLevels ? `bot-${name}` : `bot-${name}~${atLeast(normLevel(data.level), brain.minLevel)}`, sit);
       if ((seatsOf(room.state) || []).some(isBot)) ensureLoop(room);
       return;
     }
@@ -327,6 +329,7 @@ function pokerBrain() {
     return s;
   }
   return {
+    minLevel: 'hard', // cash table: easy bots would be free money
     sitData: (st) => (st.seats.length < 6 ? { kind: 'sit' } : null), // cash table: any time
     random(st, i) {
       const h = st.hand;

@@ -1,4 +1,4 @@
-import { preferredLevel, levelSelect, levelLabel } from './botLevel.js';
+import { preferredLevel, levelSelect, levelLabel, atLeast } from './botLevel.js';
 // Shared rendering helper for the standard-52-card games (War, Crazy Eights, BS, Poker, Hearts,
 // Spades) — one DOM building block so they all share the same card face, back and animations.
 // Styles live in an injected stylesheet; callers may still set inline cursor/outline/opacity/
@@ -166,21 +166,23 @@ export const botName = (id) => {
 };
 
 // "+ ADD BOT" (optionally for a specific seat) — glowing dashed button.
-// Comes with a difficulty picker (remembered per browser) unless `withLevel` is false.
+// Comes with a difficulty picker (remembered per browser) unless `withLevel` is false; a level name
+// as `withLevel` is the easiest level offered.
 export function addBotButton(api, seat, label = '+ ADD BOT', withLevel = true) {
+  const min = typeof withLevel === 'string' ? withLevel : null;
   ensureStyles();
   const b = document.createElement('button');
   b.className = 'gt-bot-add';
   b.textContent = label;
   b.title = 'Fill this seat with a computer player';
-  b.addEventListener('click', () => api.sendAction({ kind: 'addBot', level: preferredLevel(), ...(seat === undefined ? {} : { seat }) }));
+  b.addEventListener('click', () => api.sendAction({ kind: 'addBot', level: atLeast(preferredLevel(), min), ...(seat === undefined ? {} : { seat }) }));
   if (!withLevel) return b;
   const wrap = document.createElement('span');
   wrap.style.cssText = 'display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap';
   const sel = levelSelect(preferredLevel(), () => {
     // Keep every other picker on the page in sync with the new preference.
     for (const o of document.querySelectorAll('select.gt-bot-level')) o.value = sel.value;
-  });
+  }, min);
   sel.style.fontSize = '.8em';
   wrap.append(b, sel);
   return wrap;
