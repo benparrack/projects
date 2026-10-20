@@ -41,17 +41,41 @@ function makeRoom(plugin, ids, uids = {}) {
   return room;
 }
 
-test('slots: the exact base return is ~93%, three diamonds are about 1 in 20k', () => {
-  const { REEL, STOPS, payFor } = slots._test;
+test('slots: the exact return with bonus and fixed jackpot is ~93%, diamonds ~1 in 24k, the bonus ~1 in 73', () => {
+  const { REEL, STOPS, payFor, BONUS, BONUS_WEIGHT, JP_FIXED } = slots._test;
   const N = STOPS.length;
+  const bonusX = BONUS.reduce((a, [, x, w]) => a + (x * w) / BONUS_WEIGHT, 0);
   let ret = 0;
+  let pBonus = 0;
   for (const a of Object.keys(REEL)) for (const b of Object.keys(REEL)) for (const c of Object.keys(REEL)) {
     const p = (REEL[a] * REEL[b] * REEL[c]) / N ** 3;
     const x = payFor([a, b, c]);
-    if (x !== 'jackpot') ret += p * x;
+    if (x === 'bonus') pBonus += p;
+    ret += p * (x === 'jackpot' ? JP_FIXED : x === 'bonus' ? bonusX : x);
   }
-  assert.ok(ret > 0.92 && ret < 0.94, `base return ${ret}`);
+  assert.ok(ret > 0.92 && ret < 0.945, `return ${ret}`);
   assert.ok(N ** 3 / REEL.JP ** 3 > 15000);
+  assert.ok(1 / pBonus > 60 && 1 / pBonus < 90, `bonus 1 in ${1 / pBonus}`);
+  assert.ok(JP_FIXED > slots._test.THREE.SE, 'diamonds beat 777');
+});
+
+test('slots: the bonus board always reveals its prize on the third match, never another tier first', () => {
+  const T = slots._test;
+  T.setRng((n) => Math.floor(Math.random() * n));
+  const seen = new Set();
+  for (let i = 0; i < 2000; i++) {
+    const b = T.bonusRound();
+    seen.add(b.tier);
+    assert.strictEqual(b.reveal.length + b.rest.length, 12);
+    const count = {};
+    b.reveal.forEach((t, k) => {
+      count[t] = (count[t] || 0) + 1;
+      if (count[t] === 3) assert.ok(t === b.tier && k === b.reveal.length - 1, JSON.stringify(b));
+    });
+    assert.strictEqual(count[b.tier], 3);
+    assert.strictEqual(b.x, T.BONUS.find(([n]) => n === b.tier)[1]);
+  }
+  assert.ok(seen.has('MINI') && seen.has('MAJOR'));
 });
 
 test('slots: a spin moves exactly bet and win through the balance; too fast and broke are refused', () => {
@@ -72,7 +96,7 @@ test('slots: a spin moves exactly bet and win through the balance; too fast and 
   assert.strictEqual(room.act('A', { kind: 'spin', bet: 10 }), 'broke');
 });
 
-test('slots: an account at max bet takes the whole jackpot, a guest gets the fixed play-money prize', async () => {
+test('slots: diamonds pay 500x, plus the whole progressive at max bet for an account; a guest gets just the 500x', async () => {
   const T = slots._test;
   let now = 2e9;
   T.setClock(() => now);
@@ -81,10 +105,10 @@ test('slots: an account at max bet takes the whole jackpot, a guest gets the fix
   T.setRng(() => T.STOPS.indexOf('JP'));
   room.act('A', { kind: 'spin', bet: T.MAX_BET });
   const pot = JACKPOT_SEED + T.MAX_BET * 0.01;
-  assert.strictEqual(room.bal('A').balance, START_BALANCE - T.MAX_BET + pot);
+  assert.strictEqual(room.bal('A').balance, START_BALANCE - T.MAX_BET + T.JP_FIXED * T.MAX_BET + pot);
   assert.strictEqual(room.w.jackpot(), JACKPOT_SEED);
   room.act('G', { kind: 'spin', bet: 1 });
-  assert.strictEqual(room.bal('G').balance, START_BALANCE - 1 + T.GUEST_JACKPOT);
+  assert.strictEqual(room.bal('G').balance, START_BALANCE - 1 + T.JP_FIXED);
   assert.strictEqual(room.w.jackpot(), JACKPOT_SEED);
 });
 

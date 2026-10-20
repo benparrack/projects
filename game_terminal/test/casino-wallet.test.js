@@ -96,12 +96,14 @@ test('jackpot: accounts feed it and win it, guests do neither, it survives a res
   assert.strictEqual(w.jackpot(), JACKPOT_SEED + 1);
   assert.strictEqual(w.hitJackpot('g:c1', 1), 0);
   assert.strictEqual(w.hitJackpot('u1', 0.5), (JACKPOT_SEED + 1) / 2);
+  assert.strictEqual(w.jackpot(), JACKPOT_SEED, 'a part hit never drops the pot below the seed');
+  w.feedJackpot('u1', 300);
   await w.flush();
   const after = createWallet(db);
   await after.flush();
-  assert.strictEqual(after.jackpot(), (JACKPOT_SEED + 1) / 2);
+  assert.strictEqual(after.jackpot(), JACKPOT_SEED + 3);
   await after.load('u1');
-  assert.strictEqual(after.hitJackpot('u1', 1), (JACKPOT_SEED + 1) / 2);
+  assert.strictEqual(after.hitJackpot('u1', 1), JACKPOT_SEED + 3);
   assert.strictEqual(after.jackpot(), JACKPOT_SEED);
 });
 

@@ -5,7 +5,7 @@ module.exports = {
   START_BALANCE: 100, // new accounts and every guest visit
   STIPEND: 25, // claimable once per UTC day from the casino lobby
   SHIFT_CAP: 6, // paid work shifts per UTC day
-  JACKPOT_SEED: 500, // the site-wide slots jackpot restarts here after a hit
+  JACKPOT_SEED: 2500, // the site-wide slots jackpot restarts here after a hit
   JACKPOT_CUT: 0.01, // share of every account's slot bet that feeds the jackpot (out of the house's edge)
   VIP_BALANCE: 1000, // balance + money at tables that gets you into the high-roller room without the key
   // Lifetime amount wagered -> tier (going broke never demotes you).

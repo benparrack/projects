@@ -1,12 +1,12 @@
 // Slots — your own 3-reel machine, one pay line, played from your casino balance. Three diamonds
-// win the site-wide progressive jackpot. Server plugin: ../../../server/games/slots.js
+// pay 500x plus the site-wide progressive; two ★ start the pick-a-jackpot bonus board. Server plugin: ../../../server/games/slots.js
 // The server decides every spin up front; everything here is the show.
 
 import { sfx } from '../sfx.js';
 
-const GLYPH = { CH: '🍒', LE: '🍋', BE: '🔔', BA: 'BAR', SE: '7', JP: '◆', BL: '·' };
-const ORDER = ['CH', 'LE', 'BE', 'BA', 'SE', 'JP', 'BL'];
-const PAYTABLE = [['JP', 'JACKPOT'], ['SE', '100x'], ['BA', '40x'], ['BE', '20x'], ['LE', '10x'], ['CH', '10x']];
+const GLYPH = { CH: '🍒', LE: '🍋', BE: '🔔', BA: 'BAR', SE: '7', JP: '◆', BL: '·', BN: '★' };
+const ORDER = ['CH', 'LE', 'BE', 'BA', 'SE', 'JP', 'BL', 'BN'];
+const PAYTABLE = [['JP', '500x + POT'], ['SE', '100x'], ['BA', '40x'], ['BE', '20x'], ['LE', '10x'], ['CH', '10x']];
 const PAYS = new Set(['CH', 'LE', 'BE', 'BA', 'SE', 'JP']); // a pair of these on reels 1-2 teases reel 3
 const SYM_H = 64;
 const STOP_MS = [800, 1150, 1500];
@@ -49,6 +49,23 @@ const CSS = `
 .sl-sym.BA span { font-size: 18px; letter-spacing: .08em; color: #fffdf6; background: linear-gradient(180deg, #333, #000); padding: 4px 8px; border-radius: 3px; border: 2px solid #c9a24a; }
 .sl-sym.JP { font-size: 50px; color: #19b5f2; text-shadow: 0 0 10px rgba(25,181,242,.7), 0 2px 0 #045; }
 .sl-sym.BL { color: #b8b0a0; }
+.sl-sym.BN { font-size: 46px; color: #ffd23f; -webkit-text-stroke: 2px #8a2be2; text-shadow: 0 0 10px rgba(138,43,226,.6); }
+.sl-ladder { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 6px 0 2px; }
+.sl-ladder div { border-radius: 6px; padding: 2px 4px; text-align: center; font-family: Georgia, serif; font-weight: bold; font-size: .72em; line-height: 1.2; color: #fff; border: 1px solid rgba(255,255,255,.35); }
+.sl-ladder b { display: block; font-size: 1.15em; font-family: 'Courier New', monospace; }
+.sl-ladder .MINI { background: linear-gradient(180deg, #2e9b4f, #0d4a20); } .sl-ladder .MINOR { background: linear-gradient(180deg, #2f6fd6, #10306b); }
+.sl-ladder .MAJOR { background: linear-gradient(180deg, #a531d6, #4a1066); } .sl-ladder .GRAND { background: linear-gradient(180deg, #e0302a, #6b0d0a); }
+.sl-ladder .lit { animation: sl-pulse .35s 8; box-shadow: 0 0 16px #ffd23f; border-color: #ffd23f; }
+.sl-bonus { position: absolute; inset: 0; z-index: 4; border-radius: 16px 16px 8px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  background: radial-gradient(circle at 50% 30%, rgba(90,20,140,.97), rgba(20,0,40,.97)); padding: 10px; }
+.sl-bonus h3 { margin: 0; font-family: Georgia, serif; color: #ffd23f; text-shadow: 0 0 10px #ff8c00; letter-spacing: .1em; }
+.sl-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%; max-width: 320px; }
+.sl-tile { aspect-ratio: 1.3; border-radius: 8px; border: 2px solid #ffd23f; background: linear-gradient(180deg, #ffe680, #c98a00); color: #4a2a00; font-size: 1.6em; font-weight: bold; padding: 0; cursor: pointer; transition: transform .25s; }
+.sl-tile:hover:not(:disabled) { transform: scale(1.06); box-shadow: 0 0 12px #ffd23f; }
+.sl-tile.open { cursor: default; font-family: Georgia, serif; font-size: .78em; color: #fff; transform: rotateY(360deg); transition: transform .4s; }
+.sl-tile.open.MINI { background: linear-gradient(180deg, #2e9b4f, #0d4a20); } .sl-tile.open.MINOR { background: linear-gradient(180deg, #2f6fd6, #10306b); }
+.sl-tile.open.MAJOR { background: linear-gradient(180deg, #a531d6, #4a1066); } .sl-tile.open.GRAND { background: linear-gradient(180deg, #e0302a, #6b0d0a); }
+.sl-tile:disabled { opacity: 1; } .sl-tile.dim { opacity: .35; } .sl-tile.win { box-shadow: 0 0 16px #ffd23f; animation: sl-pulse .35s 6; }
 .sl-sym.hit { animation: sl-hit .45s ease-in-out infinite alternate; }
 .sl-lever { position: relative; width: 26px; height: 170px; cursor: pointer; align-self: center; }
 .sl-lever .base { position: absolute; left: 3px; bottom: 0; width: 20px; height: 34px; border-radius: 6px; background: linear-gradient(90deg, #555, #ccc, #555); }
@@ -60,7 +77,7 @@ const CSS = `
 .sl-line.win { color: #ffbf00; text-shadow: 0 0 10px rgba(255,191,0,.6); }
 .sl-line.jackpot { color: #39ff14; font-size: 1.8em; animation: sl-pulse .4s 10; }
 .sl-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
-.sl-bet { border-radius: 50%; width: 44px; height: 44px; padding: 0; font-weight: bold; border: 3px dashed var(--sl-accent, #ffbf00); }
+.sl-bet { border-radius: 50%; width: 46px; height: 46px; padding: 0; font-weight: bold; font-size: .8em; border: 3px dashed var(--sl-accent, #ffbf00); }
 .sl-bet[aria-pressed="true"] { background: #ffbf00; color: #000; transform: translateY(-3px); box-shadow: 0 0 10px rgba(255,191,0,.6); }
 .sl-spin { font-size: 1.25em; font-weight: bold; width: 88px; height: 88px; border-radius: 50%; padding: 0; color: #fff; border: 4px solid #600;
   background: radial-gradient(circle at 35% 30%, #ff7070, #d00000 55%, #800000); box-shadow: 0 6px 0 #500, 0 8px 14px rgba(0,0,0,.5); transition: transform .08s, box-shadow .08s; }
@@ -111,6 +128,7 @@ export function mount(container, api) {
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const sym = (s) => { const d = el('div', `sl-sym ${s}`); if (s === 'BA') d.append(el('span', null, 'BAR')); else d.textContent = GLYPH[s]; return d; };
+  const prize = (tier, b) => (view.bonusTiers.find(([n]) => n === tier) || [0, 0])[1] * b;
   const name = (id) => (roster.find((r) => r.clientId === id) || {}).nickname || 'someone';
   const randSym = () => ORDER[Math.floor(Math.random() * ORDER.length)];
 
@@ -119,7 +137,8 @@ export function mount(container, api) {
   const marquee = el('div', 'sl-marquee');
   const bulbs = () => { const b = el('div', 'sl-bulbs'); for (let i = 0; i < 16; i++) b.append(el('i')); return b; };
   const led = el('div', 'sl-led');
-  marquee.append(bulbs(), el('div', 'sl-title', '7 TERMINAL 7'), led, bulbs());
+  const ladder = el('div', 'sl-ladder');
+  marquee.append(bulbs(), el('div', 'sl-title', '7 TERMINAL 7'), led, ladder, bulbs());
   const win = el('div', 'sl-window');
   const reelsBox = el('div', 'sl-reels');
   const reels = [0, 1, 2].map(() => { const r = el('div', 'sl-reel'); const s = el('div', 'sl-strip'); r.append(s); reelsBox.append(r); return { box: r, strip: s }; });
@@ -149,6 +168,7 @@ export function mount(container, api) {
   const row3 = (s) => { const d = el('span'); d.append(sym(s), sym(s), sym(s)); return d; };
   for (const [s, x] of PAYTABLE) pay.append(row3(s), el('span', null, x));
   pay.append(el('span', null, '🍒 🍒 any'), el('span', null, '3x'), el('span', null, '🍒 any'), el('span', null, '1x'));
+  { const d = el('span'); d.append(sym('BN'), sym('BN'), el('span', null, ' any')); pay.append(d, el('span', null, 'BONUS')); }
   const others = el('ul', 'sl-others');
   root.append(cab, line, balance, controls, pay, others);
 
@@ -228,6 +248,7 @@ export function mount(container, api) {
   function animate(m, finalBalance) {
     spinning = true;
     machine.classList.remove('won');
+    ladder.querySelectorAll('.lit').forEach((e) => e.classList.remove('lit'));
     line.className = 'sl-line';
     line.textContent = '';
     const tease = m.reels[0] === m.reels[1] && PAYS.has(m.reels[0]);
@@ -244,11 +265,54 @@ export function mount(container, api) {
     render();
   }
 
+  // Pick-a-jackpot: each click flips the next tile of the server's reveal order; three alike wins that prize.
+  function bonusGame(m, finalBalance) {
+    sfx.play('win');
+    banner('★ BONUS ★');
+    const box = el('div', 'sl-bonus');
+    const board = el('div', 'sl-board');
+    const hint = el('div', 'muted', 'Pick tiles until you match three.');
+    box.append(el('h3', null, 'PICK A JACKPOT'), board, hint);
+    let k = 0;
+    const tiles = [];
+    const flip = (t, tier) => { t.disabled = true; t.className = `sl-tile open ${tier}`; t.textContent = `${tier}\n${money(prize(tier, m.bet))}`; t.style.whiteSpace = 'pre'; };
+    for (let i = 0; i < 12; i++) {
+      const t = el('button', 'sl-tile', '?');
+      t.type = 'button';
+      t.addEventListener('click', () => {
+        if (t.disabled || k >= m.bonus.reveal.length) return;
+        const tier = m.bonus.reveal[k++];
+        flip(t, tier);
+        sfx.play(k === m.bonus.reveal.length ? 'chime' : 'card');
+        if (k < m.bonus.reveal.length) return;
+        tiles.forEach((o) => { if (o.classList.contains(tier)) o.classList.add('win'); });
+        const rest = [...m.bonus.rest];
+        setTimeout(() => tiles.forEach((o) => { if (!o.disabled) { flip(o, rest.shift()); o.classList.add('dim'); } }), 700);
+        hint.textContent = `${tier} JACKPOT!`;
+        setTimeout(() => { box.remove(); bonusPaid = tier; finish(m, finalBalance); }, 2600);
+      });
+      tiles.push(t);
+      board.append(t);
+    }
+    machine.append(box);
+  }
+  let bonusPaid = null; // the tier the bonus board just landed on, lit on the ladder
+
   function finish(m, finalBalance) {
+    if (m.bonus && !bonusPaid) { auto = 0; render(); bonusGame(m, finalBalance); return; }
     spinning = false;
     shownBalance = finalBalance;
     const x = m.win / m.bet;
-    if (m.win > 0) {
+    if (bonusPaid) {
+      const lit = ladder.querySelector(`.${bonusPaid}`);
+      if (lit) lit.classList.add('lit');
+      countUp(m.win, 'win', `${bonusPaid} JACKPOT`);
+      if (bonusPaid === 'GRAND' || bonusPaid === 'MAJOR') { banner(`${bonusPaid} JACKPOT!`); coins(bonusPaid === 'GRAND' ? 60 : 35); } else coins(12);
+      bonusPaid = null;
+      render();
+      return;
+    }
+    if (m.win > 0 && !m.bonus) {
       machine.classList.add('won');
       const cherryOnly = !(m.reels[0] === m.reels[1] && m.reels[1] === m.reels[2]);
       reels.forEach((r, i) => { if (!cherryOnly || m.reels[i] === 'CH') r.strip.children[1].classList.add('hit'); });
@@ -269,8 +333,10 @@ export function mount(container, api) {
   function render() {
     if (!view) { line.textContent = 'Loading…'; return; }
     const me = api.getClientId();
-    led.replaceChildren(el('small', null, 'JACKPOT'), document.createTextNode(money(view.jackpot)));
-    led.title = `Progressive jackpot: pays in full on a $${view.bets[view.bets.length - 1]} bet · signed-in players only`;
+    led.replaceChildren(el('small', null, '◆◆◆ PAYS'), document.createTextNode(money(Math.floor(view.jpFixed * bet + (view.jackpot * bet) / view.maxBet))));
+    led.title = `Three diamonds pay ${view.jpFixed}x your bet plus your bet's share of the ${money(view.jackpot)} progressive (all of it at $${view.maxBet}; the progressive is for signed-in players only)`;
+    if (!ladder.children.length) for (const [n] of view.bonusTiers) ladder.append(el('div', n));
+    view.bonusTiers.forEach(([n, x], i) => { ladder.children[i].replaceChildren(document.createTextNode(n), el('b', null, money(x * bet))); });
     if (shownBalance == null) shownBalance = view.balances[me] || 0;
     balance.textContent = `BALANCE ${money(shownBalance)}`;
     controls.replaceChildren(el('span', 'muted', 'BET'));

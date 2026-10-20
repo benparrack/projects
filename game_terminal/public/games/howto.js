@@ -104,10 +104,10 @@ export const HOWTO = {
   slots: {
     about: 'A 3-reel slot machine with one pay line, played straight from your casino balance.',
     rules: [
-      'Bet $1, $2, $5 or $10 a spin. Three of a kind pays 10x-100x; cherries pay anywhere on the line (one 1x, two 3x).',
-      'Three ◆ win the progressive jackpot, shared by every signed-in player on the site. 1% of every spin feeds it.',
-      'A $10 bet wins the whole jackpot; smaller bets win their share of it ($5 wins half). Guests win a fixed 200x in play money.',
-      'The machine returns about 93% of what goes in, plus the jackpot. The house always wins in the long run.',
+      'Bet $1 to $100 a spin. Three of a kind pays 10x-100x; cherries pay anywhere on the line (one 1x, two 3x).',
+      'Two or more ★ anywhere on the line start the BONUS: flip tiles until three match, and win that jackpot: MINI 2x, MINOR 5x, MAJOR 20x or GRAND 150x your bet.',
+      'Three ◆ pay 500x your bet plus a share of the progressive jackpot, shared by every signed-in player on the site (1% of every spin feeds it). A $100 bet takes the whole progressive, $50 half, and so on. Guests get the 500x only.',
+      'The machine returns about 93% of what goes in, plus the progressive. The house always wins in the long run.',
     ],
     controls: ['Pick a bet, then SPIN, pull the lever, or press Space. AUTO ×10 spins ten times in a row and stops on a big win or when the money runs short.'],
   },

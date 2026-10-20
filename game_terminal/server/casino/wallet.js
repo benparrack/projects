@@ -41,7 +41,7 @@ function createWallet(db, { now = () => Date.now() } = {}) {
 
   // The progressive slots jackpot, shared by every account on the site (guests neither feed nor win it).
   const jackpot = { amount: JACKPOT_SEED };
-  jackpot.tail = db.get('casinoMeta/jackpot').then((d) => { if (d) jackpot.amount = round2(d.amount + jackpot.amount - JACKPOT_SEED); })
+  jackpot.tail = db.get('casinoMeta/jackpot').then((d) => { if (d) jackpot.amount = round2(Math.max(d.amount, JACKPOT_SEED) + jackpot.amount - JACKPOT_SEED); })
     .catch((err) => console.error('casino: jackpot load failed', err));
   function saveJackpot() {
     const amount = jackpot.amount;
@@ -52,12 +52,12 @@ function createWallet(db, { now = () => Date.now() } = {}) {
     jackpot.amount = round2(jackpot.amount + bet * JACKPOT_CUT);
     saveJackpot();
   }
-  // Pays `share` (0-1) of the pot to this account's balance; the rest stays on top of a fresh seed.
+  // Pays `share` (0-1) of the pot to this account's balance; the pot never drops below the seed.
   function hitJackpot(key, share) {
     const s = cache.get(key);
     if (!s || isGuest(key)) return 0;
     const won = round2(jackpot.amount * share);
-    jackpot.amount = round2(jackpot.amount - won + (share >= 1 ? JACKPOT_SEED : 0));
+    jackpot.amount = share >= 1 ? JACKPOT_SEED : Math.max(round2(jackpot.amount - won), JACKPOT_SEED);
     s.balance = round2(s.balance + won);
     persist(key);
     saveJackpot();
