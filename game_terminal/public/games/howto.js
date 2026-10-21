@@ -92,14 +92,15 @@ export const HOWTO = {
     controls: ['Same as BLACKJACK.'],
   },
   diner: {
-    about: 'Terminal Diner: a three-minute burger shift that pays into your casino balance. The way back from broke.',
+    about: 'Your own restaurant. Work three-minute burger shifts for money, gamble it at the casino, and spend it on upgrades that make every shift pay more.',
     rules: [
       'Customers bring tickets: a doneness (rare, medium or well) and toppings listed bottom to top.',
-      'Grill a patty and plate it when the needle is in the right zone; it burns after 18s. Stack the toppings in order (the ticket ticks each one off), then serve that customer.',
-      'Each order scores doneness 40, toppings in order 40, speed 20 (only on a decent burger). Tips run up to $9 an order; customers walk out after 70s.',
-      'Serve 3+ orders for the $30 wage. A shift pays $120 at most, and 6 shifts a day are paid. Leaving mid-shift forfeits it.',
+      'Grill a patty and plate it when the needle is in the right zone (it burns if you wait too long). Stack the toppings in order, then serve that customer.',
+      'Each order scores doneness 40, toppings in order 40, speed 20. A 60+ order pays the full menu price, and anything over 50 tips. Bigger burgers sell for more; customers walk out if they wait too long.',
+      'No pay cap: everything you earn goes into your casino balance. Leaving mid-shift forfeits it.',
+      'Between shifts, buy upgrades in the shop (more grills, faster burners, more seats, extra toppings and more) and grow from a food truck to a diner, restaurant and franchise. Every tier multiplies your menu prices.',
     ],
-    controls: ['Click a burner to drop a patty, click the patty to plate it, ✕ to scrape it. Click a customer to serve them.', 'Keys: Q / W patty on or plate, E / R scrape, 1-6 toppings, BACKSPACE takes the top one off, X trash, SPACE serves the highlighted customer (the best fit).'],
+    controls: ['Click a burner to drop a patty, click the patty to plate it, ✕ to scrape it. Click a customer to serve them.', 'Keys: Q / W / E / R put a patty on that grill or plate it, SHIFT + the key scrapes it, number keys add toppings, BACKSPACE takes the top one off, X trash, SPACE serves the highlighted customer (the best fit).'],
   },
   slots: {
     about: 'A 3-reel slot machine with one pay line, played straight from your casino balance.',

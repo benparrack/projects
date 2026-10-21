@@ -13,7 +13,7 @@
 // Keys: an account uid, or `g:<clientId>` for a guest.
 'use strict';
 
-const { START_BALANCE, STIPEND, SHIFT_CAP, JACKPOT_SEED, JACKPOT_CUT, VIP_BALANCE, TIERS, SHOP } = require('./economy');
+const { START_BALANCE, STIPEND, JACKPOT_SEED, JACKPOT_CUT, VIP_BALANCE, TIERS, SHOP } = require('./economy');
 
 const isGuest = (key) => key.startsWith('g:');
 const utcDay = (t) => new Date(t).toISOString().slice(0, 10);
@@ -24,6 +24,8 @@ const tierOf = (wagered) => {
   return { name: TIERS[i][0], glyph: TIERS[i][2], next: next ? { name: next[0], at: next[1] } : null };
 };
 const BOARD_MS = 60000;
+const restaurant = require('./diner');
+const { isOffensiveName, maskText } = require('../wordfilter');
 
 function createWallet(db, { now = () => Date.now() } = {}) {
   const cache = new Map(); // key -> state
@@ -64,7 +66,7 @@ function createWallet(db, { now = () => Date.now() } = {}) {
     return won;
   }
 
-  const fresh = () => ({ balance: START_BALANCE, atTable: {}, stipendDay: null, shifts: { day: null, n: 0 }, wagered: 0, biggestWin: 0, owned: {}, equipped: {} });
+  const fresh = () => ({ balance: START_BALANCE, atTable: {}, stipendDay: null, shifts: { day: null, n: 0 }, wagered: 0, biggestWin: 0, owned: {}, equipped: {}, diner: restaurant.fresh() });
 
   async function load(uid, name) {
     if (cache.has(uid)) {
@@ -78,6 +80,7 @@ function createWallet(db, { now = () => Date.now() } = {}) {
         // Nothing can be live at a table before this process loaded the account: refund it.
         for (const n of Object.values(doc.atTable || {})) doc.balance = round2(doc.balance + n);
         doc.atTable = {};
+        doc.diner = restaurant.normalize(doc.diner);
         if (!cache.has(uid)) { cache.set(uid, doc); persist(uid); }
         loading.delete(uid);
         return cache.get(uid);
@@ -138,14 +141,15 @@ function createWallet(db, { now = () => Date.now() } = {}) {
     return true;
   }
 
-  const shiftsLeft = (s) => (s.shifts.day === utcDay(now()) ? Math.max(0, SHIFT_CAP - s.shifts.n) : SHIFT_CAP);
-  // Pays a finished work shift. Guests can work too (play money); the daily cap is per account.
+  // Pays a finished work shift into the balance and onto the restaurant's record. Guests work for play money.
   function payShift(key, n) {
     const s = state(key);
-    if (!s || shiftsLeft(s) <= 0) return 0;
-    const day = utcDay(now());
-    s.shifts = { day, n: (s.shifts.day === day ? s.shifts.n : 0) + 1 };
-    s.balance = round2(s.balance + Math.max(0, n));
+    if (!s) return 0;
+    n = round2(Math.max(0, n));
+    s.balance = round2(s.balance + n);
+    s.diner.shifts++;
+    s.diner.earned = round2(s.diner.earned + n);
+    s.diner.bestShift = Math.max(s.diner.bestShift, n);
     persist(key);
     return n;
   }
@@ -171,6 +175,26 @@ function createWallet(db, { now = () => Date.now() } = {}) {
     if (!s || !item || !s.owned[id] || item.slot === 'key') return 'unknown';
     if (s.equipped[item.slot] === id) delete s.equipped[item.slot];
     else s.equipped[item.slot] = id;
+    persist(key);
+    return null;
+  }
+  // The restaurant (server/casino/diner.js): upgrades come out of the casino balance.
+  const dinerOf = (key) => { const s = state(key); return s ? s.diner : null; };
+  function dinerBuy(key, id) {
+    const s = state(key);
+    if (!s) return 'unknown';
+    const r = restaurant.buy(s.diner, id, s.balance);
+    if (r.err) return r.err;
+    s.balance = round2(s.balance - r.cost);
+    persist(key);
+    return null;
+  }
+  function dinerRename(key, name) {
+    const s = state(key);
+    const clean = typeof name === 'string' ? name.replace(/\s+/g, ' ').trim().slice(0, 24) : '';
+    if (!s || !clean) return 'bad_name';
+    if (isOffensiveName(clean)) return 'bad_name';
+    s.diner.name = maskText(clean);
     persist(key);
     return null;
   }
@@ -207,7 +231,7 @@ function createWallet(db, { now = () => Date.now() } = {}) {
     const s = state(key);
     if (!s) return null;
     const atTables = round2(Object.values(s.atTable).reduce((a, b) => a + b, 0));
-    return { guest: isGuest(key), balance: s.balance, atTables, stipend: isGuest(key) ? null : { amount: STIPEND, ready: stipendReady(s) }, shiftsLeft: shiftsLeft(s), wagered: s.wagered, biggestWin: s.biggestWin, jackpot: jackpot.amount,
+    return { guest: isGuest(key), balance: s.balance, atTables, stipend: isGuest(key) ? null : { amount: STIPEND, ready: stipendReady(s) }, wagered: s.wagered, biggestWin: s.biggestWin, jackpot: jackpot.amount,
       tier: tierOf(s.wagered), vip: vip(key), owned: s.owned, equipped: s.equipped, shop: SHOP };
   }
 
@@ -219,7 +243,7 @@ function createWallet(db, { now = () => Date.now() } = {}) {
   }
   const flush = () => Promise.all([...writes.values(), jackpot.tail]);
 
-  return { load, forget, buy, equip, vip, flair, leaderboards, buyIn, sync, cashOut, noteBet, claimStipend, payShift, view, dropGuest, flush, feedJackpot, hitJackpot, jackpot: () => jackpot.amount, isLoaded: (key) => isGuest(key) || cache.has(key) };
+  return { load, forget, buy, equip, vip, flair, leaderboards, buyIn, sync, cashOut, noteBet, claimStipend, payShift, dinerOf, dinerBuy, dinerRename, view, dropGuest, flush, feedJackpot, hitJackpot, jackpot: () => jackpot.amount, isLoaded: (key) => isGuest(key) || cache.has(key) };
 }
 
 module.exports = { createWallet, utcDay };

@@ -57,7 +57,7 @@ export const ServerMessage = {
   ACCOUNT_DELETED: 'account.deleted', // {} — the account is gone; client signs out
   SOCIAL_STATE: 'social.state', // { friends, incoming, outgoing, blocked, recent, party } — accounts only
   SOCIAL_NOTICE: 'social.notice', // { kind: 'request'|'accepted'|'invite'|'party'|'follow'|'turn'|'ok'|'error', from?, message?, gameType?, code?, id? }
-  CASINO_STATE: 'casino.state', // { balance, atTables, guest, stipend: { amount, ready } | null, shiftsLeft, wagered, biggestWin, tier, vip, owned, equipped, shop, boards?, error? } — only ever sent on request from the casino lobby
+  CASINO_STATE: 'casino.state', // { balance, atTables, guest, stipend: { amount, ready } | null, wagered, biggestWin, tier, vip, owned, equipped, shop, boards?, error? } — only ever sent on request from the casino lobby
   ACTIVITY: 'activity', // { items: [{ at, kind, ..., user: { username, avatar, cosmetics } }], friends }
   ONLINE: 'online', // { players: [{ username, avatar, level, cosmetics, friend, playing?: { gameType, code? } }], guests }
   CHAT_MESSAGE: 'chat.message', // { channel, with?, msg: { id, at, from: { username, avatar, level, role? }, text } }

@@ -50,11 +50,9 @@ export function casinoBar(cs, { onStipend, onWork, onBuy, onEquip }) {
   }
   if (!cs.guest && cs.stipend && cs.stipend.ready) parts.push(h('button.casino-btn', { type: 'button', onclick: onStipend }, `CLAIM ${money(cs.stipend.amount)} DAILY`));
   else if (cs.stipend) parts.push(h('span.muted.casino-note', 'Daily stipend claimed · back tomorrow'));
-  if (cs.shiftsLeft > 0) {
-    const broke = cs.balance + cs.atTables < 2;
-    parts.push(h(`button.casino-btn${broke ? '.casino-broke' : ''}`, { type: 'button', onclick: onWork, title: 'Terminal Diner: a 3 minute burger shift that pays up to $120' },
-      `${broke ? 'BROKE? ' : ''}WORK A SHIFT (${cs.shiftsLeft} left today)`));
-  }
+  const broke = cs.balance + cs.atTables < 2;
+  parts.push(h(`button.casino-btn${broke ? '.casino-broke' : ''}`, { type: 'button', onclick: onWork, title: 'Your restaurant: work shifts for money, buy upgrades that pay more' },
+    `${broke ? 'BROKE? ' : ''}🍔 YOUR RESTAURANT`));
   if (cs.jackpot) parts.push(h('span.casino-note', { title: 'Progressive slots jackpot, shared by the whole site' }, `◆ SLOTS JACKPOT ${money(cs.jackpot)}`));
   if (cs.error && ERRORS[cs.error]) parts.push(h('div.casino-note.casino-error', ERRORS[cs.error]));
   parts.push(shop(cs, onBuy, onEquip));

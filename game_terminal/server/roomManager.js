@@ -88,7 +88,9 @@ function roomWallet(room, wallet) {
     vip: (clientId) => wallet.vip(key(clientId)),
     flair: (clientId) => wallet.flair(key(clientId)),
     payShift: (clientId, n) => wallet.payShift(key(clientId), n),
-    shiftsLeft: (clientId) => { const v = wallet.view(key(clientId)); return v ? v.shiftsLeft : 0; },
+    diner: (clientId) => wallet.dinerOf(key(clientId)),
+    dinerBuy: (clientId, id) => wallet.dinerBuy(key(clientId), id),
+    dinerRename: (clientId, name) => wallet.dinerRename(key(clientId), name),
   };
 }
 

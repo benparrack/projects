@@ -6,7 +6,7 @@
 const assert = require('assert');
 const { createWallet } = require('../server/casino/wallet');
 const { createMemoryDb } = require('../server/db');
-const { START_BALANCE, STIPEND, SHIFT_CAP, JACKPOT_SEED, SHOP, VIP_BALANCE } = require('../server/casino/economy');
+const { START_BALANCE, STIPEND, JACKPOT_SEED, SHOP, VIP_BALANCE } = require('../server/casino/economy');
 
 let failures = 0;
 const tests = [];
@@ -64,13 +64,24 @@ test('stipend: once per UTC day, accounts only', async () => {
   assert.strictEqual(w.claimStipend('g:abc'), false);
 });
 
-test('shift pay is capped per day', async () => {
-  const w = createWallet(createMemoryDb());
+test('shift pay is uncapped and lands on the restaurant record; upgrades come out of the balance', async () => {
+  const db = createMemoryDb();
+  const w = createWallet(db);
   await w.load('u1');
-  for (let i = 0; i < SHIFT_CAP; i++) assert.strictEqual(w.payShift('u1', 10), 10);
-  assert.strictEqual(w.payShift('u1', 10), 0);
-  assert.strictEqual(w.view('u1').balance, START_BALANCE + 10 * SHIFT_CAP);
-  assert.strictEqual(w.view('u1').shiftsLeft, 0);
+  for (let i = 0; i < 10; i++) assert.strictEqual(w.payShift('u1', 10), 10);
+  assert.strictEqual(w.payShift('u1', 55.5), 55.5);
+  assert.strictEqual(w.view('u1').balance, START_BALANCE + 155.5);
+  assert.deepStrictEqual([w.dinerOf('u1').shifts, w.dinerOf('u1').bestShift, w.dinerOf('u1').earned], [11, 55.5, 155.5]);
+  assert.strictEqual(w.dinerBuy('u1', 'grill'), null); // $250
+  assert.strictEqual(w.view('u1').balance, START_BALANCE + 155.5 - 250);
+  assert.strictEqual(w.dinerBuy('u1', 'grill'), 'tier'); // level 2 needs the Diner
+  assert.strictEqual(w.dinerBuy('u1', 'tier'), 'broke');
+  assert.strictEqual(w.dinerRename('u1', '  Bob\'s   Burgers  '), null);
+  assert.strictEqual(w.dinerRename('u1', '   '), 'bad_name');
+  await w.flush();
+  const w2 = createWallet(db); // a restart keeps the restaurant
+  await w2.load('u1');
+  assert.deepStrictEqual([w2.dinerOf('u1').levels, w2.dinerOf('u1').name], [{ grill: 1 }, "Bob's Burgers"]);
 });
 
 test('guests get play money that never touches the db and is gone when dropped', async () => {

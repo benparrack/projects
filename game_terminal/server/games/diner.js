@@ -1,37 +1,35 @@
-// Terminal Diner: the casino's way back from broke. A solo three-minute burger shift: tickets come
-// in, you grill patties to the asked doneness, stack the toppings in order and serve. Pay is a base
-// wage plus a tip per order, scored here on the server's own clock (the client only sends button
-// presses), and paid into the casino balance via wallet.payShift (capped shifts per day).
+// Your restaurant: a solo three-minute burger shift. Tickets come in, you grill patties to the asked
+// doneness, stack the toppings in order and serve. Each order pays its menu price plus a tip, scored
+// here on the server's own clock (the client only sends button presses), into the casino balance via
+// wallet.payShift. Between shifts the same room is the restaurant's home and upgrade shop; the
+// upgrades (server/casino/diner.js) change the numbers a shift runs on.
 // Client: ../../public/games/diner/client.js
 'use strict';
 
 const crypto = require('crypto');
+const restaurant = require('../casino/diner');
 
 const TYPE = 'diner';
 const SHIFT_MS = 180000;
 const ARRIVE_MS = [10000, 16000]; // gap between customers
-const MAX_TICKETS = 3;
 const WALK_OUT_MS = 70000;
-const GRILLS = 2;
-const DONENESS = { rare: [4000, 7000], medium: [8000, 11000], well: [12000, 15000] }; // cook ms
+const DONENESS = { rare: [4000, 7000], medium: [8000, 11000], well: [12000, 15000] }; // cook ms before hot burners
 const BURNT_MS = 18000;
-const TOPPINGS = ['lettuce', 'tomato', 'cheese', 'onion', 'pickles', 'bacon'];
 const MAX_STACK = 6;
-const BASE_PAY = 30; // for a shift with at least BASE_MIN_SERVED orders out
-const BASE_MIN_SERVED = 3;
-const TIP_MAX = 9; // a perfect order
-const PAY_CAP = 120;
 
 let rng = (n) => crypto.randomInt(n);
 let clock = () => Date.now();
 const between = ([a, b]) => a + rng(b - a + 1);
 
+// The shift's cook windows: hot burners shrink every time (and the burn point) by cookMult.
+const cookRules = (m) => ({ DONENESS: Object.fromEntries(Object.entries(DONENESS).map(([k, [a, b]]) => [k, [Math.round(a * m), Math.round(b * m)]])), BURNT_MS: Math.round(BURNT_MS * m) });
+
 // 0-100: doneness 40, toppings in order 40, speed 20.
-function scoreOrder(ticket, build, servedAt) {
-  const [lo, hi] = DONENESS[ticket.doneness];
+function scoreOrder(ticket, build, servedAt, rules = cookRules(1)) {
+  const [lo, hi] = rules.DONENESS[ticket.doneness];
   const c = build.patty.cooked;
   const off = c < lo ? lo - c : c > hi ? c - hi : 0;
-  const cook = c >= BURNT_MS ? 0 : Math.max(0, 40 - (12 * off) / 1000);
+  const cook = c >= rules.BURNT_MS ? 0 : Math.max(0, 40 - (12 * off) / 1000);
   const n = Math.max(ticket.toppings.length, build.toppings.length);
   const right = ticket.toppings.filter((t, i) => build.toppings[i] === t).length;
   const tops = n ? (40 * right) / n : 40;
@@ -40,48 +38,66 @@ function scoreOrder(ticket, build, servedAt) {
   const speed = 20 * Math.min(1, Math.max(0, 1 - (wait - 25000) / 40000)) * ((cook + tops) / 80);
   return Math.round(cook + tops + speed);
 }
-const tipFor = (score) => Math.round((score * TIP_MAX) / 100);
 
 function newTicket(st, now) {
-  const pool = TOPPINGS.slice();
+  const pool = st.perks.toppings.slice();
   const toppings = [];
-  for (let k = 2 + rng(3); k > 0; k--) toppings.push(pool.splice(rng(pool.length), 1)[0]);
+  for (let k = Math.min(pool.length, 2 + rng(3)); k > 0; k--) toppings.push(pool.splice(rng(pool.length), 1)[0]);
   const names = Object.keys(DONENESS);
   st.tickets.push({ id: ++st.nextId, doneness: names[rng(names.length)], toppings, at: now });
 }
 
+// phase: home (the restaurant and its shop) -> shift -> report (back to home on the next start).
 function createInitialState() {
-  return { phase: 'idle', worker: null, endsAt: null, nextArrival: null, tickets: [], nextId: 0, grills: Array(GRILLS).fill(null),
-    build: { patty: null, toppings: [] }, served: [], missed: 0, tips: 0, pay: null, seq: 0 };
+  return { phase: 'home', worker: null, endsAt: null, nextArrival: null, tickets: [], nextId: 0, grills: [], perks: null, rules: null,
+    build: { patty: null, toppings: [] }, served: [], missed: 0, revenue: 0, tips: 0, report: null, seq: 0 };
 }
+
+const dinerOf = (room, id) => (room.wallet ? room.wallet.diner(id) : null) || restaurant.fresh();
 
 function start(room, id, now) {
   const st = room.state;
   if (st.phase === 'shift') return 'on_shift';
   const w = room.wallet;
   if (w && !w.ready(id)) return 'wallet_loading';
-  if (w && w.shiftsLeft(id) <= 0) return 'shift_cap';
-  Object.assign(st, createInitialState(), { phase: 'shift', worker: id, endsAt: now + SHIFT_MS, nextArrival: now + between(ARRIVE_MS), seq: st.seq });
+  const perks = restaurant.perks(dinerOf(room, id));
+  Object.assign(st, createInitialState(), { phase: 'shift', worker: id, endsAt: now + SHIFT_MS, seq: st.seq, perks,
+    rules: { ...cookRules(perks.cookMult), WALK_OUT_MS: Math.round(WALK_OUT_MS * perks.patienceMult) }, grills: Array(perks.grills).fill(null) });
+  st.nextArrival = now + Math.round(between(ARRIVE_MS) * perks.arriveMult);
   newTicket(st, now);
   return null;
 }
 
 function finish(room) {
   const st = room.state;
-  const earned = Math.min(PAY_CAP, (st.served.length >= BASE_MIN_SERVED ? BASE_PAY : 0) + st.tips);
+  const before = room.wallet ? dinerOf(room, st.worker).bestShift : 0;
+  const earned = Math.round((st.revenue + st.tips) * 100) / 100;
   const paid = room.wallet ? room.wallet.payShift(st.worker, earned) : earned;
-  st.pay = { earned, paid, base: st.served.length >= BASE_MIN_SERVED ? BASE_PAY : 0 };
-  st.phase = 'done';
+  const best = st.served.reduce((a, o) => (!a || o.score > a.score ? o : a), null);
+  st.report = { served: st.served.length, missed: st.missed, revenue: st.revenue, tips: st.tips, paid,
+    avg: st.served.length ? Math.round(st.served.reduce((a, o) => a + o.score, 0) / st.served.length) : 0,
+    best, newBest: paid > before && paid > 0 };
+  st.phase = 'report';
   st.tickets = [];
-  st.grills = Array(GRILLS).fill(null);
+  st.grills = [];
+}
+
+// Shop actions, between shifts only.
+function shop(room, id, data) {
+  const w = room.wallet;
+  if (!w) return 'unknown';
+  if (!w.ready(id)) return 'wallet_loading';
+  if (data.kind === 'buy') return w.dinerBuy(id, String(data.id));
+  return w.dinerRename(id, data.name);
 }
 
 function act(room, id, data, now) {
   const st = room.state;
   if (data.kind === 'start') return start(room, id, now);
+  if (data.kind === 'buy' || data.kind === 'rename') return st.phase === 'shift' ? 'on_shift' : shop(room, id, data);
   if (st.phase !== 'shift' || id !== st.worker) return 'not_on_shift';
   const slot = Number(data.slot);
-  const g = Number.isInteger(slot) && slot >= 0 && slot < GRILLS ? slot : -1;
+  const g = Number.isInteger(slot) && slot >= 0 && slot < st.grills.length ? slot : -1;
   switch (data.kind) {
     case 'grill':
       if (g === -1 || st.grills[g]) return 'grill_busy';
@@ -98,7 +114,7 @@ function act(room, id, data, now) {
       st.grills[g] = null;
       return null;
     case 'top':
-      if (!TOPPINGS.includes(data.item)) return 'bad_item';
+      if (!st.perks.toppings.includes(data.item)) return 'bad_item';
       if (st.build.toppings.length >= MAX_STACK) return 'stack_full';
       st.build.toppings.push(data.item);
       return null;
@@ -113,10 +129,11 @@ function act(room, id, data, now) {
       const i = st.tickets.findIndex((t) => t.id === Number(data.ticket));
       if (i === -1) return 'no_ticket';
       if (!st.build.patty) return 'no_patty';
-      const score = scoreOrder(st.tickets[i], st.build, now);
-      const tip = tipFor(score);
-      st.served.push({ id: st.tickets[i].id, score, tip });
-      st.tips += tip;
+      const score = scoreOrder(st.tickets[i], st.build, now, st.rules);
+      const { price, tip } = restaurant.orderPay(st.perks, st.tickets[i], score);
+      st.served.push({ id: st.tickets[i].id, score, price, tip });
+      st.revenue = Math.round((st.revenue + price) * 100) / 100;
+      st.tips = Math.round((st.tips + tip) * 100) / 100;
       st.tickets.splice(i, 1);
       st.build = { patty: null, toppings: [] };
       return null;
@@ -133,11 +150,11 @@ function step(room, now) {
   if (now >= st.endsAt) { finish(room); return true; }
   let changed = false;
   const before = st.tickets.length;
-  st.tickets = st.tickets.filter((t) => now - t.at < WALK_OUT_MS);
+  st.tickets = st.tickets.filter((t) => now - t.at < st.rules.WALK_OUT_MS);
   if (st.tickets.length !== before) { st.missed += before - st.tickets.length; changed = true; }
   if (now >= st.nextArrival) {
-    if (st.tickets.length < MAX_TICKETS) { newTicket(st, now); changed = true; }
-    st.nextArrival = now + between(ARRIVE_MS);
+    if (st.tickets.length < st.perks.maxTickets) { newTicket(st, now); changed = true; }
+    st.nextArrival = now + Math.round(between(ARRIVE_MS) * st.perks.arriveMult);
   }
   return changed;
 }
@@ -145,11 +162,14 @@ function step(room, now) {
 function buildView(room, id) {
   const st = room.state;
   const w = room.wallet;
+  const d = id ? dinerOf(room, id) : null;
   return {
     seq: st.seq, phase: st.phase, serverNow: clock(), endsAt: st.endsAt, tickets: st.tickets, grills: st.grills, build: st.build,
-    served: st.served, missed: st.missed, tips: st.tips, pay: st.pay,
-    balance: w && id ? w.balance(id) : null, shiftsLeft: w && id ? w.shiftsLeft(id) : null,
-    rules: { DONENESS, BURNT_MS, TOPPINGS, SHIFT_MS, WALK_OUT_MS, BASE_PAY, BASE_MIN_SERVED, TIP_MAX, PAY_CAP },
+    served: st.served, missed: st.missed, revenue: st.revenue, tips: st.tips, report: st.report, perks: st.perks,
+    balance: w && id ? w.balance(id) : null, guest: w && id ? w.guest(id) : true,
+    restaurant: d && { ...d, perks: restaurant.perks(d), quotes: Object.fromEntries(['tier', ...restaurant.UPGRADES.map((u) => u.id)].map((k) => [k, restaurant.quote(d, k)])) },
+    catalog: { TIERS: restaurant.TIERS, UPGRADES: restaurant.UPGRADES },
+    rules: { ...(st.rules || { ...cookRules(1), WALK_OUT_MS }), SHIFT_MS, MAX_STACK, TOPPINGS: st.perks ? st.perks.toppings : [] },
   };
 }
 
@@ -185,5 +205,5 @@ module.exports = {
     }
     broadcast(room);
   },
-  _test: { scoreOrder, tipFor, step, SHIFT_MS, DONENESS, BURNT_MS, TOPPINGS, BASE_PAY, TIP_MAX, PAY_CAP, WALK_OUT_MS, setRng(fn) { rng = fn; }, setClock(fn) { clock = fn; } },
+  _test: { scoreOrder, step, SHIFT_MS, DONENESS, BURNT_MS, WALK_OUT_MS, setRng(fn) { rng = fn; }, setClock(fn) { clock = fn; } },
 };

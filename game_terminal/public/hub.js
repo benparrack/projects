@@ -85,7 +85,7 @@ const CATEGORIES = [
       { type: 'mines', label: 'MINES 💣' },
       { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
       { type: 'roulette', label: 'ROULETTE' },
-      { type: 'diner', label: 'WORK A SHIFT: TERMINAL DINER' },
+      { type: 'diner', label: 'YOUR RESTAURANT 🍔' },
     ],
   },
   {
