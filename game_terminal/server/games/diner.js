@@ -44,13 +44,19 @@ function newTicket(st, now) {
   const toppings = [];
   for (let k = Math.min(pool.length, 2 + rng(3)); k > 0; k--) toppings.push(pool.splice(rng(pool.length), 1)[0]);
   const names = Object.keys(DONENESS);
-  st.tickets.push({ id: ++st.nextId, doneness: names[rng(names.length)], toppings, at: now });
+  const doneness = names[rng(names.length)];
+  const sides = {};
+  for (const id of st.perks.stations) {
+    const f = restaurant.STATIONS[id].flavors;
+    if (rng(100) < restaurant.SIDE_ODDS) sides[id] = f[rng(f.length)];
+  }
+  st.tickets.push({ id: ++st.nextId, doneness, toppings, sides, at: now });
 }
 
 // phase: home (the restaurant and its shop) -> shift -> report (back to home on the next start).
 function createInitialState() {
   return { phase: 'home', worker: null, endsAt: null, nextArrival: null, tickets: [], nextId: 0, grills: [], perks: null, rules: null,
-    build: { patty: null, toppings: [] }, served: [], missed: 0, revenue: 0, tips: 0, report: null, seq: 0 };
+    build: { patty: null, toppings: [] }, stations: {}, tray: {}, served: [], missed: 0, combos: 0, revenue: 0, tips: 0, report: null, seq: 0 };
 }
 
 const dinerOf = (room, id) => (room.wallet ? room.wallet.diner(id) : null) || restaurant.fresh();
@@ -62,7 +68,8 @@ function start(room, id, now) {
   if (w && !w.ready(id)) return 'wallet_loading';
   const perks = restaurant.perks(dinerOf(room, id));
   Object.assign(st, createInitialState(), { phase: 'shift', worker: id, endsAt: now + SHIFT_MS, seq: st.seq, perks,
-    rules: { ...cookRules(perks.cookMult), WALK_OUT_MS: Math.round(WALK_OUT_MS * perks.patienceMult) }, grills: Array(perks.grills).fill(null) });
+    rules: { ...cookRules(perks.cookMult), WALK_OUT_MS: Math.round(WALK_OUT_MS * perks.patienceMult) }, grills: Array(perks.grills).fill(null),
+    stations: Object.fromEntries(perks.stations.map((s) => [s, null])) });
   st.nextArrival = now + Math.round(between(ARRIVE_MS) * perks.arriveMult);
   newTicket(st, now);
   return null;
@@ -74,12 +81,14 @@ function finish(room) {
   const earned = Math.round((st.revenue + st.tips) * 100) / 100;
   const paid = room.wallet ? room.wallet.payShift(st.worker, earned) : earned;
   const best = st.served.reduce((a, o) => (!a || o.score > a.score ? o : a), null);
-  st.report = { served: st.served.length, missed: st.missed, revenue: st.revenue, tips: st.tips, paid,
+  st.report = { served: st.served.length, missed: st.missed, combos: st.combos, revenue: st.revenue, tips: st.tips, paid,
     avg: st.served.length ? Math.round(st.served.reduce((a, o) => a + o.score, 0) / st.served.length) : 0,
     best, newBest: paid > before && paid > 0 };
   st.phase = 'report';
   st.tickets = [];
   st.grills = [];
+  st.stations = {};
+  st.tray = {};
 }
 
 // Shop actions, between shifts only.
@@ -125,13 +134,42 @@ function act(room, id, data, now) {
     case 'trash':
       st.build = { patty: null, toppings: [] };
       return null;
+    // Side stations: start (with a flavour), stop onto the tray, or dump the tray item (else the running one).
+    case 'station': {
+      if (!Object.hasOwn(st.stations, data.id) || !restaurant.STATIONS[data.id].flavors.includes(data.flavor)) return 'bad_item';
+      if (st.stations[data.id]) return 'station_busy';
+      if (st.tray[data.id]) return 'tray_full';
+      st.stations[data.id] = { flavor: data.flavor, at: now };
+      return null;
+    }
+    case 'station_stop': {
+      const run = Object.hasOwn(st.stations, data.id) && st.stations[data.id];
+      if (!run) return 'station_empty';
+      st.tray[data.id] = { flavor: run.flavor, ms: now - run.at };
+      st.stations[data.id] = null;
+      return null;
+    }
+    case 'dump':
+      if (!Object.hasOwn(st.stations, data.id)) return 'bad_item';
+      if (st.tray[data.id]) delete st.tray[data.id];
+      else if (st.stations[data.id]) st.stations[data.id] = null;
+      else return 'nothing';
+      return null;
     case 'serve': {
       const i = st.tickets.findIndex((t) => t.id === Number(data.ticket));
       if (i === -1) return 'no_ticket';
       if (!st.build.patty) return 'no_patty';
-      const score = scoreOrder(st.tickets[i], st.build, now, st.rules);
-      const { price, tip } = restaurant.orderPay(st.perks, st.tickets[i], score);
-      st.served.push({ id: st.tickets[i].id, score, price, tip });
+      const t = st.tickets[i];
+      const burger = scoreOrder(t, st.build, now, st.rules);
+      // Sides: 40% of the score when a ticket has any; the tray items it asked for go with it.
+      const want = Object.entries(t.sides || {});
+      const q = want.map(([sid, f]) => restaurant.sideQuality(sid, f, st.tray[sid]));
+      const score = want.length ? Math.round(0.6 * burger + (40 * q.reduce((a, x) => a + x, 0)) / q.length) : burger;
+      const combo = want.length > 0 && burger >= 80 && q.every((x) => x >= 0.8);
+      for (const [sid] of want) delete st.tray[sid];
+      const { price, tip } = restaurant.orderPay(st.perks, t, score, combo);
+      if (combo) st.combos++;
+      st.served.push({ id: t.id, score, price, tip, combo });
       st.revenue = Math.round((st.revenue + price) * 100) / 100;
       st.tips = Math.round((st.tips + tip) * 100) / 100;
       st.tickets.splice(i, 1);
@@ -164,11 +202,11 @@ function buildView(room, id) {
   const w = room.wallet;
   const d = id ? dinerOf(room, id) : null;
   return {
-    seq: st.seq, phase: st.phase, serverNow: clock(), endsAt: st.endsAt, tickets: st.tickets, grills: st.grills, build: st.build,
+    seq: st.seq, phase: st.phase, serverNow: clock(), endsAt: st.endsAt, tickets: st.tickets, grills: st.grills, build: st.build, stations: st.stations, tray: st.tray,
     served: st.served, missed: st.missed, revenue: st.revenue, tips: st.tips, report: st.report, perks: st.perks,
     balance: w && id ? w.balance(id) : null, guest: w && id ? w.guest(id) : true,
     restaurant: d && { ...d, perks: restaurant.perks(d), quotes: Object.fromEntries(['tier', ...restaurant.UPGRADES.map((u) => u.id)].map((k) => [k, restaurant.quote(d, k)])) },
-    catalog: { TIERS: restaurant.TIERS, UPGRADES: restaurant.UPGRADES },
+    catalog: { TIERS: restaurant.TIERS, UPGRADES: restaurant.UPGRADES, STATIONS: restaurant.STATIONS },
     rules: { ...(st.rules || { ...cookRules(1), WALK_OUT_MS }), SHIFT_MS, MAX_STACK, TOPPINGS: st.perks ? st.perks.toppings : [] },
   };
 }

@@ -12,9 +12,12 @@ const EFFECT = {
   premium: (n) => [`tips ×${(1.25 ** n).toFixed(2)}`, `tips ×${(1.25 ** (n + 1)).toFixed(2)}`],
   seats: (n) => [`${2 + n} customers`, `${3 + n} customers`],
   booths: (n) => [`patience +${pct(1.2 ** n - 1)}`, `patience +${pct(1.2 ** (n + 1) - 1)}`],
+  fryer: () => ['no fries', '🍟 fries +$2'],
+  fountain: () => ['no drinks', '🥤 sodas +$1.50'],
+  shake: () => ['no shakes', '🍨 shakes +$3.50'],
   billboard: (n) => [`+${pct(1 / 0.8 ** n - 1)} customers`, `+${pct(1 / 0.8 ** (n + 1) - 1)} customers`],
 };
-const TABS = [['kitchen', '🍳 Kitchen'], ['dining', '🪑 Dining room'], ['expand', '🏗️ Expand']];
+const TABS = [['kitchen', '🍳 Kitchen'], ['stations', '🍟 Stations'], ['dining', '🪑 Dining room'], ['expand', '🏗️ Expand']];
 export const BUY_ERR = { broke: "You can't afford that yet.", tier: 'Upgrade your restaurant first.', maxed: 'Already maxed out.', bad_name: "That name won't fit on the sign." };
 
 export function renderHome(c) {
@@ -116,6 +119,7 @@ export function renderReport(c) {
   card.append(el('div', 'dn-receipt-h', '🧾 SHIFT REPORT'), el('div', 'dn-receipt-sub', view.restaurant.name));
   const line = (label, value, cls = '') => { const l = el('div', `dn-line ${cls}`); l.append(el('span', null, label), el('b', null, value)); return l; };
   card.append(line('Orders served', r.served), line('Walked out', r.missed, r.missed ? 'bad' : ''), line('Average order', `${r.avg}%`));
+  if (r.combos) card.append(line('Combos (+25%)', r.combos));
   if (r.best) card.append(line('Best order', `#${r.best.id} · ${r.best.score}%`));
   card.append(el('div', 'dn-rule'), line('Sales', money(r.revenue)), line('Tips', money(r.tips)), el('div', 'dn-rule'));
   const total = line('TOTAL', money(0), 'total');

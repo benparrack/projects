@@ -25,7 +25,20 @@ const UPGRADES = [
   { id: 'seats', tab: 'dining', name: 'Counter seats', icon: '🪑', prices: [300, 2000, 10000], tiers: [0, 1, 2], desc: 'Room for one more customer at a time.' },
   { id: 'booths', tab: 'dining', name: 'Comfy booths', icon: '🛋️', prices: [350, 2500, 15000], tiers: [0, 1, 2], desc: 'Customers wait 20% longer per level.' },
   { id: 'billboard', tab: 'dining', name: 'Billboard', icon: '🪧', prices: [600, 5000, 30000], tiers: [0, 1, 2], desc: 'Customers show up 20% more often per level.' },
+  { id: 'fryer', tab: 'stations', name: 'Fryer', icon: '🍟', prices: [400], tiers: [0], desc: 'Customers order fries: drop the basket, pull it when golden.' },
+  { id: 'fountain', tab: 'stations', name: 'Soda fountain', icon: '🥤', prices: [600], tiers: [0], desc: 'Customers order drinks: hold to fill the cup to the line without spilling.' },
+  { id: 'shake', tab: 'stations', name: 'Shake machine', icon: '🍨', prices: [2500], tiers: [1], desc: 'Customers order milkshakes: blend the right flavour for the right time.' },
 ];
+
+// Side stations. Start one (with a flavour), stop it inside `window` ms; past `ruin` it's burnt, spilt or
+// soup. Each side a ticket asks for adds `price` to it, and getting every item right is a combo.
+const STATIONS = {
+  fryer: { name: 'Fries', flavors: ['fries'], price: 2, window: [5000, 8000], ruin: 12000, slop: 3000 },
+  fountain: { name: 'Soda', flavors: ['cola', 'lemon', 'orange'], price: 1.5, window: [2550, 3000], ruin: 3400, slop: 1200 },
+  shake: { name: 'Shake', flavors: ['vanilla', 'chocolate', 'strawberry'], price: 3.5, window: [4000, 6500], ruin: 10000, slop: 3000 },
+};
+const SIDE_ODDS = 45; // % chance a ticket asks for each side you can make
+const COMBO_BONUS = 0.25;
 
 const BURGER_PRICE = 5; // plus TOPPING_PRICE per topping on the ticket
 const TOPPING_PRICE = 0.75;
@@ -51,6 +64,7 @@ function perks(d) {
     patienceMult: 1.2 ** L('booths'),
     arriveMult: 0.8 ** L('billboard'),
     priceMult: TIERS[d.tier].mult,
+    stations: Object.keys(STATIONS).filter((id) => L(id) > 0),
   };
 }
 
@@ -80,12 +94,23 @@ function buy(d, id, balance) {
   return { cost: q.cost };
 }
 
+// 0-1: how well a side came out (`item` = { flavor, ms } off the tray); the wrong flavour keeps 30%.
+function sideQuality(id, want, item) {
+  if (!item) return 0;
+  const { window: [lo, hi], ruin, slop } = STATIONS[id];
+  const ms = item.ms;
+  const t = ms >= ruin ? 0 : ms < lo ? Math.max(0, 1 - (lo - ms) / slop) : ms > hi ? 1 - (ms - hi) / (ruin - hi) : 1;
+  return Math.round(t * (item.flavor === want ? 1 : 0.3) * 100) / 100;
+}
+
 // One served order: the menu price (paid in full from a score of 60, less below) and a tip above 50.
-function orderPay(p, ticket, score) {
-  const price = (BURGER_PRICE + TOPPING_PRICE * ticket.toppings.length) * p.priceMult;
-  const paid = price * Math.min(1, score / 60);
+// A combo (every item on a ticket with sides done right) adds COMBO_BONUS of the price.
+function orderPay(p, ticket, score, combo = false) {
+  const sides = Object.keys(ticket.sides || {}).reduce((a, id) => a + STATIONS[id].price, 0);
+  const price = (BURGER_PRICE + TOPPING_PRICE * ticket.toppings.length + sides) * p.priceMult;
+  const paid = price * Math.min(1, score / 60) + (combo ? price * COMBO_BONUS : 0);
   const tip = price * TIP_SHARE * p.tipMult * Math.max(0, score - 50) / 50;
   return { price: Math.round(paid * 100) / 100, tip: Math.round(tip * 100) / 100 };
 }
 
-module.exports = { TIERS, TOPPINGS, UPGRADES, fresh, normalize, perks, quote, buy, orderPay };
+module.exports = { TIERS, TOPPINGS, UPGRADES, STATIONS, SIDE_ODDS, fresh, normalize, perks, quote, buy, sideQuality, orderPay };

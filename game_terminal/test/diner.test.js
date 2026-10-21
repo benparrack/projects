@@ -149,12 +149,64 @@ test('junk serves, bogus tickets and walking out earn nothing', () => {
   room.act('A', { kind: 'untop' });
   assert.strictEqual(room.act('A', { kind: 'untop' }), 'nothing');
   assert.strictEqual(room.act('A', { kind: 'serve', ticket: 1 }), null);
-  assert.deepStrictEqual(room.state.served, [{ id: 1, score: 0, price: 0, tip: 0 }]);
+  assert.deepStrictEqual(room.state.served, [{ id: 1, score: 0, price: 0, tip: 0, combo: false }]);
   assert.strictEqual(T.scoreOrder({ doneness: 'rare', toppings: ['a'], at: 0 }, { patty: { cooked: T.BURNT_MS }, toppings: ['a'] }, 0), 50);
   diner.onLeave(room, { clientId: 'A' }); // walks out mid-shift: nothing paid
   assert.strictEqual(room.state.phase, 'home');
   assert.strictEqual(room.bal('A'), START_BALANCE);
   assert.strictEqual(room.d('A').shifts, 0);
+});
+
+test('stations: sides on tickets, timing scores, combos pay +25%', () => {
+  assert.deepStrictEqual([R.sideQuality('fryer', 'fries', { flavor: 'fries', ms: 6000 }), R.sideQuality('fryer', 'fries', { flavor: 'fries', ms: 3500 }),
+    R.sideQuality('fryer', 'fries', { flavor: 'fries', ms: 12000 }), R.sideQuality('fountain', 'cola', { flavor: 'lemon', ms: 2800 }),
+    R.sideQuality('fountain', 'cola', null)], [1, 0.5, 0, 0.3, 0]);
+  const p = R.perks({ ...R.fresh(), levels: { fryer: 1 } });
+  assert.deepStrictEqual(p.stations, ['fryer']);
+  const t = { toppings: ['a', 'b'], sides: { fryer: 'fries' } }; // $6.50 + $2
+  assert.deepStrictEqual(R.orderPay(p, t, 100), { price: 8.5, tip: 4.25 });
+  assert.deepStrictEqual(R.orderPay(p, t, 100, true), { price: 10.63, tip: 4.25 });
+
+  const clock = { now: 10e9 };
+  T.setClock(() => clock.now);
+  T.setRng(() => 0); // every ticket: rare, two toppings, fries and a cola
+  const room = makeRoom(['A']);
+  room.w.payShift('g:A', 2000);
+  room.act('A', { kind: 'buy', id: 'fryer' });
+  room.act('A', { kind: 'buy', id: 'fountain' });
+  assert.strictEqual(room.act('A', { kind: 'buy', id: 'shake' }), 'tier');
+  room.act('A', { kind: 'start' });
+  const tk = room.state.tickets[0];
+  assert.deepStrictEqual(tk.sides, { fryer: 'fries', fountain: 'cola' });
+  assert.strictEqual(room.act('A', { kind: 'station', id: 'shake', flavor: 'vanilla' }), 'bad_item');
+  assert.strictEqual(room.act('A', { kind: 'station', id: 'constructor', flavor: 'x' }), 'bad_item');
+  assert.strictEqual(room.act('A', { kind: 'station', id: 'fountain', flavor: 'beer' }), 'bad_item');
+  assert.strictEqual(room.act('A', { kind: 'station_stop', id: 'fryer' }), 'station_empty');
+  assert.strictEqual(room.act('A', { kind: 'station', id: 'fryer', flavor: 'fries' }), null);
+  assert.strictEqual(room.act('A', { kind: 'station', id: 'fryer', flavor: 'fries' }), 'station_busy');
+  room.act('A', { kind: 'grill', slot: 0 });
+  room.act('A', { kind: 'station', id: 'fountain', flavor: 'cola' });
+  clock.now += 2800;
+  room.act('A', { kind: 'station_stop', id: 'fountain' });
+  clock.now += 3200; // fries at 6s, patty at 6s (rare)
+  room.act('A', { kind: 'station_stop', id: 'fryer' });
+  assert.strictEqual(room.act('A', { kind: 'station', id: 'fryer', flavor: 'fries' }), 'tray_full');
+  room.act('A', { kind: 'plate', slot: 0 });
+  for (const item of tk.toppings) room.act('A', { kind: 'top', item });
+  assert.strictEqual(room.act('A', { kind: 'serve', ticket: tk.id }), null);
+  const o = room.state.served[0];
+  assert.deepStrictEqual([o.score, o.combo, o.price], [100, true, 12.5]); // ($6.50 + $2 + $1.50) x 1.25
+  assert.deepStrictEqual(room.state.tray, {});
+  assert.strictEqual(room.state.combos, 1);
+  // A side left off: no combo and the score drops.
+  const t2 = room.state.tickets[0] || (T.step(room, (clock.now += 10000)), room.state.tickets[0]);
+  room.act('A', { kind: 'grill', slot: 0 });
+  clock.now += 5500;
+  room.act('A', { kind: 'plate', slot: 0 });
+  for (const item of t2.toppings) room.act('A', { kind: 'top', item });
+  room.act('A', { kind: 'serve', ticket: t2.id });
+  assert.deepStrictEqual([room.state.served[1].score < 70, room.state.served[1].combo], [true, false]);
+  assert.strictEqual(room.act('A', { kind: 'dump', id: 'fryer' }), 'nothing');
 });
 
 (async () => {

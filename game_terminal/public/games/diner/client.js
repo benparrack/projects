@@ -5,7 +5,7 @@
 import { sfx } from '../sfx.js';
 import { makeServerClock } from '../serverClock.js';
 import { renderHome, renderReport, BUY_ERR } from './restaurant.js';
-import { renderKitchen, makeCook, GRILL_KEYS } from './kitchen.js';
+import { renderKitchen, makeCook, GRILL_KEYS, STATION_KEYS } from './kitchen.js';
 
 const money = (n) => `$${Number(n).toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
 const REJECT = {
@@ -15,6 +15,8 @@ const REJECT = {
   no_patty: 'Put a patty on the board first: click a cooking patty to plate it.',
   stack_full: 'That burger is tall enough.',
   on_shift: 'Finish the shift first.',
+  tray_full: 'Serve (or ✕ dump) the one that\'s ready first.',
+  station_busy: 'That one is already going.',
 };
 
 const FONT = 'https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap';
@@ -146,6 +148,29 @@ const CSS = `
 .dn-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .dn-help { font-size: .75em; opacity: .6; text-align: center; }
 
+.dn-side { position: relative; } .dn-side::after { content: ''; position: absolute; right: -2px; bottom: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--fl); border: 1.5px solid var(--ink); }
+.dn-side.ok { filter: drop-shadow(0 0 3px var(--green)); } .dn-side.bad { opacity: .45; }
+.dn-stations { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.dn-station { background: #fff; border: 3px solid var(--ink); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.dn-st-h { display: flex; justify-content: space-between; width: 100%; }
+.dn-pot { position: relative; width: 70px; height: 62px; border: 3px solid var(--ink); border-radius: 6px 6px 14px 14px; overflow: hidden; background: #f4f4f4; display: flex; align-items: flex-end; }
+.dn-pot.fryer { width: 96px; height: 50px; border-radius: 8px; background: #6b6b6b; }
+.dn-pot.fryer .dn-fill { background: #e8b23a; opacity: .5; }
+.dn-pot.fryer.on .dn-fill { opacity: 1; background: repeating-linear-gradient(90deg, #f4c430 0 6px, #e0a020 6px 9px); animation: dn-bubble .5s ease-in-out infinite alternate; }
+.dn-pot.fountain { width: 52px; height: 72px; border-radius: 4px 4px 12px 12px; clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%); }
+.dn-pot.shake { width: 58px; border-radius: 8px 8px 4px 4px; }
+.dn-pot.shake.on .dn-fill { animation: dn-whirl .25s linear infinite; }
+.dn-fill { width: 100%; height: 0; background: var(--fl, #ddd); transition: height .1s linear; }
+.dn-pot.ruined .dn-fill { background: #2b2b2b !important; } .dn-pot.spill { box-shadow: 0 6px 0 -2px var(--fl); }
+.dn-pot.good { outline: 3px solid var(--green); }
+.dn-line { position: absolute; left: 0; right: 0; bottom: 86%; border-top: 2px dashed var(--red); }
+.dn-st-act { display: flex; gap: 6px; align-items: center; font-size: .85em; font-weight: 600; text-align: center; }
+.dn-st-act .ok { color: #1e8449; } .dn-st-act .bad { color: var(--red); }
+.dn-st-picks { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.dn .dn-flavor { border-left: 10px solid var(--fl); touch-action: none; }
+.dn .dn-flavor.want { box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--yellow); }
+@keyframes dn-bubble { to { filter: brightness(1.15); } }
+@keyframes dn-whirl { 50% { transform: translateX(2px); } }
 .dn-fx { position: absolute; left: 0; right: 0; top: 60px; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 5; }
 .dn-pop { padding: 6px 16px; border-radius: 999px; font-weight: 700; font-size: 1.2em; background: var(--yellow); border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink); animation: dn-pop 1.8s ease-out forwards; }
 .dn-pop.bad { background: var(--red); color: #fff; }
@@ -176,7 +201,7 @@ export function mount(container, api) {
   let msg = '';
   const clock = makeServerClock();
   const live = []; // [fn] run every frame-ish to move timers without rebuilding the buttons
-  const ui = { tab: 'kitchen', renaming: false, showReport: false };
+  const ui = { tab: 'kitchen', renaming: false, showReport: false, pouring: false };
   const rang = new Set(); // doneness-bell dings already played
   if (!document.querySelector(`link[href="${FONT}"]`)) {
     const font = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: FONT });
@@ -230,12 +255,24 @@ export function mount(container, api) {
     if (n >= 1 && n <= view.rules.TOPPINGS.length) send({ kind: 'top', item: view.rules.TOPPINGS[n - 1] });
     else if (slot !== -1 && slot < view.grills.length) send({ kind: ev.shiftKey ? 'scrape' : view.grills[slot] ? 'plate' : 'grill', slot });
     else if (k === 'x') send({ kind: 'trash' });
+    else if (Object.values(STATION_KEYS).includes(k)) {
+      const id = Object.keys(STATION_KEYS).find((s) => STATION_KEYS[s] === k);
+      if (ev.repeat || !view.perks.stations.includes(id)) return;
+      if (view.stations[id]) send({ kind: 'station_stop', id });
+      else if (view.tray[id]) send({ kind: 'dump', id });
+      else { ui.pouring = id === 'fountain'; sfx.play('whoosh'); send({ kind: 'station', id, flavor: cook.wantedFlavor(id) }); }
+    }
     else if (k === 'backspace') send({ kind: 'untop' });
     else if (k === ' ' || k === 'enter') { const t = cook.bestTicket(); if (t) send({ kind: 'serve', ticket: t.id }); }
     else return;
     ev.preventDefault();
   };
   document.addEventListener('keydown', onKey);
+  // The fountain pours while the button or D is held.
+  const stopPour = () => { if (ui.pouring) { ui.pouring = false; sfx.play('pop'); send({ kind: 'station_stop', id: 'fountain' }); } };
+  const onKeyUp = (ev) => { if (ev.key.toLowerCase() === STATION_KEYS.fountain) stopPour(); };
+  document.addEventListener('pointerup', stopPour);
+  document.addEventListener('keyup', onKeyUp);
 
   function apply(data) {
     clock.sync(data.serverNow);
@@ -249,7 +286,7 @@ export function mount(container, api) {
       if (data.served.length > prev.served.length) {
         const s = data.served[data.served.length - 1];
         sfx.play(s.score >= 60 ? 'chips' : 'point');
-        pop(`${s.score >= 90 ? '😋' : s.score >= 60 ? '🙂' : '😕'} ${s.score}% · +${money(s.price + s.tip)}`);
+        pop(`${s.score >= 90 ? '😋' : s.score >= 60 ? '🙂' : '😕'} ${s.score}% · +${money(s.price + s.tip)}${s.combo ? ' · COMBO!' : ''}`);
         coins(Math.max(1, Math.round(s.score / 20)));
       }
       if (data.missed > prev.missed) { sfx.play('lose'); pop('😠 A customer walked out', true); }
@@ -267,9 +304,9 @@ export function mount(container, api) {
     applyEvent(data) {
       if (!data) return;
       if (data.kind === 'state') apply(data);
-      else if (data.kind === 'moveRejected') { sfx.play('error'); msg = REJECT[data.reason] || ''; render(); }
+      else if (data.kind === 'moveRejected') { ui.pouring = false; sfx.play('error'); msg = REJECT[data.reason] || ''; render(); }
     },
     applyRoster() {},
-    unmount() { clearInterval(frame); document.removeEventListener('keydown', onKey); container.innerHTML = ''; },
+    unmount() { clearInterval(frame); document.removeEventListener('keydown', onKey); document.removeEventListener('pointerup', stopPour); document.removeEventListener('keyup', onKeyUp); container.innerHTML = ''; },
   };
 }

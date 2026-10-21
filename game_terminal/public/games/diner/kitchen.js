@@ -3,7 +3,11 @@
 import { ICON, face, setMood } from './art.js';
 
 export const GRILL_KEYS = ['q', 'w', 'e', 'r'];
+export const STATION_KEYS = { fryer: 'f', fountain: 'd', shake: 's' };
 const ZONE = { rare: '#e05050', medium: '#c07a40', well: '#7a5236' };
+export const SIDE_ICON = { fryer: '🍟', fountain: '🥤', shake: '🍨' };
+export const FLAVOR = { fries: '#f4c430', cola: '#5a2d1a', lemon: '#c8e64a', orange: '#ff9f1c', vanilla: '#fff3c4', chocolate: '#7b4a2a', strawberry: '#ff8fab' };
+const STATION_VERB = { fryer: ['DROP BASKET', 'PULL'], fountain: ['HOLD TO POUR', 'RELEASE'], shake: ['BLEND', 'POUR'] };
 
 export function makeCook(c) {
   const R = () => c.view.rules;
@@ -30,9 +34,22 @@ export function makeCook(c) {
     const cook = donenessKey(b.patty.cooked);
     const fit = (t) => (t.doneness === cook ? 100 : 0) + t.toppings.filter((x, i) => b.toppings[i] === x).length * 10
       - Math.abs(t.toppings.length - b.toppings.length) * 5;
-    return tickets.reduce((best, t) => (!best || fit(t) > fit(best) || (fit(t) === fit(best) && t.at < best.at) ? t : best), null);
+    const sides = (t) => Object.entries(t.sides || {}).filter(([id, f]) => c.view.tray[id] && c.view.tray[id].flavor === f).length * 10;
+    const fitAll = (t) => fit(t) + sides(t);
+    return tickets.reduce((best, t) => (!best || fitAll(t) > fitAll(best) || (fitAll(t) === fitAll(best) && t.at < best.at) ? t : best), null);
   }
-  return { pattyColor, donenessKey, donenessLabel, bestTicket };
+  // 0-1 like the server's sideQuality, ignoring flavour (the slip shows that).
+  function sideTiming(id, ms) {
+    const { window: [lo, hi], ruin, slop } = c.view.catalog.STATIONS[id];
+    return ms >= ruin ? 0 : ms < lo ? Math.max(0, 1 - (lo - ms) / slop) : ms > hi ? 1 - (ms - hi) / (ruin - hi) : 1;
+  }
+  // The flavour a station should make next: what the oldest ticket wanting it still needs.
+  function wantedFlavor(id) {
+    const tray = c.view.tray[id];
+    const t = c.view.tickets.find((x) => x.sides && x.sides[id] && (!tray || tray.flavor !== x.sides[id]));
+    return t ? t.sides[id] : c.view.catalog.STATIONS[id].flavors[0];
+  }
+  return { pattyColor, donenessKey, donenessLabel, bestTicket, sideTiming, wantedFlavor };
 }
 
 export function renderKitchen(c, cook, rang) {
@@ -72,6 +89,13 @@ export function renderKitchen(c, cook, rang) {
       s.title = x;
       want.append(s);
     });
+    for (const [id, f] of Object.entries(t.sides || {})) {
+      const tr = view.tray[id];
+      const s = el('span', `dn-side${tr ? (tr.flavor === f ? ' ok' : ' bad') : ''}`, SIDE_ICON[id]);
+      s.style.setProperty('--fl', FLAVOR[f]);
+      s.title = id === 'fryer' ? 'fries' : `${f} ${id === 'shake' ? 'shake' : 'soda'}`;
+      want.append(s);
+    }
     let mood = 'happy';
     live.push(() => {
       const left = Math.max(0, 1 - (clock.now() - t.at) / R.WALK_OUT_MS);
@@ -173,7 +197,76 @@ export function renderKitchen(c, cook, rang) {
   padCol.append(el('div', 'dn-h', 'TOPPINGS'), pad, actions);
   kitchen.append(padCol);
 
-  page.append(kitchen, el('div', 'dn-msg', c.msg),
-    el('div', 'dn-help', 'Q/W/E/R patty on or plate · shift+key scrape · number keys toppings · BACKSPACE undo · X trash · SPACE serve'));
+  page.append(kitchen);
+  if (view.perks.stations.length) page.append(renderStations(c, cook));
+  page.append(el('div', 'dn-msg', c.msg),
+    el('div', 'dn-help', `Q/W/E/R patty on or plate · shift+key scrape · number keys toppings · BACKSPACE undo · X trash · SPACE serve${view.perks.stations.length ? ' · F fries · hold D soda · S shake' : ''}`));
   return page;
+}
+
+// Fryer, soda fountain, shake machine: start, watch the needle, stop it in the green. The fountain pours
+// while held (the client stops it on pointerup / key up, see client.js).
+function renderStations(c, cook) {
+  const { view, el, btn, send, sfx, clock, live, ui } = c;
+  const row = el('div', 'dn-stations');
+  for (const id of view.perks.stations) {
+    const S = view.catalog.STATIONS[id];
+    const run = view.stations[id];
+    const tray = view.tray[id];
+    const card = el('div', `dn-station ${id}`);
+    const head = el('div', 'dn-st-h');
+    head.append(el('b', null, `${SIDE_ICON[id]} ${S.name}`), el('span', 'dn-key', STATION_KEYS[id].toUpperCase()));
+    card.append(head);
+    // The vessel: oil with a basket, a cup filling to the line, or the blender jug.
+    const pot = el('div', `dn-pot ${id}`);
+    const fill = el('div', 'dn-fill');
+    pot.append(fill);
+    if (id === 'fountain') pot.append(el('div', 'dn-line'));
+    card.append(pot);
+    const bar = el('div', 'dn-bar');
+    const [lo, hi] = S.window;
+    const zone = el('span');
+    Object.assign(zone.style, { left: `${(lo / S.ruin) * 100}%`, width: `${((hi - lo) / S.ruin) * 100}%`, background: '#2ecc71' });
+    const needle = el('i');
+    bar.append(zone, needle);
+    card.append(bar);
+    if (run) {
+      fill.style.setProperty('--fl', FLAVOR[run.flavor]);
+      live.push(() => {
+        const ms = Math.max(0, clock.now() - run.at);
+        const k = Math.min(1, ms / S.ruin);
+        needle.style.left = `${k * 100}%`;
+        fill.style.height = id === 'fountain' ? `${Math.min(100, (ms / hi) * 86)}%` : '70%';
+        pot.classList.toggle('spill', ms >= S.ruin && id === 'fountain');
+        pot.classList.toggle('ruined', ms >= S.ruin && id !== 'fountain');
+        pot.classList.toggle('good', ms >= lo && ms <= hi);
+      });
+      pot.classList.add('on');
+      if (id === 'fountain') card.append(el('div', 'dn-st-act', `pouring ${run.flavor}… let go at the line`));
+      else card.append(btn(`${STATION_VERB[id][1]} ▸`, () => { sfx.play('pop'); send({ kind: 'station_stop', id }); }, 'dn-btn small go'));
+    } else if (tray) {
+      fill.style.setProperty('--fl', FLAVOR[tray.flavor]);
+      fill.style.height = id === 'fountain' ? `${Math.min(100, (tray.ms / hi) * 86)}%` : '70%';
+      const q = Math.round(cook.sideTiming(id, tray.ms) * 100);
+      const ready = el('div', 'dn-st-act');
+      ready.append(el('b', q >= 80 ? 'ok' : 'bad', `${id === 'fryer' ? '' : `${tray.flavor} `}ready · ${q}%`),
+        btn('✕', () => { sfx.play('crash'); send({ kind: 'dump', id }); }, 'dn-btn icon'));
+      card.append(ready);
+    } else {
+      const picks = el('div', 'dn-st-picks');
+      const want = cook.wantedFlavor(id);
+      for (const f of S.flavors) {
+        const label = id === 'fryer' ? STATION_VERB[id][0] : f;
+        const b = btn(label, () => {}, `dn-btn small dn-flavor${f === want && S.flavors.length > 1 ? ' want' : ''}`);
+        b.style.setProperty('--fl', FLAVOR[f]);
+        if (id === 'fountain') {
+          b.addEventListener('pointerdown', (e) => { e.preventDefault(); ui.pouring = true; sfx.play('whoosh'); send({ kind: 'station', id, flavor: f }); });
+        } else b.addEventListener('click', () => { sfx.play('whoosh'); send({ kind: 'station', id, flavor: f }); });
+        picks.append(b);
+      }
+      card.append(picks);
+    }
+    row.append(card);
+  }
+  return row;
 }
