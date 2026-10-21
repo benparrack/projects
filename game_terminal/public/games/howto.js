@@ -98,6 +98,7 @@ export const HOWTO = {
       'Grill a patty and plate it when the needle is in the right zone (it burns if you wait too long). Stack the toppings in order, then serve that customer.',
       'Each order scores doneness 40, toppings in order 40, speed 20. A 60+ order pays the full menu price, and anything over 50 tips. Bigger burgers sell for more; customers walk out if they wait too long.',
       'Stations (fryer, soda fountain, shake machine) add sides to tickets. Start one, then stop it while the needle is in the green; the fountain pours while you hold it. Sides are 40% of the order score, and getting every item right is a COMBO for +25%.',
+      'Hire staff from the Staff tab: a fry cook and a soda jerk run their station for you, a prep cook stacks toppings onto a plated patty, and a host brings more customers and more patience. Each takes a wage at the end of every shift (more at bigger tiers).',
       'No pay cap: everything you earn goes into your casino balance. Leaving mid-shift forfeits it.',
       'Between shifts, buy upgrades in the shop (more grills, faster burners, more seats, extra toppings and more) and grow from a food truck to a diner, restaurant and franchise. Every tier multiplies your menu prices.',
     ],

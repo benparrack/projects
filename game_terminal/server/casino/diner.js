@@ -27,6 +27,10 @@ const UPGRADES = [
   { id: 'billboard', tab: 'dining', name: 'Billboard', icon: '🪧', prices: [600, 5000, 30000], tiers: [0, 1, 2], desc: 'Customers show up 20% more often per level.' },
   { id: 'fryer', tab: 'stations', name: 'Fryer', icon: '🍟', prices: [400], tiers: [0], desc: 'Customers order fries: drop the basket, pull it when golden.' },
   { id: 'fountain', tab: 'stations', name: 'Soda fountain', icon: '🥤', prices: [600], tiers: [0], desc: 'Customers order drinks: hold to fill the cup to the line without spilling.' },
+  { id: 'frycook', tab: 'staff', name: 'Fry cook', icon: '🧑‍🍳', prices: [1200], tiers: [0], wage: 8, needs: 'fryer', desc: 'Keeps fries coming for every ticket that wants them, perfectly golden.' },
+  { id: 'jerk', tab: 'staff', name: 'Soda jerk', icon: '🧃', prices: [1500], tiers: [0], wage: 8, needs: 'fountain', desc: 'Pours every soda your customers order, right to the line.' },
+  { id: 'prep', tab: 'staff', name: 'Prep cook', icon: '🔪', prices: [2500], tiers: [1], wage: 15, desc: 'Once a patty is on the board, adds the next topping for you every 2.5 seconds.' },
+  { id: 'host', tab: 'staff', name: 'Host', icon: '🤵', prices: [4000], tiers: [1], wage: 20, desc: 'Seats people faster (+10% customers) and keeps them happy (+25% patience).' },
   { id: 'shake', tab: 'stations', name: 'Shake machine', icon: '🍨', prices: [2500], tiers: [1], desc: 'Customers order milkshakes: blend the right flavour for the right time.' },
 ];
 
@@ -39,6 +43,7 @@ const STATIONS = {
 };
 const SIDE_ODDS = 45; // % chance a ticket asks for each side you can make
 const COMBO_BONUS = 0.25;
+const PREP_MS = 2500; // how often the prep cook adds a topping
 
 const BURGER_PRICE = 5; // plus TOPPING_PRICE per topping on the ticket
 const TOPPING_PRICE = 0.75;
@@ -53,6 +58,7 @@ const level = (d, id) => d.levels[id] || 0;
 // Everything a shift reads from the restaurant, snapshotted when it starts.
 function perks(d) {
   const L = (id) => level(d, id);
+  const staff = UPGRADES.filter((u) => u.wage && L(u.id));
   return {
     tier: d.tier,
     grills: 1 + L('grill'),
@@ -61,10 +67,13 @@ function perks(d) {
     toppings: TOPPINGS.slice(0, BASE_TOPPINGS + 2 * L('toppings')),
     tipMult: 1.25 ** L('premium'),
     maxTickets: 2 + L('seats'),
-    patienceMult: 1.2 ** L('booths'),
-    arriveMult: 0.8 ** L('billboard'),
+    patienceMult: 1.2 ** L('booths') * (L('host') ? 1.25 : 1),
+    arriveMult: 0.8 ** L('billboard') * (L('host') ? 0.9 : 1),
     priceMult: TIERS[d.tier].mult,
     stations: Object.keys(STATIONS).filter((id) => L(id) > 0),
+    staff: staff.map((u) => u.id),
+    // Wages are paid at the end of every shift and scale with the tier, like prices.
+    wages: Math.round(staff.reduce((a, u) => a + u.wage, 0) * TIERS[d.tier].mult * 100) / 100,
   };
 }
 
@@ -79,6 +88,7 @@ function quote(d, id) {
   const n = level(d, id);
   if (n >= u.prices.length) return { err: 'maxed' };
   if (d.tier < u.tiers[n]) return { err: 'tier', need: TIERS[u.tiers[n]].name };
+  if (u.needs && !level(d, u.needs)) return { err: 'needs', need: UPGRADES.find((x) => x.id === u.needs).name };
   return { cost: u.prices[n] };
 }
 
@@ -113,4 +123,4 @@ function orderPay(p, ticket, score, combo = false) {
   return { price: Math.round(paid * 100) / 100, tip: Math.round(tip * 100) / 100 };
 }
 
-module.exports = { TIERS, TOPPINGS, UPGRADES, STATIONS, SIDE_ODDS, fresh, normalize, perks, quote, buy, sideQuality, orderPay };
+module.exports = { TIERS, TOPPINGS, UPGRADES, STATIONS, SIDE_ODDS, PREP_MS, fresh, normalize, perks, quote, buy, sideQuality, orderPay };

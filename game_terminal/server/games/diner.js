@@ -71,6 +71,7 @@ function start(room, id, now) {
     rules: { ...cookRules(perks.cookMult), WALK_OUT_MS: Math.round(WALK_OUT_MS * perks.patienceMult) }, grills: Array(perks.grills).fill(null),
     stations: Object.fromEntries(perks.stations.map((s) => [s, null])) });
   st.nextArrival = now + Math.round(between(ARRIVE_MS) * perks.arriveMult);
+  st.prepAt = now + restaurant.PREP_MS;
   newTicket(st, now);
   return null;
 }
@@ -79,9 +80,11 @@ function finish(room) {
   const st = room.state;
   const before = room.wallet ? dinerOf(room, st.worker).bestShift : 0;
   const earned = Math.round((st.revenue + st.tips) * 100) / 100;
-  const paid = room.wallet ? room.wallet.payShift(st.worker, earned) : earned;
+  const wages = st.perks.wages;
+  const net = Math.max(0, Math.round((earned - wages) * 100) / 100);
+  const paid = room.wallet ? room.wallet.payShift(st.worker, net) : net;
   const best = st.served.reduce((a, o) => (!a || o.score > a.score ? o : a), null);
-  st.report = { served: st.served.length, missed: st.missed, combos: st.combos, revenue: st.revenue, tips: st.tips, paid,
+  st.report = { served: st.served.length, missed: st.missed, combos: st.combos, revenue: st.revenue, tips: st.tips, wages, paid,
     avg: st.served.length ? Math.round(st.served.reduce((a, o) => a + o.score, 0) / st.served.length) : 0,
     best, newBest: paid > before && paid > 0 };
   st.phase = 'report';
@@ -193,6 +196,35 @@ function step(room, now) {
   if (now >= st.nextArrival) {
     if (st.tickets.length < st.perks.maxTickets) { newTicket(st, now); changed = true; }
     st.nextArrival = now + Math.round(between(ARRIVE_MS) * st.perks.arriveMult);
+  }
+  return staffWork(st, now) || changed;
+}
+
+// Hired staff, on the room tick. The fry cook and soda jerk run their station for whatever a waiting
+// ticket wants and pull it mid-window; the prep cook stacks the next topping for the oldest ticket the
+// board still fits.
+const STAFF_STATION = { frycook: 'fryer', jerk: 'fountain' };
+function staffWork(st, now) {
+  let changed = false;
+  for (const [who, sid] of Object.entries(STAFF_STATION)) {
+    if (!st.perks.staff.includes(who)) continue;
+    const run = st.stations[sid];
+    const { window: [lo, hi] } = restaurant.STATIONS[sid];
+    if (run && now - run.at >= (lo + hi) / 2) {
+      st.tray[sid] = { flavor: run.flavor, ms: Math.round((lo + hi) / 2) };
+      st.stations[sid] = null;
+      changed = true;
+    } else if (!run && !st.tray[sid]) {
+      const t = st.tickets.find((x) => x.sides && x.sides[sid]);
+      if (t) { st.stations[sid] = { flavor: t.sides[sid], at: now }; changed = true; }
+    }
+  }
+  if (st.perks.staff.includes('prep') && now >= st.prepAt) {
+    st.prepAt = now + restaurant.PREP_MS;
+    const b = st.build.toppings;
+    const t = st.build.patty && b.length < MAX_STACK
+      && st.tickets.find((x) => x.toppings.length > b.length && b.every((item, i) => x.toppings[i] === item));
+    if (t) { b.push(t.toppings[b.length]); changed = true; }
   }
   return changed;
 }

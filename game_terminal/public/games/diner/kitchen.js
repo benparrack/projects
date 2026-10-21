@@ -68,6 +68,7 @@ export function renderKitchen(c, cook, rang) {
     timer.classList.toggle('low', s <= 20);
   });
   top.append(timer, el('span', 'dn-pill', `🍔 ${view.served.length} served`), el('span', 'dn-pill money', `💰 ${money(view.revenue + view.tips)}`));
+  if (view.perks.staff.includes('prep')) top.append(el('span', 'dn-pill', '🔪 prep cook'));
   page.append(top);
 
   // The counter: one customer per ticket. Click one (or SPACE for the highlighted one) to serve.
@@ -215,13 +216,15 @@ function renderStations(c, cook) {
     const tray = view.tray[id];
     const card = el('div', `dn-station ${id}`);
     const head = el('div', 'dn-st-h');
-    head.append(el('b', null, `${SIDE_ICON[id]} ${S.name}`), el('span', 'dn-key', STATION_KEYS[id].toUpperCase()));
+    const crew = { fryer: 'frycook', fountain: 'jerk' }[id];
+    head.append(el('b', null, `${SIDE_ICON[id]} ${S.name}`), view.perks.staff.includes(crew)
+      ? el('span', 'dn-crew', crew === 'frycook' ? '🧑‍🍳 fry cook' : '🧃 soda jerk') : el('span', 'dn-key', STATION_KEYS[id].toUpperCase()));
     card.append(head);
     // The vessel: oil with a basket, a cup filling to the line, or the blender jug.
     const pot = el('div', `dn-pot ${id}`);
     const fill = el('div', 'dn-fill');
     pot.append(fill);
-    if (id === 'fountain') pot.append(el('div', 'dn-line'));
+    if (id === 'fountain') pot.append(el('div', 'dn-fillline'));
     card.append(pot);
     const bar = el('div', 'dn-bar');
     const [lo, hi] = S.window;
@@ -242,10 +245,12 @@ function renderStations(c, cook) {
         pot.classList.toggle('good', ms >= lo && ms <= hi);
       });
       pot.classList.add('on');
-      if (id === 'fountain') card.append(el('div', 'dn-st-act', `pouring ${run.flavor}… let go at the line`));
+      if (view.perks.staff.includes(crew)) card.append(el('div', 'dn-st-act', `${crew === 'jerk' ? 'pouring' : 'frying'} ${run.flavor}…`));
+      else if (id === 'fountain') card.append(el('div', 'dn-st-act', `pouring ${run.flavor}… let go at the line`));
       else card.append(btn(`${STATION_VERB[id][1]} ▸`, () => { sfx.play('pop'); send({ kind: 'station_stop', id }); }, 'dn-btn small go'));
     } else if (tray) {
       fill.style.setProperty('--fl', FLAVOR[tray.flavor]);
+      pot.classList.add('done');
       fill.style.height = id === 'fountain' ? `${Math.min(100, (tray.ms / hi) * 86)}%` : '70%';
       const q = Math.round(cook.sideTiming(id, tray.ms) * 100);
       const ready = el('div', 'dn-st-act');

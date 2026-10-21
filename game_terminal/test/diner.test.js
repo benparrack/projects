@@ -209,6 +209,50 @@ test('stations: sides on tickets, timing scores, combos pay +25%', () => {
   assert.strictEqual(room.act('A', { kind: 'dump', id: 'fryer' }), 'nothing');
 });
 
+test('staff: needs gates, wages by tier, fry cook / soda jerk / prep cook work on the tick', () => {
+  const d = R.fresh();
+  assert.deepStrictEqual(R.quote(d, 'frycook'), { err: 'needs', need: 'Fryer' });
+  assert.deepStrictEqual(R.quote(d, 'prep'), { err: 'tier', need: 'Diner' });
+  d.levels = { fryer: 1, fountain: 1, frycook: 1, jerk: 1, prep: 1, host: 1 };
+  d.tier = 1;
+  const p = R.perks(d);
+  assert.deepStrictEqual([p.staff, p.wages], [['frycook', 'jerk', 'prep', 'host'], 81.6]); // (8+8+15+20) x 1.6
+  assert.deepStrictEqual([+p.patienceMult.toFixed(3), +p.arriveMult.toFixed(3)], [1.25, 0.9]);
+
+  const clock = { now: 20e9 };
+  T.setClock(() => clock.now);
+  T.setRng(() => 0); // rare, two toppings, fries + cola every ticket
+  const room = makeRoom(['A']);
+  room.w.payShift('g:A', 5000);
+  for (const id of ['fryer', 'fountain', 'frycook', 'jerk']) assert.strictEqual(room.act('A', { kind: 'buy', id }), null);
+  room.act('A', { kind: 'start' });
+  const tk = room.state.tickets[0];
+  room.act('A', { kind: 'grill', slot: 0 });
+  for (let t = 0; t < 7000; t += 100) { clock.now += 100; T.step(room, clock.now); }
+  assert.deepStrictEqual(room.state.tray, { fryer: { flavor: 'fries', ms: 6500 }, fountain: { flavor: 'cola', ms: 2775 } });
+  room.act('A', { kind: 'plate', slot: 0 });
+  for (const item of tk.toppings) room.act('A', { kind: 'top', item });
+  room.act('A', { kind: 'serve', ticket: tk.id });
+  assert.deepStrictEqual([room.state.served[0].score, room.state.served[0].combo], [100, true]);
+  // The wage comes off the shift's earnings (and never takes the shift below zero).
+  clock.now = room.state.endsAt;
+  T.step(room, clock.now);
+  const r = room.state.report;
+  assert.deepStrictEqual([r.wages, r.paid], [16, Math.round((r.revenue + r.tips - 16) * 100) / 100]);
+
+  // Prep cook (Diner tier): stacks toppings onto a plated patty in the ticket's order.
+  const room2 = makeRoom(['B']);
+  room2.w.payShift('g:B', 10000);
+  for (const id of ['tier', 'prep']) assert.strictEqual(room2.act('B', { kind: 'buy', id }), null);
+  room2.act('B', { kind: 'start' });
+  const t2 = room2.state.tickets[0];
+  room2.act('B', { kind: 'grill', slot: 0 });
+  clock.now += 5000;
+  room2.act('B', { kind: 'plate', slot: 0 });
+  for (let t = 0; t < 5100; t += 100) { clock.now += 100; T.step(room2, clock.now); }
+  assert.deepStrictEqual(room2.state.build.toppings, t2.toppings);
+});
+
 (async () => {
   for (const { name, fn } of tests) {
     try { await fn(); console.log(`ok   ${name}`); } catch (err) { failures++; console.log(`FAIL ${name}\n     ${err.stack}`); }

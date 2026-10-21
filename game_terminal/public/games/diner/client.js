@@ -56,7 +56,7 @@ const CSS = `
 
 .dn-shop { background: var(--cream); border: 3px solid var(--ink); border-radius: 16px; padding: 10px; }
 .dn-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.dn-tab { background: #fff; border: 3px solid var(--ink); border-radius: 12px 12px 4px 4px; padding: 5px 12px; font-weight: 600; font-size: .95em; }
+.dn-tab { background: #fff; border: 3px solid var(--ink); border-radius: 12px 12px 4px 4px; padding: 5px 9px; font-weight: 600; font-size: .88em; white-space: nowrap; }
 .dn .dn-tab:hover { background: #fff3c4; color: var(--ink); }
 .dn .dn-tab.on { background: var(--red); color: #fff; }
 .dn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; }
@@ -150,20 +150,23 @@ const CSS = `
 
 .dn-side { position: relative; } .dn-side::after { content: ''; position: absolute; right: -2px; bottom: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--fl); border: 1.5px solid var(--ink); }
 .dn-side.ok { filter: drop-shadow(0 0 3px var(--green)); } .dn-side.bad { opacity: .45; }
+.dn-crew { font-size: .75em; font-weight: 600; background: var(--yellow); border: 2px solid var(--ink); border-radius: 99px; padding: 0 6px; }
+.dn-wage { font-size: .8em; font-weight: 600; color: #8a5a00; }
 .dn-stations { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .dn-station { background: #fff; border: 3px solid var(--ink); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
 .dn-st-h { display: flex; justify-content: space-between; width: 100%; }
 .dn-pot { position: relative; width: 70px; height: 62px; border: 3px solid var(--ink); border-radius: 6px 6px 14px 14px; overflow: hidden; background: #f4f4f4; display: flex; align-items: flex-end; }
 .dn-pot.fryer { width: 96px; height: 50px; border-radius: 8px; background: #6b6b6b; }
 .dn-pot.fryer .dn-fill { background: #e8b23a; opacity: .5; }
-.dn-pot.fryer.on .dn-fill { opacity: 1; background: repeating-linear-gradient(90deg, #f4c430 0 6px, #e0a020 6px 9px); animation: dn-bubble .5s ease-in-out infinite alternate; }
+.dn-pot.fryer.on .dn-fill, .dn-pot.fryer.done .dn-fill { opacity: 1; background: repeating-linear-gradient(90deg, #f4c430 0 6px, #e0a020 6px 9px); animation: dn-bubble .5s ease-in-out infinite alternate; }
+.dn-pot.fryer.done .dn-fill { animation: none; }
 .dn-pot.fountain { width: 52px; height: 72px; border-radius: 4px 4px 12px 12px; clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%); }
 .dn-pot.shake { width: 58px; border-radius: 8px 8px 4px 4px; }
 .dn-pot.shake.on .dn-fill { animation: dn-whirl .25s linear infinite; }
 .dn-fill { width: 100%; height: 0; background: var(--fl, #ddd); transition: height .1s linear; }
 .dn-pot.ruined .dn-fill { background: #2b2b2b !important; } .dn-pot.spill { box-shadow: 0 6px 0 -2px var(--fl); }
 .dn-pot.good { outline: 3px solid var(--green); }
-.dn-line { position: absolute; left: 0; right: 0; bottom: 86%; border-top: 2px dashed var(--red); }
+.dn-fillline { position: absolute; left: 0; right: 0; bottom: 86%; border-top: 2px dashed var(--red); }
 .dn-st-act { display: flex; gap: 6px; align-items: center; font-size: .85em; font-weight: 600; text-align: center; }
 .dn-st-act .ok { color: #1e8449; } .dn-st-act .bad { color: var(--red); }
 .dn-st-picks { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }

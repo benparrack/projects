@@ -15,10 +15,14 @@ const EFFECT = {
   fryer: () => ['no fries', '🍟 fries +$2'],
   fountain: () => ['no drinks', '🥤 sodas +$1.50'],
   shake: () => ['no shakes', '🍨 shakes +$3.50'],
+  frycook: () => ['you fry', 'fries on autopilot'],
+  jerk: () => ['you pour', 'sodas on autopilot'],
+  prep: () => ['you stack', 'auto-toppings'],
+  host: () => ['no host', '+25% patience'],
   billboard: (n) => [`+${pct(1 / 0.8 ** n - 1)} customers`, `+${pct(1 / 0.8 ** (n + 1) - 1)} customers`],
 };
-const TABS = [['kitchen', '🍳 Kitchen'], ['stations', '🍟 Stations'], ['dining', '🪑 Dining room'], ['expand', '🏗️ Expand']];
-export const BUY_ERR = { broke: "You can't afford that yet.", tier: 'Upgrade your restaurant first.', maxed: 'Already maxed out.', bad_name: "That name won't fit on the sign." };
+const TABS = [['kitchen', '🍳 Kitchen'], ['stations', '🍟 Stations'], ['dining', '🪑 Dining room'], ['staff', '🧑‍🍳 Staff'], ['expand', '🏗️ Expand']];
+export const BUY_ERR = { broke: "You can't afford that yet.", tier: 'Upgrade your restaurant first.', maxed: 'Already maxed out.', needs: 'Buy that station first.', bad_name: "That name won't fit on the sign." };
 
 export function renderHome(c) {
   const { view, el, btn, money, ui } = c;
@@ -66,12 +70,13 @@ export function renderHome(c) {
   return page;
 }
 
-function buyButton(c, id, q) {
+function buyButton(c, id, q, u) {
   const { btn, money, view } = c;
-  if (q.err === 'maxed') return c.el('div', 'dn-owned', '✔ MAXED');
+  if (q.err === 'maxed') return c.el('div', 'dn-owned', u && u.wage ? '✔ HIRED' : '✔ MAXED');
+  if (q.err === 'needs') return c.el('div', 'dn-locked', `🔒 Needs a ${q.need.toLowerCase()}`);
   if (q.err === 'tier') return c.el('div', 'dn-locked', `🔒 Needs ${q.need}`);
   const short = q.cost - (view.balance || 0);
-  const b = btn(`BUY ${money(q.cost)}`, () => { c.sfx.play('chips'); c.send({ kind: 'buy', id }); }, 'dn-btn buy');
+  const b = btn(`${u && u.wage ? 'HIRE' : 'BUY'} ${money(q.cost)}`, () => { c.sfx.play('chips'); c.send({ kind: 'buy', id }); }, 'dn-btn buy');
   if (short <= 0) return b;
   b.disabled = true;
   const wrap = c.el('div', 'dn-buywrap');
@@ -91,7 +96,9 @@ function upgradeCard(c, u) {
   const eff = el('div', 'dn-eff');
   eff.append(el('span', null, now));
   if (n < u.prices.length) eff.append(el('span', 'dn-arrow', '→'), el('b', null, next));
-  card.append(head, pips, el('div', 'dn-desc', u.desc), eff, buyButton(c, u.id, view.restaurant.quotes[u.id]));
+  card.append(head, pips, el('div', 'dn-desc', u.desc), eff);
+  if (u.wage) card.append(el('div', 'dn-wage', `wage ${c.money(u.wage * view.catalog.TIERS[view.restaurant.tier].mult)} a shift`));
+  card.append(buyButton(c, u.id, view.restaurant.quotes[u.id], u));
   return card;
 }
 
@@ -121,7 +128,9 @@ export function renderReport(c) {
   card.append(line('Orders served', r.served), line('Walked out', r.missed, r.missed ? 'bad' : ''), line('Average order', `${r.avg}%`));
   if (r.combos) card.append(line('Combos (+25%)', r.combos));
   if (r.best) card.append(line('Best order', `#${r.best.id} · ${r.best.score}%`));
-  card.append(el('div', 'dn-rule'), line('Sales', money(r.revenue)), line('Tips', money(r.tips)), el('div', 'dn-rule'));
+  card.append(el('div', 'dn-rule'), line('Sales', money(r.revenue)), line('Tips', money(r.tips)));
+  if (r.wages) card.append(line('Wages', `−${money(r.wages)}`, 'bad'));
+  card.append(el('div', 'dn-rule'));
   const total = line('TOTAL', money(0), 'total');
   card.append(total);
   if (r.newBest) card.append(el('div', 'dn-stamp', 'NEW BEST SHIFT!'));
