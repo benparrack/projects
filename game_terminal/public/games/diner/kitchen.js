@@ -4,8 +4,8 @@ import { icon, HAT, face, setMood } from './art.js';
 
 export const GRILL_KEYS = ['q', 'w', 'e', 'r'];
 export const STATION_KEYS = { fryer: 'f', fountain: 'd', shake: 's' };
-const ZONE = { rare: '#e05050', medium: '#c07a40', well: '#7a5236' };
-export const FLAVOR = { fries: '#f4c430', cola: '#5a2d1a', lemon: '#c8e64a', orange: '#ff9f1c', vanilla: '#fff3c4', chocolate: '#7b4a2a', strawberry: '#ff8fab' };
+const ZONE = { rare: '#a8483a', medium: '#8e6240', well: '#5a4334' };
+export const FLAVOR = { fries: '#d9a446', cola: '#4a2a1c', lemon: '#c4c86a', orange: '#d9853a', vanilla: '#efe6cc', chocolate: '#6b4430', strawberry: '#d98a8a' };
 const STATION_VERB = { fryer: ['DROP BASKET', 'PULL'], fountain: ['HOLD TO POUR', 'RELEASE'], shake: ['BLEND', 'POUR'] };
 
 export function makeCook(c) {
@@ -103,8 +103,8 @@ export function renderKitchen(c, cook, rang) {
     let mood = 'happy';
     live.push(() => {
       const left = Math.max(0, 1 - (clock.now() - t.at) / (t.wait || R.WALK_OUT_MS));
-      const color = left < 0.3 ? '#e74c3c' : left < 0.6 ? '#f39c12' : '#2ecc71';
-      ring.style.background = `conic-gradient(${color} ${left * 360}deg, rgba(0,0,0,.15) 0)`;
+      const color = left < 0.3 ? '#d26e54' : left < 0.6 ? '#d9a446' : '#8fb58e';
+      ring.style.background = `conic-gradient(${color} ${left * 360}deg, rgba(236,226,208,.08) 0)`;
       const m = left < 0.3 ? 'mad' : left < 0.6 ? 'meh' : 'happy';
       if (m !== mood) { mood = m; setMood(f, m); }
     });
@@ -150,7 +150,7 @@ export function renderKitchen(c, cook, rang) {
         patty.style.background = cook.pattyColor(ms);
         steam.classList.toggle('smoke', k === 'burnt');
         read.textContent = `${(ms / 1000).toFixed(1)}s ${cook.donenessLabel(ms)}`;
-        read.style.color = k === 'burnt' ? '#e74c3c' : ZONE[k] ? '#1e8449' : '#555';
+        read.style.color = k === 'burnt' ? '#d26e54' : ZONE[k] ? '#8fb58e' : '#9d9384';
         needle.style.left = `${Math.min(100, (ms / R.BURNT_MS) * 100)}%`;
         // The doneness bell: glow (and one ding) while it's cooked the way a waiting ticket wants it.
         const wanted = view.perks.bell && view.tickets.some((t) => t.doneness === k);
@@ -232,7 +232,7 @@ function renderStations(c, cook) {
     const bar = el('div', 'dn-bar');
     const [lo, hi] = S.window;
     const zone = el('span');
-    Object.assign(zone.style, { left: `${(lo / S.ruin) * 100}%`, width: `${((hi - lo) / S.ruin) * 100}%`, background: '#2ecc71' });
+    Object.assign(zone.style, { left: `${(lo / S.ruin) * 100}%`, width: `${((hi - lo) / S.ruin) * 100}%`, background: '#8fb58e' });
     const needle = el('i');
     bar.append(zone, needle);
     card.append(bar);

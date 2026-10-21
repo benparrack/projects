@@ -151,7 +151,7 @@ export function renderReport(c) {
     const d = r.rep.to - r.rep.from;
     card.append(line('Reputation', `${d >= 0 ? '+' : ''}${d} · ${'★'.repeat(r.rep.stars)}${'☆'.repeat(5 - r.rep.stars)}`, d < 0 ? 'bad' : ''));
   }
-  if (r.rep && r.rep.stars > r.rep.starsBefore) card.append(el('div', 'dn-stamp', `NEW STAR! ${'★'.repeat(r.rep.stars)}`));
+  if (r.rep && r.rep.stars > r.rep.starsBefore) card.append(el('div', 'dn-stamp', `NEW STAR ${'★'.repeat(r.rep.stars)}`));
   else if (r.rep && r.rep.stars < r.rep.starsBefore) card.append(el('div', 'dn-stamp bad', 'LOST A STAR'));
   if (r.newBest) card.append(el('div', 'dn-stamp', 'NEW BEST SHIFT'));
   const t0 = performance.now();
