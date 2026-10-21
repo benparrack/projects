@@ -816,14 +816,14 @@ export function mount(container, api) {
     let msg = '';
     if (phase === 'countdown') {
       const left = Math.ceil((view.raceStartAt - clock.now()) / 1000);
-      msg = left > 0 ? String(left) : 'GO!';
+      msg = left > 0 ? String(left) : 'GO';
       if (msg !== lastCountdown) { sfx.play(left > 0 ? 'beep' : 'go'); lastCountdown = msg; }
     } else if (phase === 'racing') {
-      if (lastCountdown !== 'GO!' && lastCountdown !== null) { sfx.play('go'); }
+      if (lastCountdown !== 'GO' && lastCountdown !== null) { sfx.play('go'); }
       lastCountdown = null;
       if (inRound && ball && !ball.alive) {
         const why = ball.cause === 'block' ? 'SMASHED' : ball.cause === 'wall' ? 'CRASHED' : 'FELL OFF';
-        if (!watching) msg = `${why}\n${deathS}${newBestThisRun ? '\nNEW BEST!' : ''}`;
+        if (!watching) msg = `${why}\n${deathS}${newBestThisRun ? '\nNEW BEST' : ''}`;
       }
     } else if (phase === 'results') {
       const left = Math.max(0, Math.ceil((view.phaseEndsAt - clock.now()) / 1000));

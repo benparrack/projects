@@ -209,11 +209,11 @@ export function mount(container, api) {
       status.textContent = 'Waiting for both seats to be filled.';
     } else if (view.phase === 'playing') {
       const mine = seat && seat === view.turn;
-      status.textContent = mine ? `▶ YOUR TURN (${seat.toUpperCase()})` : `${view.turn.toUpperCase()} TO MOVE — ${nicknameFor(view.players[view.turn])}`;
+      status.textContent = mine ? `▶ YOUR TURN (${seat.toUpperCase()})` : `${view.turn.toUpperCase()} TO MOVE. ${nicknameFor(view.players[view.turn])}`;
       if (mine) status.classList.add('mine');
       status.style.color = view.turn === 'black' ? '#c8c8c8' : '#ffffff';
     } else {
-      status.textContent = view.winner === 'draw' ? "IT'S A DRAW!" : `${view.winner.toUpperCase()} WINS ${Math.max(view.counts.black, view.counts.white)}–${Math.min(view.counts.black, view.counts.white)}!`;
+      status.textContent = view.winner === 'draw' ? "IT'S A DRAW" : `${view.winner.toUpperCase()} WINS ${Math.max(view.counts.black, view.counts.white)}–${Math.min(view.counts.black, view.counts.white)}!`;
       status.style.color = '#ffb000';
     }
     root.appendChild(status);
@@ -350,7 +350,7 @@ export function mount(container, api) {
       const call = document.createElement('div');
       call.className = 'rv-callout';
       const who = view.pass.color === seat ? 'YOU HAVE' : `${view.pass.color.toUpperCase()} HAS`;
-      call.textContent = `${who} NO MOVES — PASS`;
+      call.textContent = `${who} NO MOVES. PASS`;
       wrap.appendChild(call);
       setTimeout(() => call.remove(), 2300);
       sfx.play('beep');

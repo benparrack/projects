@@ -424,7 +424,7 @@ export function buildReviewView(opts) {
   hint.className = 'hint';
   const bits = [];
   if (played && cls && cls !== 'best' && before && before.best) bits.push(`Best was ${before.best.san}`);
-  if (here && here.best) bits.push(`${turn === 'white' ? 'White' : 'Black'} to move — engine plays ${here.best.san}`);
+  if (here && here.best) bits.push(`${turn === 'white' ? 'White' : 'Black'} to move. Engine plays ${here.best.san}`);
   else if (idx === plies) bits.push(opts.resultText);
   hint.textContent = bits.join(' · ');
   card.appendChild(hint);

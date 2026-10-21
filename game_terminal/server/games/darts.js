@@ -98,7 +98,7 @@ function endTurn(st) {
   st.prevTurn = { seat, darts: st.turnDarts, total: bust ? 0 : total, bust };
   if (!bust && st.mode !== 'cricket') {
     st.stats[seat].best = Math.max(st.stats[seat].best, total);
-    if (total === 180) setCallout(st, '180', seat, 'ONE HUNDRED AND EIGHTY!');
+    if (total === 180) setCallout(st, '180', seat, 'ONE HUNDRED AND EIGHTY');
     else if (total >= 100 && !st.winner) setCallout(st, 'ton', seat, `TON${total >= 140 ? '-FORTY' : ''}! ${total}`);
   }
   st.turnDarts = [];
@@ -173,7 +173,7 @@ function applyDart(st, x, y) {
     // Undo everything this turn scored.
     st.stats[seat].scored -= st.turnStart - st.scores[seat];
     st.scores[seat] = st.turnStart;
-    setCallout(st, 'bust', seat, 'BUST!');
+    setCallout(st, 'bust', seat, 'BUST');
     endTurn(st);
     return dart;
   }

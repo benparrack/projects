@@ -44,7 +44,7 @@ export function mount(container, api) {
     results.update(view && view.phase === 'game_over' ? seatResults({
       seats: view.seats, winners: [0, 1, 2, 3].filter((i) => i % 2 === view.winnerTeam), me: view.mySeat, nameFor: nicknameFor,
       value: (i) => `${view.teamScores[i % 2]} pts`, rank: (i) => -view.teamScores[i % 2] * 10 + (i % 2),
-      winTitle: `${view.winnerTeam === 0 ? 'NORTH/SOUTH' : 'EAST/WEST'} WIN!`, subtitle: view.winnerTeam === 0 ? 'North/South take the game' : 'East/West take the game', onRematch: () => api.sendAction({ kind: 'newGame' }),
+      winTitle: `${view.winnerTeam === 0 ? 'NORTH/SOUTH' : 'EAST/WEST'} WIN`, subtitle: view.winnerTeam === 0 ? 'North/South take the game' : 'East/West take the game', onRematch: () => api.sendAction({ kind: 'newGame' }),
     }) : null);
     root.innerHTML = '';
     if (!view) {
@@ -62,16 +62,16 @@ export function mount(container, api) {
       status.textContent = `Waiting for players (${seated}/4 seated).`;
     } else if (view.phase === 'bidding') {
       const name = nicknameFor(view.seats[view.biddingTurnIdx]);
-      status.textContent = view.biddingTurnIdx === mySeat ? 'YOUR TURN — make your bid' : `Bidding — ${name} to bid.`;
+      status.textContent = view.biddingTurnIdx === mySeat ? 'YOUR TURN. Make your bid' : `Bidding. ${name} to bid.`;
       if (view.biddingTurnIdx === mySeat) status.className = 'gt-your-turn';
     } else if (view.phase === 'playing') {
       const name = nicknameFor(view.seats[view.turnIdx]);
-      status.textContent = `Hand ${view.handNumber} — ${view.turnIdx === mySeat ? 'YOUR TURN' : `${name} to play`}${view.spadesBroken ? ' (spades broken)' : ''}`;
+      status.textContent = `Hand ${view.handNumber}. ${view.turnIdx === mySeat ? 'YOUR TURN' : `${name} to play`}${view.spadesBroken ? ' (spades broken)' : ''}`;
       if (view.turnIdx === mySeat) status.className = 'gt-your-turn';
     } else if (view.phase === 'hand_over') {
-      status.textContent = `Hand ${view.handNumber} over — see scores below.`;
+      status.textContent = `Hand ${view.handNumber} over. See scores below.`;
     } else if (view.phase === 'game_over') {
-      status.textContent = `${view.winnerTeam === 0 ? 'NORTH/SOUTH' : 'EAST/WEST'} WINS THE GAME!`;
+      status.textContent = `${view.winnerTeam === 0 ? 'NORTH/SOUTH' : 'EAST/WEST'} WINS THE GAME`;
     }
     root.appendChild(status);
 
@@ -103,7 +103,7 @@ export function mount(container, api) {
       name.style.fontWeight = i === mySeat ? 'bold' : 'normal';
       if (clientId) {
         const bid = view.bids ? view.bids[i] : null;
-        const bidText = view.phase === 'waiting' ? '' : bid === null || bid === undefined ? ' (no bid yet)' : bid === 0 ? ' — NIL' : ` — bid ${bid}`;
+        const bidText = view.phase === 'waiting' ? '' : bid === null || bid === undefined ? ' (no bid yet)' : bid === 0 ? ' · NIL' : ` · bid ${bid}`;
         const tricks = view.tricksWon ? view.tricksWon[i] : 0;
         name.textContent = `${nicknameFor(clientId)}${clientId === api.getClientId() ? ' (you)' : ''}${bidText}`;
         box.appendChild(name);

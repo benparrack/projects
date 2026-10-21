@@ -69,7 +69,7 @@ function board(type, g, me) {
         avatarEl(r.avatar, 24, r.cosmetics),
         h('a.daily-player', { href: `/u/${encodeURIComponent(r.username)}`, 'data-link': true, class: nameColor(r.cosmetics) }, r.username),
         h('span.daily-score', fmtScore(r.score, g.score)))))
-      : h('p.muted.empty', 'Nobody has finished yet. Be the first!'));
+      : h('p.muted.empty', 'Nobody has finished yet. Be the first.'));
 }
 
 export async function renderDaily(mount, { account, auth, play, signIn }) {

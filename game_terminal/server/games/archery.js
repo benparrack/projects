@@ -148,7 +148,7 @@ function finishShootoffRound(st) {
   }
   st.shootoff++;
   st.turn = st.shootoff % 2 ? 'p1' : 'p2';
-  setCallout(st, 'shootoff', null, 'DEAD LEVEL — SHOOT AGAIN');
+  setCallout(st, 'shootoff', null, 'DEAD LEVEL. SHOOT AGAIN');
 }
 
 function finishEnd(st) {
@@ -169,14 +169,14 @@ function finishEnd(st) {
     }
     st.shootoff = 1;
     st.turn = 'p1';
-    setCallout(st, 'shootoff', null, `TIED ${st.totals.p1}–${st.totals.p2} · SHOOT-OFF!`);
+    setCallout(st, 'shootoff', null, `TIED ${st.totals.p1}–${st.totals.p2} · SHOOT-OFF`);
     return;
   }
   st.end = e + 1;
   st.opener = other(st.opener);
   st.turn = st.opener;
   // A perfect end on the last arrow keeps its own callout; the scorecard shows the end anyway.
-  if (!(st.callout && st.callout.seq === st.shotNo)) setCallout(st, 'end', null, `END ${e} · P1 ${a} — P2 ${b}`);
+  if (!(st.callout && st.callout.seq === st.shotNo)) setCallout(st, 'end', null, `END ${e} · P1 ${a}. P2 ${b}`);
 }
 
 // Scores one arrow that landed at (x, y) for the archer to move. Returns the arrow record.

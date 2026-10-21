@@ -428,7 +428,7 @@ export function mount(container, api) {
   cards.className = 'sk-cards';
   const help = document.createElement('div');
   help.className = 'sk-help';
-  help.textContent = 'Drag up from anywhere on the lane and let go — sideways aims, a longer drag rolls harder. 9 balls each, three at a time. Rings score 10–50, the corner pockets 100. Highest score wins.';
+  help.textContent = 'Drag up from anywhere on the lane and let go. Sideways aims, a longer drag rolls harder. 9 balls each, three at a time. Rings score 10–50, the corner pockets 100. Highest score wins.';
   root.append(status, err, seats, stage, cards, help);
 
   function nicknameFor(id) {
@@ -511,12 +511,12 @@ export function mount(container, api) {
     if (rec.outcome === 'score') {
       const big = p >= 50;
       callout(`+${p}`, PTS_COLOR[p], { blink: true });
-      if (p >= 100) { sfx.play('kill'); setTimeout(() => sfx.play('chime'), 160); callout('JACKPOT!', '#e879f9', { small: true }); }
+      if (p >= 100) { sfx.play('kill'); setTimeout(() => sfx.play('chime'), 160); callout('JACKPOT', '#e879f9', { small: true }); }
       else if (big) { sfx.play('chime'); setTimeout(() => sfx.play('point'), 120); }
       else sfx.play('point');
       burstTickets(p);
     } else {
-      callout(rec.reason === 'pit' ? 'SHORT — GUTTER' : 'GUTTER', PTS_COLOR[0], { small: true });
+      callout(rec.reason === 'pit' ? 'SHORT. GUTTER' : 'GUTTER', PTS_COLOR[0], { small: true });
       sfx.play('beep', { vol: 0.7 });
     }
     renderDom();
@@ -898,13 +898,13 @@ export function mount(container, api) {
       status.textContent = `GAME OVER: ${view.totals[view.winner]} POINTS`;
       status.style.color = '#ffb000';
     } else if (over) {
-      status.textContent = view.winner === 'draw' ? `DRAW — ${view.totals.red} all` : `${view.winner.toUpperCase()} WINS ${view.totals[view.winner]} – ${view.totals[view.winner === 'red' ? 'blue' : 'red']}!`;
+      status.textContent = view.winner === 'draw' ? `DRAW. ${view.totals.red} all` : `${view.winner.toUpperCase()} WINS ${view.totals[view.winner]} – ${view.totals[view.winner === 'red' ? 'blue' : 'red']}!`;
       status.style.color = '#ffb000';
     } else if (seat && active === seat) {
-      status.textContent = `▶ YOUR ROLL — ${ballTxt}`;
+      status.textContent = `▶ YOUR ROLL. ${ballTxt}`;
       status.classList.add('mine');
     } else if (active) {
-      status.textContent = `${active.toUpperCase()} ROLLING — ${nicknameFor(view.players[active])} · ${ballTxt}`;
+      status.textContent = `${active.toUpperCase()} ROLLING. ${nicknameFor(view.players[active])} · ${ballTxt}`;
       status.style.color = TEXT_COLOR[active];
     }
     err.textContent = flashError ? REJECT_MESSAGES[flashError] || 'Roll rejected' : '';

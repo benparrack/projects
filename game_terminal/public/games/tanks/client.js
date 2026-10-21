@@ -142,7 +142,7 @@ export function mount(container, api) {
   ctrl.append(weapRow, mainRow);
   const help = document.createElement('div');
   help.className = 'tk-help';
-  help.textContent = 'Tap or drag on the battlefield to aim (direction = angle, distance = power) · ← → angle · ↑ ↓ power · hold A / D or ◀ ▶ to drive · 1-4 weapon · SPACE fires. Mind the wind!';
+  help.textContent = 'Tap or drag on the battlefield to aim (direction = angle, distance = power) · ← → angle · ↑ ↓ power · hold A / D or ◀ ▶ to drive · 1-4 weapon · SPACE fires. Mind the wind.';
   root.append(status, err, seats, stage, ctrl, help);
 
   // ---- local state ----
@@ -687,7 +687,7 @@ export function mount(container, api) {
     const proj = rec.projectiles[ev.p];
     if (proj && proj.end && proj.end.type === 'tank') {
       const victim = COLORS.find((c) => (ev.dmg[c] || 0) > 0 && c !== rec.by) ;
-      if (victim) callout('DIRECT HIT!', '#ffd23f', false);
+      if (victim) callout('DIRECT HIT', '#ffd23f', false);
     }
   }
 
@@ -701,7 +701,7 @@ export function mount(container, api) {
     fx.burst(X, Y, TEAM[c].body, { count: 24, speed: 260, life: 1.2, size: 3.5, gravity: 500, spread: Math.PI, angle: -Math.PI / 2 });
     fx.shake(16);
     setTimeout(() => sfx.play('kill'), 150);
-    callout('DESTROYED!', TEAM[c].text, false);
+    callout('DESTROYED', TEAM[c].text, false);
   }
 
   function stepAnim(now) {
@@ -742,7 +742,7 @@ export function mount(container, api) {
       const dealt = rec.hpBefore[opp] - rec.hpAfter[opp];
       const self = rec.hpBefore[rec.by] - rec.hpAfter[rec.by];
       const allOff = rec.projectiles.every((p) => p.end.type === 'off');
-      if (!dealt && !allOff) callout(self ? 'OUCH!' : 'MISS', self ? '#ff8a3d' : '#9fb39c', true);
+      if (!dealt && !allOff) callout(self ? 'OUCH' : 'MISS', self ? '#ff8a3d' : '#9fb39c', true);
       else if (dealt >= 40 && rec.hpAfter[opp] > 0) callout(`-${dealt}!`, '#ffd23f', false);
     }
     if (f >= rec.frames + SETTLE_FRAMES) finishAnim();
@@ -997,7 +997,7 @@ export function mount(container, api) {
     const pow = mk('POWER', () => (myAim ? myAim.power : 0), (p) => myAim && setAim(myAim.angle, p));
     const fireBtn = document.createElement('button');
     fireBtn.className = 'tk-fire';
-    fireBtn.textContent = 'FIRE!';
+    fireBtn.textContent = 'FIRE';
     fireBtn.addEventListener('click', fire);
     mainRow.append(dg, ang.el, pow.el, fireBtn);
     controls = { dLeft, dRight, fuelFill, ang, pow, fireBtn };
@@ -1053,7 +1053,7 @@ export function mount(container, api) {
     for (const b of [controls.dLeft, controls.dRight]) b.disabled = !can || fuel <= 0;
     for (const b of [controls.ang.minus, controls.ang.plus, controls.pow.minus, controls.pow.plus]) b.disabled = !can;
     controls.fireBtn.disabled = !can;
-    controls.fireBtn.textContent = firePending ? 'FIRING…' : 'FIRE!';
+    controls.fireBtn.textContent = firePending ? 'FIRING…' : 'FIRE';
     stage.classList.toggle('can-aim', can);
   }
 
@@ -1148,7 +1148,7 @@ export function mount(container, api) {
       g.fillStyle = '#39ff14';
       g.shadowColor = '#39ff14';
       g.shadowBlur = 10;
-      g.fillText('WAITING FOR TANKS — TAKE A SEAT OR ADD A BOT', cw / 2, ch / 2 + 6);
+      g.fillText('WAITING FOR TANKS. TAKE A SEAT OR ADD A BOT', cw / 2, ch / 2 + 6);
       g.restore();
     }
     // keep the panel's enabled state honest as busy windows expire
@@ -1198,7 +1198,7 @@ export function mount(container, api) {
     const over = !!(view && view.phase === 'game_over' && !busy());
     results.update(over ? duelResults({
       winner: view.winner === 'draw' ? null : view.winner, colors: COLORS, players: view.players, me: seat, nameFor: (id) => (id === 'BOT' ? 'Bot' : nicknameFor(id)),
-      subtitle: `${view.endReason === 'turns' ? 'Out of shots — most HP wins · ' : ''}HP ${view.tanks.red.hp} – ${view.tanks.blue.hp} · hits ${view.stats.red.hits}/${view.stats.red.shots} vs ${view.stats.blue.hits}/${view.stats.blue.shots}`,
+      subtitle: `${view.endReason === 'turns' ? 'Out of shots. Most HP wins · ' : ''}HP ${view.tanks.red.hp} – ${view.tanks.blue.hp} · hits ${view.stats.red.hits}/${view.stats.red.shots} vs ${view.stats.blue.hits}/${view.stats.blue.shots}`,
       onRematch: () => api.sendAction({ kind: 'resetGame' }),
     }) : null);
     if (!view || !S) {
@@ -1211,13 +1211,13 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       status.textContent = 'Waiting for both tanks to be crewed.';
     } else if (over) {
-      status.textContent = view.winner === 'draw' ? "IT'S A DRAW!" : `${seatName(view.winner)} WINS!`;
+      status.textContent = view.winner === 'draw' ? "IT'S A DRAW" : `${seatName(view.winner)} WINS`;
       status.style.color = '#ffb000';
     } else if (anim) {
-      status.textContent = `${anim.rec.by === seat ? 'YOUR' : `${seatName(anim.rec.by)}'s`} ${S.WEAPONS[anim.rec.input.weapon].name.toUpperCase()} — INCOMING!`;
+      status.textContent = `${anim.rec.by === seat ? 'YOUR' : `${seatName(anim.rec.by)}'s`} ${S.WEAPONS[anim.rec.input.weapon].name.toUpperCase()}. INCOMING`;
       status.style.color = TEAM[anim.rec.by].text;
     } else if (seat && showTurn === seat) {
-      status.textContent = firePending ? '▶ FIRING…' : '▶ YOUR TURN — AIM, DRIVE & FIRE';
+      status.textContent = firePending ? '▶ FIRING…' : '▶ YOUR TURN. AIM, DRIVE & FIRE';
       status.classList.add('mine');
     } else {
       status.textContent = `${seatName(showTurn)} IS AIMING…`;
@@ -1281,7 +1281,7 @@ export function mount(container, api) {
       syncFromView(true);
       if (prev && prev.phase !== 'playing' && data.phase === 'playing') {
         sfx.play('go');
-        fx.bigLabel('FIGHT!', '#39ff14');
+        fx.bigLabel('FIGHT', '#39ff14');
       }
     } else if (data.lastShot && data.lastShot.seq > lastSeqSeen) {
       onNewShot(data.lastShot);

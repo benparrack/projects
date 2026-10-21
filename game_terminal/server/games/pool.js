@@ -126,7 +126,7 @@ function applyShot(st, seat, shot, cuePos) {
     if (obj.includes(9)) {
       if (foul || wasBreak) {
         Sim.spotBall(balls, 9);
-        notes.push(wasBreak ? '9 on the break — re-spotted' : '9 re-spotted');
+        notes.push(wasBreak ? '9 on the break. Re-spotted' : '9 re-spotted');
       } else {
         winner = seat;
         winReason = 'nine';
@@ -146,7 +146,7 @@ function applyShot(st, seat, shot, cuePos) {
     if (obj.includes(8)) {
       if (wasBreak) {
         Sim.spotBall(balls, 8);
-        notes.push('8 on the break — re-spotted');
+        notes.push('8 on the break. Re-spotted');
       } else if (!foul && onEight) {
         winner = seat;
         winReason = 'eight';

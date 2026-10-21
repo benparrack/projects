@@ -296,7 +296,7 @@ export function mount(container, api) {
         tiles.forEach((o) => { if (o.classList.contains(tier)) o.classList.add('win'); });
         const rest = [...m.bonus.rest];
         setTimeout(() => tiles.forEach((o) => { if (!o.disabled) { flip(o, rest.shift()); o.classList.add('dim'); } }), 700);
-        hint.textContent = `${tier} JACKPOT!`;
+        hint.textContent = `${tier} JACKPOT`;
         setTimeout(() => { box.remove(); bonusPaid = tier; finish(m, finalBalance); }, 2600);
       });
       tiles.push(t);
@@ -315,7 +315,7 @@ export function mount(container, api) {
       const lit = ladder.querySelector(`.${bonusPaid}`);
       if (lit) lit.classList.add('lit');
       countUp(m.win, 'win', `${bonusPaid} JACKPOT`);
-      if (bonusPaid === 'GRAND' || bonusPaid === 'MAJOR') { banner(`${bonusPaid} JACKPOT!`); coins(bonusPaid === 'GRAND' ? 60 : 35); } else coins(12);
+      if (bonusPaid === 'GRAND' || bonusPaid === 'MAJOR') { banner(`${bonusPaid} JACKPOT`); coins(bonusPaid === 'GRAND' ? 60 : 35); } else coins(12);
       bonusPaid = null;
       render();
       return;
@@ -326,8 +326,8 @@ export function mount(container, api) {
       reels.forEach((r, i) => { if (!cherryOnly || m.reels[i] === 'CH') r.strip.children[1].classList.add('hit'); });
     }
     if (m.jackpot) { countUp(m.win, 'jackpot', '◆ JACKPOT'); banner('◆ JACKPOT ◆', true); coins(70); sfx.play('win'); }
-    else if (x >= 100) { countUp(m.win, 'win', 'MEGA WIN'); banner('MEGA WIN!'); coins(55); sfx.play('win'); }
-    else if (x >= 20) { countUp(m.win, 'win', 'BIG WIN'); banner('BIG WIN!'); coins(35); sfx.play('win'); }
+    else if (x >= 100) { countUp(m.win, 'win', 'MEGA WIN'); banner('MEGA WIN'); coins(55); sfx.play('win'); }
+    else if (x >= 20) { countUp(m.win, 'win', 'BIG WIN'); banner('BIG WIN'); coins(35); sfx.play('win'); }
     else if (x >= 3) { countUp(m.win, 'win', 'WIN'); coins(10); sfx.play('chime'); }
     else if (m.win > 0) { countUp(m.win, 'win', 'WIN'); sfx.play('point'); }
     if (auto) {

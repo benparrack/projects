@@ -315,7 +315,7 @@ function chooseMove(g, edges, level) {
       try {
         const r = safeSearch(g, edges, { max: SAFE_SEARCH_NODES });
         if (r.edges.length) return pick(r.edges);
-      } catch { /* over budget — fall through */ }
+      } catch { /* over budget. Fall through */ }
     }
     return pick(safe);
   }
@@ -498,7 +498,7 @@ function vacate(room, clientId, nickname) {
     const others = st.seats.filter((id, i) => i !== idx && !isBot(id));
     if (others.length) {
       st.seats[idx] = newBotId(st, 'medium');
-      st.note = `${nickname || 'A player'} left — a bot took over their seat`;
+      st.note = `${nickname || 'A player'} left. A bot took over their seat`;
       clearBotTimer(room);
       return true;
     }

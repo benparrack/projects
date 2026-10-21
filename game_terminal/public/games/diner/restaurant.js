@@ -7,7 +7,7 @@ const pct = (x) => `${Math.round(x * 100)}%`;
 const EFFECT = {
   grill: (n) => [`${1 + n} grill${n ? 's' : ''}`, `${2 + n} grills`],
   burners: (n) => [n ? `${pct(1 - 0.85 ** n)} faster` : 'normal', `${pct(1 - 0.85 ** (n + 1))} faster`],
-  bell: () => ['no bell', 'ding!'],
+  bell: () => ['no bell', 'ding.'],
   toppings: (n) => [`${4 + 2 * n} toppings`, `${6 + 2 * n} toppings`],
   premium: (n) => [`tips ×${(1.25 ** n).toFixed(2)}`, `tips ×${(1.25 ** (n + 1)).toFixed(2)}`],
   seats: (n) => [`${2 + n} customers`, `${3 + n} customers`],
@@ -153,7 +153,7 @@ export function renderReport(c) {
   }
   if (r.rep && r.rep.stars > r.rep.starsBefore) card.append(el('div', 'dn-stamp', `NEW STAR! ${'★'.repeat(r.rep.stars)}`));
   else if (r.rep && r.rep.stars < r.rep.starsBefore) card.append(el('div', 'dn-stamp bad', 'LOST A STAR'));
-  if (r.newBest) card.append(el('div', 'dn-stamp', 'NEW BEST SHIFT!'));
+  if (r.newBest) card.append(el('div', 'dn-stamp', 'NEW BEST SHIFT'));
   const t0 = performance.now();
   const shown = total.querySelector('b');
   const tick = (t) => {

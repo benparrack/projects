@@ -107,8 +107,8 @@ test('sim: movers depend on phase', () => {
 });
 
 test('sim: scoreName', () => {
-  assert.strictEqual(Sim.scoreName(1, 3), 'HOLE IN ONE!');
-  assert.strictEqual(Sim.scoreName(2, 3), 'BIRDIE!');
+  assert.strictEqual(Sim.scoreName(1, 3), 'HOLE IN ONE');
+  assert.strictEqual(Sim.scoreName(2, 3), 'BIRDIE');
   assert.strictEqual(Sim.scoreName(3, 3), 'PAR');
   assert.strictEqual(Sim.scoreName(4, 3), 'BOGEY');
 });

@@ -24,7 +24,7 @@ export function makeCook(c) {
     for (const [name, [lo, hi]] of Object.entries(R().DONENESS)) if (ms >= lo && ms <= hi) return name;
     return ms < R().DONENESS.rare[0] ? 'raw' : 'between';
   }
-  const donenessLabel = (ms) => ({ burnt: 'BURNT!', raw: 'raw', between: '…' }[donenessKey(ms)] || donenessKey(ms).toUpperCase());
+  const donenessLabel = (ms) => ({ burnt: 'BURNT', raw: 'raw', between: '…' }[donenessKey(ms)] || donenessKey(ms).toUpperCase());
   // Who the burger on the board fits best (what SPACE serves): right doneness, then most toppings
   // in the right place, then whoever has waited longest.
   function bestTicket() {

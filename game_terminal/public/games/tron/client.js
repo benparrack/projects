@@ -95,9 +95,9 @@ export function mount(container, api) {
 
   const hint = document.createElement('p');
   hint.innerHTML =
-    '<strong>STEER</strong> — arrow keys or WASD (touchscreens get an on-screen pad below the field)<br>' +
-    '<strong>GOAL</strong> — survive: avoid walls, your own trail, and everyone else\'s<br>' +
-    '<strong>ROUND</strong> — starts once 2+ players are here; last cycle alive wins';
+    '<strong>STEER</strong>. Arrow keys or WASD (touchscreens get an on-screen pad below the field)<br>' +
+    '<strong>GOAL</strong>. Survive: avoid walls, your own trail, and everyone else\'s<br>' +
+    '<strong>ROUND</strong>. Starts once 2+ players are here; last cycle alive wins';
   hint.style.margin = '2px 0 0';
   hint.style.maxWidth = `${CANVAS_WIDTH}px`;
   hint.style.textAlign = 'center';
@@ -229,8 +229,8 @@ export function mount(container, api) {
     if (view.phase === 'countdown') return `Starting in ${Math.ceil((view.countdownRemainingMs || 0) / 1000)}…`;
     if (view.phase === 'playing') return 'Round in progress';
     if (view.phase === 'round_over') {
-      if (view.roundOver && view.roundOver.isDraw) return 'ROUND OVER — DRAW';
-      if (view.roundOver) return `ROUND OVER — ${view.roundOver.winnerNickname} WINS`;
+      if (view.roundOver && view.roundOver.isDraw) return 'ROUND OVER. DRAW';
+      if (view.roundOver) return `ROUND OVER. ${view.roundOver.winnerNickname} WINS`;
     }
     return '';
   }
@@ -272,7 +272,7 @@ export function mount(container, api) {
       const nm = document.createElement('span');
       nm.textContent = p.nickname + (p.clientId === me ? ' (you)' : '');
       name.append(sw, nm);
-      name.title = `${p.nickname} — ${p.rounds || 0} round${p.rounds === 1 ? '' : 's'} played`;
+      name.title = `${p.nickname}. ${p.rounds || 0} round${p.rounds === 1 ? '' : 's'} played`;
       const w = tr.insertCell();
       w.className = 'num w';
       w.textContent = String(p.wins || 0);
@@ -294,7 +294,7 @@ export function mount(container, api) {
   function renderOverlay(view) {
     overlay.textContent = '';
     const big = document.createElement('div');
-    big.textContent = view.roundOver && view.roundOver.isDraw ? 'DRAW!' : `${view.roundOver ? view.roundOver.winnerNickname : ''} WINS!`;
+    big.textContent = view.roundOver && view.roundOver.isDraw ? 'DRAW' : `${view.roundOver ? view.roundOver.winnerNickname : ''} WINS`;
     overlay.appendChild(big);
     const rows = sortedStandings(view.players).slice(0, 5);
     if (rows.length) {
@@ -492,7 +492,7 @@ export function mount(container, api) {
     }
     if (view.phase === 'playing' && prev.phase === 'countdown') {
       sfx.play('go');
-      fx.bigLabel('GO!');
+      fx.bigLabel('GO');
     }
     // Crash explosions for every player who died this tick (bigger, with shake + flash, for you).
     for (const p of view.players) {

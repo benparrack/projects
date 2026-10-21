@@ -18,8 +18,8 @@ const REJECT_MESSAGES = {
   not_your_turn: "It's not your run.",
   busy: 'Wait for the next ball.',
   not_playing: 'The game is not running.',
-  not_started: 'Wait for the whistle!',
-  time_up: "Time's up!",
+  not_started: 'Wait for the whistle.',
+  time_up: "Time's up.",
   invalid: 'Invalid shot.',
 };
 
@@ -162,9 +162,9 @@ export function mount(container, api) {
   options.className = 'bb-row';
   const help = document.createElement('div');
   help.className = 'bb-help';
-  help.textContent = 'Flick up from anywhere on the court and let go — sideways aims, a longer flick shoots harder. '
+  help.textContent = 'Flick up from anywhere on the court and let go. Sideways aims, a longer flick shoots harder. '
     + 'Make = 2, swish = 3. Every 5th ball is a MONEY BALL (x2); 3 in a row and you are ON FIRE (x2 until you miss). '
-    + 'After 5 makes the hoop starts moving. 30 s each — highest score wins, ties go to sudden-death overtime.';
+    + 'After 5 makes the hoop starts moving. 30 s each. Highest score wins, ties go to sudden-death overtime.';
   root.append(status, err, seats, stage, options, help);
 
   // ---- helpers ----
@@ -677,13 +677,13 @@ export function mount(container, api) {
         if (r.money) sfx.play('chips');
         const col = r.money ? '#ffd23f' : r.fire ? '#ff8a1c' : TEXT_COLOR[a.by];
         popup(nx, ny - 0.4 * F / 5, `+${r.points}`, col, r.mult > 1 ? 1.35 : 1.05);
-        if (r.swish) popup(nx, ny - 0.75 * F / 5, 'SWISH!', '#9fffe0', 0.75);
-        else if (r.events.some((e) => e.type === 'board' && e.f < ev.f)) popup(nx, ny - 0.75 * F / 5, 'BANK!', '#c8d8ff', 0.7);
+        if (r.swish) popup(nx, ny - 0.75 * F / 5, 'SWISH', '#9fffe0', 0.75);
+        else if (r.events.some((e) => e.type === 'board' && e.f < ev.f)) popup(nx, ny - 0.75 * F / 5, 'BANK', '#c8d8ff', 0.7);
         if (r.money) popup(nx, ny - 1.05 * F / 5, 'MONEY BALL x2', '#ffd23f', 0.7);
         burst(nx, ny, r.swish ? 26 : 16, r.fire ? ['#ffb000', '#ff4d00', '#ffe14d'] : r.money ? ['#ffd23f', '#ffffff', '#e0283c', '#2a6cf0'] : ['#39ff14', '#ffffff', TEXT_COLOR[a.by]],
           5 * (W / 480), true);
         if (r.runIdx === landed.runIdx) landed.streak = r.streak;
-        if (r.streak === S.FIRE_AT) { callout('ON FIRE!', '#ff7b1c'); sfx.play('kill'); }
+        if (r.streak === S.FIRE_AT) { callout('ON FIRE', '#ff7b1c'); sfx.play('kill'); }
         bumpScore(a.by);
       }
     });
@@ -890,7 +890,7 @@ export function mount(container, api) {
     levelCallouts = levelCallouts.filter((l) => {
       if (now < l.wall) return true;
       if (now - l.wall < 1500) {
-        callout(l.level === 1 ? 'HOOP IS MOVING!' : 'FASTER!', '#3ad7ff');
+        callout(l.level === 1 ? 'HOOP IS MOVING' : 'FASTER', '#3ad7ff');
         sfx.play('slide');
       }
       return false;
@@ -910,7 +910,7 @@ export function mount(container, api) {
           if (prev) subText(`SCORE TO BEAT: ${view.scores[prev.shooter] - view.scores[run.shooter]}`, '#ffd23f', 1);
         }
       } else {
-        if (lastCount !== 0 && lastCount !== null && t < 1200) { lastCount = 0; sfx.play('go'); callout('GO!', '#39ff14'); }
+        if (lastCount !== 0 && lastCount !== null && t < 1200) { lastCount = 0; sfx.play('go'); callout('GO', '#39ff14'); }
         if (t < 0 || t > 1500) lastCount = null;
         const left = run.endAt - now;
         const sec = Math.ceil(left / 1000);
@@ -920,7 +920,7 @@ export function mount(container, api) {
           if (left > -800) { sfx.play('error'); setTimeout(() => sfx.play('error'), 160); }
         }
         if (left <= 0) {
-          bigText('TIME!', '#ffb000', 1);
+          bigText('TIME', '#ffb000', 1);
           subText(`${(nicknameFor(view.players[run.shooter], run.shooter) || run.shooter).toUpperCase()} · ${run.makes}/${run.shots} MADE`, TEXT_COLOR[run.shooter]);
         }
       }
@@ -1014,7 +1014,7 @@ export function mount(container, api) {
     let st = '';
     let mine = false;
     let color = '';
-    if (view.phase === 'waiting') st = seat ? 'SHOOT SOLO for a high score, or wait for an opponent / play a bot.' : 'Waiting for both seats — PLAY VS BOT to practise.';
+    if (view.phase === 'waiting') st = seat ? 'SHOOT SOLO for a high score, or wait for an opponent / play a bot.' : 'Waiting for both seats. PLAY VS BOT to practise.';
     else if (view.phase === 'game_over') {
       if (anims.length) { st = 'FINAL BUZZER…'; }
       else if (view.solo) { st = `TIME! ${view.scores[view.winner]} POINTS`; color = '#ffb000'; }
@@ -1024,11 +1024,11 @@ export function mount(container, api) {
       const who = nicknameFor(view.players[run.shooter], run.shooter);
       const t = now - run.startAt;
       if (t < 0) {
-        if (run.shooter === seat) { st = `▶ GET READY — YOUR ${run.ot ? 'OVERTIME ' : ''}RUN STARTS IN ${Math.ceil(-t / 1000)}`; mine = true; }
-        else { st = `${run.shooter.toUpperCase()} SHOOTS NEXT — ${who}`; color = TEXT_COLOR[run.shooter]; }
+        if (run.shooter === seat) { st = `▶ GET READY. YOUR ${run.ot ? 'OVERTIME ' : ''}RUN STARTS IN ${Math.ceil(-t / 1000)}`; mine = true; }
+        else { st = `${run.shooter.toUpperCase()} SHOOTS NEXT. ${who}`; color = TEXT_COLOR[run.shooter]; }
       } else if (now <= run.endAt) {
-        if (run.shooter === seat) { st = '▶ YOUR TURN — FLICK UP TO SHOOT!'; mine = true; }
-        else { st = `${run.shooter.toUpperCase()} SHOOTING — ${who}`; color = TEXT_COLOR[run.shooter]; }
+        if (run.shooter === seat) { st = '▶ YOUR TURN. FLICK UP TO SHOOT'; mine = true; }
+        else { st = `${run.shooter.toUpperCase()} SHOOTING. ${who}`; color = TEXT_COLOR[run.shooter]; }
       } else {
         st = `TIME! ${run.shooter.toUpperCase()} SCORED ${run.score}`;
         color = TEXT_COLOR[run.shooter];

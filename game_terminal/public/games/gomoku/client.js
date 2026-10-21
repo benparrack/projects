@@ -307,10 +307,10 @@ export function mount(container, api) {
         status.textContent = `▶ YOUR TURN (${view.turn.toUpperCase()})`;
         status.classList.add('mine');
       } else {
-        status.textContent = `${view.turn.toUpperCase()} TO MOVE — ${name}${view.players[view.turn] === 'BOT' ? ' is thinking…' : ''}`;
+        status.textContent = `${view.turn.toUpperCase()} TO MOVE. ${name}${view.players[view.turn] === 'BOT' ? ' is thinking…' : ''}`;
       }
     } else {
-      status.textContent = view.winner === 'draw' ? "IT'S A DRAW!" : `${view.winner.toUpperCase()} WINS!`;
+      status.textContent = view.winner === 'draw' ? "IT'S A DRAW" : `${view.winner.toUpperCase()} WINS`;
       status.style.color = '#ffd23f';
     }
     header.appendChild(status);
@@ -375,7 +375,7 @@ export function mount(container, api) {
     } else if (view.phase !== 'waiting') {
       const hint = document.createElement('div');
       hint.style.cssText = 'font-size:12px;opacity:.6';
-      hint.textContent = 'Get five (or more) in a row — across, down or diagonally. Black moves first.';
+      hint.textContent = 'Get five (or more) in a row. Across, down or diagonally. Black moves first.';
       footer.appendChild(hint);
     }
     draw();

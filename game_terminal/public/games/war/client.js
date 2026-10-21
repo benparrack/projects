@@ -32,7 +32,7 @@ export function mount(container, api) {
     results.update(view && view.phase === 'game_over' ? seatResults({
       seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
       value: (i) => `${view.handCounts[i]} cards`, rank: (i) => -view.handCounts[i],
-      winTitle: `${nicknameFor(view.seats[view.winnerSeat])} WINS!`, subtitle: 'Took the whole deck', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+      winTitle: `${nicknameFor(view.seats[view.winnerSeat])} WINS`, subtitle: 'Took the whole deck', onRematch: () => api.sendAction({ kind: 'resetGame' }),
     }) : null);
     root.innerHTML = '';
     if (!view) {
@@ -47,7 +47,7 @@ export function mount(container, api) {
       status.textContent = 'Click FLIP to play your top card.';
     } else if (view.phase === 'game_over') {
       const winnerName = nicknameFor(view.seats[view.winnerSeat]);
-      status.textContent = `${winnerName} WINS THE WHOLE DECK!`;
+      status.textContent = `${winnerName} WINS THE WHOLE DECK`;
     }
     root.appendChild(status);
 
@@ -83,7 +83,7 @@ export function mount(container, api) {
         col.style.alignItems = 'center';
         col.style.gap = '6px';
         const name = document.createElement('div');
-        name.textContent = `${nicknameFor(clientId)}${clientId === api.getClientId() ? ' (you)' : ''} — ${view.handCounts[i]} cards`;
+        name.textContent = `${nicknameFor(clientId)}${clientId === api.getClientId() ? ' (you)' : ''}. ${view.handCounts[i]} cards`;
         col.appendChild(name);
         col.appendChild(renderCard(view.pendingFlips[i], { faceDown: !view.pendingFlips[i] }));
         if (i === mySeat && view.phase === 'playing' && !view.pendingFlips[i]) {
@@ -107,11 +107,11 @@ export function mount(container, api) {
     if (view.lastResult) {
       const result = document.createElement('div');
       if (view.lastResult.kind === 'war') {
-        result.textContent = 'WAR! Each side burns a card — flip again.';
+        result.textContent = 'WAR Each side burns a card. Flip again.';
       } else if (view.lastResult.kind === 'roundWin') {
         result.textContent = `${nicknameFor(view.seats[view.lastResult.winnerIdx])} takes the pile (${view.lastResult.cardsWon} cards).`;
       } else if (view.lastResult.kind === 'outOfCards') {
-        result.textContent = `${nicknameFor(view.seats[view.lastResult.loserIdx])} ran out of cards!`;
+        result.textContent = `${nicknameFor(view.seats[view.lastResult.loserIdx])} ran out of cards.`;
       }
       result.style.color = '#39ff14';
       root.appendChild(result);

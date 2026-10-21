@@ -353,7 +353,7 @@ export function mount(container, api) {
       status.textContent = 'Waiting for both seats to be filled.';
     } else if (view.phase === 'playing') {
       const turnName = nicknameFor(view.players[view.turn]) || view.turn;
-      status.textContent = `Turn: ${view.turn.toUpperCase()} (${turnName})${view.inCheck === view.turn ? ' — CHECK' : ''}`;
+      status.textContent = `Turn: ${view.turn.toUpperCase()} (${turnName})${view.inCheck === view.turn ? ' · CHECK' : ''}`;
     } else if (view.phase === 'game_over') {
       const reason =
         view.winReason === 'checkmate' ? 'CHECKMATE' : view.winReason === 'resignation' ? 'RESIGNATION' : view.winReason === 'timeout' ? 'TIME OUT' : 'STALEMATE';
@@ -724,7 +724,7 @@ export function mount(container, api) {
         // A new game started (rematch / new opponent) or the archive went away: leave review.
         if (review && (data.phase === 'playing' || !data.review || data.review.gameId !== review.gameId)) {
           review = null;
-          reviewNotice = data.phase === 'playing' ? 'A new game started — review closed.' : null;
+          reviewNotice = data.phase === 'playing' ? 'A new game started. Review closed.' : null;
         } else if (data.phase !== 'waiting') {
           reviewNotice = null;
         }

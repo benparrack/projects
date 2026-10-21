@@ -15,7 +15,7 @@ const REJECT_MESSAGES = {
   not_your_turn: "It's not your turn",
   not_playing: 'The game is not in progress',
   invalid: 'Invalid throw',
-  stale: 'Too quick — wait for the last dart',
+  stale: 'Too quick. Wait for the last dart',
 };
 const VIEW_MM = 236; // half-width of the canvas in board millimetres
 const FLIGHT_MS = 420;
@@ -637,7 +637,7 @@ export function mount(container, api) {
     if (myFlick && myFlick.throwNo === d.n) {
       const f = myFlick.flick;
       const side = (v, unit) => (Math.abs(v) < 0.5 ? 'straight' : `${Math.abs(v).toFixed(0)}${unit} ${v > 0 ? 'right' : 'left'}`);
-      const why = Math.abs(d.x) > Math.abs(d.y) ? ' — too wide' : d.y > 0 ? ' — too slow, it dropped' : ' — too fast, it flew high';
+      const why = Math.abs(d.x) > Math.abs(d.y) ? ' · too wide' : d.y > 0 ? ' · too slow, it dropped' : ' · too fast, it flew high';
       hint.textContent = `${text} · speed ${f.speed.toFixed(2)} · lean ${side(f.angle, '°')} · curve ${side(f.curve * 100, '%')}${d.ring === 'MISS' ? why : ''}`;
       delete hint.dataset.auto;
     }
@@ -825,7 +825,7 @@ export function mount(container, api) {
     }
     if (view.endReason === 'closed') subtitle = 'Closed everything with the lead';
     return {
-      title: draw ? "IT'S A DRAW" : me === w ? 'YOU WIN!' : me ? 'YOU LOSE' : `${seatName(w)} WINS!`,
+      title: draw ? "IT'S A DRAW" : me === w ? 'YOU WIN' : me ? 'YOU LOSE' : `${seatName(w)} WINS`,
       subtitle,
       outcome: draw ? 'draw' : me == null ? 'over' : me === w ? 'win' : 'lose',
       rows: order.map((seat) => ({ name: seatName(seat), value: val(seat), win: !draw && seat === w, you: seat === me })),
@@ -849,11 +849,11 @@ export function mount(container, api) {
     } else if (view.phase === 'playing') {
       const mine = seat && seat === view.turn;
       const dartNo = view.turnDarts.length + 1;
-      status.textContent = mine ? `▶ YOUR THROW — DART ${dartNo} OF 3` : `${seatName(view.turn)} TO THROW — DART ${dartNo}`;
+      status.textContent = mine ? `▶ YOUR THROW. DART ${dartNo} OF 3` : `${seatName(view.turn)} TO THROW. DART ${dartNo}`;
       if (mine) status.classList.add('mine');
       status.style.color = SEAT_COLOR[view.turn];
     } else {
-      status.textContent = view.winner === 'draw' ? "IT'S A DRAW!" : `${seatName(view.winner)} WINS!`;
+      status.textContent = view.winner === 'draw' ? "IT'S A DRAW" : `${seatName(view.winner)} WINS`;
       status.style.color = '#ffb000';
     }
     err.textContent = flashError ? REJECT_MESSAGES[flashError] || 'Throw rejected' : '';
@@ -899,7 +899,7 @@ export function mount(container, api) {
 
     if (view.phase === 'playing' && seat === view.turn) {
       if (!hint.textContent || hint.dataset.auto) {
-        hint.textContent = 'Grab, line up under your target and FLICK UP — faster flies higher';
+        hint.textContent = 'Grab, line up under your target and FLICK UP. Faster flies higher';
         hint.dataset.auto = '1';
       }
     } else {

@@ -274,7 +274,7 @@ export function mount(container, api) {
           cell.appendChild(ring);
         }
         if (opts.onCell) cell.addEventListener('click', () => opts.onCell(r, c, shot));
-        cell.title = cellName(r, c) + (reading === 'ship' ? ' — radar: ship!' : reading === 'empty' ? ' — radar: clear' : '');
+        cell.title = cellName(r, c) + (reading === 'ship' ? ' · radar: ship.' : reading === 'empty' ? ' · radar: clear' : '');
         grid.appendChild(cell);
       }
     }
@@ -532,10 +532,10 @@ export function mount(container, api) {
     status.className = 'sb-status';
     const seat = mySeat();
     if (view.phase === 'waiting') {
-      status.textContent = 'Waiting for two admirals — take a seat or play the bot.';
+      status.textContent = 'Waiting for two admirals. Take a seat or play the bot.';
     } else if (view.phase === 'placing') {
       if (seat && !view.ready[seat]) { status.textContent = 'POSITION YOUR FLEET'; status.classList.add('mine'); }
-      else if (seat) status.textContent = `Fleet locked in — waiting for ${seatName(other(seat))}…`;
+      else if (seat) status.textContent = `Fleet locked in. Waiting for ${seatName(other(seat))}…`;
       else status.textContent = 'The admirals are positioning their fleets…';
     } else if (view.phase === 'playing') {
       const ls = view.lastShot;
@@ -543,13 +543,13 @@ export function mount(container, api) {
         status.textContent = ls && ls.by === seat && ls.result !== 'miss' ? 'DIRECT HIT. FIRE AGAIN' : 'YOUR TURN. FIRE';
         status.classList.add('mine');
       } else if (seat) {
-        status.textContent = ls && ls.by !== seat && ls.result !== 'miss' ? `${seatName(view.turn)} hit you — firing again…` : `${seatName(view.turn)} is taking aim…`;
+        status.textContent = ls && ls.by !== seat && ls.result !== 'miss' ? `${seatName(view.turn)} hit you. Firing again…` : `${seatName(view.turn)} is taking aim…`;
         if (ls && ls.by !== seat && ls.result !== 'miss') status.classList.add('alert');
       } else {
         status.textContent = `${seatName(view.turn)} to fire`;
       }
     } else {
-      status.textContent = `${seatName(view.winner).toUpperCase()} SANK THE ENEMY FLEET!`;
+      status.textContent = `${seatName(view.winner).toUpperCase()} SANK THE ENEMY FLEET`;
       status.style.color = '#ffd23f';
     }
     return status;
@@ -611,7 +611,7 @@ export function mount(container, api) {
         const g = view.radar && view.radar[seat];
         let n = 0;
         if (g) for (let r = ls.r; r < ls.r + 2; r++) for (let c = ls.c; c < ls.c + 2; c++) if (g[r][c] === 'ship') n++;
-        return { text: `Radar at ${cellName(ls.r, ls.c)}: ${n ? `${n} ship cell${n > 1 ? 's' : ''} found!` : 'all clear'}`, cls: n ? 'good' : '' };
+        return { text: `Radar at ${cellName(ls.r, ls.c)}: ${n ? `${n} ship cell${n > 1 ? 's' : ''} found.` : 'all clear'}`, cls: n ? 'good' : '' };
       }
       return { text: `${who} scanned ${target} waters at ${cellName(ls.r, ls.c)}–${cellName(ls.r + 1, ls.c + 1)}`, cls: yours ? 'bad' : '' };
     }
@@ -620,8 +620,8 @@ export function mount(container, api) {
       const sunk = ls.cells.filter((x) => x.result === 'sunk').map((x) => shipName(x.ship));
       const line = ls.axis === 'row' ? `row ${ls.i + 1}` : `column ${COLS[ls.i]}`;
       let text = `${who === 'You' ? 'Your' : `${who}'s`} BARRAGE on ${line}: ${hits ? `${hits} hit${hits > 1 ? 's' : ''}` : 'all misses'}`;
-      if (struck.length) text += ` — struck your ${struck.join(', ')}`;
-      if (sunk.length) text += ` — ${sunk.join(', ')} sunk!`;
+      if (struck.length) text += ` · struck your ${struck.join(', ')}`;
+      if (sunk.length) text += ` · ${sunk.join(', ')} sunk.`;
       return { text, cls: hits ? (yours ? 'bad' : 'good') : '' };
     }
     const at = cellName(ls.r, ls.c);
@@ -785,7 +785,7 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       const { frame } = buildBoard({ shots: null, ships: [], dim: true });
       boards.appendChild(panel('<b>OPEN WATERS</b>', '', frame));
-      root.appendChild(hint('Each admiral hides five ships (5, 4, 3, 3, 2) on a 10×10 grid, then you take turns firing. Hit a ship and you shoot again — sink the whole enemy fleet to win. Turn POWERS on for Barrage (a whole row or column) and Radar (2×2 scan) on long cooldowns.'));
+      root.appendChild(hint('Each admiral hides five ships (5, 4, 3, 3, 2) on a 10×10 grid, then you take turns firing. Hit a ship and you shoot again. Sink the whole enemy fleet to win. Turn POWERS on for Barrage (a whole row or column) and Radar (2×2 scan) on long cooldowns.'));
       return;
     }
 
@@ -843,7 +843,7 @@ export function mount(container, api) {
       });
       if (armed) target.grid.classList.add('armed');
       if (view.powers && !over) aim = attachAim(target.grid);
-      boards.appendChild(panel(`<b>ENEMY WATERS</b> — ${esc(seatName(foe))}`, shotSummary(seat), target.frame, fleetList(view.sunk[seat], 'ENEMY:')));
+      boards.appendChild(panel(`<b>ENEMY WATERS</b>. ${esc(seatName(foe))}`, shotSummary(seat), target.frame, fleetList(view.sunk[seat], 'ENEMY:')));
       const myFleet = view.fleets[seat] || [];
       const hitAt = (r, c) => view.shots[foe][r][c] === 'hit';
       const mine = myFleet.map((s) => ({
@@ -879,7 +879,7 @@ export function mount(container, api) {
     const w = view.winner;
     const order = [w, other(w)];
     return {
-      title: seat ? (seat === w ? 'VICTORY AT SEA!' : 'YOUR FLEET IS SUNK') : `${seatName(w).toUpperCase()} WINS!`,
+      title: seat ? (seat === w ? 'VICTORY AT SEA' : 'YOUR FLEET IS SUNK') : `${seatName(w).toUpperCase()} WINS`,
       subtitle: `${view.shotCount[w]} shots to sink the fleet`,
       outcome: seat ? (seat === w ? 'win' : 'lose') : 'over',
       rows: order.map((s) => ({ name: seatName(s), value: `${view.sunk[s].length}/5 sunk`, win: s === w, you: s === seat })),

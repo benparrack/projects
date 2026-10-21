@@ -136,7 +136,7 @@ export function mount(container, api) {
   const scoresEl = el('ul', 'wh-scores');
   side.append(scoreHead, scoresEl, wordsHead, wordsEl);
   body.append(main, side);
-  const hint = el('p', 'wh-hint', 'Swipe through touching letters (any direction, each tile once) to make words of 3+ letters. 3=100 · 4=400 · 5=800 · 6=1400 · 7=1800 · 8+=2200. Everyone plays the same grid — highest score wins.');
+  const hint = el('p', 'wh-hint', 'Swipe through touching letters (any direction, each tile once) to make words of 3+ letters. 3=100 · 4=400 · 5=800 · 6=1400 · 7=1800 · 8+=2200. Everyone plays the same grid. Highest score wins.');
   root.append(top, botBar.el, body, hint);
   container.appendChild(root);
 
@@ -379,7 +379,7 @@ export function mount(container, api) {
         fx.burst(x, y, long ? '#ffd23f' : '#39ff14', { count: long ? 34 : 18, speed: long ? 220 : 150, life: 0.6 });
         fx.text(x, y - cell * 0.4, `+${data.points}`, '#ffd23f', { size: long ? 20 : 15, life: 0.9 });
       }
-      if (data.word.length >= 6) { fx.shake(3); fx.bigLabel(data.word.length >= 8 ? 'INCREDIBLE!' : 'AWESOME!', '#ffd23f'); }
+      if (data.word.length >= 6) { fx.shake(3); fx.bigLabel(data.word.length >= 8 ? 'INCREDIBLE' : 'AWESOME', '#ffd23f'); }
     } else if (data.outcome === 'already') {
       flash = { path: p, color: '#ffd23f', t: now };
       updateWordBar('dupe', data.word, 'already found');
@@ -402,9 +402,9 @@ export function mount(container, api) {
   function renderStatus() {
     if (!view) { statusEl.textContent = 'Loading…'; return; }
     const humans = view.players.filter((p) => !p.bot).length;
-    if (view.phase === 'waiting') statusEl.textContent = api.daily ? 'Today\'s grid: one try. Press START.' : `${humans} player${humans === 1 ? '' : 's'} here — add a bot or wait for friends, then START.`;
-    else if (view.phase === 'playing') statusEl.textContent = clock.now() < view.startedAt ? 'Get ready…' : 'Find as many words as you can!';
-    else statusEl.textContent = `Round over — ${view.totalWords} words were hiding in this grid.`;
+    if (view.phase === 'waiting') statusEl.textContent = api.daily ? 'Today\'s grid: one try. Press START.' : `${humans} player${humans === 1 ? '' : 's'} here. Add a bot or wait for friends, then START.`;
+    else if (view.phase === 'playing') statusEl.textContent = clock.now() < view.startedAt ? 'Get ready…' : 'Find as many words as you can.';
+    else statusEl.textContent = `Round over. ${view.totalWords} words were hiding in this grid.`;
     startBtn.disabled = view.phase === 'playing';
     startBtn.textContent = view.phase === 'results' ? 'NEW GRID' : 'START';
   }
@@ -524,7 +524,7 @@ export function mount(container, api) {
     if (lastTick.startsWith(`c${view.roundId}-`)) {
       lastTick = `go${view.roundId}`;
       sfx.play('go');
-      fx.bigLabel('GO!', '#39ff14');
+      fx.bigLabel('GO', '#39ff14');
       renderStatus();
     }
     const left = view.endsAt - now;
@@ -548,7 +548,7 @@ export function mount(container, api) {
     if (mine && !solo) {
       const iWon = topScore > 0 && mine.score === topScore;
       outcome = iWon ? 'win' : 'lose';
-      title = iWon ? (players.filter((p) => p.score === topScore).length > 1 ? 'TIED FOR FIRST!' : 'YOU WIN!') : 'YOU LOSE';
+      title = iWon ? (players.filter((p) => p.score === topScore).length > 1 ? 'TIED FOR FIRST' : 'YOU WIN') : 'YOU LOSE';
     } else if (mine) outcome = mine.score > 0 ? 'win' : 'lose';
     const best = (p) => (p.words || []).reduce((b, w) => (w.length > b.length ? w : b), '');
     results.update({

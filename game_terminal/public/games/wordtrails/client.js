@@ -197,7 +197,7 @@ export function mount(container, api) {
   side.append(sideHead, playersEl);
   body.append(main, side);
 
-  const hint = el('p', 'wt-hint', 'Each word must start with the last letter of the one before it — no repeats. Run out of time and you lose a life; the clock gets shorter every lap. A wrong word costs no life, just a couple of seconds. Last player standing wins.');
+  const hint = el('p', 'wt-hint', 'Each word must start with the last letter of the one before it. No repeats. Run out of time and you lose a life; the clock gets shorter every lap. A wrong word costs no life, just a couple of seconds. Last player standing wins.');
   root.append(top, controls, botBar.el, body, hint);
   container.appendChild(root);
 
@@ -246,13 +246,13 @@ export function mount(container, api) {
       : '';
     if (view.phase === 'waiting') {
       const n = view.players.length;
-      statusEl.textContent = n < 2 ? 'Start solo for a survival run, or add a bot / wait for friends.' : `${n} players ready — press START.`;
+      statusEl.textContent = n < 2 ? 'Start solo for a survival run, or add a bot / wait for friends.' : `${n} players ready. Press START.`;
     } else if (view.phase === 'countdown') statusEl.textContent = 'Get ready…';
     else if (view.phase === 'playing') {
       const p = playerOf(view.turnId);
-      statusEl.textContent = view.turnId === me() ? 'YOUR TURN!' : p ? `${p.nickname}'s turn` : '…';
+      statusEl.textContent = view.turnId === me() ? 'YOUR TURN' : p ? `${p.nickname}'s turn` : '…';
     } else if (view.phase === 'results') {
-      statusEl.textContent = view.solo ? `Run over — a trail of ${view.chainLength} words.` : 'Round over.';
+      statusEl.textContent = view.solo ? `Run over. A trail of ${view.chainLength} words.` : 'Round over.';
     }
   }
 
@@ -294,10 +294,10 @@ export function mount(container, api) {
       if (!view.turnEndsAt) {
         // post-timeout beat
         const ev = view.lastEvent;
-        whoEl.append(ev && ev.kind === 'timeout' ? `${ev.name} ran out of time${ev.out ? ' and is OUT!' : ' — loses a life!'}` : '…');
+        whoEl.append(ev && ev.kind === 'timeout' ? `${ev.name} ran out of time${ev.out ? ' and is OUT' : ' · loses a life.'}` : '…');
         return;
       }
-      if (p.clientId === me()) whoEl.append('Your word — starts with ');
+      if (p.clientId === me()) whoEl.append('Your word. Starts with ');
       else { const b = el('b', '', p.nickname); whoEl.append(b, ' needs a word starting with '); }
       const L = el('b', '', view.required.toUpperCase());
       L.style.color = '#39ff14';
@@ -381,10 +381,10 @@ export function mount(container, api) {
       outcome = mine && mine.bestTrail === view.chainLength && view.chainLength > 0 ? 'win' : 'over';
     } else if (mine) {
       outcome = view.winner === id ? 'win' : 'lose';
-      title = view.winner === id ? 'YOU WIN!' : 'YOU LOSE';
+      title = view.winner === id ? 'YOU WIN' : 'YOU LOSE';
     } else {
       const w = playerOf(view.winner);
-      title = w ? `${w.nickname.toUpperCase()} WINS!` : 'ROUND OVER';
+      title = w ? `${w.nickname.toUpperCase()} WINS` : 'ROUND OVER';
     }
     const longest = (view.chain || []).filter((c) => c.by).reduce((a, c) => (c.word.length > (a ? a.word.length : 0) ? c : a), null);
     results.update({
@@ -435,7 +435,7 @@ export function mount(container, api) {
     const ev = view.lastEvent;
     if (ev && ev.kind === 'reject' && ev.clientId !== me() && (!prevView || !prevView.lastEvent || prevView.lastEvent.at !== ev.at)) {
       const p = playerOf(ev.clientId);
-      toast(`${p ? p.nickname : '?'}: ${ev.word.toUpperCase() || '—'} — ${REASON_TEXT[ev.reason] || 'rejected'}`, true);
+      toast(`${p ? p.nickname : '?'}: ${ev.word.toUpperCase() || '—'}. ${REASON_TEXT[ev.reason] || 'rejected'}`, true);
     }
     sounds(prevView, view);
     renderAll();
@@ -525,7 +525,7 @@ export function mount(container, api) {
         sfx.play('error');
         if (data.reason === 'not_playing') return;
         const pen = view && view.penaltyMs ? ` (−${view.penaltyMs / 1000}s)` : '';
-        toast(`${(data.word || '').toUpperCase() || 'That'} — ${REASON_TEXT[data.reason] || 'rejected'}${data.reason === 'not_your_turn' ? '' : pen}`, true);
+        toast(`${(data.word || '').toUpperCase() || 'That'}. ${REASON_TEXT[data.reason] || 'rejected'}${data.reason === 'not_your_turn' ? '' : pen}`, true);
         stage.classList.remove('shake');
         void stage.offsetWidth;
         stage.classList.add('shake');

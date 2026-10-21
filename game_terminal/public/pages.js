@@ -120,7 +120,7 @@ const FAQ = [
   ['Does it work on my phone?', 'Most games do. A few (the 3D and Game Boy games) are best on a computer with a keyboard.'],
   ['Someone is being abusive. What do I do?', ['Report them with the report button and read the ', link('/rules', 'Community Guidelines'), '.']],
   ['How do I delete my account?', ['From your account settings, or email ', mail(), '.']],
-  ['I found a bug.', ['Thanks! Email ', mail(), ' with the game and what happened.']],
+  ['I found a bug.', ['Thanks. Email ', mail(), ' with the game and what happened.']],
 ];
 
 const about = () => page('ABOUT', null,
@@ -151,7 +151,7 @@ const ROMS = [
   ['Link Cycles', '2026 Ben Parrack', 'MIT', null],
 ];
 const creditList = (rows) => h('ul.credits', rows.map(([name, by, lic, src]) =>
-  h('li', h('strong', name), ` — © ${by}. ${lic}.`, src && [' ', ext(src, 'Source')])));
+  h('li', h('strong', name), ` · © ${by}. ${lic}.`, src && [' ', ext(src, 'Source')])));
 
 const credits = () => page('CREDITS & LICENSES', 'Game Terminal stands on the work of these people and projects. Thank you.',
   sec('Libraries, fonts, and data', creditList(CREDITS)),

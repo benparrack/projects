@@ -22,7 +22,7 @@ const SEAT_NUM = { p1: 1, p2: 2 };
 
 const REJECT_MESSAGES = {
   not_your_turn: "It's not your turn",
-  color_taken: 'That colour is taken — pick another',
+  color_taken: 'That colour is taken. Pick another',
   invalid: 'Invalid move',
   not_playing: 'The game is not in progress',
   not_seated: 'Take a seat to play',
@@ -208,7 +208,7 @@ export function mount(container, api) {
     const draw = view.winner === 'draw';
     const order = draw ? ['p1', 'p2'] : [view.winner, view.winner === 'p1' ? 'p2' : 'p1'];
     return {
-      title: draw ? "IT'S A DRAW" : seat === view.winner ? 'YOU WIN!' : seat ? 'YOU LOSE' : `${seatName(view.winner).toUpperCase()} WINS!`,
+      title: draw ? "IT'S A DRAW" : seat === view.winner ? 'YOU WIN' : seat ? 'YOU LOSE' : `${seatName(view.winner).toUpperCase()} WINS`,
       subtitle: `Cells ${view.counts.p1} – ${view.counts.p2} of ${view.cols * view.rows}`,
       outcome: draw ? 'draw' : !seat ? 'over' : seat === view.winner ? 'win' : 'lose',
       rows: order.map((s) => ({ name: seatName(s), value: `${view.counts[s]} cells`, win: !draw && s === view.winner, you: s === seat })),
@@ -232,11 +232,11 @@ export function mount(container, api) {
       status.textContent = 'Waiting for both seats to be filled.';
     } else if (view.phase === 'playing') {
       const mine = seat && seat === view.turn;
-      status.textContent = mine ? `▶ YOUR TURN — PICK A COLOUR` : `${SEAT_LABEL[view.turn]} TO MOVE — ${nicknameFor(view.players[view.turn])}`;
+      status.textContent = mine ? `▶ YOUR TURN. PICK A COLOUR` : `${SEAT_LABEL[view.turn]} TO MOVE. ${nicknameFor(view.players[view.turn])}`;
       if (mine) status.classList.add('mine');
       status.style.color = mine ? '' : PALETTE[view.current[view.turn]].hex;
     } else {
-      status.textContent = view.winner === 'draw' ? "IT'S A DRAW!" : `${SEAT_LABEL[view.winner]} WINS ${view.counts[view.winner]}–${view.counts[view.winner === 'p1' ? 'p2' : 'p1']}!`;
+      status.textContent = view.winner === 'draw' ? "IT'S A DRAW" : `${SEAT_LABEL[view.winner]} WINS ${view.counts[view.winner]}–${view.counts[view.winner === 'p1' ? 'p2' : 'p1']}!`;
       status.style.color = '#ffb000';
     }
     root.appendChild(status);

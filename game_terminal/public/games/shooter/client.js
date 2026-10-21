@@ -420,7 +420,7 @@ export function mount(container, api) {
   hint.style.margin = '0';
   hint.style.fontSize = '0.85em';
   hint.style.opacity = '0.8';
-  hint.textContent = 'ROUND-BASED 1V1 DUEL — HEALTH BARS, NO RESPAWNS MID-ROUND. FIRST TO 3 ROUND WINS TAKES THE MATCH.';
+  hint.textContent = 'ROUND-BASED 1V1 DUEL. HEALTH BARS, NO RESPAWNS MID-ROUND. FIRST TO 3 ROUND WINS TAKES THE MATCH.';
   lobby.appendChild(hint);
 
   const scoreLine = document.createElement('p');
@@ -518,9 +518,9 @@ export function mount(container, api) {
   }
 
   function renderLobby(st) {
-    scoreLine.textContent = `ROUND ${st.round} — WINS: A ${st.wins.a} / B ${st.wins.b} (FIRST TO ${st.winsNeeded})`;
-    seatABtn.textContent = st.seats.a ? `SEAT A: ${nicknameFor(st, 'a')}` : 'SIT — SEAT A';
-    seatBBtn.textContent = st.seats.b ? `SEAT B: ${nicknameFor(st, 'b')}` : 'SIT — SEAT B';
+    scoreLine.textContent = `ROUND ${st.round}. WINS: A ${st.wins.a} / B ${st.wins.b} (FIRST TO ${st.winsNeeded})`;
+    seatABtn.textContent = st.seats.a ? `SEAT A: ${nicknameFor(st, 'a')}` : 'SIT. SEAT A';
+    seatBBtn.textContent = st.seats.b ? `SEAT B: ${nicknameFor(st, 'b')}` : 'SIT. SEAT B';
     seatABtn.disabled = !!st.seats.a;
     seatBBtn.disabled = !!st.seats.b;
     leaveSeatBtn.hidden = !mySeat || spectating;
@@ -530,9 +530,9 @@ export function mount(container, api) {
 
     if (st.phase === 'game_over') {
       if (st.matchWinReason === 'opponent_disconnected') {
-        resultLine.textContent = `MATCH OVER — SEAT ${st.matchWinner.toUpperCase()} WINS (OPPONENT DISCONNECTED)`;
+        resultLine.textContent = `MATCH OVER. SEAT ${st.matchWinner.toUpperCase()} WINS (OPPONENT DISCONNECTED)`;
       } else {
-        resultLine.textContent = `MATCH OVER — SEAT ${st.matchWinner.toUpperCase()} WINS ${Math.max(st.wins.a, st.wins.b)}-${Math.min(st.wins.a, st.wins.b)}`;
+        resultLine.textContent = `MATCH OVER. SEAT ${st.matchWinner.toUpperCase()} WINS ${Math.max(st.wins.a, st.wins.b)}-${Math.min(st.wins.a, st.wins.b)}`;
       }
     } else if (st.phase === 'waiting') {
       resultLine.textContent = 'WAITING FOR BOTH SEATS TO FILL…';
@@ -1481,11 +1481,11 @@ export function mount(container, api) {
       const pct = clamp((me.hp / me.maxHp) * 100, 0, 100);
       arena.meBarFill.style.width = `${pct}%`;
       arena.meBarFill.classList.toggle('low', pct <= 30);
-      arena.meLabel.textContent = `${spectating ? me.nickname || 'PLAYER' : 'YOU'} — ${Math.round(me.hp)}/${me.maxHp}${perkIcons(me)}`;
+      arena.meLabel.textContent = `${spectating ? me.nickname || 'PLAYER' : 'YOU'}. ${Math.round(me.hp)}/${me.maxHp}${perkIcons(me)}`;
       arena.leaveSeatArenaBtn.textContent = spectating ? 'STOP WATCHING' : 'LEAVE SEAT';
       if (spectating) {
         arena.unlockHint.hidden = false;
-        arena.unlockHint.textContent = `WATCHING ${me.nickname || 'PLAYER'} — CLICK/SPACE: SWITCH · ESC: STOP`;
+        arena.unlockHint.textContent = `WATCHING ${me.nickname || 'PLAYER'}. CLICK/SPACE: SWITCH · ESC: STOP`;
       }
       arena.ammoEl.textContent = me.reloading ? 'RELOADING…' : `${me.ammo[me.weapon]} / ${me.magSize}`;
       for (const id of Object.keys(arena.wslots)) arena.wslots[id].classList.toggle('active', id === me.weapon);
@@ -1494,9 +1494,9 @@ export function mount(container, api) {
       const pct = clamp((opp.hp / opp.maxHp) * 100, 0, 100);
       arena.oppBarFill.style.width = `${pct}%`;
       arena.oppBarFill.classList.toggle('low', pct <= 30);
-      arena.oppLabel.textContent = `${opp.nickname || 'OPPONENT'} — ${Math.round(opp.hp)}/${opp.maxHp}${perkIcons(opp)}`;
+      arena.oppLabel.textContent = `${opp.nickname || 'OPPONENT'}. ${Math.round(opp.hp)}/${opp.maxHp}${perkIcons(opp)}`;
     }
-    arena.scorePill.textContent = `ROUND ${currentView.round} — WINS: A ${currentView.wins.a} / B ${currentView.wins.b} (TO ${currentView.winsNeeded})`;
+    arena.scorePill.textContent = `ROUND ${currentView.round}. WINS: A ${currentView.wins.a} / B ${currentView.wins.b} (TO ${currentView.winsNeeded})`;
 
     if (currentView.phase === 'round_intro') {
       const secs = Math.max(0, Math.ceil((currentView.roundEndsAt - Date.now()) / 1000));
@@ -1524,7 +1524,7 @@ export function mount(container, api) {
         const head = document.createElement('div');
         head.className = 'sub';
         head.style.width = '100%';
-        head.textContent = 'CATCH-UP PERK — PICK ONE (KEPT ALL MATCH)';
+        head.textContent = 'CATCH-UP PERK. PICK ONE (KEPT ALL MATCH)';
         arena.perkBox.prepend(head);
       }
       arena.perkBox.hidden = !picking;
@@ -1878,7 +1878,7 @@ export function mount(container, api) {
       void arena.banner.offsetWidth;
       arena.banner.classList.add('pop');
     }
-    if (st.phase === 'playing' && prev.phase === 'round_intro') { sfx.play('go'); callout('FIGHT!', true); }
+    if (st.phase === 'playing' && prev.phase === 'round_intro') { sfx.play('go'); callout('FIGHT', true); }
   }
 
   function applyShot(data) {

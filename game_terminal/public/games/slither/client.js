@@ -77,9 +77,9 @@ export function mount(container, api) {
   // labels and a bit more size/opacity so it doesn't fade into the background on first glance.
   const hint = document.createElement('p');
   hint.innerHTML =
-    '<strong>STEER</strong> — move the mouse / drag<br>' +
-    '<strong>BOOST</strong> — click, hold Space, or the boost button (costs length)<br>' +
-    '<strong>GOAL</strong> — eat orbs to grow, avoid walls and other snakes';
+    '<strong>STEER</strong>. Move the mouse / drag<br>' +
+    '<strong>BOOST</strong>. Click, hold Space, or the boost button (costs length)<br>' +
+    '<strong>GOAL</strong>. Eat orbs to grow, avoid walls and other snakes';
   hint.style.margin = '2px 0 0';
   hint.style.maxWidth = `${CANVAS_WIDTH}px`;
   hint.style.textAlign = 'center';
@@ -116,7 +116,7 @@ export function mount(container, api) {
   overlay.style.textAlign = 'center';
   overlay.style.pointerEvents = 'none';
   overlay.hidden = true;
-  overlay.textContent = 'YOU DIED — RESPAWNING…';
+  overlay.textContent = 'YOU DIED. RESPAWNING…';
 
   // Dedicated boost control — mainly for touch, where the canvas itself has to be free for
   // steer-by-drag without every touch also engaging boost (see onPointerDown below).
@@ -331,7 +331,7 @@ export function mount(container, api) {
     } else {
       overlay.hidden = false;
       const remainingSec = own.respawnAt ? Math.max(0, Math.ceil((own.respawnAt - Date.now()) / 1000)) : 0;
-      overlay.textContent = `YOU DIED — RESPAWNING IN ${remainingSec}…`;
+      overlay.textContent = `YOU DIED. RESPAWNING IN ${remainingSec}…`;
     }
 
     drawMinimap(view, own, camX, camY, zoom);
@@ -376,7 +376,7 @@ export function mount(container, api) {
     leaderboardEl.innerHTML = '';
     for (const entry of view.leaderboard) {
       const li = document.createElement('li');
-      li.textContent = entry.clientId === myClientId() ? `${entry.nickname} (you) — ${entry.length}` : `${entry.nickname} — ${entry.length}`;
+      li.textContent = entry.clientId === myClientId() ? `${entry.nickname} (you). ${entry.length}` : `${entry.nickname}. ${entry.length}`;
       leaderboardEl.appendChild(li);
     }
   }

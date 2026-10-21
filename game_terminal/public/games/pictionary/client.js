@@ -271,7 +271,7 @@ export function mount(container, api) {
       statusEl.textContent = `Waiting for at least one more player (${view.playerCount} here)...`;
     } else if (view.phase === 'choosing_word') {
       if (view.isDrawer) {
-        statusEl.textContent = "You're drawing next — pick a word:";
+        statusEl.textContent = "You're drawing next. Pick a word:";
         for (const word of view.wordOptions || []) {
           const btn = document.createElement('button');
           btn.textContent = word.toUpperCase();
@@ -293,16 +293,16 @@ export function mount(container, api) {
       const secsLeft = Math.ceil(msLeft / 1000);
       timer.update(msLeft / ROUND_MS, secsLeft);
       if (view.isDrawer) {
-        statusEl.textContent = `Draw: "${view.word ? view.word.toUpperCase() : ''}" — ${secsLeft}s left`;
+        statusEl.textContent = `Draw: "${view.word ? view.word.toUpperCase() : ''}" · ${secsLeft}s left`;
       } else {
         const guessed = view.correctGuessers.includes(api.getClientId());
         statusEl.textContent = guessed
-          ? `You got it! Waiting on others — ${secsLeft}s left`
-          : `${drawerName} is drawing — ${secsLeft}s left`;
+          ? `You got it. Waiting on others. ${secsLeft}s left`
+          : `${drawerName} is drawing. ${secsLeft}s left`;
         guessForm.style.display = (guessed) ? 'none' : 'flex';
       }
     } else if (view.phase === 'round_over') {
-      statusEl.textContent = `Round over — the word was "${(view.word || '').toUpperCase()}"`;
+      statusEl.textContent = `Round over. The word was "${(view.word || '').toUpperCase()}"`;
     }
 
     choicesShown = view.phase === 'choosing_word';
@@ -313,7 +313,7 @@ export function mount(container, api) {
       if (idx >= logShown) line.className = 'dfx-slide';
       const name = nicknameFor(entry.clientId);
       if (entry.correct) {
-        line.textContent = `${name} guessed the word!`;
+        line.textContent = `${name} guessed the word.`;
         line.style.color = '#39ff14';
       } else {
         line.textContent = `${name}: ${entry.text}`;
@@ -350,16 +350,16 @@ export function mount(container, api) {
       if (revealEl && next.phase !== 'round_over') { revealEl.remove(); revealEl = null; }
       if (next.phase === 'choosing_word') {
         sfx.play('turn');
-        if (next.isDrawer) floatText(stage, "YOU'RE UP — PICK A WORD", true);
+        if (next.isDrawer) floatText(stage, "YOU'RE UP. PICK A WORD", true);
       } else if (next.phase === 'drawing') {
         sfx.play('whoosh');
         timer.reset();
-        floatText(stage, next.isDrawer ? 'DRAW!' : 'GUESS!');
+        floatText(stage, next.isDrawer ? 'DRAW' : 'GUESS');
       } else if (next.phase === 'round_over') {
         const anyone = (next.correctGuessers || []).length > 0;
         sfx.play(anyone ? 'chime' : 'lose');
         if (revealEl) revealEl.remove();
-        revealEl = next.word ? revealWord(stage, next.word, anyone ? 'THE WORD WAS' : 'NOBODY GOT IT — THE WORD WAS') : null;
+        revealEl = next.word ? revealWord(stage, next.word, anyone ? 'THE WORD WAS' : 'NOBODY GOT IT. THE WORD WAS') : null;
       }
       return;
     }
@@ -372,10 +372,10 @@ export function mount(container, api) {
         sfx.play('point');
         burst(stage);
         replay(stage, 'dfx-flash');
-        floatText(stage, gained > 0 ? `+${gained} YOU GOT IT!` : 'YOU GOT IT!');
+        floatText(stage, gained > 0 ? `+${gained} YOU GOT IT` : 'YOU GOT IT');
       } else {
         sfx.play(next.isDrawer ? 'point' : 'chime');
-        floatText(stage, `${nicknameFor(entry.clientId)} got it!`, true);
+        floatText(stage, `${nicknameFor(entry.clientId)} got it.`, true);
         if (next.isDrawer) burst(stage, 12);
       }
     }

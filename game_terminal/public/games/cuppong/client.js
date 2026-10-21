@@ -322,7 +322,7 @@ export function mount(container, api) {
   options.className = 'cp-row';
   const help = document.createElement('div');
   help.className = 'cp-help';
-  help.textContent = 'Pull down from anywhere on the table and let go, like a slingshot — pull left to aim right and vice versa, a longer pull throws harder. Two throws a turn; sink both for BALLS BACK. Clear all their cups to win.';
+  help.textContent = 'Pull down from anywhere on the table and let go, like a slingshot. Pull left to aim right and vice versa, a longer pull throws harder. Two throws a turn; sink both for BALLS BACK. Clear all their cups to win.';
   root.append(status, err, seats, stage, options, help);
 
   // ---- game-state helpers ----
@@ -433,11 +433,11 @@ export function mount(container, api) {
     const latest = nextAtSide ? nextAtSide.before : view.cups[rec.target];
     syncCups(rec.target, latest);
     if (rec.rerack) {
-      callout('RE-RACK!', '#ffe14d', true);
+      callout('RE-RACK', '#ffe14d', true);
       sfx.play('swap');
     }
     if (rec.ballsBack) {
-      callout('BALLS BACK!', '#39ff14');
+      callout('BALLS BACK', '#39ff14');
       sfx.play('kill');
     } else if (rec.turnOver && view.phase === 'playing' && !queue.length) {
       const seat = mySeat();
@@ -565,7 +565,7 @@ export function mount(container, api) {
             const e = shown[rec.target].get(rec.cupId);
             if (e) { splash(e.mesh.position.x, e.mesh.position.z); e.fading = 1; }
             const mine = rec.by === mySeat();
-            callout(mine ? 'SPLASH!' : 'SUNK!', TEXT_COLOR[rec.by], false);
+            callout(mine ? 'SPLASH' : 'SUNK', TEXT_COLOR[rec.by], false);
           }
         }
       }
@@ -715,13 +715,13 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       status.textContent = 'Waiting for both seats to be filled.';
     } else if (over) {
-      status.textContent = `${view.winner.toUpperCase()} WINS!`;
+      status.textContent = `${view.winner.toUpperCase()} WINS`;
       status.style.color = '#ffb000';
     } else if (seat && showTurn === seat) {
       status.textContent = '▶ YOUR THROW';
       status.classList.add('mine');
     } else {
-      status.textContent = `${showTurn.toUpperCase()} THROWING — ${nicknameFor(view.players[showTurn])}`;
+      status.textContent = `${showTurn.toUpperCase()} THROWING. ${nicknameFor(view.players[showTurn])}`;
       status.style.color = TEXT_COLOR[showTurn];
     }
     err.textContent = flashError ? REJECT_MESSAGES[flashError] || 'Throw rejected' : '';

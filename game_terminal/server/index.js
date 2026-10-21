@@ -753,7 +753,7 @@ wss.on('connection', (ws, req) => {
         // The run that starts here is today's one attempt (claimed atomically; a second start is refused).
         if (room.daily && d && d.kind === DAILY_GAMES[room.gameType].start) {
           if (room.daily.started || !session.user || session.uid !== room.daily.uid || !(await daily.start(session.uid, session.user.username, room.gameType, room.daily.date))) {
-            send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.DAILY, detail: 'That was today\'s run. Come back tomorrow!', soft: true });
+            send(ws, ServerMessage.ROOM_ERROR, { reason: RoomErrorReason.DAILY, detail: 'That was today\'s run. Come back tomorrow.', soft: true });
             return;
           }
           room.daily.started = true;

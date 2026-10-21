@@ -466,10 +466,10 @@ export function mount(container, api) {
     status.classList.remove('mine');
     status.style.color = '';
     if (view.phase === 'waiting') status.textContent = 'Waiting for both seats to be filled.';
-    else if (view.phase === 'game_over') { status.textContent = `${SEAT_LABEL[view.winner]} (${seatName(view.winner)}) BREAKS THROUGH!`; status.style.color = '#ffb000'; }
+    else if (view.phase === 'game_over') { status.textContent = `${SEAT_LABEL[view.winner]} (${seatName(view.winner)}) BREAKS THROUGH`; status.style.color = '#ffb000'; }
     else if (myTurn()) {
       status.classList.add('mine');
-      status.textContent = view.step === 'move' ? '▶ YOUR TURN — MOVE A PAWN 1–2 SQUARES' : '▶ NOW PLACE A WALL';
+      status.textContent = view.step === 'move' ? '▶ YOUR TURN. MOVE A PAWN 1–2 SQUARES' : '▶ NOW PLACE A WALL';
     } else {
       status.textContent = `${SEAT_LABEL[view.turn]} (${seatName(view.turn)}) ${view.step === 'move' ? 'is moving' : 'is placing a wall'}…`;
       status.style.color = SEAT_COLOR[view.turn];

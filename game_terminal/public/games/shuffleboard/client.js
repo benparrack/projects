@@ -27,7 +27,7 @@ const REJECT_MESSAGES = {
   busy: 'Wait for the pucks to stop.',
   not_playing: 'The game is not running.',
   invalid: 'Invalid shot.',
-  flick: 'Flick UP and let go while still moving — the flick speed is the power.',
+  flick: 'Flick UP and let go while still moving. The flick speed is the power.',
 };
 
 const motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -239,7 +239,7 @@ export function mount(container, api) {
   options.className = 'sb-row';
   const help = document.createElement('div');
   help.className = 'sb-help';
-  help.textContent = 'Drag sideways to place your puck, then FLICK UP and let go while moving — tilt aims, flick speed is power. '
+  help.textContent = 'Drag sideways to place your puck, then FLICK UP and let go while moving. Tilt aims, flick speed is power. '
     + 'Only the furthest puck\'s owner scores: 1/2/3 by zone, 4 for a HANGER over the edge, for every puck past the opponent\'s best. '
     + 'Pucks short of the red foul line are removed.';
   root.append(status, err, seats, stage, options, help);
@@ -308,7 +308,7 @@ export function mount(container, api) {
     anim = null;
     const me = rec.after.find((p) => p.id === rec.shotId);
     if (me && S.zoneValue(me) === 4) {
-      callout('HANGER!', '#ffe14d');
+      callout('HANGER', '#ffe14d');
       sfx.play('chime');
     }
     if (rec.roundEnd) {
@@ -615,7 +615,7 @@ export function mount(container, api) {
           const p = proj(fr[k * 2], fr[k * 2 + 1]);
           sfx.play('pop');
           fx.burst(p.x, p.y, PUCK[rec.owners[k]].top, { count: 18, speed: 120, life: 0.5, gravity: 300 });
-          if (rec.owners[k] !== rec.by) callout('KNOCKED OFF!', TEXT_COLOR[rec.by], true);
+          if (rec.owners[k] !== rec.by) callout('KNOCKED OFF', TEXT_COLOR[rec.by], true);
           else if (ev.id === rec.shotId) callout(ev.why === 'side' ? 'GUTTER' : 'OFF THE END', '#9fb39c', true);
         } else if (ev.type === 'short') {
           sfx.play('blip');
@@ -833,10 +833,10 @@ export function mount(container, api) {
       status.style.color = re.scorer ? TEXT_COLOR[re.scorer] : '#9fb39c';
     } else if (seat && t === seat) {
       const n = 5 - Math.max(1, view.left[seat]);
-      status.textContent = anim ? '▶ YOUR SHOT…' : `▶ YOUR SHOT — puck ${n} of 4`;
+      status.textContent = anim ? '▶ YOUR SHOT…' : `▶ YOUR SHOT. Puck ${n} of 4`;
       status.classList.add('mine');
     } else {
-      status.textContent = `${t.toUpperCase()} SHOOTING — ${nicknameFor(view.players[t])}`;
+      status.textContent = `${t.toUpperCase()} SHOOTING. ${nicknameFor(view.players[t])}`;
       status.style.color = TEXT_COLOR[t];
     }
     const cs = canShoot();

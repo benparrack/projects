@@ -88,7 +88,7 @@ export function openReport(username, msg) {
     h('div.row-end',
       h('button', { type: 'button', onclick: () => m.close() }, 'CANCEL'),
       h('button.btn-primary', { type: 'button', onclick: () => {
-        const reason = select.value + (details.value.trim() ? ` — ${details.value.trim()}` : '');
+        const reason = select.value + (details.value.trim() ? ` · ${details.value.trim()}` : '');
         ctx.send(ClientMessage.CHAT_REPORT, { username, messageId: msg ? msg.id : undefined, reason });
         m.close();
       } }, 'SEND REPORT')));
@@ -100,7 +100,7 @@ export function openReport(username, msg) {
 export function chatBox(opts) {
   const key = keyOf(opts.channel, opts.with);
   const log = h('ol.chat-log', { 'aria-live': 'polite', 'aria-relevant': 'additions', tabindex: 0, 'aria-label': opts.title || 'Chat messages' });
-  const empty = h('p.chat-empty', opts.emptyText || 'No messages yet. Say hi!');
+  const empty = h('p.chat-empty', opts.emptyText || 'No messages yet. Say hi.');
   const jump = h('button.chat-jump', { type: 'button', hidden: true, onclick: () => { scrollEnd(); } }, '↓ New messages');
   const err = h('p.chat-err', { role: 'alert', hidden: true });
   const foot = h('div.chat-foot');
@@ -227,7 +227,7 @@ function toggleDock(open = dock.panel.hidden) {
   try { localStorage.setItem(DOCK_KEY, open ? '1' : '0'); } catch { /* storage blocked: not important */ }
   if (open) {
     if (!dock.box || !dock.box.el.isConnected) {
-      dock.box = chatBox({ channel: 'global', title: 'Global chat', placeholder: 'Say something to everyone', emptyText: 'It\'s quiet in here. Start the conversation!' });
+      dock.box = chatBox({ channel: 'global', title: 'Global chat', placeholder: 'Say something to everyone', emptyText: 'It\'s quiet in here. Start the conversation.' });
       dock.body.replaceChildren(dock.box.el);
     } else dock.box.open();
     setTimeout(() => dock.box && dock.box.focus(), 50);

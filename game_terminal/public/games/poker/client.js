@@ -134,10 +134,10 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       status.textContent = dealIn != null ? `Dealing in ${dealIn}s…` : `Waiting for players (${view.seats.length}/6 seated, need 2 stacks to deal).`;
     } else if (view.phase === 'playing') {
-      status.textContent = `${h.stage.toUpperCase()} — ${nameAt(h.toAct)}${h.toAct === mySeat ? ' (you)' : ''} to act — pot: ${money(h.potTotal)}`;
+      status.textContent = `${h.stage.toUpperCase()}. ${nameAt(h.toAct)}${h.toAct === mySeat ? ' (you)' : ''} to act. Pot: ${money(h.potTotal)}`;
     } else if (view.phase === 'hand_over') {
       const r = h.lastResult;
-      status.textContent = (r.kind === 'fold' ? `${nameAt(r.winnerSeat)} wins ${money(r.payouts[r.winnerSeat])}, everyone else folded.` : 'Showdown!')
+      status.textContent = (r.kind === 'fold' ? `${nameAt(r.winnerSeat)} wins ${money(r.payouts[r.winnerSeat])}, everyone else folded.` : 'Showdown.')
         + (dealIn != null ? ` Next hand in ${dealIn}s.` : '');
     }
     root.appendChild(status);

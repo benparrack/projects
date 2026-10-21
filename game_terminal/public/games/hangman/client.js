@@ -230,8 +230,8 @@ export function mount(container, api) {
         if (wordRejected) {
           const bad = (wordRejected.unknown || []).map((w) => `"${w.toUpperCase()}"`).join(', ');
           errEl.textContent = bad
-            ? `${bad} isn't in the dictionary — try another word (multi-word phrases are OK, e.g. "STAR WARS").`
-            : 'Not a real word/phrase — try again (multi-word phrases are OK, e.g. "STAR WARS").';
+            ? `${bad} isn't in the dictionary. Try another word (multi-word phrases are OK, e.g. "STAR WARS").`
+            : 'Not a real word/phrase. Try again (multi-word phrases are OK, e.g. "STAR WARS").';
         }
         form.addEventListener('submit', (ev) => {
           ev.preventDefault();
@@ -244,7 +244,7 @@ export function mount(container, api) {
         // Keep focus in the box across re-renders so typing isn't interrupted.
         setTimeout(() => { if (input.isConnected && document.activeElement !== input && !document.activeElement?.matches('input,textarea')) input.focus(); }, 0);
         const hint = document.createElement('div');
-        hint.textContent = 'You are picking this round — enter a word for everyone else to guess.';
+        hint.textContent = 'You are picking this round. Enter a word for everyone else to guess.';
         root.appendChild(hint);
       } else {
         const waiting = document.createElement('div');
@@ -297,8 +297,8 @@ export function mount(container, api) {
         const who = document.createElement('div');
         const me = view.roundWinner === api.getClientId();
         who.textContent = view.result === 'win'
-          ? `${me ? 'You' : nicknameFor(view.roundWinner)} solved it first — +1 win`
-          : `${me ? 'You' : nicknameFor(view.roundWinner)} stumped the room — +1 win`;
+          ? `${me ? 'You' : nicknameFor(view.roundWinner)} solved it first. +1 win`
+          : `${me ? 'You' : nicknameFor(view.roundWinner)} stumped the room. +1 win`;
         who.style.color = me ? '#b6ff9e' : '';
         root.appendChild(who);
       }

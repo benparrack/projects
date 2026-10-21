@@ -14,7 +14,7 @@ const NUM_COLOR = ['', '#4da3ff', '#52d273', '#ff5d5d', '#b48cff', '#ffa94d', '#
 const LONG_PRESS_MS = 450;
 
 const REJECT_MESSAGES = {
-  frozen: 'Frozen — you hit a mine!',
+  frozen: 'Frozen. You hit a mine.',
   not_playing: 'The game is not in progress',
   not_seated: 'Take a seat to play',
   in_progress: 'Finish this race first (size can change mid-game only vs a bot)',
@@ -109,7 +109,7 @@ export function mount(container, api) {
   boardsEl.className = 'ms-boards';
   const hint = document.createElement('div');
   hint.className = 'ms-hint';
-  hint.textContent = 'Click: open (click a number whose mines are all flagged to open around it) · Right-click / long-press / FLAG mode: flag. Same mines for both players — first to clear wins. A mine freezes you for 5s.';
+  hint.textContent = 'Click: open (click a number whose mines are all flagged to open around it) · Right-click / long-press / FLAG mode: flag. Same mines for both players. First to clear wins. A mine freezes you for 5s.';
   root.append(status, err, chrome, race, boardsEl, hint);
   const results = createResults(container);
 
@@ -325,7 +325,7 @@ export function mount(container, api) {
         box.className = 'ms-boardbox';
         const cap = document.createElement('div');
         cap.className = 'ms-cap';
-        cap.textContent = s === seat ? 'YOUR BOARD' : `${SEAT_LABEL[s]} — ${seatName(s)}`;
+        cap.textContent = s === seat ? 'YOUR BOARD' : `${SEAT_LABEL[s]}. ${seatName(s)}`;
         cap.style.color = SEAT_COLOR[s];
         const g = buildGrid(s, s === seat && view.phase === 'playing');
         const fz = document.createElement('div');
@@ -345,9 +345,9 @@ export function mount(container, api) {
     const now = performance.now();
     status.classList.remove('frozen');
     status.style.color = '';
-    if (view.phase === 'waiting') status.textContent = 'Waiting for both seats — take one and add a bot or a friend.';
+    if (view.phase === 'waiting') status.textContent = 'Waiting for both seats. Take one and add a bot or a friend.';
     else if (view.phase === 'game_over') {
-      status.textContent = `${seat === view.winner ? 'YOU WIN' : `${SEAT_LABEL[view.winner]} (${seatName(view.winner)}) WINS`} — cleared in ${fmt(view.elapsedMs)}`;
+      status.textContent = `${seat === view.winner ? 'YOU WIN' : `${SEAT_LABEL[view.winner]} (${seatName(view.winner)}) WINS`}. Cleared in ${fmt(view.elapsedMs)}`;
       status.style.color = '#ffb000';
     } else if (seat && frozenUntil[seat] > now) {
       status.textContent = `FROZEN ${Math.ceil((frozenUntil[seat] - now) / 1000)}s · ${fmt(now - clockBase)}`;
@@ -369,7 +369,7 @@ export function mount(container, api) {
     const seat = mySeat();
     const order = [view.winner, view.winner === 'p1' ? 'p2' : 'p1'];
     return {
-      title: seat === view.winner ? 'YOU WIN!' : seat ? 'YOU LOSE' : `${seatName(view.winner).toUpperCase()} WINS!`,
+      title: seat === view.winner ? 'YOU WIN' : seat ? 'YOU LOSE' : `${seatName(view.winner).toUpperCase()} WINS`,
       subtitle: `Cleared in ${fmt(view.elapsedMs)}`,
       outcome: !seat ? 'over' : seat === view.winner ? 'win' : 'lose',
       rows: order.map((s) => ({ name: seatName(s), value: `${Math.floor((100 * view.progress[s].opened) / view.safeTotal)}% · ✹${view.progress[s].hits}`, win: s === view.winner, you: s === seat })),

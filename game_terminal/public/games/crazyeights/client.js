@@ -45,7 +45,7 @@ export function mount(container, api) {
     results.update(view && view.phase === 'game_over' ? seatResults({
       seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
       value: (i) => `${view.handCounts[i]} left`, rank: (i) => view.handCounts[i],
-      winTitle: `${nicknameFor(view.seats[view.winnerSeat])} WINS!`, subtitle: 'Emptied their hand first', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+      winTitle: `${nicknameFor(view.seats[view.winnerSeat])} WINS`, subtitle: 'Emptied their hand first', onRematch: () => api.sendAction({ kind: 'resetGame' }),
     }) : null);
     root.innerHTML = '';
     if (!view) {
@@ -59,10 +59,10 @@ export function mount(container, api) {
       status.textContent = `Waiting for players (${view.seats.length}/6 seated, need 2+ to start).`;
     } else if (view.phase === 'playing') {
       const turnName = nicknameFor(view.seats[view.turnIdx]);
-      status.textContent = `${view.turnIdx === mySeat ? 'YOUR TURN' : `Turn: ${turnName}`} — current suit: ${SUIT_GLYPH[view.currentSuit]}`;
+      status.textContent = `${view.turnIdx === mySeat ? 'YOUR TURN' : `Turn: ${turnName}`}. Current suit: ${SUIT_GLYPH[view.currentSuit]}`;
       if (view.turnIdx === mySeat) status.className = 'gt-your-turn';
     } else if (view.phase === 'game_over') {
-      status.textContent = `${nicknameFor(view.seats[view.winnerSeat])} WINS — hand emptied!`;
+      status.textContent = `${nicknameFor(view.seats[view.winnerSeat])} WINS. Hand emptied.`;
     }
     root.appendChild(status);
 

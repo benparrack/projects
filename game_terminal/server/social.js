@@ -43,7 +43,7 @@ function createSocial(db, accounts) {
   async function resolve(uid, name) {
     const other = await accounts.uidForUsername(String(name || '').trim());
     if (!other) return { error: 'No player with that name.' };
-    if (other === uid) return { error: 'That\'s you!' };
+    if (other === uid) return { error: 'That\'s you.' };
     return { other };
   }
 

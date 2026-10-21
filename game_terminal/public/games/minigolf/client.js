@@ -328,7 +328,7 @@ export function mount(container, api) {
   options.className = 'mg-row';
   const help = document.createElement('div');
   help.className = 'mg-help';
-  help.textContent = 'On your turn press anywhere on the course and drag BACK, like a slingshot — the dotted line shows direction and power. Let go to putt; drag back to the start to cancel. Turns alternate stroke by stroke. Water = +1 stroke and a re-try from where you hit. 6 strokes max (then you score 7). Lowest total after 9 holes wins.';
+  help.textContent = 'On your turn press anywhere on the course and drag BACK, like a slingshot. The dotted line shows direction and power. Let go to putt; drag back to the start to cancel. Turns alternate stroke by stroke. Water = +1 stroke and a re-try from where you hit. 6 strokes max (then you score 7). Lowest total after 9 holes wins.';
   root.append(status, err, seats, stage, card, options, help);
   let holeCard = null;
 
@@ -446,7 +446,7 @@ export function mount(container, api) {
     const nx = document.createElement('div');
     nx.className = 'nx';
     const nh = S.HOLES[rec.hole + 1];
-    nx.textContent = nh ? `NEXT: HOLE ${rec.hole + 2} — ${nh.name.toUpperCase()} · PAR ${nh.par}` : '';
+    nx.textContent = nh ? `NEXT: HOLE ${rec.hole + 2}. ${nh.name.toUpperCase()} · PAR ${nh.par}` : '';
     holeCard.appendChild(nx);
     stage.appendChild(holeCard);
     sfx.play('point');
@@ -566,7 +566,7 @@ export function mount(container, api) {
       case 'mover':
         sfx.play('swap');
         fx.burst(x, y, '#ffa040', { count: 8, speed: 90, life: 0.3, size: 1.5 });
-        if (ev.knock) callout('KNOCKED!', TEXT_COLOR[color], true);
+        if (ev.knock) callout('KNOCKED', TEXT_COLOR[color], true);
         break;
       case 'sand':
         sfx.play('slide', { vol: 0.5 });
@@ -579,7 +579,7 @@ export function mount(container, api) {
         sfx.play('whoosh');
         fx.burst(x, y, '#7fc4ff', { count: 26, speed: 90, life: 0.6, size: 1.8 });
         fx.ring(x, y, '#9fd4ff', { radius: 18, life: 0.6, width: 2 });
-        callout(ev.knock ? 'SPLASH!' : 'SPLASH! +1', '#5aa0ff', true);
+        callout(ev.knock ? 'SPLASH' : 'SPLASH +1', '#5aa0ff', true);
         break;
       case 'sink':
         sinkAnim = { color, start: performance.now() };
@@ -1182,16 +1182,16 @@ export function mount(container, api) {
       status.textContent = `ROUND OVER: ${soloTot} STROKES (${vsPar(soloTot)})`;
       status.style.color = '#ffb000';
     } else if (over) {
-      status.textContent = view.winner === 'draw' ? "IT'S A TIE!" : `${view.winner.toUpperCase()} WINS!`;
+      status.textContent = view.winner === 'draw' ? "IT'S A TIE" : `${view.winner.toUpperCase()} WINS`;
       status.style.color = '#ffb000';
     } else if (interlude) {
       status.textContent = `HOLE ${interlude.rec.hole + 1} COMPLETE`;
       status.style.color = '#e9ffe4';
     } else if (seat && showTurn === seat) {
-      status.textContent = anim ? '▶ ROLLING…' : `▶ YOUR PUTT — STROKE ${(disp.strokes[seat] || 0) + 1}`;
+      status.textContent = anim ? '▶ ROLLING…' : `▶ YOUR PUTT. STROKE ${(disp.strokes[seat] || 0) + 1}`;
       status.classList.add('mine');
     } else {
-      status.textContent = `${showTurn.toUpperCase()} PUTTING — ${seatName(showTurn)}`;
+      status.textContent = `${showTurn.toUpperCase()} PUTTING. ${seatName(showTurn)}`;
       status.style.color = TEXT_COLOR[showTurn];
     }
     err.textContent = flashError ? REJECT_MESSAGES[flashError] || 'Putt rejected' : '';

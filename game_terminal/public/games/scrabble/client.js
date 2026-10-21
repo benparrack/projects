@@ -105,7 +105,7 @@ const CSS = `
 .gt-scr .scr-log .e .who { color:#1f8f0c; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:90px; flex-shrink:0; }
 .gt-scr .scr-log .e .what { flex:1; text-transform:uppercase; word-break:break-word; }
 .gt-scr .scr-log .e .pts { color:#ffb000; font-weight:bold; }
-.gt-scr .scr-log .e.bingo .what::after { content:' BINGO!'; color:#ffb000; }
+.gt-scr .scr-log .e.bingo .what::after { content:' BINGO'; color:#ffb000; }
 .gt-scr .scr-legend { display:grid; grid-template-columns:auto 1fr; gap:3px 8px; font-size:11px; align-items:center; }
 .gt-scr .scr-legend span.k { width:18px; height:14px; border-radius:2px; display:inline-block; }
 .gt-scr-ghost { position:fixed; z-index:9999; pointer-events:none; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:4px; background:#0d3307; border:2px solid #39ff14; color:#39ff14; font:bold 26px monospace; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px rgba(0,0,0,0.6), 0 0 12px rgba(57,255,20,0.6); text-transform:uppercase; }
@@ -290,7 +290,7 @@ export function mount(container, api) {
     closeModal();
     modal = el('div', 'gt-scr-modal');
     const card = el('div', 'card');
-    card.appendChild(el('div', null, 'BLANK TILE — CHOOSE A LETTER'));
+    card.appendChild(el('div', null, 'BLANK TILE. CHOOSE A LETTER'));
     const grid = el('div', 'grid');
     for (let k = 0; k < 26; k++) {
       const L = String.fromCharCode(97 + k);
@@ -410,16 +410,16 @@ export function mount(container, api) {
   function statusText() {
     if (view.phase === 'waiting') {
       const n = view.seats.length;
-      if (n < 2) return { text: 'WAITING FOR PLAYERS — need 2 to 4 (add a bot to play now)' };
-      return { text: seated() ? `${n} PLAYERS READY — press START GAME` : `${n} PLAYERS SEATED — waiting for a player to start` };
+      if (n < 2) return { text: 'WAITING FOR PLAYERS. Need 2 to 4 (add a bot to play now)' };
+      return { text: seated() ? `${n} PLAYERS READY. Press START GAME` : `${n} PLAYERS SEATED. Waiting for a player to start` };
     }
     if (view.phase === 'game_over') {
       const fin = (view.endInfo && view.endInfo.final) || [];
       const best = fin.filter((f) => f.winner);
       const why = { out: 'a player went out', scoreless: 'six scoreless turns', left: 'a player left' }[view.endInfo && view.endInfo.reason] || '';
-      return { text: `GAME OVER — ${best.length > 1 ? 'TIE' : `${(best[0] && best[0].name) || '?'} WINS`}${why ? ` (${why})` : ''}`, cls: 'over' };
+      return { text: `GAME OVER. ${best.length > 1 ? 'TIE' : `${(best[0] && best[0].name) || '?'} WINS`}${why ? ` (${why})` : ''}`, cls: 'over' };
     }
-    if (myTurn()) return { text: exchangeMode ? '▶ YOUR TURN — pick tiles to exchange, then CONFIRM' : '▶ YOUR TURN — place tiles to form a word', cls: 'mine' };
+    if (myTurn()) return { text: exchangeMode ? '▶ YOUR TURN. Pick tiles to exchange, then CONFIRM' : '▶ YOUR TURN. Place tiles to form a word', cls: 'mine' };
     return { text: `${seatName(view.turnIdx).toUpperCase()} IS THINKING…` };
   }
 
@@ -517,7 +517,7 @@ export function mount(container, api) {
       const L = view.myRack[i];
       const t = tileEl(L, L === '?', selected === i ? 'sel' : exchangeSel.has(i) ? 'xsel' : '');
       t.dataset.i = String(i);
-      if (L === '?') t.title = 'Blank — choose any letter when you place it';
+      if (L === '?') t.title = 'Blank. Choose any letter when you place it';
       if (exchangeMode) {
         t.addEventListener('click', () => {
           if (exchangeSel.has(i)) exchangeSel.delete(i); else exchangeSel.add(i);
@@ -532,8 +532,8 @@ export function mount(container, api) {
   }
 
   function previewHtml() {
-    if (!pending.size) return { cls: '', html: myTurn() ? 'Drag tiles onto the board — or tap a tile, then a square.' : '' };
-    if (!myTurn()) return { cls: '', html: 'Planning ahead — you can submit on your turn.' };
+    if (!pending.size) return { cls: '', html: myTurn() ? 'Drag tiles onto the board. Or tap a tile, then a square.' : '' };
+    if (!myTurn()) return { cls: '', html: 'Planning ahead. You can submit on your turn.' };
     if (!preview || preview.key !== pendingKey()) return { cls: '', html: 'checking…' };
     const esc = (s) => String(s).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
     if (preview.ok) {
@@ -626,9 +626,9 @@ export function mount(container, api) {
     const mine = fin.find((f) => f.id === me());
     const winners = fin.filter((f) => f.winner);
     const tie = winners.length > 1;
-    const why = { out: 'Bag empty — a player went out', scoreless: 'Six scoreless turns in a row', left: 'A player left the game' }[view.endInfo.reason] || 'Game over';
+    const why = { out: 'Bag empty. A player went out', scoreless: 'Six scoreless turns in a row', left: 'A player left the game' }[view.endInfo.reason] || 'Game over';
     results.update({
-      title: mine ? (mine.winner ? (tie ? 'TIE FOR FIRST!' : 'YOU WIN!') : 'YOU LOSE') : (tie ? "IT'S A TIE" : `${winners[0] ? winners[0].name : '?'} WINS`),
+      title: mine ? (mine.winner ? (tie ? 'TIE FOR FIRST' : 'YOU WIN') : 'YOU LOSE') : (tie ? "IT'S A TIE" : `${winners[0] ? winners[0].name : '?'} WINS`),
       subtitle: why,
       outcome: mine ? (mine.winner ? (tie ? 'draw' : 'win') : 'lose') : 'over',
       rows: sorted.map((f) => ({ name: f.name, value: `${f.score}${f.delta ? ` (${f.delta > 0 ? '+' : ''}${f.delta})` : ''}`, win: f.winner, you: f.id === me() })),
@@ -653,7 +653,7 @@ export function mount(container, api) {
       col.appendChild(el('div', 'scr-preview'));
       col.appendChild(renderControls());
     } else if (view.phase === 'playing') {
-      col.appendChild(el('div', 'scr-preview', 'Spectating — racks are hidden.'));
+      col.appendChild(el('div', 'scr-preview', 'Spectating. Racks are hidden.'));
     }
     main.appendChild(col);
     main.appendChild(renderSide());

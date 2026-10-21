@@ -15,7 +15,7 @@ const REJECT_MESSAGES = {
   not_your_turn: "It's not your turn",
   not_playing: 'The game is not in progress',
   invalid: 'Invalid shot',
-  stale: 'Too quick — wait for the last arrow',
+  stale: 'Too quick. Wait for the last arrow',
   busy: 'Wait for the arrow to land',
 };
 const FLIGHT_MS = 900; // matches the server's timing.flight
@@ -395,7 +395,7 @@ export function mount(container, api) {
     const p = { x: aim.x, y: aim.y };
     aim = null;
     if (held < MIN_HOLD_MS) {
-      hint.textContent = 'Hold to draw the bow — let go when the sight is steady';
+      hint.textContent = 'Hold to draw the bow. Let go when the sight is steady';
       delete hint.dataset.auto;
       return;
     }
@@ -1077,7 +1077,7 @@ export function mount(container, api) {
       subtitle = draw ? 'Shoot-offs could not separate them' : `Shoot-off: ${so[w].toFixed(1)} cm vs ${so[w === 'p1' ? 'p2' : 'p1'].toFixed(1)} cm from the centre`;
     }
     return {
-      title: draw ? "IT'S A DRAW" : me === w ? 'YOU WIN!' : me ? 'YOU LOSE' : `${seatName(w)} WINS!`,
+      title: draw ? "IT'S A DRAW" : me === w ? 'YOU WIN' : me ? 'YOU LOSE' : `${seatName(w)} WINS`,
       subtitle,
       outcome: draw ? 'draw' : me == null ? 'over' : me === w ? 'win' : 'lose',
       rows: order.map((seat) => ({ name: seatName(seat), value: `${view.totals[seat]} · ${view.xs[seat]}X`, win: !draw && seat === w, you: seat === me })),
@@ -1101,14 +1101,14 @@ export function mount(container, api) {
     } else if (view.phase === 'playing') {
       const mine = seat && seat === view.turn;
       const where = view.shootoff ? 'SHOOT-OFF · CLOSEST TO THE X WINS' : `END ${view.end}/${view.ends} · ARROW ${(view.shotsInEnd % view.arrowsPerEnd) + 1} OF ${view.arrowsPerEnd}`;
-      status.textContent = mine ? `▶ YOUR SHOT — ${where}` : `${seatName(view.turn)} TO SHOOT — ${where}`;
+      status.textContent = mine ? `▶ YOUR SHOT. ${where}` : `${seatName(view.turn)} TO SHOOT. ${where}`;
       if (mine) status.classList.add('mine');
       status.style.color = SEAT_COLOR[view.turn];
     } else if (view.solo) {
       status.textContent = `FINAL SCORE: ${view.totals[view.winner]}`;
       status.style.color = '#ffb000';
     } else {
-      status.textContent = view.winner === 'draw' ? "IT'S A DRAW!" : `${seatName(view.winner)} WINS!`;
+      status.textContent = view.winner === 'draw' ? "IT'S A DRAW" : `${seatName(view.winner)} WINS`;
       status.style.color = '#ffb000';
     }
     err.textContent = flashError ? REJECT_MESSAGES[flashError] || 'Shot rejected' : '';

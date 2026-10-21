@@ -308,7 +308,7 @@ export function mount(container, api) {
   }
 
   function renderEntry(entry) {
-    if (entry.content == null) return el('div', 'gp-blank', entry.type === 'drawing' ? '(no drawing — ran out of time)' : '(nothing written — ran out of time)');
+    if (entry.content == null) return el('div', 'gp-blank', entry.type === 'drawing' ? '(no drawing. Ran out of time)' : '(nothing written. Ran out of time)');
     if (entry.type === 'drawing') {
       const img = el('img', 'gp-img');
       img.src = entry.content;
@@ -381,7 +381,7 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       const card = el('div', 'gp-card');
       card.appendChild(el('div', 'gp-label', 'DRAWING PHONE'));
-      card.appendChild(el('div', null, `${view.seats.length}/8 seated — need 3+ to start. One round per player.`));
+      card.appendChild(el('div', null, `${view.seats.length}/8 seated. Need 3+ to start. One round per player.`));
       const players = el('div', 'gp-row');
       view.seats.forEach((id) => players.appendChild(el('span', 'gp-pip done', nicknameFor(id))));
       card.appendChild(players);
@@ -424,7 +424,7 @@ export function mount(container, api) {
       root.appendChild(pips);
 
       if (mySeat === -1) {
-        root.appendChild(el('div', 'gp-blank', 'Game in progress — you can sit in next game.'));
+        root.appendChild(el('div', 'gp-blank', 'Game in progress. You can sit in next game.'));
       } else if (view.myTask.alreadySubmitted) {
         const key = `done:${view.currentRound}`;
         if (taskCache.key !== key) {

@@ -820,7 +820,7 @@ export function mount(container, api) {
     anim = null;
     if (ls) {
       const msgs = [];
-      if (ls.foul) msgs.push(`FOUL — ${FOULS[ls.foul] || ls.foul}${view.winner ? '' : `: ${seatName(other(ls.by))} has ball in hand`}`);
+      if (ls.foul) msgs.push(`FOUL. ${FOULS[ls.foul] || ls.foul}${view.winner ? '' : `: ${seatName(other(ls.by))} has ball in hand`}`);
       for (const n of ls.notes || []) msgs.push(n);
       if (msgs.length) showToast(msgs.join(' · '));
     }
@@ -1093,16 +1093,16 @@ export function mount(container, api) {
     status.style.color = '';
     if (!view) { status.textContent = 'Loading…'; return; }
     const mode = view.mode === '9ball' ? '9-BALL' : '8-BALL';
-    if (view.phase === 'waiting') { status.textContent = `${mode} — waiting for both seats to be filled.`; return; }
+    if (view.phase === 'waiting') { status.textContent = `${mode}. Waiting for both seats to be filled.`; return; }
     if (view.phase === 'game_over' && !anim) {
-      status.textContent = `${seatName(view.winner).toUpperCase()} WINS — ${REASONS[view.winReason] || ''}`;
+      status.textContent = `${seatName(view.winner).toUpperCase()} WINS. ${REASONS[view.winReason] || ''}`;
       return;
     }
     if (anim) { status.textContent = `${seatName(view.lastShot.by)} shoots…`; return; }
     const mine = myTurn();
     let extra = '';
-    if (view.breakShot) extra = ' — BREAK';
-    else if (view.ballInHand) extra = ' — BALL IN HAND';
+    if (view.breakShot) extra = ' · BREAK';
+    else if (view.ballInHand) extra = ' · BALL IN HAND';
     if (mine) {
       let target = '';
       if (!view.breakShot) {

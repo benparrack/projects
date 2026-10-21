@@ -379,7 +379,7 @@ export function mount(container, api) {
     const now = clock.now();
     const players = view.players.length;
     if (view.phase === 'waiting') {
-      statusEl.textContent = players > 1 ? 'Press START when everyone is ready.' : 'Press START to play — or add a bot to race.';
+      statusEl.textContent = players > 1 ? 'Press START when everyone is ready.' : 'Press START to play. Or add a bot to race.';
     } else if (view.phase === 'playing') {
       statusEl.textContent = now < view.startedAt ? 'Get ready…' : `${view.myWords.length} word${view.myWords.length === 1 ? '' : 's'} · ${view.totalWords} possible`;
     } else statusEl.textContent = 'Round over.';
@@ -461,7 +461,7 @@ export function mount(container, api) {
     if (mine && ps.length > 1) {
       const won = topScore > 0 && mine.score === topScore;
       outcome = won ? 'win' : 'lose';
-      title = won ? (ps.filter((p) => p.score === topScore).length > 1 ? 'TIED FOR FIRST!' : 'YOU WIN!') : 'YOU LOSE';
+      title = won ? (ps.filter((p) => p.score === topScore).length > 1 ? 'TIED FOR FIRST' : 'YOU WIN') : 'YOU LOSE';
     } else if (mine) outcome = mine.score > 0 ? 'win' : 'over';
     const longest = mine && mine.words && mine.words.length ? mine.words.reduce((a, b) => (b.word.length > a.word.length ? b : a)).word.toUpperCase() : null;
     results.update({

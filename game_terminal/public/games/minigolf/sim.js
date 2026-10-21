@@ -714,11 +714,11 @@
 
   // Display helpers
   function scoreName(strokes, par) {
-    if (strokes === 1) return 'HOLE IN ONE!';
+    if (strokes === 1) return 'HOLE IN ONE';
     const d = strokes - par;
-    if (d <= -3) return 'ALBATROSS!';
-    if (d === -2) return 'EAGLE!';
-    if (d === -1) return 'BIRDIE!';
+    if (d <= -3) return 'ALBATROSS';
+    if (d === -2) return 'EAGLE';
+    if (d === -1) return 'BIRDIE';
     if (d === 0) return 'PAR';
     if (d === 1) return 'BOGEY';
     if (d === 2) return 'DOUBLE BOGEY';

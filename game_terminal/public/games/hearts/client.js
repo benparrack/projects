@@ -11,7 +11,7 @@ const SEAT_LABELS = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 const REJECT_MESSAGES = {
   must_pass_three: 'Pick exactly three cards to pass.',
   invalid_cards: "Those cards aren't in your hand.",
-  illegal_card: "You can't play that card — follow suit if you can, the 2♣ leads the first trick, and hearts can't lead until broken.",
+  illegal_card: "You can't play that card. Follow suit if you can, the 2♣ leads the first trick, and hearts can't lead until broken.",
 };
 
 export function mount(container, api) {
@@ -65,7 +65,7 @@ export function mount(container, api) {
     results.update(view && view.phase === 'game_over' ? seatResults({
       seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
       value: (i) => `${view.scores[i]} pts`, rank: (i) => view.scores[i],
-      winTitle: `${nicknameFor(view.seats[view.winnerSeat])} WINS!`, subtitle: 'Lowest score wins', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+      winTitle: `${nicknameFor(view.seats[view.winnerSeat])} WINS`, subtitle: 'Lowest score wins', onRematch: () => api.sendAction({ kind: 'resetGame' }),
     }) : null);
     root.innerHTML = '';
     if (!view) {
@@ -81,19 +81,19 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       status.textContent = `Waiting for players (${view.seats.filter(Boolean).length}/4 seated).`;
     } else if (view.phase === 'passing') {
-      status.textContent = `Passing ${view.passDirection.toUpperCase()} — pick 3 cards to pass.`;
+      status.textContent = `Passing ${view.passDirection.toUpperCase()}. Pick 3 cards to pass.`;
     } else if (view.phase === 'playing') {
       const turnName = nicknameFor(view.seats[view.turnSeat]);
       if (view.turnSeat === mySeat) {
-        status.textContent = view.currentTrick.length === 0 ? 'YOUR TURN — lead a card' : 'YOUR TURN — play a card';
+        status.textContent = view.currentTrick.length === 0 ? 'YOUR TURN. Lead a card' : 'YOUR TURN. Play a card';
         status.className = 'gt-your-turn';
       } else status.textContent = `${view.currentTrick.length === 0 ? 'Leading' : 'Turn'}: ${turnName}`;
     } else if (view.phase === 'hand_over') {
       status.textContent = view.moonShooterSeat != null
-        ? `${nicknameFor(view.seats[view.moonShooterSeat])} SHOT THE MOON!`
+        ? `${nicknameFor(view.seats[view.moonShooterSeat])} SHOT THE MOON`
         : 'Hand over.';
     } else if (view.phase === 'game_over') {
-      status.textContent = `${nicknameFor(view.seats[view.winnerSeat])} WINS with the lowest score!`;
+      status.textContent = `${nicknameFor(view.seats[view.winnerSeat])} WINS with the lowest score.`;
     }
     root.appendChild(status);
 

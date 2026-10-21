@@ -266,7 +266,7 @@ export function duelResults({ winner, colors, players, me, nameFor, subtitle, on
   const draw = !winner || winner === 'draw';
   const order = draw ? colors : [winner, ...colors.filter((c) => c !== winner)];
   return {
-    title: draw ? "IT'S A DRAW" : me === winner ? 'YOU WIN!' : me ? 'YOU LOSE' : `${winner.toUpperCase()} WINS!`,
+    title: draw ? "IT'S A DRAW" : me === winner ? 'YOU WIN' : me ? 'YOU LOSE' : `${winner.toUpperCase()} WINS`,
     subtitle,
     outcome: draw ? 'draw' : me == null ? 'over' : me === winner ? 'win' : 'lose',
     rows: order.map((c) => ({
@@ -284,7 +284,7 @@ export function seatResults({ seats, winners, me, nameFor, value, rank, winTitle
   const iWon = winners.includes(me);
   const seated = me != null && me >= 0;
   return {
-    title: seated ? (iWon ? 'YOU WIN!' : 'YOU LOSE') : winTitle,
+    title: seated ? (iWon ? 'YOU WIN' : 'YOU LOSE') : winTitle,
     subtitle,
     outcome: seated ? (iWon ? 'win' : 'lose') : 'over',
     rows: idxs.map((i) => ({ name: `${nameFor(seats[i])}`, value: value(i), win: winners.includes(i), you: i === me })),

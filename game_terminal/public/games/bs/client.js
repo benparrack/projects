@@ -37,7 +37,7 @@ export function mount(container, api) {
     results.update(view && view.phase === 'game_over' ? seatResults({
       seats: view.seats, winners: [view.winnerSeat], me: mySeatIndex(), nameFor: nicknameFor,
       value: (i) => `${view.handCounts[i]} left`, rank: (i) => view.handCounts[i],
-      winTitle: `${nameAt(view.winnerSeat)} WINS!`, subtitle: 'Emptied their hand unchallenged', onRematch: () => api.sendAction({ kind: 'resetGame' }),
+      winTitle: `${nameAt(view.winnerSeat)} WINS`, subtitle: 'Emptied their hand unchallenged', onRematch: () => api.sendAction({ kind: 'resetGame' }),
     }) : null);
     root.innerHTML = '';
     if (!view) {
@@ -50,12 +50,12 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       status.textContent = `Waiting for players (${view.seats.length}/6 seated, need 2+ to start).`;
     } else if (view.phase === 'playing') {
-      status.textContent = `${view.turnIdx === mySeat ? 'YOUR TURN — play' : `${nameAt(view.turnIdx)} must play`} claiming: ${view.requiredRank}`;
+      status.textContent = `${view.turnIdx === mySeat ? 'YOUR TURN. Play' : `${nameAt(view.turnIdx)} must play`} claiming: ${view.requiredRank}`;
       if (view.turnIdx === mySeat) status.className = 'gt-your-turn';
     } else if (view.phase === 'challenge') {
-      status.textContent = `${nameAt(view.lastPlay.playerIdx)} played ${view.lastPlay.count} card(s) claiming ${view.lastPlay.claimedRank} — call BS or let it ride!`;
+      status.textContent = `${nameAt(view.lastPlay.playerIdx)} played ${view.lastPlay.count} card(s) claiming ${view.lastPlay.claimedRank}. Call BS or let it ride.`;
     } else if (view.phase === 'game_over') {
-      status.textContent = `${nameAt(view.winnerSeat)} WINS — hand emptied unchallenged!`;
+      status.textContent = `${nameAt(view.winnerSeat)} WINS. Hand emptied unchallenged.`;
     }
     root.appendChild(status);
 
@@ -116,7 +116,7 @@ export function mount(container, api) {
       actions.style.gap = '8px';
       if (mySeat !== -1 && mySeat !== view.lastPlay.playerIdx) {
         const bsBtn = document.createElement('button');
-        bsBtn.textContent = 'CALL BS!';
+        bsBtn.textContent = 'CALL BS';
         bsBtn.style.color = '#ff4d4d';
         bsBtn.addEventListener('click', () => api.sendAction({ kind: 'callBS' }));
         actions.appendChild(bsBtn);
@@ -140,8 +140,8 @@ export function mount(container, api) {
       box.style.fontSize = '0.85em';
       const line = document.createElement('div');
       line.textContent = r.bluffConfirmed
-        ? `BUSTED! ${nameAt(r.playerIdx)} was bluffing (claimed ${r.claimedRank}) — ${nameAt(r.callerIdx)} was right and ${nameAt(r.playerIdx)} takes the pile.`
-        : `${nameAt(r.playerIdx)} was telling the truth (really had ${r.claimedRank}) — ${nameAt(r.callerIdx)} takes the pile instead.`;
+        ? `BUSTED! ${nameAt(r.playerIdx)} was bluffing (claimed ${r.claimedRank}). ${nameAt(r.callerIdx)} was right and ${nameAt(r.playerIdx)} takes the pile.`
+        : `${nameAt(r.playerIdx)} was telling the truth (really had ${r.claimedRank}). ${nameAt(r.callerIdx)} takes the pile instead.`;
       box.appendChild(line);
       const revealRow = document.createElement('div');
       revealRow.style.display = 'flex';

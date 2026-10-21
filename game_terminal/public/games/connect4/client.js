@@ -100,12 +100,12 @@ export function mount(container, api) {
       const isMyTurn = seat && seat === turnColor;
       status.textContent = isMyTurn
         ? `▶ YOUR TURN (${turnColor.toUpperCase()})`
-        : `${turnColor.toUpperCase()} TO MOVE — ${turnName}`;
+        : `${turnColor.toUpperCase()} TO MOVE. ${turnName}`;
       status.style.color = turnColor === 'red' ? '#ff6b6b' : '#ffee58';
       status.style.background = isMyTurn ? 'rgba(57, 255, 20, 0.15)' : 'rgba(255, 255, 255, 0.05)';
       status.style.border = isMyTurn ? '2px solid #39ff14' : '2px solid transparent';
     } else if (view.phase === 'game_over') {
-      status.textContent = view.winner ? `${view.winner.toUpperCase()} WINS!` : "IT'S A DRAW!";
+      status.textContent = view.winner ? `${view.winner.toUpperCase()} WINS` : "IT'S A DRAW";
     }
     root.appendChild(status);
 

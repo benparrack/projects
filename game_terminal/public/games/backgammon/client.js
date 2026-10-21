@@ -322,9 +322,9 @@ export function mount(container, api) {
       status.textContent = 'WAITING FOR BOTH SEATS';
     } else if (view.phase === 'playing') {
       const turnName = nicknameFor(view.players[view.turn]) || view.turn;
-      status.textContent = `${view.turn.toUpperCase()} TO MOVE — ${turnName}${seat === view.turn ? ' (YOU)' : ''}`;
+      status.textContent = `${view.turn.toUpperCase()} TO MOVE. ${turnName}${seat === view.turn ? ' (YOU)' : ''}`;
     } else if (view.phase === 'game_over') {
-      status.textContent = `${view.winner.toUpperCase()} WINS!`;
+      status.textContent = `${view.winner.toUpperCase()} WINS`;
     }
     panel.appendChild(status);
 

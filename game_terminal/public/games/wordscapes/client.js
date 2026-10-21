@@ -116,7 +116,7 @@ export function mount(container, api) {
   const coopBtn = el('button', '', 'CO-OP');
   const raceBtn = el('button', '', 'RACE');
   coopBtn.title = 'Everyone fills one shared crossword';
-  raceBtn.title = 'Everyone gets their own copy — first to finish wins';
+  raceBtn.title = 'Everyone gets their own copy. First to finish wins';
   coopBtn.addEventListener('click', () => { if (snap && snap.mode !== 'coop') { sfx.play('click'); api.sendAction({ kind: 'setMode', mode: 'coop' }); } });
   raceBtn.addEventListener('click', () => { if (snap && snap.mode !== 'race') { sfx.play('click'); api.sendAction({ kind: 'setMode', mode: 'race' }); } });
   modes.append(coopBtn, raceBtn);
@@ -291,7 +291,7 @@ export function mount(container, api) {
   shuffleBtn.addEventListener('click', shuffleWheel);
   hintBtn.addEventListener('click', () => {
     if (!canPlay()) return;
-    if (!snap.me.hintsLeft) { reject('No hints left — find bonus words to earn more'); return; }
+    if (!snap.me.hintsLeft) { reject('No hints left. Find bonus words to earn more'); return; }
     api.sendAction({ kind: 'hint' });
   });
   bonusBtn.addEventListener('click', () => { if (bonusOpen) closeBonus(); else openBonus(); });
@@ -305,7 +305,7 @@ export function mount(container, api) {
     bonusList.textContent = '';
     const mine = (snap && snap.me && snap.me.bonusWords) || [];
     bonusList.appendChild(el('b', '', `BONUS WORDS ${mine.length}/${snap ? snap.bonusTotal : 0}`));
-    bonusList.appendChild(el('div', '', mine.length ? mine.join(' · ').toUpperCase() : 'None yet — any real word from the wheel that is not in the grid counts.'));
+    bonusList.appendChild(el('div', '', mine.length ? mine.join(' · ').toUpperCase() : 'None yet. Any real word from the wheel that is not in the grid counts.'));
     if (snap && snap.missedBonus && snap.missedBonus.length) {
       bonusList.appendChild(el('b', '', 'MISSED'));
       bonusList.appendChild(el('div', '', snap.missedBonus.join(' · ').toUpperCase()));
@@ -342,12 +342,12 @@ export function mount(container, api) {
     if (snap.phase === 'complete') {
       if (snap.mode === 'race') {
         const w = snap.players.find((p) => p.clientId === snap.winnerId);
-        return w ? (w.clientId === myId() ? 'You won the race! NEXT LEVEL when ready' : `${w.nickname} won the race`) : 'Level over';
+        return w ? (w.clientId === myId() ? 'You won the race. NEXT LEVEL when ready' : `${w.nickname} won the race`) : 'Level over';
       }
       return `Level ${snap.level} complete${solo() && snap.solvedMs ? ` in ${(snap.solvedMs / 1000).toFixed(1)}s` : ''}! Press NEXT LEVEL`;
     }
     if (clock.now() < snap.startAt) return 'Race starting…';
-    const modeTxt = solo() ? 'SOLO — fill the grid, beat your best time' : snap.mode === 'race' ? 'RACE — first to fill your grid wins' : 'CO-OP — fill the grid together';
+    const modeTxt = solo() ? 'SOLO. Fill the grid, beat your best time' : snap.mode === 'race' ? 'RACE. First to fill your grid wins' : 'CO-OP. Fill the grid together';
     return `${left} word${left === 1 ? '' : 's'} left · ${modeTxt}`;
   }
   function setStatus(msg, cls) {
@@ -505,7 +505,7 @@ export function mount(container, api) {
     const won = race ? snap.winnerId === me : true;
     const mine = snap.me ? snap.me.bonusWords.length : 0;
     results.update({
-      title: race ? (won ? 'YOU WIN THE RACE!' : `${nameOf(snap.winnerId)} WINS`) : solo() && snap.solvedMs ? `LEVEL ${snap.level} CLEAR IN ${(snap.solvedMs / 1000).toFixed(1)}s` : `LEVEL ${snap.level} CLEAR!`,
+      title: race ? (won ? 'YOU WIN THE RACE' : `${nameOf(snap.winnerId)} WINS`) : solo() && snap.solvedMs ? `LEVEL ${snap.level} CLEAR IN ${(snap.solvedMs / 1000).toFixed(1)}s` : `LEVEL ${snap.level} CLEAR`,
       subtitle: `${snap.total} words · ${mine}/${snap.bonusTotal} bonus words found by you`,
       outcome: race ? (snap.me ? (won ? 'win' : 'lose') : 'over') : 'win',
       rows,
@@ -574,9 +574,9 @@ export function mount(container, api) {
         const s = snap && snap.slots[d.slot];
         if (s) slotKeys(s).forEach((k) => { const c = cellEl(k); if (c) { c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); } });
         reject(`${word} is already in the grid`);
-      } else if (d.outcome === 'alreadyBonus') reject(`${word} — bonus word already found`);
+      } else if (d.outcome === 'alreadyBonus') reject(`${word}. Bonus word already found`);
       else if (d.outcome === 'short') reject('Words need 3+ letters');
-      else if (d.outcome === 'early') reject('Wait for GO!');
+      else if (d.outcome === 'early') reject('Wait for GO');
       else if (d.outcome === 'closed') { sel = []; drawSelection(); }
       else reject(`${word} is not a word`);
     }

@@ -138,9 +138,9 @@ export function mount(container, api) {
       status.textContent = 'Waiting for both seats to be filled.';
     } else if (view.phase === 'playing') {
       const turnName = nicknameFor(view.players[view.turn]) || view.turn;
-      status.textContent = `Turn: ${view.turn.toUpperCase()} (${turnName})${view.mustContinueFrom ? ' — must continue jumping' : ''}`;
+      status.textContent = `Turn: ${view.turn.toUpperCase()} (${turnName})${view.mustContinueFrom ? ' · must continue jumping' : ''}`;
     } else if (view.phase === 'game_over') {
-      status.textContent = `${view.winner.toUpperCase()} WINS!`;
+      status.textContent = `${view.winner.toUpperCase()} WINS`;
     }
     root.appendChild(status);
 

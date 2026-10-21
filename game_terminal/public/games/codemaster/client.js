@@ -23,8 +23,8 @@ const PEGS = 4;
 
 const MODE_INFO = {
   duel: { label: 'DUEL', blurb: 'Set a code for your opponent, then race to crack theirs.' },
-  race: { label: 'RACE', blurb: 'The computer hides one code — everyone races to crack it.' },
-  coop: { label: 'CO-OP', blurb: 'The computer hides a code — crack it together on one board.' },
+  race: { label: 'RACE', blurb: 'The computer hides one code. Everyone races to crack it.' },
+  coop: { label: 'CO-OP', blurb: 'The computer hides a code. Crack it together on one board.' },
 };
 
 const REJECT = {
@@ -32,7 +32,7 @@ const REJECT = {
   bad_code: 'Fill all 4 slots first',
   no_dups: 'No duplicate colours in this game',
   not_playing: 'The game is not running',
-  not_participant: "You're not playing — join first",
+  not_participant: "You're not playing. Join first",
   board_done: 'Your board is finished',
   two_bots: 'At least one seat must be a human',
 };
@@ -457,12 +457,12 @@ export function mount(container, api) {
     const k = myKey();
     if (view.phase === 'waiting') {
       s.textContent = view.mode === 'duel' ? 'Waiting for both seats to be filled.'
-        : view.mode === 'race' ? (view.racers.length ? 'Ready — press START RACE.' : 'Join the race to play.')
+        : view.mode === 'race' ? (view.racers.length ? 'Ready. Press START RACE.' : 'Join the race to play.')
           : 'Press START to begin.';
     } else if (view.phase === 'setting') {
       const seat = mySeat();
       if (seat && !view.setBy[seat]) { s.textContent = `▶ SET A SECRET CODE FOR ${seatName(other(seat)).toUpperCase()}`; s.classList.add('mine'); }
-      else if (seat) s.textContent = `Code locked in — waiting for ${seatName(other(seat))}…`;
+      else if (seat) s.textContent = `Code locked in. Waiting for ${seatName(other(seat))}…`;
       else s.textContent = 'Players are setting their secret codes…';
       s.style.color = '#ffb000';
     } else if (view.phase === 'playing') {
@@ -471,8 +471,8 @@ export function mount(container, api) {
         s.textContent = `▶ GUESS ${b.guesses.length + 1} OF ${view.maxGuesses}`;
         s.classList.add('mine');
       } else if (b && b.solved) s.textContent = `Cracked in ${b.guesses.length}. Waiting for the others…`;
-      else if (b) s.textContent = 'Out of guesses — waiting for the others…';
-      else s.textContent = view.mode === 'race' ? 'Race in progress — you can still JOIN.' : 'Game in progress.';
+      else if (b) s.textContent = 'Out of guesses. Waiting for the others…';
+      else s.textContent = view.mode === 'race' ? 'Race in progress. You can still JOIN.' : 'Game in progress.';
     } else {
       s.textContent = headline().title;
     }
@@ -484,12 +484,12 @@ export function mount(container, api) {
     const k = myKey();
     const won = res.winners;
     if (view.mode === 'coop') {
-      return won.length ? { title: 'CODE CRACKED!', outcome: 'win' } : { title: 'THE CODE SURVIVES', outcome: 'lose' };
+      return won.length ? { title: 'CODE CRACKED', outcome: 'win' } : { title: 'THE CODE SURVIVES', outcome: 'lose' };
     }
     if (!won.length) return { title: 'NOBODY CRACKED IT', outcome: k ? 'lose' : 'over' };
     if (won.length > 1) return { title: "IT'S A TIE", outcome: 'draw' };
-    if (k) return won[0] === k ? { title: 'YOU WIN!', outcome: 'win' } : { title: 'YOU LOSE', outcome: 'lose' };
-    return { title: `${(boardOwner(won[0]) || '').toUpperCase()} WINS!`, outcome: 'over' };
+    if (k) return won[0] === k ? { title: 'YOU WIN', outcome: 'win' } : { title: 'YOU LOSE', outcome: 'lose' };
+    return { title: `${(boardOwner(won[0]) || '').toUpperCase()} WINS`, outcome: 'over' };
   }
 
   function resultsOpts() {

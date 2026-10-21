@@ -421,7 +421,7 @@ export function mount(container, api) {
       statusEl.textContent = 'Waiting for both seats to be filled.';
     } else if (view.phase === 'playing') {
       const mine = seat && seat === view.turn;
-      statusEl.textContent = mine ? `▶ YOUR TURN (${SEAT_LABEL[seat]})` : `${SEAT_LABEL[view.turn]} TO MOVE — ${displayName(view.turn)}`;
+      statusEl.textContent = mine ? `▶ YOUR TURN (${SEAT_LABEL[seat]})` : `${SEAT_LABEL[view.turn]} TO MOVE. ${displayName(view.turn)}`;
       statusEl.style.color = SEAT_COLOR[view.turn];
       if (mine) statusEl.classList.add('mine');
     } else if (view.phase === 'game_over') {
@@ -497,14 +497,14 @@ export function mount(container, api) {
     }
     const blurb = document.createElement('div');
     blurb.className = 'mc-blurb';
-    blurb.textContent = `${MODE_INFO[view.mode].label} MODE — ${MODE_INFO[view.mode].blurb}`;
+    blurb.textContent = `${MODE_INFO[view.mode].label} MODE. ${MODE_INFO[view.mode].blurb}`;
     modesEl.append(seg, blurb);
   }
 
   function renderHint() {
     const pv = preview();
     if (!pv) { hintEl.textContent = mySeat() && view && view.phase === 'playing' && view.turn === mySeat() && !anim ? 'Pick a pit (click or press 1–6).' : ''; return; }
-    if (pv.extra) hintEl.textContent = `Lands in your store — ${pv.relays ? `after ${pv.relays} relay${pv.relays > 1 ? 's' : ''}, ` : ''}extra turn!`;
+    if (pv.extra) hintEl.textContent = `Lands in your store${pv.relays ? ` after ${pv.relays} relay${pv.relays > 1 ? 's' : ''}` : ''}. Extra turn.`;
     else if (pv.captured) hintEl.textContent = `Captures ${pv.captured} stone${pv.captured > 1 ? 's' : ''}!`;
     else if (pv.relays) hintEl.textContent = `Avalanche: ${pv.relays} relay${pv.relays > 1 ? 's' : ''}, then your turn ends.`;
     else hintEl.textContent = 'Your turn ends after this move.';
@@ -527,7 +527,7 @@ export function mount(container, api) {
     const score = { gold: view.pits[6], jade: view.pits[13] };
     const order = draw ? SEATS : [view.winner, ...SEATS.filter((s) => s !== view.winner)];
     results.update({
-      title: draw ? "IT'S A DRAW" : me === view.winner ? 'YOU WIN!' : me ? 'YOU LOSE' : `${SEAT_LABEL[view.winner]} WINS!`,
+      title: draw ? "IT'S A DRAW" : me === view.winner ? 'YOU WIN' : me ? 'YOU LOSE' : `${SEAT_LABEL[view.winner]} WINS`,
       subtitle: `Mancala · ${MODE_INFO[view.mode].label.toLowerCase()} mode · ${score.gold} – ${score.jade}`,
       outcome: draw ? 'draw' : !me ? 'over' : me === view.winner ? 'win' : 'lose',
       rows: order.map((s) => ({ name: `${displayName(s) || SEAT_LABEL[s]} · ${SEAT_LABEL[s]}`, value: `${score[s]} stones`, win: !draw && s === view.winner, you: s === me })),
@@ -633,7 +633,7 @@ export function mount(container, api) {
       }
     }
     if (lm.extra) {
-      callout('EXTRA TURN!', SEAT_COLOR[lm.seat]);
+      callout('EXTRA TURN', SEAT_COLOR[lm.seat]);
       sfx.play('chime');
     }
     anim = null;

@@ -493,7 +493,7 @@ export function mount(container, api) {
   options.className = 'bw-row';
   const help = document.createElement('div');
   help.className = 'bw-help';
-  help.textContent = 'Press and slide sideways: the ball follows your finger along the foul line. Then flick up toward the pins and let go — the ball rolls where you flicked, a faster flick rolls it faster, and a curved flick hooks it (bow out left and sweep back right = hooks right). Ten frames; strikes and spares score bonus balls.';
+  help.textContent = 'Press and slide sideways: the ball follows your finger along the foul line. Then flick up toward the pins and let go. The ball rolls where you flicked, a faster flick rolls it faster, and a curved flick hooks it (bow out left and sweep back right = hooks right). Ten frames; strikes and spares score bonus balls.';
   root.append(status, err, seats, stage, cardEl, options, help);
 
   // ---- helpers ----
@@ -607,12 +607,12 @@ export function mount(container, api) {
     const mine = rec.by === mySeat();
     const col = SEAT_COLOR[rec.by];
     if (rec.mark === 'strike') {
-      callout('STRIKE!', '#ffe14d');
+      callout('STRIKE', '#ffe14d');
       burst();
       sfx.play('kill');
       setTimeout(() => sfx.play('chime'), 180);
     } else if (rec.mark === 'spare') {
-      callout('SPARE!', '#39ff14');
+      callout('SPARE', '#39ff14');
       sfx.play('chime');
       setTimeout(() => sfx.play('point'), 120);
     } else if (rec.mark === 'gutter') {
@@ -622,7 +622,7 @@ export function mount(container, api) {
       callout('MISS', '#9fb39c', 'small');
     } else {
       callout(`${rec.count} PIN${rec.count === 1 ? '' : 'S'}`, mine ? '#39ff14' : col, 'small');
-      if (rec.split) setTimeout(() => callout('SPLIT!', '#ff7a3a', 'sub'), 150);
+      if (rec.split) setTimeout(() => callout('SPLIT', '#ff7a3a', 'sub'), 150);
     }
   }
 
@@ -1096,7 +1096,7 @@ export function mount(container, api) {
     const order = draw ? SEATS : [w, w === 'p1' ? 'p2' : 'p1'];
     const st = (s) => view.stats[s];
     return {
-      title: draw ? "IT'S A DRAW" : me === w ? 'YOU WIN!' : me ? 'YOU LOSE' : `${seatName(w)} WINS!`,
+      title: draw ? "IT'S A DRAW" : me === w ? 'YOU WIN' : me ? 'YOU LOSE' : `${seatName(w)} WINS`,
       subtitle: SEATS.map((s) => `${s.toUpperCase()} ${st(s).strikes}X ${st(s).spares}/`).join(' · '),
       outcome: draw ? 'draw' : me == null ? 'over' : me === w ? 'win' : 'lose',
       rows: order.map((s) => ({ name: seatName(s), value: `${view.totals[s]}`, win: !draw && s === w, you: s === me })),
@@ -1123,16 +1123,16 @@ export function mount(container, api) {
       status.textContent = `GAME OVER: ${view.totals[view.winner]} PINS`;
       status.style.color = '#ffb000';
     } else if (over) {
-      status.textContent = view.winner === 'draw' ? "IT'S A DRAW!" : `${seatName(view.winner)} WINS ${view.totals[view.winner]}–${view.totals[view.winner === 'p1' ? 'p2' : 'p1']}!`;
+      status.textContent = view.winner === 'draw' ? "IT'S A DRAW" : `${seatName(view.winner)} WINS ${view.totals[view.winner]}–${view.totals[view.winner === 'p1' ? 'p2' : 'p1']}!`;
       status.style.color = '#ffb000';
     } else if (rollingBy) {
       status.textContent = rollingBy === seat ? 'ROLLING…' : `${seatName(rollingBy)} ROLLING…`;
       status.style.color = SEAT_COLOR[rollingBy];
     } else if (seat && view.turn === seat) {
-      status.textContent = `▶ YOUR TURN — FRAME ${view.frame + 1}, BALL ${view.ball + 1}`;
+      status.textContent = `▶ YOUR TURN. FRAME ${view.frame + 1}, BALL ${view.ball + 1}`;
       status.classList.add('mine');
     } else {
-      status.textContent = `${seatName(view.turn)} TO BOWL — FRAME ${view.frame + 1}`;
+      status.textContent = `${seatName(view.turn)} TO BOWL. FRAME ${view.frame + 1}`;
       status.style.color = SEAT_COLOR[view.turn];
     }
     err.textContent = flashError ? REJECT_MESSAGES[flashError] || 'Roll rejected' : '';

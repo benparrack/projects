@@ -36,7 +36,7 @@ export const HOWTO = {
     ],
     controls: [
       'Press and hold anywhere on the range to draw; drag to move the sight.',
-      'Release when the sight is steady (green) — sway is calmest after ~1.3 s, then the arm tires.',
+      'Release when the sight is steady (green). Sway is calmest after ~1.3 s, then the arm tires.',
       'ESC cancels a shot while drawing.',
     ],
   },
@@ -224,7 +224,7 @@ export const HOWTO = {
     about: 'Four in a Row for two players on a 7-wide, 6-tall grid.',
     rules: [
       'Players take turns dropping a disc into a column; it falls to the lowest empty row.',
-      'First to get 4 in a row — across, down or diagonally — wins.',
+      'First to get 4 in a row (across, down or diagonally) wins.',
       'A full board with no four is a draw.',
     ],
     controls: [
@@ -262,7 +262,7 @@ export const HOWTO = {
     about: 'Cup Pong for two: throw balls into your opponent\'s 10-cup triangle.',
     rules: [
       'You get two throws a turn; each sunk cup is removed.',
-      'Sink both throws and you get BALLS BACK — two more throws.',
+      'Sink both throws and you get BALLS BACK. Two more throws.',
       'Optional re-racks tighten the formation at 6, 3, 2 or 1 cups left.',
       'Clear all of the opponent\'s cups to win. Red throws first; a rematch swaps colours.',
     ],
@@ -289,7 +289,7 @@ export const HOWTO = {
     about: 'Dots and Boxes for 2-4 players on a 4x4, 5x5 or 6x6 box grid.',
     rules: [
       'Take turns drawing one line between two adjacent dots.',
-      'Draw the fourth side of a box to claim it — then you must move again.',
+      'Draw the fourth side of a box to claim it. Then you must move again.',
       'When every box is claimed, the most boxes wins (ties share the win).',
     ],
     controls: [
@@ -298,7 +298,7 @@ export const HOWTO = {
     ],
   },
   drawing: {
-    about: 'A shared canvas everyone in the room can draw on together — no score, just doodling.',
+    about: 'A shared canvas everyone in the room can draw on together. No score, just doodling.',
     rules: [
       'Everything drawn appears live for everyone in the room.',
       'UNDO and CLEAR MINE only affect your own strokes.',
@@ -340,7 +340,7 @@ export const HOWTO = {
       'Round 1: everyone writes a secret prompt that starts their own book.',
       'Each round the books are passed around in a new shuffled order; you draw or describe only the previous entry.',
       'Rounds alternate drawing and guessing, one round per player. Each round is timed (60/90/120s) and sends whatever you have when time runs out.',
-      'Then the chains are revealed one link at a time, for everyone together — no points, just the laughs.',
+      'Then the chains are revealed one link at a time, for everyone together. No points, just the laughs.',
     ],
     controls: [
       'Type your prompt or guess and press DONE.',
@@ -352,7 +352,7 @@ export const HOWTO = {
     about: 'Gomoku (five in a row) on a 15x15 board.',
     rules: [
       'Players place stones on the intersections in turn; black moves first.',
-      'Five or more in a row — across, down or diagonally — wins.',
+      'Five or more in a row (across, down or diagonally) wins.',
       'A full board with no five is a draw.',
     ],
     controls: [
@@ -394,7 +394,7 @@ export const HOWTO = {
       'Last side with penguins wins; both wiped out = draw; after 24 rounds more penguins wins.',
     ],
     controls: [
-      'Drag out from a penguin to aim it — longer arrow = harder shove; drag back onto it to clear.',
+      'Drag out from a penguin to aim it. Longer arrow = harder shove; drag back onto it to clear.',
       'Press LOCK IN when ready (unlocked arrows still count at the buzzer).',
     ],
   },
@@ -427,8 +427,8 @@ export const HOWTO = {
     rules: [
       'Both balls play the same hole; putts alternate stroke by stroke.',
       'Water = +1 stroke and a retry from where you hit.',
-      'Windmills and sliders knock resting balls too — no stroke for that (knocked into water: dropped nearby, no penalty).',
-      '6 strokes max per hole — miss the 6th and you score 7.',
+      'Windmills and sliders knock resting balls too. No stroke for that (knocked into water: dropped nearby, no penalty).',
+      '6 strokes max per hole. Miss the 6th and you score 7.',
       'Lowest total after 9 holes wins; the lower score on the last hole tees off first.',
     ],
     controls: [
@@ -439,7 +439,7 @@ export const HOWTO = {
   paintball: {
     about: 'A shooting-gallery duel: each player gets one 45-second run at the same pop-up targets.',
     rules: [
-      'Bandits score — more for far rows, moving targets and head shots; gold stars are 500.',
+      'Bandits score. More for far rows, moving targets and head shots; gold stars are 500.',
       'Hitting a civilian costs 300.',
       '8 paintballs per hopper, and you must reload manually.',
       'Highest score after both runs wins.',
@@ -581,7 +581,7 @@ export const HOWTO = {
       'Eat orbs to grow longer and thicker.',
       'Hitting a wall or another snake\'s body ends your snake.',
       'Boosting is faster but costs length.',
-      'Play continues as long as you like — try to become the biggest snake.',
+      'Play continues as long as you like. Try to become the biggest snake.',
     ],
     controls: [
       'Steer with the mouse (or drag on touch).',
@@ -630,7 +630,7 @@ export const HOWTO = {
     ],
   },
   tron: {
-    about: 'Light cycles: your cycle leaves a solid trail — be the last one riding.',
+    about: 'Light cycles: your cycle leaves a solid trail. Be the last one riding.',
     rules: [
       'A round starts once 2+ players are here.',
       'Cycles move constantly; crashing into a wall, any trail (yours too) or a player knocks you out.',
@@ -647,7 +647,7 @@ export const HOWTO = {
       'The guesser asks free-text questions, answered YES / NO / SOMETIMES / DON\'T KNOW.',
       'A guess can be made any time but counts as a question; 20 questions max.',
       'Solving on question n scores 21 - n; stumping the guesser scores the picker 10.',
-      'A match is two rounds — roles swap.',
+      'A match is two rounds. Roles swap.',
     ],
     controls: [
       'Guesser: type a question or a guess and send it.',
@@ -655,7 +655,7 @@ export const HOWTO = {
     ],
   },
   war: {
-    about: 'The card game War for exactly 2 players — pure luck, no decisions.',
+    about: 'The card game War for exactly 2 players. Pure luck, no decisions.',
     rules: [
       'The deck is split evenly; each round both flip their top card and the higher rank takes both.',
       'A tie is a war: each burns one card face down and flips again until it resolves.',
@@ -715,7 +715,7 @@ export const HOWTO = {
     ],
   },
   wordtrails: {
-    about: 'Word Trails: a last-letter word chain — keep the trail going before your clock runs out.',
+    about: 'Word Trails: a last-letter word chain. Keep the trail going before your clock runs out.',
     rules: [
       'Each word must start with the last letter of the previous word; no repeats.',
       'Words must be real and at least the room\'s minimum length (3, 4 or 5).',

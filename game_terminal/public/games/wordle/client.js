@@ -195,7 +195,7 @@ export function mount(container, api) {
     const mine = players.find((p) => p.clientId === meId);
     const won = mine && mine.solved && mine === top; // ties on guesses go to whoever finished first
     results.update({
-      title: mine && mine.solved ? (players.length > 1 ? (won ? 'YOU WIN!' : `SOLVED IN ${mine.count}`) : ['GENIUS!', 'MAGNIFICENT!', 'IMPRESSIVE!', 'SPLENDID!', 'GREAT!', 'PHEW!'][mine.count - 1]) : 'OUT OF GUESSES',
+      title: mine && mine.solved ? (players.length > 1 ? (won ? 'YOU WIN' : `SOLVED IN ${mine.count}`) : ['GENIUS', 'MAGNIFICENT', 'IMPRESSIVE', 'SPLENDID', 'GREAT', 'PHEW'][mine.count - 1]) : 'OUT OF GUESSES',
       subtitle: `The word was ${String(view.answer).toUpperCase()}`,
       outcome: won ? 'win' : mine && mine.solved ? 'over' : 'lose',
       rows: players.map((p) => ({ name: p.nickname, value: p.solved ? `${p.count}/${view.maxGuesses}` : 'X', win: p === top && p.solved, you: p.clientId === meId })),

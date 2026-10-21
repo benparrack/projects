@@ -150,7 +150,7 @@ export function mount(container, api) {
   const modeBtns = {};
   for (const [m, text] of [['coop', 'CO-OP'], ['race', 'RACE']]) {
     const b = el('button', '', text);
-    b.title = m === 'coop' ? 'Everyone fills one shared grid' : 'Everyone solves their own copy — first to finish wins';
+    b.title = m === 'coop' ? 'Everyone fills one shared grid' : 'Everyone solves their own copy. First to finish wins';
     b.addEventListener('click', () => { prefs.mode = m; savePrefs(prefs); sfx.play('click'); renderControls(); });
     modeBtns[m] = b;
     modeSeg.appendChild(b);
@@ -512,9 +512,9 @@ export function mount(container, api) {
     titleEl.textContent = `CROSSWORD · ${(view.sizes[view.size] || '').toUpperCase()} · ${modeLabel()}`;
     const done = words.filter((w) => solvedBy(w) !== undefined).length;
     if (view.phase === 'results') {
-      statusEl.textContent = view.endReason === 'revealed' ? '· answers revealed' : view.mode === 'race' ? '· race over' : '· solved!';
+      statusEl.textContent = view.endReason === 'revealed' ? '· answers revealed' : view.mode === 'race' ? '· race over' : '· solved.';
     } else if (counting()) statusEl.textContent = '· get ready…';
-    else if (me() && me().gaveUp) statusEl.textContent = '· you gave up — watching the race';
+    else if (me() && me().gaveUp) statusEl.textContent = '· you gave up. Watching the race';
     else statusEl.textContent = `· ${done}/${words.length} clues${view.mode === 'race' ? ' · first to finish wins' : ''}`;
   }
 
@@ -668,7 +668,7 @@ export function mount(container, api) {
       const winner = view.players.find((p) => p.clientId === view.winner);
       const iWon = view.winner === meId;
       results.update({
-        title: view.endReason === 'revealed' ? 'ANSWERS REVEALED' : iWon ? 'YOU WIN!' : `${winner ? winner.nickname : '?'} WINS`,
+        title: view.endReason === 'revealed' ? 'ANSWERS REVEALED' : iWon ? 'YOU WIN' : `${winner ? winner.nickname : '?'} WINS`,
         subtitle: `RACE · ${size} · ${elapsed}`,
         outcome: view.endReason === 'revealed' ? 'over' : iWon ? 'win' : (me() && me().inRound ? 'lose' : 'over'),
         rows: players.map((p) => ({ name: p.nickname, value: `${p.solved}/${words.length} clues`, win: p.clientId === view.winner, you: p.clientId === meId })),
@@ -680,7 +680,7 @@ export function mount(container, api) {
     const topScore = players.length ? players[0].score : 0;
     const done = words.filter((w) => solvedBy(w) !== undefined).length;
     results.update({
-      title: view.endReason === 'revealed' ? 'ANSWERS REVEALED' : players.length === 1 ? `SOLVED IN ${elapsed}` : 'PUZZLE SOLVED!',
+      title: view.endReason === 'revealed' ? 'ANSWERS REVEALED' : players.length === 1 ? `SOLVED IN ${elapsed}` : 'PUZZLE SOLVED',
       subtitle: `${modeLabel()} · ${size} · ${done}/${words.length} clues · ${elapsed}`,
       outcome: view.endReason === 'revealed' ? 'over' : 'win',
       rows: players.map((p) => ({ name: p.nickname, value: `${p.score} pts · ${p.solved} clue${p.solved === 1 ? '' : 's'}`, win: topScore > 0 && p.score === topScore, you: p.clientId === meId })),
@@ -732,7 +732,7 @@ export function mount(container, api) {
       });
     }
     sfx.play('error');
-    toast('Not quite — something in that word is wrong', '#ff8a8a');
+    toast('Not quite. Something in that word is wrong', '#ff8a8a');
   }
 
   function onState(data) {
@@ -773,7 +773,7 @@ export function mount(container, api) {
           if (activeWord() === w && playing()) nextClue(1);
         } else {
           sfx.play('pop');
-          if (p && view.mode === 'coop') toast(`${p.nickname} solved ${label(w)} — ${w.clue}`, p.color);
+          if (p && view.mode === 'coop') toast(`${p.nickname} solved ${label(w)}. ${w.clue}`, p.color);
         }
       }
     }
@@ -786,7 +786,7 @@ export function mount(container, api) {
     if (prev && prev.mode === 'race' && view.mode === 'race' && view.phase === 'playing') {
       for (const p of view.players) {
         const old = prev.players.find((x) => x.clientId === p.clientId);
-        if (p.clientId !== meId && old && p.solved > old.solved && p.solved === words.length - 2) toast(`${p.nickname} is 2 clues from finishing!`, p.color);
+        if (p.clientId !== meId && old && p.solved > old.solved && p.solved === words.length - 2) toast(`${p.nickname} is 2 clues from finishing.`, p.color);
       }
     }
     render();

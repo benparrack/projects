@@ -67,7 +67,7 @@ export async function renderLeaderboards(mount, gameType, { gameLabel, auth, me,
     const scopeParam = keepFriends && view.scope === 'all' ? 'friends' : view.scope;
     const params = new URLSearchParams({ ...(scopeParam !== 'all' ? { scope: scopeParam } : {}), ...(view.by !== metrics[0] ? { by: view.by } : {}) });
     history.replaceState(null, '', `/leaderboards/${view.game}${params.size ? `?${params}` : ''}`);
-    document.title = `${gameLabel(view.game)} leaderboard — Game Terminal`;
+    document.title = `${gameLabel(view.game)} leaderboard | Game Terminal`;
 
     const api = new URLSearchParams({ by: view.by, scope: view.scope === 'season' ? 'season' : 'all' });
     if (view.scope === 'friends') api.set('names', (shownNames = [me.username, ...friends()].join(',')));

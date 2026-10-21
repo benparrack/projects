@@ -229,7 +229,7 @@ export function mount(container, api) {
       preKeyInputs = [];
       const p = roster.find((r) => r.clientId === watching);
       showMsg('');
-      statusEl.textContent = `WATCHING ${p ? p.nickname : ''} — ${p && p.title ? p.title : ''}`;
+      statusEl.textContent = `WATCHING ${p ? p.nickname : ''}. ${p && p.title ? p.title : ''}`;
     } catch (e) {
       console.error('gameboy: keyframe failed', e);
       stopWatching(true, 'STREAM FAILED');
@@ -281,7 +281,7 @@ export function mount(container, api) {
     session.delay = delay;
     player.startLink(session.rom, { side: session.side, delay, send: lsend, name: LINK_GAME.file });
     showMsg('');
-    statusEl.textContent = `LINKED WITH ${partnerName()} — you are P${session.side + 1} (input delay ${delay})`;
+    statusEl.textContent = `LINKED WITH ${partnerName()}. You are P${session.side + 1} (input delay ${delay})`;
   }
 
   function onLinkMsg(m) {
@@ -324,7 +324,7 @@ export function mount(container, api) {
     if (linked) showMsg(e.detail ? `WAITING FOR ${escapeHtml(partnerName())}…` : '');
   });
   player.addEventListener('linkdesync', () => {
-    if (linked) statusEl.textContent = 'LINK OUT OF SYNC — UNPLUG AND LINK AGAIN';
+    if (linked) statusEl.textContent = 'LINK OUT OF SYNC. UNPLUG AND LINK AGAIN';
   });
 
   // ---------------- roster ----------------
@@ -368,7 +368,7 @@ export function mount(container, api) {
     const invitedBy = roster.find((p) => p.invite === api.getClientId() && !p.link);
     if (invitedBy && !linked && !lastInviteFrom.has(invitedBy.clientId)) {
       sfx.play?.('chime');
-      statusEl.textContent = `${invitedBy.nickname} WANTS TO LINK — press ACCEPT next to their name`;
+      statusEl.textContent = `${invitedBy.nickname} WANTS TO LINK. Press ACCEPT next to their name`;
     }
     lastInviteFrom = new Set(roster.filter((p) => p.invite === api.getClientId()).map((p) => p.clientId));
     if (linked && !roster.some((p) => p.clientId === linked.partner)) unplug('YOUR PARTNER LEFT THE ROOM', false);

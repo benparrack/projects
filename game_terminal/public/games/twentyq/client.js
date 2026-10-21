@@ -13,7 +13,7 @@ import { createResults } from '../resultsPanel.js';
 
 const SEAT_COLOR = { p1: '#3ad7ff', p2: '#ffb000' };
 const CAT_LABEL = { animal: 'ANIMAL', food: 'FOOD & DRINK', object: 'OBJECT', place: 'PLACE', person: 'PERSON / JOB', any: 'ANYTHING' };
-const ANSWER_LABEL = { yes: 'YES', no: 'NO', sometimes: 'SOMETIMES', unknown: "DON'T KNOW", correct: 'CORRECT!' };
+const ANSWER_LABEL = { yes: 'YES', no: 'NO', sometimes: 'SOMETIMES', unknown: "DON'T KNOW", correct: 'CORRECT' };
 const REJECT_MESSAGES = {
   not_your_turn: "It's not your turn",
   not_playing: 'Not right now',
@@ -294,7 +294,7 @@ export function mount(container, api) {
   }
   const correctBtn = btn('', () => answer('correct'), 'tq-ans');
   correctBtn.style.setProperty('--a', '#ffd36b');
-  correctBtn.append('CORRECT!', Object.assign(el('kbd'), { textContent: 'Y' }));
+  correctBtn.append('CORRECT', Object.assign(el('kbd'), { textContent: 'Y' }));
   const wrongBtn = btn('', () => answer('no'), 'tq-ans');
   wrongBtn.style.setProperty('--a', '#ff4d4d');
   wrongBtn.append('NOPE', Object.assign(el('kbd'), { textContent: 'N' }));
@@ -459,7 +459,7 @@ export function mount(container, api) {
       }
     });
     const log2 = view.roundLog || [];
-    recap.textContent = log2.length ? log2.map((r) => `R${r.round}: ${r.word.toUpperCase()} — ${r.solved ? `solved in ${r.questions}` : 'stumped'} (+${r.points} ${seatName(r.winner)})`).join('\n') : '';
+    recap.textContent = log2.length ? log2.map((r) => `R${r.round}: ${r.word.toUpperCase()}. ${r.solved ? `solved in ${r.questions}` : 'stumped'} (+${r.points} ${seatName(r.winner)})`).join('\n') : '';
     recap.style.whiteSpace = 'pre-line';
   }
 
@@ -503,10 +503,10 @@ export function mount(container, api) {
     });
     if (!qs.length && !log.querySelector('.empty')) {
       const msg = view.phase === 'waiting' ? 'Questions and answers will appear here.'
-        : view.phase === 'picking' ? 'The picker is choosing a secret word…' : 'No questions yet — ask away!';
+        : view.phase === 'picking' ? 'The picker is choosing a secret word…' : 'No questions yet. Ask away.';
       log.appendChild(el('div', 'empty', msg));
     } else if (!qs.length) {
-      log.querySelector('.empty').textContent = view.phase === 'picking' ? 'The picker is choosing a secret word…' : 'No questions yet — ask away!';
+      log.querySelector('.empty').textContent = view.phase === 'picking' ? 'The picker is choosing a secret word…' : 'No questions yet. Ask away.';
     }
     if (added) log.scrollTop = log.scrollHeight;
   }
@@ -587,7 +587,7 @@ export function mount(container, api) {
         nextBtn.hidden = !seat;
         updateCountdown();
       } else {
-        nextInfo.textContent = view.winner === 'draw' ? "Match drawn!" : `${view.winner === seat ? 'You win' : `${seatName(view.winner)} wins`} the match ${Math.max(view.scores.p1, view.scores.p2)}–${Math.min(view.scores.p1, view.scores.p2)}`;
+        nextInfo.textContent = view.winner === 'draw' ? "Match drawn." : `${view.winner === seat ? 'You win' : `${seatName(view.winner)} wins`} the match ${Math.max(view.scores.p1, view.scores.p2)}–${Math.min(view.scores.p1, view.scores.p2)}`;
         newGameBtn.hidden = !seat;
       }
       return;
@@ -596,7 +596,7 @@ export function mount(container, api) {
     showPanel(waitPanel);
     waitText.innerHTML = '';
     let msg;
-    if (ph === 'waiting') msg = seat ? 'Waiting for an opponent — or fill the other seat with a bot' : 'Take a seat or PLAY VS BOT to start';
+    if (ph === 'waiting') msg = seat ? 'Waiting for an opponent. Or fill the other seat with a bot' : 'Take a seat or PLAY VS BOT to start';
     else if (ph === 'picking') msg = `${seatName(picker)} is picking a secret word`;
     else if (ph === 'asking') msg = `${seatName(guesser)} is thinking of a question`;
     else if (ph === 'answering') msg = `${seatName(picker)} is answering`;
@@ -607,7 +607,7 @@ export function mount(container, api) {
   function updateCountdown() {
     if (!view || view.phase !== 'round_over') return;
     const s = Math.max(0, Math.ceil((roundDeadline - performance.now()) / 1000));
-    nextInfo.textContent = `Round ${view.round + 1} starts in ${s}s — roles swap`;
+    nextInfo.textContent = `Round ${view.round + 1} starts in ${s}s. Roles swap`;
   }
 
   function renderStatus() {
@@ -616,11 +616,11 @@ export function mount(container, api) {
     let text;
     let mine = false;
     if (ph === 'waiting') text = 'Waiting for both seats to be filled.';
-    else if (ph === 'picking') { mine = seat === view.picker; text = mine ? '▶ YOUR TURN — pick a secret word' : `${seatName(view.picker)} is picking a word…`; }
-    else if (ph === 'asking') { mine = seat === view.guesser; text = mine ? `▶ YOUR TURN — ask or guess (question ${view.questions.length + 1}/${view.maxQ})` : `${seatName(view.guesser)} is asking question ${view.questions.length + 1}…`; }
-    else if (ph === 'answering') { mine = seat === view.picker; text = mine ? '▶ YOUR TURN — answer the question' : `Waiting for ${seatName(view.picker)} to answer…`; }
-    else if (ph === 'round_over') text = `ROUND ${view.round} OVER — the word was “${view.result ? view.result.word : '?'}”`;
-    else text = view.winner === 'draw' ? "IT'S A DRAW!" : `${view.winner === seat ? 'YOU WIN' : `${seatName(view.winner).toUpperCase()} WINS`} THE MATCH!`;
+    else if (ph === 'picking') { mine = seat === view.picker; text = mine ? '▶ YOUR TURN. Pick a secret word' : `${seatName(view.picker)} is picking a word…`; }
+    else if (ph === 'asking') { mine = seat === view.guesser; text = mine ? `▶ YOUR TURN. Ask or guess (question ${view.questions.length + 1}/${view.maxQ})` : `${seatName(view.guesser)} is asking question ${view.questions.length + 1}…`; }
+    else if (ph === 'answering') { mine = seat === view.picker; text = mine ? '▶ YOUR TURN. Answer the question' : `Waiting for ${seatName(view.picker)} to answer…`; }
+    else if (ph === 'round_over') text = `ROUND ${view.round} OVER. The word was “${view.result ? view.result.word : '?'}”`;
+    else text = view.winner === 'draw' ? "IT'S A DRAW" : `${view.winner === seat ? 'YOU WIN' : `${seatName(view.winner).toUpperCase()} WINS`} THE MATCH`;
     status.textContent = text;
     status.classList.toggle('mine', mine);
     status.style.color = ph === 'game_over' || ph === 'round_over' ? '#ffb000' : '';
@@ -632,7 +632,7 @@ export function mount(container, api) {
     const order = ['p1', 'p2'].sort((a, b) => view.scores[b] - view.scores[a]);
     const draw = view.winner === 'draw';
     results.update({
-      title: draw ? "IT'S A DRAW" : seat ? (seat === view.winner ? 'YOU WIN!' : 'YOU LOSE') : `${seatName(view.winner).toUpperCase()} WINS!`,
+      title: draw ? "IT'S A DRAW" : seat ? (seat === view.winner ? 'YOU WIN' : 'YOU LOSE') : `${seatName(view.winner).toUpperCase()} WINS`,
       subtitle: (view.roundLog || []).map((r) => `${r.word.toUpperCase()} ${r.solved ? `in ${r.questions}` : '(stumped)'}`).join(' · '),
       outcome: draw ? 'draw' : !seat ? 'over' : seat === view.winner ? 'win' : 'lose',
       rows: order.map((s) => ({ name: seatName(s), value: `${view.scores[s]} pts`, win: !draw && s === view.winner, you: s === seat })),

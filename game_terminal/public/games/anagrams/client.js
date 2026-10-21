@@ -166,7 +166,7 @@ export function mount(container, api) {
   const backBtn = el('button', '', '⌫');
   const enterBtn = el('button', 'an-enter', 'ENTER');
   shuffleBtn.title = 'Shuffle (Space)';
-  backBtn.title = 'Delete letter (Backspace) — Esc clears';
+  backBtn.title = 'Delete letter (Backspace). Esc clears';
   enterBtn.title = 'Submit (Enter)';
   actions.append(shuffleBtn, backBtn, enterBtn);
   const toastEl = el('div', 'an-toast');
@@ -329,7 +329,7 @@ export function mount(container, api) {
     if (!view || view.phase === 'waiting' || !view.letters) {
       overlay.hidden = false;
       overlay.append(el('div', '', 'ANAGRAMS'),
-        el('div', 'an-help', 'Six letters, 60 seconds. Make as many words as you can — longer words score far more. Press START ROUND' + (api.daily ? ': one try at today\'s letters.' : ' (add a bot to play against the computer), or FIND EVERY WORD to play with no clock until you have them all.')));
+        el('div', 'an-help', 'Six letters, 60 seconds. Make as many words as you can. Longer words score far more. Press START ROUND' + (api.daily ? ': one try at today\'s letters.' : ' (add a bot to play against the computer), or FIND EVERY WORD to play with no clock until you have them all.')));
       return;
     }
     if (view.phase === 'playing' && now < view.startedAt) {
@@ -349,9 +349,9 @@ export function mount(container, api) {
     giveUpBtn.hidden = !(view.phase === 'playing' && complete() && now >= view.startedAt && meP() && meP().inRound && !meP().gaveUp);
     if (view.phase === 'waiting') statusEl.textContent = 'Waiting to start…';
     else if (view.phase === 'playing') statusEl.textContent = now < view.startedAt ? 'Get ready…'
-      : complete() ? (meP() && meP().gaveUp ? 'Waiting for the others to finish…' : `${view.myWords.length} / ${view.totalWords} found, keep going!`)
+      : complete() ? (meP() && meP().gaveUp ? 'Waiting for the others to finish…' : `${view.myWords.length} / ${view.totalWords} found, keep going.`)
       : `${view.totalWords} words hide in these letters`;
-    else statusEl.textContent = `Round over — the 6-letter word was ${String(view.base || '').toUpperCase()}`;
+    else statusEl.textContent = `Round over. The 6-letter word was ${String(view.base || '').toUpperCase()}`;
     const me = view.players.find((p) => p.clientId === myId());
     const score = complete() ? view.myWords.length : me ? me.score : 0; // no clock, so words found is the score
     if (scoreEl.textContent !== String(score)) {
@@ -427,7 +427,7 @@ export function mount(container, api) {
     if (complete()) {
       const all = mine && mine.count === view.totalWords;
       results.update({
-        title: all ? 'EVERY WORD FOUND!' : 'ANSWERS REVEALED',
+        title: all ? 'EVERY WORD FOUND' : 'ANSWERS REVEALED',
         subtitle: `${String(view.base || '').toUpperCase()} · ${view.totalWords} words · ${fmtClock(view.endedAt - view.startedAt)}`,
         outcome: all ? 'win' : 'over',
         rows: players.sort((a, b) => b.count - a.count).map((p) => ({ name: p.nickname, value: `${p.count}/${view.totalWords} words`, win: p.count === view.totalWords, you: p.clientId === me })),
@@ -438,7 +438,7 @@ export function mount(container, api) {
     if (mine && !solo) {
       const iWon = topScore > 0 && mine.score === topScore;
       outcome = iWon ? 'win' : 'lose';
-      title = iWon ? (players.filter((p) => p.score === topScore).length > 1 ? 'TIED FOR FIRST!' : 'YOU WIN!') : 'YOU LOSE';
+      title = iWon ? (players.filter((p) => p.score === topScore).length > 1 ? 'TIED FOR FIRST' : 'YOU WIN') : 'YOU LOSE';
     } else if (mine && solo) {
       outcome = mine.score > 0 ? 'win' : 'lose';
     }
@@ -524,7 +524,7 @@ export function mount(container, api) {
       freshWord = data.word;
       sfx.play(data.word.length >= 5 ? 'chime' : 'point');
       floatText(`+${data.points}`, data.word.length === 6 ? '#ffd23f' : '#39ff14');
-      if (data.word.length === 6) toast(`${w} — ALL SIX LETTERS!`, '#ffd23f');
+      if (data.word.length === 6) toast(`${w}. ALL SIX LETTERS`, '#ffd23f');
       flashTray('good');
       renderWords();
     } else if (data.outcome === 'already') {

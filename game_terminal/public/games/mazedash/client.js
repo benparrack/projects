@@ -37,8 +37,8 @@ export function mount(container, api) {
 
   const hint = document.createElement('p');
   hint.innerHTML =
-    '<strong>MOVE</strong> — arrow keys or WASD (touchscreens get a pad below the maze); hold to keep going<br>' +
-    '<strong>GOAL</strong> — reach the gold exit cell fastest; everyone races the same maze';
+    '<strong>MOVE</strong>. Arrow keys or WASD (touchscreens get a pad below the maze); hold to keep going<br>' +
+    '<strong>GOAL</strong>. Reach the gold exit cell fastest; everyone races the same maze';
   hint.style.margin = '0';
   hint.style.maxWidth = `${CANVAS_WIDTH}px`;
   hint.style.textAlign = 'center';
@@ -113,9 +113,9 @@ export function mount(container, api) {
 
   function statusLabel() {
     if (!view) return 'Loading...';
-    if (view.phase === 'waiting') return `Waiting to start (${view.players.length} here) — click START RACE.`;
-    if (view.phase === 'racing') return 'Race in progress!';
-    if (view.phase === 'results') return 'Race over — click NEW RACE to go again.';
+    if (view.phase === 'waiting') return `Waiting to start (${view.players.length} here). Click START RACE.`;
+    if (view.phase === 'racing') return 'Race in progress.';
+    if (view.phase === 'results') return 'Race over. Click NEW RACE to go again.';
     return '';
   }
 
@@ -239,10 +239,10 @@ export function mount(container, api) {
         fx.burst(ex, ey, '#ffd23f', { count: mine ? 30 : 12, speed: 200, life: 0.7, size: 2 });
         fx.ring(ex, ey, p.color, { radius: mine ? 90 : 50, width: 4 });
         const place = view.leaderboard.filter((e) => e.finished).findIndex((e) => e.clientId === p.clientId) + 1;
-        if (place) fx.text(ex, ey - 12, ['', '1ST!', '2ND', '3RD'][place] || `${place}TH`, p.color, { size: mine ? 16 : 12, life: 1.2 });
+        if (place) fx.text(ex, ey - 12, ['', '1ST', '2ND', '3RD'][place] || `${place}TH`, p.color, { size: mine ? 16 : 12, life: 1.2 });
         if (mine) {
           fx.shake(5);
-          if (place === 1) fx.bigLabel('1ST!', '#ffd23f');
+          if (place === 1) fx.bigLabel('1ST', '#ffd23f');
         }
       }
     }
@@ -265,8 +265,8 @@ export function mount(container, api) {
       const li = document.createElement('li');
       const you = entry.clientId === api.getClientId() ? ' (you)' : '';
       li.textContent = entry.finished
-        ? `${nicknameFor(entry.clientId)}${you} — ${fmtMs(entry.finishMs)}`
-        : `${nicknameFor(entry.clientId)}${you} — racing…`;
+        ? `${nicknameFor(entry.clientId)}${you}. ${fmtMs(entry.finishMs)}`
+        : `${nicknameFor(entry.clientId)}${you}. Racing…`;
       lbEl.appendChild(li);
     }
   }
@@ -297,7 +297,7 @@ export function mount(container, api) {
     } else {
       if (lastTimerSfx.startsWith('GET READY')) {
         sfx.play('go');
-        fx.bigLabel('GO!', '#39ff14');
+        fx.bigLabel('GO', '#39ff14');
       }
       lastTimerSfx = 'racing';
       timerEl.textContent = fmtMs(serverClock.now() - view.roundStartedAt);

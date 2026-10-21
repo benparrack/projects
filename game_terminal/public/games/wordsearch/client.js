@@ -165,7 +165,7 @@ export function mount(container, api) {
   side.append(head, wordsEl, scoreTitle, scoresEl);
   body.append(board, side);
   const toastEl = el('div', 'ws-toast');
-  const hint = el('p', 'ws-hint', 'Drag from the first letter of a word to its last — any of the 8 directions, forwards or backwards. First to find a word gets the points.');
+  const hint = el('p', 'ws-hint', 'Drag from the first letter of a word to its last. Any of the 8 directions, forwards or backwards. First to find a word gets the points.');
   root.append(top, controls, botBar.el, body, toastEl, hint);
   container.appendChild(root);
 
@@ -469,12 +469,12 @@ export function mount(container, api) {
   function renderStatus() {
     if (!view) { statusEl.textContent = 'Loading…'; return; }
     const humans = view.players.filter((p) => !p.bot).length;
-    if (view.phase === 'waiting') statusEl.textContent = `${humans} player${humans === 1 ? '' : 's'} here — pick a grid and theme, then START.`;
+    if (view.phase === 'waiting') statusEl.textContent = `${humans} player${humans === 1 ? '' : 's'} here. Pick a grid and theme, then START.`;
     else if (view.phase === 'playing') {
       const left = view.words.filter((w) => !w.foundBy).length;
-      statusEl.textContent = clock.now() < view.startedAt ? 'Get ready…' : `${left} word${left === 1 ? '' : 's'} left to find!`;
+      statusEl.textContent = clock.now() < view.startedAt ? 'Get ready…' : `${left} word${left === 1 ? '' : 's'} left to find.`;
     } else {
-      statusEl.textContent = view.endReason === 'all_found' ? 'All words found!' : "Time's up!";
+      statusEl.textContent = view.endReason === 'all_found' ? 'All words found.' : "Time's up.";
     }
   }
 
@@ -553,7 +553,7 @@ export function mount(container, api) {
     if (lastTick.startsWith(`c${view.roundId}-`)) {
       lastTick = `go${view.roundId}`;
       sfx.play('go');
-      fx.bigLabel('GO!', '#39ff14');
+      fx.bigLabel('GO', '#39ff14');
       renderWords();
       renderStatus();
     }
@@ -576,11 +576,11 @@ export function mount(container, api) {
     const solo = players.filter((p) => !p.bot).length <= 1 && !players.some((p) => p.bot);
     const found = view.words.filter((w) => w.foundBy).length;
     let outcome = 'over';
-    let title = view.endReason === 'all_found' ? 'ALL FOUND!' : "TIME'S UP";
+    let title = view.endReason === 'all_found' ? 'ALL FOUND' : "TIME'S UP";
     if (mine && !solo) {
       const iWon = top > 0 && mine.score === top;
       outcome = iWon ? 'win' : 'lose';
-      title = iWon ? (players.filter((p) => p.score === top).length > 1 ? 'TIED FOR FIRST!' : 'YOU WIN!') : 'YOU LOSE';
+      title = iWon ? (players.filter((p) => p.score === top).length > 1 ? 'TIED FOR FIRST' : 'YOU WIN') : 'YOU LOSE';
     } else if (mine && solo) outcome = view.endReason === 'all_found' ? 'win' : 'lose';
     results.update({
       title,
@@ -629,7 +629,7 @@ export function mount(container, api) {
       const mine = view.players.find((p) => p.clientId === me && p.inRound);
       const top = Math.max(0, ...view.players.filter((p) => p.inRound).map((p) => p.score));
       if (mine) sfx.play(mine.score === top && top > 0 ? 'win' : 'lose');
-      if (view.endReason === 'all_found') fx.bigLabel('ALL FOUND!', '#ffd23f');
+      if (view.endReason === 'all_found') fx.bigLabel('ALL FOUND', '#ffd23f');
     }
     if (view.grid && view.grid.length !== n) layout();
     render();

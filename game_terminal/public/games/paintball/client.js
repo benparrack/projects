@@ -21,10 +21,10 @@ const FX_WINDOW = 450; // events older than this when applied are catch-up: no f
 const REJECT_MESSAGES = {
   not_your_turn: "It's not your turn.",
   not_playing: 'The game is not running.',
-  not_started: 'Wait for GO!',
+  not_started: 'Wait for GO',
   bad_time: 'Shot arrived too late (lag).',
-  too_fast: 'Too fast!',
-  empty: 'Out of paint — reload! (R)',
+  too_fast: 'Too fast.',
+  empty: 'Out of paint. Reload (R)',
   reloading: 'Still reloading.',
   full: 'Hopper is already full.',
   time_up: "Time's up.",
@@ -519,7 +519,7 @@ export function mount(container, api) {
   stage.append(canvas, reloadBtn);
   const help = document.createElement('div');
   help.className = 'pb-help';
-  help.textContent = 'Each player gets one 45-second run through the same gallery. Click/tap to fire — bandits score (more for far rows, moving targets and head shots, gold stars 500), civilians cost 300. 8 paintballs per hopper: reload with R, right-click or the RELOAD button. Highest score wins.';
+  help.textContent = 'Each player gets one 45-second run through the same gallery. Click/tap to fire. Bandits score (more for far rows, moving targets and head shots, gold stars 500), civilians cost 300. 8 paintballs per hopper: reload with R, right-click or the RELOAD button. Highest score wins.';
   root.append(status, err, seats, stage, help);
 
   const ctx = canvas.getContext('2d');
@@ -965,7 +965,7 @@ export function mount(container, api) {
       text(g, 'RELOADING', 22 + S.CLIP * 9, S.H - 44, { size: 12, color: '#ffe14d' });
     } else if (gun.ammo === 0 && m === 'running') {
       const blink = Math.floor(performance.now() / 250) % 2;
-      if (blink) text(g, myRunLive() ? 'RELOAD! (R)' : 'EMPTY', 22 + S.CLIP * 9, S.H - 44, { size: 13, color: '#ff5a5a' });
+      if (blink) text(g, myRunLive() ? 'RELOAD (R)' : 'EMPTY', 22 + S.CLIP * 9, S.H - 44, { size: 13, color: '#ff5a5a' });
     }
   }
   function drawOverlay(g, m, T, now) {
@@ -980,7 +980,7 @@ export function mount(container, api) {
       const name = nicknameFor(view.players[seat]) || seat;
       text(g, `${seat.toUpperCase()} UP: ${name}`, S.W / 2, 170, { size: 30, color: TEXT_COLOR[seat], glow: PAINT[seat] });
       const other = seat === 'red' ? 'blue' : 'red';
-      if (view.scores[other] != null) text(g, `${other.toUpperCase()} SCORED ${view.scores[other]} — BEAT IT!`, S.W / 2, 214, { size: 17, color: '#ffe14d' });
+      if (view.scores[other] != null) text(g, `${other.toUpperCase()} SCORED ${view.scores[other]}. BEAT IT`, S.W / 2, 214, { size: 17, color: '#ffe14d' });
       if (seat === mySeat()) {
         const pulse = 1 + 0.06 * Math.sin(now / 180);
         g.save();
@@ -1020,11 +1020,11 @@ export function mount(container, api) {
       }
     } else if (m === 'running' && T < 600) {
       g.globalAlpha = 1 - T / 600;
-      text(g, 'GO!', S.W / 2, S.H / 2, { size: 90 + T / 20, color: '#39ff14', glow: '#39ff14' });
+      text(g, 'GO', S.W / 2, S.H / 2, { size: 90 + T / 20, color: '#39ff14', glow: '#39ff14' });
       g.globalAlpha = 1;
     } else if (m === 'timeup' && disp) {
       dim(0.45);
-      text(g, "TIME'S UP!", S.W / 2, 190, { size: 50, color: '#ffe14d', glow: '#ffb000' });
+      text(g, "TIME'S UP", S.W / 2, 190, { size: 50, color: '#ffe14d', glow: '#ffb000' });
       const s = disp.sim.stats;
       text(g, `${disp.sim.score} POINTS`, S.W / 2, 250, { size: 28, color: PAINT[disp.seat], glow: PAINT[disp.seat] });
       text(g, `${s.hits} hits · ${s.heads} head shots · ${s.civs} civilians · ${s.shots ? Math.round(((s.hits + s.civs) / s.shots) * 100) : 0}% accuracy`, S.W / 2, 290, { size: 13, color: '#d8ffd0', weight: 'normal' });
@@ -1168,15 +1168,15 @@ export function mount(container, api) {
       status.textContent = 'Waiting for both seats to be filled.';
     } else if (over) {
       status.textContent = view.winner === 'draw'
-        ? `DRAW — ${view.scores.red} each`
-        : `${view.winner.toUpperCase()} WINS! ${view.scores.red} – ${view.scores.blue}`;
+        ? `DRAW. ${view.scores.red} each`
+        : `${view.winner.toUpperCase()} WINS ${view.scores.red} – ${view.scores.blue}`;
       status.style.color = '#ffb000';
     } else if (seat && view.turn === seat) {
-      status.textContent = view.runStart == null ? '▶ YOUR RUN — tap the gallery to start' : '▶ YOUR RUN — shoot the bandits, spare the civilians!';
+      status.textContent = view.runStart == null ? '▶ YOUR RUN. Tap the gallery to start' : '▶ YOUR RUN. Shoot the bandits, spare the civilians.';
       status.classList.add('mine');
     } else {
       const t = view.turn;
-      status.textContent = `${t.toUpperCase()} ${view.runStart == null ? 'GETTING READY' : 'SHOOTING'} — ${nicknameFor(view.players[t])}`;
+      status.textContent = `${t.toUpperCase()} ${view.runStart == null ? 'GETTING READY' : 'SHOOTING'}. ${nicknameFor(view.players[t])}`;
       status.style.color = TEXT_COLOR[t];
     }
     seats.innerHTML = '';

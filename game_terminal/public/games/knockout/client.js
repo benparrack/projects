@@ -137,7 +137,7 @@ export function mount(container, api) {
   options.className = 'ko-row';
   const help = document.createElement('div');
   help.className = 'ko-help';
-  help.textContent = 'Drag out from your penguins to aim them — longer arrow = harder shove. Both players move at the same time; arrows stay secret until everyone locks in. Knock their penguins off the ice — it shrinks every 2 rounds. Last team standing wins.';
+  help.textContent = 'Drag out from your penguins to aim them. Longer arrow = harder shove. Both players move at the same time; arrows stay secret until everyone locks in. Knock their penguins off the ice. It shrinks every 2 rounds. Last team standing wins.';
   root.append(status, err, seats, stage, controls, options, help);
 
   // ---- game-state helpers ----
@@ -316,7 +316,7 @@ export function mount(container, api) {
     anim = null;
     renderDom();
     if (view && view.phase === 'playing') {
-      fx.bigLabel('GO!', '#39ff14');
+      fx.bigLabel('GO', '#39ff14');
       if (mySeat()) setTimeout(() => sfx.play('turn'), 120);
     }
   }
@@ -408,7 +408,7 @@ export function mount(container, api) {
         anim.fired.add('shrink');
         sfx.play('crash');
         fx.shake(6);
-        fx.bigLabel('CRACK!', '#8fe3ff');
+        fx.bigLabel('CRACK', '#8fe3ff');
       }
       for (const id of rec.fell) {
         const p = pos(id);
@@ -430,7 +430,7 @@ export function mount(container, api) {
     fx.ring(sx, sy, '#7fd0ff', { radius: S.R * s * 2.6, life: 0.7, width: 4 });
     const seat = mySeat();
     const side = sideOf(id);
-    fx.text(sx, sy - S.R * s, seat ? (side === seat ? 'OOF!' : 'KO!') : 'SPLASH!', TEAM[side], { size: 16, life: 1.1 });
+    fx.text(sx, sy - S.R * s, seat ? (side === seat ? 'OOF' : 'KO') : 'SPLASH', TEAM[side], { size: 16, life: 1.1 });
     sfx.play('whoosh', { vol: 0.8 });
     setTimeout(() => sfx.play('pop'), 120);
   }
@@ -831,24 +831,24 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       status.textContent = 'Waiting for both seats to be filled.';
     } else if (over) {
-      status.textContent = view.winner === 'draw' ? "IT'S A DRAW — everyone's in the water!" : `${view.winner.toUpperCase()} WINS!`;
+      status.textContent = view.winner === 'draw' ? "IT'S A DRAW. Everyone's in the water." : `${view.winner.toUpperCase()} WINS`;
       status.style.color = '#ffb000';
     } else if (anim) {
-      status.textContent = `ROUND ${anim.rec.round} — SLIDE!`;
+      status.textContent = `ROUND ${anim.rec.round}. SLIDE`;
       status.style.color = '#8fe3ff';
     } else if (seat && !view.penguins.some((p) => p.side === seat)) {
       status.textContent = 'Your penguins are all in the water…';
     } else if (seat && (view.locked[seat] || lockSent)) {
       const opp = seat === 'red' ? 'blue' : 'red';
-      status.textContent = view.locked[opp] ? 'Both locked in — here we go!' : `LOCKED IN — waiting for ${nicknameFor(view.players[opp])}…`;
+      status.textContent = view.locked[opp] ? 'Both locked in. Here we go.' : `LOCKED IN. Waiting for ${nicknameFor(view.players[opp])}…`;
       status.style.color = '#9fdc98';
     } else if (seat) {
-      status.textContent = clock.now() < view.planFrom - 150 ? 'Get ready…' : '▶ YOUR MOVE — aim your penguins, then LOCK IN';
+      status.textContent = clock.now() < view.planFrom - 150 ? 'Get ready…' : '▶ YOUR MOVE. Aim your penguins, then LOCK IN';
       status.classList.add('mine');
     } else {
       const r = view.locked.red ? 'RED ✓' : 'RED …';
       const b = view.locked.blue ? 'BLUE ✓' : 'BLUE …';
-      status.textContent = `ROUND ${view.round} — players are planning (${r} / ${b})`;
+      status.textContent = `ROUND ${view.round}. Players are planning (${r} / ${b})`;
     }
   }
 
@@ -858,7 +858,7 @@ export function mount(container, api) {
     const over = !!(view && view.phase === 'game_over' && !anim);
     results.update(over ? duelResults({
       winner: view.winner, colors: COLORS, players: view.players, me: seat, nameFor: nicknameFor,
-      subtitle: `${view.endReason === 'rounds' ? `Round limit (${view.maxRounds}) — most penguins left · ` : ''}`
+      subtitle: `${view.endReason === 'rounds' ? `Round limit (${view.maxRounds}). Most penguins left · ` : ''}`
         + COLORS.map((c) => `${c.toUpperCase()} ${view.stats[c].ko} KO`).join(' · '),
       onRematch: () => api.sendAction({ kind: 'resetGame' }),
     }) : null);
@@ -928,7 +928,7 @@ export function mount(container, api) {
       draftRound = roundKey;
       if (prev && prev.phase !== 'playing' && data.phase === 'playing') {
         sfx.play('go');
-        fx.bigLabel('GO!', '#39ff14');
+        fx.bigLabel('GO', '#39ff14');
       }
     } else if (data.lastRound && data.lastRound.seq > lastSeqSeen) {
       lastSeqSeen = data.lastRound.seq;

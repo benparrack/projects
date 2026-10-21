@@ -11,11 +11,11 @@ import { handValue, cardValue, basicStrategy, adviceLabel } from './strategy.js'
 
 const HINT_KEY = 'gt.blackjack.hints';
 
-const TIP_THANKS = ['Much obliged!', 'Thank you kindly!', 'Good luck to you!', 'A true gentleman of the felt.'];
+const TIP_THANKS = ['Much obliged.', 'Thank you kindly.', 'Good luck to you.', 'A true gentleman of the felt.'];
 const REJECT = {
-  not_betting: 'Bets are closed', not_seated: 'Sit down first', already_ready: 'Bet locked in — wait for the deal',
+  not_betting: 'Bets are closed', not_seated: 'Sit down first', already_ready: 'Bet locked in. Wait for the deal',
   bad_amount: 'Invalid chip', over_max: 'Over the table max', insufficient: 'Not enough chips', no_last_bet: 'No previous bet',
-  under_min: 'Minimum bet is $2', vip_only: 'High rollers only: $1,000+ in the casino, or the VIP key from the casino SHOP.', no_rebuy: 'No rebuys — visit the CASINO lobby',
+  under_min: 'Minimum bet is $2', vip_only: 'High rollers only: $1,000+ in the casino, or the VIP key from the casino SHOP.', no_rebuy: 'No rebuys. Visit the CASINO lobby',
   broke: 'You\'re broke: claim the daily stipend or work a shift in the CASINO lobby', wallet_loading: 'Loading your balance, try again', no_insurance: 'Insurance is closed',
   not_your_turn: "It's not your turn", cant_double: "Can't double this hand", cant_split: "Can't split this hand",
   split_aces: 'Split aces get one card', table_full: 'Table is full', already_seated: 'Already seated',
@@ -249,15 +249,15 @@ export function mount(container, api) {
     if (!view) return 'Loading…';
     const t = currentTurn();
     switch (view.phase) {
-      case 'waiting': return 'Table open — take a seat to play.';
-      case 'betting': return view.deadline ? 'Place your bets — dealing in' : 'Place your bets.';
+      case 'waiting': return 'Table open. Take a seat to play.';
+      case 'betting': return view.deadline ? 'Place your bets. Dealing in' : 'Place your bets.';
       case 'dealing': return 'Dealing…';
-      case 'insurance': return 'Dealer shows an ace — insurance?';
+      case 'insurance': return 'Dealer shows an ace. Insurance?';
       case 'peek': return 'Dealer checks for blackjack…';
       case 'playing': return t ? `${t.entry.id === me() ? 'Your' : `${nameFor(t.entry.id)}'s`} turn${t.entry.hands.length > 1 ? ` (hand ${t.h + 1})` : ''}` : '';
       case 'dealer': return 'Dealer plays…';
       case 'settle': return 'Round over.';
-      case 'shoe_over': return 'End of the shoe — reshuffling. Next shoe in';
+      case 'shoe_over': return 'End of the shoe. Reshuffling. Next shoe in';
       default: return '';
     }
   }
@@ -418,7 +418,7 @@ export function mount(container, api) {
     const p = view.players[me()];
     const seated = mySeat() !== -1;
     if (!seated && !myEntry()) {
-      panel.appendChild(el('div', null, view.seats.length >= 6 ? 'Table full — watching.' : 'Watching — take a seat to play.'));
+      panel.appendChild(el('div', null, view.seats.length >= 6 ? 'Table full. Watching.' : 'Watching. Take a seat to play.'));
       parent.appendChild(panel);
       return;
     }
@@ -426,7 +426,7 @@ export function mount(container, api) {
     if (view.phase === 'betting' && p) {
       const broke = p.bankroll < view.minBet && p.bet === 0;
       if (broke) {
-        panel.appendChild(el('div', null, 'Out of chips! Stand up, then claim the daily stipend or work a shift in the CASINO lobby.'));
+        panel.appendChild(el('div', null, 'Out of chips. Stand up, then claim the daily stipend or work a shift in the CASINO lobby.'));
       } else {
         const line = el('div', 'bj-bigbet');
         line.innerHTML = `Bet: <b>$${fmt(p.bet)}</b> · Bankroll $${fmt(p.bankroll - p.bet)} · min ${view.minBet} / max ${view.maxBet}`;
@@ -454,7 +454,7 @@ export function mount(container, api) {
       const e = myEntry();
       if (e && !e.insDecided) {
         const cost = e.hands[0].bet / 2;
-        panel.appendChild(el('div', null, e.hands[0].natural ? 'You have blackjack! Insurance = take even money.' : `Insurance costs $${fmt(cost)} and pays 2:1 if the dealer has blackjack.`));
+        panel.appendChild(el('div', null, e.hands[0].natural ? 'You have blackjack. Insurance = take even money.' : `Insurance costs $${fmt(cost)} and pays 2:1 if the dealer has blackjack.`));
         const row = el('div', 'bj-row bj-act');
         const yes = el('button', null, 'INSURE');
         yes.disabled = p.bankroll < cost;
@@ -499,7 +499,7 @@ export function mount(container, api) {
       panel.appendChild(b);
     } else {
       const t = currentTurn();
-      panel.appendChild(el('div', null, t ? `Waiting for ${nameFor(t.entry.id)}…` : myEntry() ? 'Good luck!' : 'Sitting this round out — you can bet next round.'));
+      panel.appendChild(el('div', null, t ? `Waiting for ${nameFor(t.entry.id)}…` : myEntry() ? 'Good luck.' : 'Sitting this round out. You can bet next round.'));
     }
     if (seated) {
       const leaveRow = el('div', 'bj-row');
@@ -575,8 +575,8 @@ export function mount(container, api) {
     const seated = mySeat() !== -1;
     const iWon = winners.includes(me());
     results.update({
-      title: seated ? (iWon ? 'TOP OF THE TABLE!' : view.players[me()].shoeNet >= 0 ? 'SHOE COMPLETE' : 'THE HOUSE WINS') : 'SHOE COMPLETE',
-      subtitle: `Shoe #${view.shoeNo} done after ${view.shoeRounds} rounds — standings for this shoe`,
+      title: seated ? (iWon ? 'TOP OF THE TABLE' : view.players[me()].shoeNet >= 0 ? 'SHOE COMPLETE' : 'THE HOUSE WINS') : 'SHOE COMPLETE',
+      subtitle: `Shoe #${view.shoeNo} done after ${view.shoeRounds} rounds. Standings for this shoe`,
       outcome: seated ? (iWon ? 'win' : view.players[me()].shoeNet >= 0 ? 'over' : 'lose') : 'over',
       rows: ids.map((id) => ({ name: nameFor(id), value: `${signed(view.players[id].shoeNet)} · $${fmt(view.players[id].bankroll)}`, win: winners.includes(id), you: id === me() })),
       rematch: seated ? { label: 'NEXT SHOE', onClick: () => send({ kind: 'continue' }) } : null,
@@ -608,7 +608,7 @@ export function mount(container, api) {
     cut.style.left = `${(view.cutAt / view.shoeSize) * 100}%`;
     bar.append(fill, cut);
     shoe.appendChild(bar);
-    if (view.reshuffleNext) shoe.appendChild(el('span', 'bj-neg', 'cut!'));
+    if (view.reshuffleNext) shoe.appendChild(el('span', 'bj-neg', 'cut.'));
     tools.appendChild(shoe);
     const hb = el('button', hints ? 'on' : '', hints ? 'HINTS: ON' : 'HINTS: OFF');
     hb.title = 'Highlight the basic-strategy play';
@@ -657,13 +657,13 @@ export function mount(container, api) {
       if (ev.kind === 'tip') { sfx.play('chips'); showToast(`${nameFor(ev.id)} tipped the dealer $${ev.amount}. "${TIP_THANKS[ev.id.length % TIP_THANKS.length]}"`); }
       if (ev.kind === 'dealerBlackjack') pendingBanner = { text: 'DEALER BLACKJACK', color: '#ff4d4d' };
       if (ev.kind === 'bust' && ev.who === me()) sfx.play('crash');
-      if (ev.kind === 'timeout' && ev.who === me()) showToast('Time up — you stood.');
+      if (ev.kind === 'timeout' && ev.who === me()) showToast('Time up. You stood.');
       if (ev.kind === 'settle') {
         const e = next.round && next.round.entries.find((x) => x.id === me());
         if (e) {
           const net = e.hands.reduce((s, h) => s + (h.payout || 0), 0);
           const bj = e.hands.some((h) => h.result === 'blackjack');
-          if (bj) pendingBanner = { text: 'BLACKJACK!', color: '#ffd23f' };
+          if (bj) pendingBanner = { text: 'BLACKJACK', color: '#ffd23f' };
           else if (next.round.dealer.bust && net > 0) pendingBanner = { text: 'DEALER BUSTS', color: '#39ff14' };
           setTimeout(() => sfx.play(net > 0 ? 'win' : net < 0 ? 'lose' : 'point'), 150);
         } else if (next.round && next.round.dealer.bust) pendingBanner = { text: 'DEALER BUSTS', color: '#39ff14' };

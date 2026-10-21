@@ -403,7 +403,7 @@ function handleAccountState(p) {
   if (p.user && state.setup) {
     state.setup.close();
     state.setup = null;
-    toast(`Welcome, ${p.user.username}! Your stats are now saved.`, { kind: 'ok' });
+    toast(`Welcome, ${p.user.username}. Your stats are now saved.`, { kind: 'ok' });
   }
   if (p.needsUsername && !state.setup) {
     state.setup = openUsernameSetup({
@@ -474,7 +474,7 @@ function handleResultRecorded(p) {
     toast(`${outcome}. Rating ${p.rating.rating} (${d >= 0 ? '+' : '−'}${Math.abs(d)}) · ${p.rating.tier}.${p.progress && p.progress.gained ? ` +${p.progress.gained} XP${p.progress.double ? ' (2× game of the week)' : ''}.` : ''}`, { kind: d >= 0 ? 'ok' : undefined, ms: 7000 });
   } else if (p.saved) toast(`${outcome}. ${p.ranked && p.kind === 'pvp' ? 'Unrated: everyone needs an account. ' : ''}${p.progress && p.progress.gained ? `+${p.progress.gained} XP${p.progress.double ? ' (2× game of the week)' : ''}.` : 'Result saved to your profile.'}`, { kind: 'ok' });
   const pr = p.progress;
-  if (pr && pr.levelUp) toast(`▲ LEVEL UP! You're now level ${pr.level}.`, { kind: 'ok', ms: 7000 });
+  if (pr && pr.levelUp) toast(`▲ LEVEL UP You're now level ${pr.level}.`, { kind: 'ok', ms: 7000 });
   if (pr) for (const b of pr.badges || []) toast(`★ ACHIEVEMENT UNLOCKED: ${b.name}. ${b.desc}.`, { kind: 'ok', ms: 8000, action: state.account ? { label: 'VIEW', run: () => window.open(`/u/${encodeURIComponent(state.account.username)}`, '_blank', 'noopener') } : undefined });
   if (!p.saved && state.auth && state.auth.mode !== 'off') {
     toast(`${outcome}. Guests' results aren't saved.`, { action: { label: 'SIGN IN', run: () => openSignIn(state.auth) } });
@@ -519,7 +519,7 @@ function handleServerMessage(type, payload) {
       renderRoster(payload.roster);
       // Chat needs accounts (to post, report and moderate), so accounts-off deploys have none.
       document.getElementById('room-chat').replaceChildren(...(state.auth && state.auth.mode !== 'off'
-        ? [chatBox({ channel: 'room', title: 'Room chat', placeholder: 'Message the room', emptyText: 'Room chat. Say good luck!', className: 'chat-room' }).el] : []));
+        ? [chatBox({ channel: 'room', title: 'Room chat', placeholder: 'Message the room', emptyText: 'Room chat. Say good luck.', className: 'chat-room' }).el] : []));
       showScreen('room');
       mountGame(payload.gameType, payload.stateSnapshot, payload.roster);
       break;
@@ -536,7 +536,7 @@ function handleServerMessage(type, payload) {
       if (payload.soft || payload.reason === RoomErrorReason.DAILY) { if (!payload.soft) state.pendingJoin = null; toast(payload.detail || payload.reason, { kind: 'error' }); break; }
       state.pendingJoin = null;
       els.menuError.hidden = false;
-      els.menuError.textContent = `ERROR: ${payload.reason}${payload.detail ? ' — ' + payload.detail : ''}`;
+      els.menuError.textContent = `ERROR: ${payload.reason}${payload.detail ? ' · ' + payload.detail : ''}`;
       showScreen('menu');
       break;
     }
@@ -734,7 +734,7 @@ function flashJoin() {
   sfx.play('chime');
   if (flashTimer) return;
   const title = document.title;
-  flashTimer = setInterval(() => { document.title = document.title === title ? '● Player joined!' : title; }, 1000);
+  flashTimer = setInterval(() => { document.title = document.title === title ? '● Player joined.' : title; }, 1000);
   document.addEventListener('visibilitychange', () => { clearInterval(flashTimer); flashTimer = null; document.title = title; }, { once: true });
 }
 
@@ -796,7 +796,7 @@ function showHowTo(gameType) {
     for (const t of items) ul.appendChild(h('li', t));
     return ul;
   };
-  els.infoPop.replaceChildren(h('h3', `HOW TO PLAY — ${label}`), h('p', info.about),
+  els.infoPop.replaceChildren(h('h3', `HOW TO PLAY. ${label}`), h('p', info.about),
     h('h4', 'RULES'), list(info.rules), h('h4', 'CONTROLS'), list(info.controls));
 }
 
@@ -923,7 +923,7 @@ function route() {
     renderReplay(els.screenPage, rep[1], { gameLabel }).then((r) => {
       if (location.pathname !== path) return r.cleanup();
       state.pageCleanup = r.cleanup;
-      document.title = `${r.title} — Game Terminal`;
+      document.title = `${r.title} | Game Terminal`;
     });
     showScreen('page');
     return 'page';
@@ -931,39 +931,39 @@ function route() {
   const prof = /^\/u\/([A-Za-z0-9_]{1,24})\/?$/.exec(path);
   if (prof) {
     renderProfile(els.screenPage, prof[1], { gameLabel, me: state.account, equip: (cosmetics) => send(ClientMessage.ACCOUNT_UPDATE, { cosmetics }) })
-      .then((title) => { if (location.pathname === path) document.title = `${title} — Game Terminal`; });
+      .then((title) => { if (location.pathname === path) document.title = `${title} | Game Terminal`; });
     showScreen('page');
     return 'page';
   }
   if (path.replace(/\/$/, '') === '/admin') {
     renderAdmin(els.screenPage, { send, account: state.account });
-    document.title = 'Moderation — Game Terminal';
+    document.title = 'Moderation | Game Terminal';
     showScreen('page');
     return 'page';
   }
   if (path.replace(/\/$/, '') === '/settings') {
     renderSettingsPage();
-    document.title = 'Settings — Game Terminal';
+    document.title = 'Settings | Game Terminal';
     showScreen('page');
     return 'page';
   }
   const lb = /^\/leaderboards(?:\/([a-z0-9]{1,24}))?\/?$/.exec(path);
   if (lb) {
     renderLeaderboards(els.screenPage, lb[1] || null, { gameLabel, games: GAMES, auth: state.auth, me: state.account, friends: friendNames });
-    document.title = 'Leaderboards — Game Terminal';
+    document.title = 'Leaderboards | Game Terminal';
     showScreen('page');
     return 'page';
   }
   if (path.replace(/\/$/, '') === '/daily') {
     renderDaily(els.screenPage, dailyOpts());
-    document.title = 'Daily challenge — Game Terminal';
+    document.title = 'Daily challenge | Game Terminal';
     showScreen('page');
     return 'page';
   }
   const info = INFO_PAGES[path.replace(/\/$/, '')];
   if (info) {
     els.screenPage.replaceChildren(info.render());
-    document.title = `${info.title} — Game Terminal`;
+    document.title = `${info.title} | Game Terminal`;
     showScreen('page');
     return 'page';
   }
@@ -986,7 +986,7 @@ function renderNotFound() {
     h('h1', 'PAGE NOT FOUND'),
     h('p.muted', `Nothing lives at ${location.pathname}.`),
     h('a.btn-primary', { href: '/', 'data-link': true }, 'BACK TO GAMES')));
-  document.title = 'Not found — Game Terminal';
+  document.title = 'Not found | Game Terminal';
   showScreen('page');
 }
 
@@ -997,7 +997,7 @@ function navigate(href) {
 
 function onRoute() {
   if (state.pageCleanup) { state.pageCleanup(); state.pageCleanup = null; }
-  document.title = 'Game Terminal — free multiplayer games in your browser';
+  document.title = 'Game Terminal | Free multiplayer games in your browser';
   state.onPage = route() === 'page';
   for (const a of document.querySelectorAll('.mainnav a')) {
     const on = a.dataset.nav === 'play' ? !state.onPage : location.pathname.startsWith(a.getAttribute('href'));

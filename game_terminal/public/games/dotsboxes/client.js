@@ -146,7 +146,7 @@ export function mount(container, api) {
       seats: view.seats, winners: view.winners, me: seat, nameFor,
       value: (i) => `${view.scores[i]} box${view.scores[i] === 1 ? '' : 'es'}`,
       rank: (i) => -view.scores[i],
-      winTitle: view.winners.length > 1 ? "IT'S A TIE!" : `${plainName(view.seats[view.winners[0]])} WINS!`,
+      winTitle: view.winners.length > 1 ? "IT'S A TIE" : `${plainName(view.seats[view.winners[0]])} WINS`,
       subtitle: view.winners.length > 1 ? `Tied on ${view.scores[view.winners[0]]} boxes` : `${view.size}×${view.size} grid`,
       onRematch: () => send({ kind: 'resetGame' }),
     }) : null);
@@ -159,19 +159,19 @@ export function mount(container, api) {
     const turnId = view.seats[view.turnIdx];
     if (view.phase === 'waiting') {
       status.textContent = view.seats.length < 2
-        ? `Waiting for players (${view.seats.length}/${MAX_SEATS}) — need 2 to start`
-        : `${view.seats.length} players ready — press START`;
+        ? `Waiting for players (${view.seats.length}/${MAX_SEATS}). Need 2 to start`
+        : `${view.seats.length} players ready. Press START`;
     } else if (view.phase === 'playing') {
       const mine = seat === view.turnIdx;
       const again = view.lastLine && view.lastLine.made > 0 && view.lastLine.seat === view.turnIdx;
       status.textContent = mine
-        ? (again ? '▶ BOX! GO AGAIN' : '▶ YOUR TURN — draw a line')
-        : `${plainName(turnId)}${again ? ' scored — going again' : ' is thinking…'}`;
+        ? (again ? '▶ BOX GO AGAIN' : '▶ YOUR TURN. Draw a line')
+        : `${plainName(turnId)}${again ? ' scored. Going again' : ' is thinking…'}`;
       status.style.color = COLORS[view.turnIdx];
       if (mine) status.classList.add('mine');
     } else {
       status.textContent = view.winners.length > 1
-        ? `TIE — ${view.winners.map((i) => plainName(view.seats[i])).join(' & ')}`
+        ? `TIE. ${view.winners.map((i) => plainName(view.seats[i])).join(' & ')}`
         : `${plainName(view.seats[view.winners[0]])} WINS ${view.scores[view.winners[0]]}–${Math.max(...view.scores.filter((_, i) => i !== view.winners[0]))}`;
       status.style.color = view.winners.length === 1 ? COLORS[view.winners[0]] : '#7fd7ff';
     }
