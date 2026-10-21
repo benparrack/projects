@@ -1,7 +1,7 @@
 // 1v1 arena duel — real-time tick-loop game like slither (see server/games/shooter.js), but
 // with server-authoritative movement + hit detection instead of slither's angle-only steering.
 // Camera rig / arena / pointer-lock math ported from 3dgames/shooter/game.js (see IDEAS.md #0);
-// the vendored non-module three.min.js there is reused as-is (see vendor/three.min.js) since it
+// the vendored non-module three.min.js (shared, games/slope/three.min.js) is reused as-is since it
 // can't be `import`ed as an ES module — it's injected as a classic <script> tag on first mount.
 //
 // Two sub-views: a lobby view (seat picker + scoreboard, inside the hub's normal boxed
@@ -11,6 +11,7 @@
 
 import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
+import { loadScript } from '../loadScript.js';
 
 // Kept in sync by hand with server/games/shooter.js constants (no shared module in this repo,
 // same convention as slither's SERVER_TICK_MS/START_LENGTH).
@@ -308,19 +309,6 @@ function resolvePillarCollision(x, z, radius) {
   return { x, z };
 }
 
-let threeLoadPromise = null;
-function loadThreeOnce() {
-  if (window.THREE) return Promise.resolve();
-  if (threeLoadPromise) return threeLoadPromise;
-  threeLoadPromise = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'games/shooter/vendor/three.min.js';
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Failed to load vendored three.min.js'));
-    document.head.appendChild(s);
-  });
-  return threeLoadPromise;
-}
 
 const HUD_STYLE = `
 .shooter-overlay { position: fixed; inset: 0; z-index: 10000; background: #05070a; font-family: monospace; color: #d7ffe0; }
@@ -1669,7 +1657,7 @@ export function mount(container, api) {
     if (arenaMounting || arena) return;
     arenaMounting = true;
     try {
-      await loadThreeOnce();
+      await loadScript('games/slope/three.min.js', 'THREE');
       arena = createArena();
     } finally {
       arenaMounting = false;

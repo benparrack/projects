@@ -10,6 +10,7 @@ import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { createFx } from '../canvasFx.js';
+import { loadScript } from '../loadScript.js';
 
 const COLORS = ['red', 'blue'];
 const PUCK = {
@@ -32,17 +33,6 @@ const REJECT_MESSAGES = {
 
 const motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 const reduced = () => !!(motionQuery && motionQuery.matches);
-
-function loadScript(src, global) {
-  if (window[global]) return Promise.resolve(window[global]);
-  return new Promise((resolve, reject) => {
-    const el = document.createElement('script');
-    el.src = src;
-    el.onload = () => resolve(window[global]);
-    el.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(el);
-  });
-}
 
 const CSS = `
 .sb-root { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; color: #b8ffb0; width: 100%; }

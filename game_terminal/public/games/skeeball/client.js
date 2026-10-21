@@ -8,6 +8,7 @@ import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
+import { loadScript } from '../loadScript.js';
 
 const FRAME_MS = 1000 / 60;
 const HOLD_FRAMES = 20; // pause after the last frame before the anim ends
@@ -24,17 +25,6 @@ const REJECT_MESSAGES = {
 };
 
 const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-function loadScript(src, global) {
-  if (window[global]) return Promise.resolve(window[global]);
-  return new Promise((resolve, reject) => {
-    const el = document.createElement('script');
-    el.src = src;
-    el.onload = () => resolve(window[global]);
-    el.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(el);
-  });
-}
 
 const CSS = `
 .sk-root { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; color: #b8ffb0; width: 100%; }

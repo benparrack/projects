@@ -13,6 +13,7 @@ import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
+import { loadScript } from '../loadScript.js';
 
 const SEATS = ['p1', 'p2'];
 const SEAT_COLOR = { p1: '#3ad7ff', p2: '#ff5ad1' };
@@ -29,17 +30,6 @@ const REJECT_MESSAGES = {
 const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
-
-function loadScript(src, global) {
-  if (window[global]) return Promise.resolve(window[global]);
-  return new Promise((resolve, reject) => {
-    const el = document.createElement('script');
-    el.src = src;
-    el.onload = () => resolve(window[global]);
-    el.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(el);
-  });
-}
 
 const CSS = `
 .bw-root { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; color: #b8ffb0; width: 100%; }

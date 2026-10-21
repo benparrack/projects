@@ -113,7 +113,6 @@ const CSS = `
 .tq-row input[type=text] { flex: 1 1 160px; min-width: 0; background: #020802; color: #e6ffe0; border: 1px solid #1f8f0c; border-radius: 4px; padding: 8px; font: inherit; font-size: 16px; }
 .tq-row input[type=text]:focus { outline: none; border-color: #39ff14; box-shadow: 0 0 8px -2px #39ff14; }
 .tq-row select { background: #0d1117; color: #3ad7ff; border: 1px solid #3ad7ff; border-radius: 4px; font: inherit; padding: 6px 4px; }
-.tq-or { font-size: 11px; color: #4f7f45; text-align: center; letter-spacing: 2px; }
 .tq-hint { font-size: 12px; color: #6fae5f; }
 .tq-hint.warn { color: #ffb000; }
 .tq-ideas { display: flex; gap: 5px; flex-wrap: wrap; }

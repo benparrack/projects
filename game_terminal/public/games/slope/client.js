@@ -8,19 +8,9 @@
 import { makeServerClock } from '../serverClock.js';
 import { sfx } from '../sfx.js';
 import { createBotBar } from '../tickBots.js';
+import { loadScript } from '../loadScript.js';
 
 const BEST_KEY = 'gt-slope-best';
-
-function loadScript(src, global) {
-  if (window[global]) return Promise.resolve(window[global]);
-  return new Promise((resolve, reject) => {
-    const el = document.createElement('script');
-    el.src = src;
-    el.onload = () => resolve(window[global]);
-    el.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(el);
-  });
-}
 
 const NAMES_KEY = 'game_terminal.slope.showNames';
 function readShowNames() {

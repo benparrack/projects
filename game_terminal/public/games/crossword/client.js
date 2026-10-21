@@ -24,7 +24,6 @@ const CSS = `
 .cw-seg button + button { border-left: 1px solid var(--border, #1f8f0c); }
 .cw-seg button.on { background: #39ff14; color: #041004; font-weight: bold; }
 .cw-seg button:disabled { opacity: .45; }
-.cw-label { font-size: .8em; opacity: .75; }
 .cw-btn { padding: 5px 12px; font-size: .88em; border-radius: 4px; }
 .cw-btn.primary { font-weight: bold; border-color: #39ff14; }
 .cw-btn.warn { border-color: #ff5a5a; color: #ff8a8a; }

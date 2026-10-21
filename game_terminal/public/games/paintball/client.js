@@ -10,6 +10,7 @@ import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { createFx, flashEl } from '../canvasFx.js';
+import { loadScript } from '../loadScript.js';
 
 const COLORS = ['red', 'blue'];
 const PAINT = { red: '#ff2d55', blue: '#2f8bff' };
@@ -33,17 +34,6 @@ const REJECT_MESSAGES = {
 };
 
 const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-function loadScript(src, global) {
-  if (window[global]) return Promise.resolve(window[global]);
-  return new Promise((resolve, reject) => {
-    const el = document.createElement('script');
-    el.src = src;
-    el.onload = () => resolve(window[global]);
-    el.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(el);
-  });
-}
 
 const CSS = `
 .pb-root { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; color: #b8ffb0; width: 100%; }

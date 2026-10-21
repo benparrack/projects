@@ -295,12 +295,3 @@ export function renderCard(card, { faceDown = false, small = false } = {}) {
   track(el, `${card.rank}${card.suit}${small ? 's' : ''}`);
   return el;
 }
-
-export function renderHand(cards, opts) {
-  const row = document.createElement('div');
-  row.style.display = 'flex';
-  row.style.gap = '4px';
-  row.style.flexWrap = 'wrap';
-  for (const card of cards) row.appendChild(renderCard(card, opts));
-  return row;
-}

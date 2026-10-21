@@ -43,7 +43,6 @@ const CSS = `
 .wd-mini { display: grid; grid-template-columns: repeat(5, 8px); gap: 2px; }
 .wd-mini i { width: 8px; height: 8px; background: rgba(57,255,20,.1); }
 .wd-mini i.g { background: #2e9e2a; } .wd-mini i.y { background: #b8901c; } .wd-mini i.x { background: #3a423a; }
-.wd-help { opacity: .8; font-size: .9em; text-align: center; max-width: 360px; line-height: 1.5; }
 @media (max-width: 520px) { .wd-tile { width: 48px; height: 48px; font-size: 1.6em; } .wd-key { height: 46px; } }
 @media (prefers-reduced-motion: reduce) { .wd-tile, .wd-row.bad { animation: none !important; } }
 `;

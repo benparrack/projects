@@ -10,17 +10,7 @@ import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { sharpCanvas } from '../canvasFx.js';
-
-function loadScript(src, global) {
-  if (window[global]) return Promise.resolve(window[global]);
-  return new Promise((resolve, reject) => {
-    const el = document.createElement('script');
-    el.src = src;
-    el.onload = () => resolve(window[global]);
-    el.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(el);
-  });
-}
+import { loadScript } from '../loadScript.js';
 
 const COLORS = {
   1: '#f2c200', 2: '#1d48c8', 3: '#d21f1f', 4: '#5c2a96', 5: '#ef7a00', 6: '#10803a', 7: '#7d1b1b', 8: '#111111',
