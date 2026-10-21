@@ -127,6 +127,11 @@ export const sfx = {
     try { SOUNDS[name](); } catch { /* ignore audio errors */ }
     volScale = 1;
   },
+  // A pitched one-off tone (rising gem ladders, plinko buckets), under the same mute and volume.
+  note(freq, { dur = 0.12, type = 'triangle', vol = 0.2, slide = 0, at = 0 } = {}) {
+    if (muted || !audio() || ctx.state !== 'running') return;
+    try { tone(freq, dur, { type, vol, slide, at }); } catch { /* ignore audio errors */ }
+  },
   get muted() { return muted; },
   setMuted(m) {
     muted = !!m;

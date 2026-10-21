@@ -7,6 +7,8 @@ module.exports = {
   SHIFT_CAP: 6, // paid work shifts per UTC day
   JACKPOT_SEED: 2500, // the site-wide slots jackpot restarts here after a hit
   JACKPOT_CUT: 0.01, // share of every account's slot bet that feeds the jackpot (out of the house's edge)
+  // The originals (crash, plinko, mines): typed-in bets in this range, a 2% edge (98% return), and a cap on any one payout.
+  ORIGINALS: { MIN_BET: 0.1, MAX_BET: 1000, EDGE: 0.02, MAX_WIN: 250000 },
   VIP_BALANCE: 1000, // balance + money at tables that gets you into the high-roller room without the key
   // Lifetime amount wagered -> tier (going broke never demotes you).
   TIERS: [['Bronze', 0, '🥉'], ['Silver', 1000, '🥈'], ['Gold', 5000, '🥇'], ['Platinum', 25000, '💠'], ['Diamond', 100000, '💎']],

@@ -55,6 +55,9 @@ const minesweeper = require('./minesweeper');
 const blockade = require('./blockade');
 const wordle = require('./wordle');
 const slots = require('./slots');
+const crash = require('./crash');
+const plinko = require('./plinko');
+const mines = require('./mines');
 const roulette = require('./roulette');
 
 const registry = {
@@ -82,6 +85,9 @@ const registry = {
   [blackjack.highRoller.type]: blackjack.highRoller,
   [diner.type]: diner,
   [slots.type]: slots,
+  [crash.type]: crash,
+  [plinko.type]: plinko,
+  [mines.type]: mines,
   [roulette.type]: roulette,
   [gomoku.type]: gomoku,
   [dotsboxes.type]: dotsboxes,

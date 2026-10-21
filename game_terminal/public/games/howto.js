@@ -111,6 +111,36 @@ export const HOWTO = {
     ],
     controls: ['Pick a bet, then SPIN, pull the lever, or press Space. AUTO ×10 spins ten times in a row and stops on a big win or when the money runs short.'],
   },
+  crash: {
+    about: 'One rocket for the whole room. The multiplier climbs from 1.00x until it crashes; cash out before it does.',
+    rules: [
+      'Bet during the 7-second countdown ($0.10 to $1,000). When the rocket launches, your bet rides the multiplier.',
+      'Cash out any time to win bet x the current multiplier. Still riding when it crashes? The bet is gone. About 3% of rounds bust instantly at 1.00x.',
+      'Set an Auto Cash Out (say 2.00x) and the server cashes you out exactly there, even if your connection lags.',
+      'Provably fair: each round\'s seed hash is shown before betting and the seed is revealed at the crash. Click any past round to verify it. Returns 98%.',
+    ],
+    controls: ['BET / CANCEL / CASH OUT, or Space. Bet between rounds to queue for the next one. AUTO bets every round with on-win / on-loss rules and stop limits.'],
+  },
+  plinko: {
+    about: 'Drop balls through a triangle of pegs into multiplier buckets: the middle pays little, the edges pay big.',
+    rules: [
+      'Pick 8-16 rows and a risk level. Low risk pays something almost everywhere; high risk pays up to 1,000x on the edges of 16 rows but under 1x in the middle.',
+      'Each row the ball goes left or right, 50/50. Every table returns 98%.',
+      'Drop as many balls as you like at once. The result is settled the moment you drop; the ball just shows you where it went.',
+      'Provably fair: open Fairness to see your seed pair, rotate it to reveal the server seed, and replay any drop.',
+    ],
+    controls: ['DROP BALL or Space. AUTO drops at normal/fast/turbo speed with on-win / on-loss rules and stop limits.'],
+  },
+  mines: {
+    about: 'A 5x5 grid hiding mines. Turn over gems to grow your multiplier, and cash out before you find a mine.',
+    rules: [
+      'Choose 1-24 mines and a bet. More mines, bigger jumps: with 3 mines one gem pays 1.11x, with 24 mines it pays 24.5x.',
+      'Hit a mine and the bet is lost (the board then shows where everything was). Find every gem and it cashes out for you.',
+      'Leaving mid-game cashes out what\'s on the board, or refunds the bet if nothing was turned.',
+      'Provably fair: mines are placed from your seed pair when the game starts. Returns 98%.',
+    ],
+    controls: ['BET, click tiles (or Pick random tile), CASH OUT. Space bets, picks a random first tile, then cashes out. AUTO: select tiles on the board and it replays that bet with your rules.'],
+  },
   roulette: {
     about: 'European roulette (single zero) on one wheel shared by everyone in the room.',
     rules: [

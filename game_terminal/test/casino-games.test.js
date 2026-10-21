@@ -7,6 +7,10 @@ const slots = require('../server/games/slots');
 const roulette = require('../server/games/roulette');
 const poker = require('../server/games/poker');
 const diner = require('../server/games/diner');
+const crash = require('../server/games/crash');
+const plinko = require('../server/games/plinko');
+const mines = require('../server/games/mines');
+const { floats } = require('../server/casino/originals');
 const blackjack = require('../server/games/blackjack');
 const { createWallet } = require('../server/casino/wallet');
 const { createMemoryDb } = require('../server/db');
@@ -244,6 +248,167 @@ test('diner: a perfect shift earns the pay cap into the balance', () => {
   while (now < end - 7000) {
     const t = room.state.tickets[0];
     if (!t) { now += 500; T.step(room, now); continue; }
+const lastTo = (room, id, kind) => room.sent.filter((x) => x.to === id && x.m.payload.data.kind === kind).map((x) => x.m.payload.data).at(-1);
+
+test('plinko: every table returns 97.5-98.5%, is symmetric, and the edges pay the most', () => {
+  const { TABLES, ROWS, rtp } = plinko._test;
+  for (const risk of Object.keys(TABLES)) for (const n of ROWS) {
+    const t = TABLES[risk][n];
+    const r = rtp(n, t);
+    assert.ok(r > 0.975 && r < 0.985, `${risk} ${n}: ${r}`);
+    assert.deepStrictEqual(t, [...t].reverse());
+    assert.strictEqual(Math.max(...t), t[0]);
+    assert.ok(t.every((m) => m > 0));
+  }
+});
+
+test('plinko: a drop takes the bet, pays bet x bucket, and the path is the provably fair floats', async () => {
+  const room = makeRoom(plinko, ['A']);
+  plinko.onJoin(room, { clientId: 'A' });
+  const seeds = lastTo(room, 'A', 'state').seeds;
+  assert.strictEqual(room.act('A', { kind: 'drop', bet: 2, rows: 12, risk: 'high', ball: 1 }), null);
+  const d = lastTo(room, 'A', 'drop');
+  assert.strictEqual(d.fair.nonce, 0);
+  assert.strictEqual(d.fair.hash, seeds.hash);
+  assert.strictEqual(d.slot, d.path.reduce((a, b) => a + b, 0));
+  assert.strictEqual(d.mult, plinko._test.TABLES.high[12][d.slot]);
+  assert.strictEqual(room.bal('A').balance, Math.round((START_BALANCE - 2 + d.win) * 100) / 100);
+  assert.strictEqual(room.bal('A').atTables, 0);
+  // Rotating reveals the server seed; re-deriving the path from it matches.
+  room.act('A', { kind: 'seed', client: 'myseed' });
+  const { prev, seeds: next } = lastTo(room, 'A', 'seeds');
+  assert.strictEqual(next.client, 'myseed');
+  assert.deepStrictEqual(floats(prev.server, prev.client, 0, 12).map((f) => (f < 0.5 ? 0 : 1)), d.path);
+  assert.strictEqual(room.act('A', { kind: 'drop', bet: 0.01, rows: 12, risk: 'high' }), 'bad_bet');
+  assert.strictEqual(room.act('A', { kind: 'drop', bet: 1, rows: 7, risk: 'high' }), 'bad_bet');
+  assert.strictEqual(room.act('A', { kind: 'drop', bet: 1, rows: 8, risk: 'low' }), 'too_fast');
+  await new Promise((r) => setTimeout(r, 70));
+  assert.strictEqual(room.act('A', { kind: 'drop', bet: 500, rows: 8, risk: 'low' }), 'broke');
+  assert.strictEqual(room.act('A', { kind: 'seed', client: 'bad seed!' }), 'bad_seed');
+});
+
+test('mines: multipliers are the fair odds less 2%, mines land on distinct tiles', () => {
+  const { multiplier, placeMines, TILES } = mines._test;
+  const choose = plinko._test.choose;
+  for (let m = 1; m < TILES; m++) for (let k = 1; k <= TILES - m; k++) {
+    const p = choose(TILES - m, k) / choose(TILES, k);
+    const ret = p * multiplier(m, k);
+    assert.ok(Math.abs(ret - 0.98) < 0.006, `${m} mines ${k} picks: ${ret}`);
+  }
+  assert.strictEqual(multiplier(3, 0), 0.98);
+  for (let i = 0; i < 200; i++) {
+    const f = Array.from({ length: 24 }, () => Math.random());
+    const n = 1 + (i % 24);
+    const placed = placeMines(f, n);
+    assert.strictEqual(new Set(placed).size, n);
+    assert.ok(placed.every((t) => t >= 0 && t < TILES));
+  }
+});
+
+test('mines: start, pick gems, cash out; a mine loses the bet; leaving refunds an untouched board', () => {
+  const room = makeRoom(mines, ['A']);
+  assert.strictEqual(room.act('A', { kind: 'start', bet: 10, mines: 3 }), null);
+  assert.strictEqual(room.bal('A').atTables, 10);
+  assert.strictEqual(room.act('A', { kind: 'start', bet: 10, mines: 3 }), 'game_active');
+  assert.strictEqual(room.act('A', { kind: 'cashout' }), 'no_picks');
+  assert.strictEqual(room.act('A', { kind: 'seed' }), 'game_active');
+  const g = room.state.games.A;
+  const safe = [...Array(25).keys()].filter((t) => !g.mineTiles.includes(t));
+  room.act('A', { kind: 'pick', tile: safe[0] });
+  room.act('A', { kind: 'pick', tile: safe[1] });
+  assert.strictEqual(room.act('A', { kind: 'pick', tile: safe[1] }), 'bad_tile');
+  const seen = lastTo(room, 'A', 'game').game;
+  assert.strictEqual(seen.mineTiles, null, 'mines stay hidden mid-game');
+  assert.strictEqual(room.act('A', { kind: 'cashout' }), null);
+  const won = Math.round(10 * mines._test.multiplier(3, 2) * 100) / 100;
+  assert.strictEqual(room.bal('A').balance, START_BALANCE - 10 + won);
+  assert.deepStrictEqual(lastTo(room, 'A', 'game').game.mineTiles.sort(), [...g.mineTiles].sort());
+  // A mine.
+  room.act('A', { kind: 'start', bet: 5, mines: 24 });
+  const g2 = room.state.games.A;
+  room.act('A', { kind: 'pick', tile: g2.mineTiles[0] });
+  assert.ok(g2.over && g2.win === 0);
+  assert.strictEqual(room.bal('A').balance, START_BALANCE - 10 + won - 5);
+  // Leaving before turning anything gives the stake back.
+  room.act('A', { kind: 'start', bet: 5, mines: 1 });
+  mines.onLeave(room, { clientId: 'A' });
+  assert.strictEqual(room.bal('A').balance, START_BALANCE - 10 + won - 5);
+  assert.strictEqual(room.bal('A').atTables, 0);
+});
+
+test('mines: an auto bet settles in one message; all-gems boards pay out automatically', () => {
+  const room = makeRoom(mines, ['A']);
+  assert.strictEqual(room.act('A', { kind: 'auto', bet: 1, mines: 24, tiles: [0, 0] }), 'bad_tiles');
+  assert.strictEqual(room.act('A', { kind: 'auto', bet: 1, mines: 24, tiles: [0, 1] }), 'bad_tiles');
+  for (let i = 0; i < 20; i++) {
+    const before = room.bal('A').balance;
+    assert.strictEqual(room.act('A', { kind: 'auto', bet: 1, mines: 2, tiles: [6, 7, 8] }), null);
+    const g = room.state.games.A;
+    assert.ok(g.over);
+    const hit = [6, 7, 8].some((t) => g.mineTiles.includes(t));
+    assert.strictEqual(room.bal('A').balance, Math.round((before - 1 + (hit ? 0 : 1 * mines._test.multiplier(2, 3))) * 100) / 100);
+  }
+  room.act('A', { kind: 'start', bet: 1, mines: 24 });
+  const g = room.state.games.A;
+  const gem = [...Array(25).keys()].find((t) => !g.mineTiles.includes(t));
+  room.act('A', { kind: 'pick', tile: gem });
+  assert.ok(g.over && g.win === mines._test.multiplier(24, 1));
+});
+
+test('crash: the crash point returns 98% at any target and ~3% of rounds bust instantly', () => {
+  const { pointFrom } = crash._test;
+  const N = 40000;
+  const pts = Array.from({ length: N }, () => pointFrom(require('crypto').randomBytes(32).toString('hex')));
+  for (const x of [1.5, 2, 5]) {
+    const r = (x * pts.filter((p) => p >= x).length) / N;
+    assert.ok(Math.abs(r - 0.98) < 0.03, `target ${x}: ${r}`);
+  }
+  const bust = pts.filter((p) => p === 1).length / N;
+  // Everything under 1.01x floors to 1.00x: 1 - 0.98 / 1.01 = 2.97%.
+  assert.ok(Math.abs(bust - 0.0297) < 0.005, `bust ${bust}`);
+});
+
+test('crash: a round: bets, auto cash-out at its target, manual cash-out, the rest lose at the crash', () => {
+  const T = crash._test;
+  let now = 1000;
+  T.setClock(() => now);
+  T.forcePoint(3);
+  const room = makeRoom(crash, ['A', 'B', 'C']);
+  T.forcePoint(null);
+  assert.strictEqual(room.act('A', { kind: 'bet', bet: 10, auto: 2 }), null);
+  assert.strictEqual(room.act('A', { kind: 'bet', bet: 10 }), 'already_bet');
+  assert.strictEqual(room.act('B', { kind: 'bet', bet: 10 }), null);
+  assert.strictEqual(room.act('C', { kind: 'bet', bet: 10, auto: 5 }), null);
+  assert.strictEqual(room.act('A', { kind: 'bet', bet: 10, auto: 1 }), 'already_bet');
+  assert.strictEqual(room.act('B', { kind: 'cashout' }), 'too_late');
+  const seen = room.sent.filter((x) => x.to === '*').at(-1).m.payload.data;
+  assert.strictEqual(seen.point, null, 'the crash point is secret before the crash');
+  now += T.BET_MS;
+  T.step(room);
+  assert.strictEqual(room.state.phase, 'running');
+  now += T.timeFor(2.5);
+  T.step(room);
+  assert.strictEqual(room.state.bets.A.out, 2, 'auto cash-out lands exactly on its target');
+  assert.strictEqual(room.act('B', { kind: 'cashout' }), null);
+  assert.strictEqual(room.state.bets.B.out, T.growth(T.timeFor(2.5)));
+  now += T.timeFor(3);
+  T.step(room);
+  assert.strictEqual(room.state.phase, 'crashed');
+  assert.strictEqual(room.state.history[0].point, 3);
+  assert.strictEqual(room.bal('A').balance, START_BALANCE + 10);
+  assert.strictEqual(room.bal('B').balance, Math.round((START_BALANCE - 10 + 10 * room.state.bets.B.out) * 100) / 100);
+  assert.strictEqual(room.bal('C').balance, START_BALANCE - 10);
+  for (const id of ['A', 'B', 'C']) assert.strictEqual(room.bal(id).atTables, 0);
+  now += T.CRASHED_MS;
+  T.step(room);
+  assert.strictEqual(room.state.phase, 'betting');
+  // Leaving before launch refunds.
+  room.act('A', { kind: 'bet', bet: 7 });
+  crash.onLeave(room, { clientId: 'A' });
+  assert.strictEqual(room.bal('A').balance, START_BALANCE + 10);
+  T.setClock(() => Date.now());
+});
+
     room.act('A', { kind: 'grill', slot: 0 });
     now += 5500;
     T.step(room, now);
