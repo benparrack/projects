@@ -101,11 +101,11 @@ test('slots: diamonds pay 500x, plus the whole progressive at max bet for an acc
   let now = 2e9;
   T.setClock(() => now);
   const room = makeRoom(slots, ['A', 'G'], { A: 'u1' });
-  await room.w.load('u1');
+  (await room.w.load('u1')).balance = T.MAX_BET; // the max bet is more than a new account starts with
   T.setRng(() => T.STOPS.indexOf('JP'));
   room.act('A', { kind: 'spin', bet: T.MAX_BET });
   const pot = JACKPOT_SEED + T.MAX_BET * 0.01;
-  assert.strictEqual(room.bal('A').balance, START_BALANCE - T.MAX_BET + T.JP_FIXED * T.MAX_BET + pot);
+  assert.strictEqual(room.bal('A').balance, T.JP_FIXED * T.MAX_BET + pot);
   assert.strictEqual(room.w.jackpot(), JACKPOT_SEED);
   room.act('G', { kind: 'spin', bet: 1 });
   assert.strictEqual(room.bal('G').balance, START_BALANCE - 1 + T.JP_FIXED);

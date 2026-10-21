@@ -12,7 +12,7 @@ const crypto = require('crypto');
 
 const TYPE = 'slots';
 const MAX_PLAYERS = 6;
-const BETS = [1, 5, 10, 25, 50, 100];
+const BETS = [1, 5, 10, 25, 50, 100, 250, 500, 1000]; // same chips as roulette and blackjack
 const MAX_BET = BETS[BETS.length - 1];
 const SPIN_MS = 1600; // the client's reel animation; no spinning faster than it can show
 const JP_FIXED = 500; // x bet for three diamonds, before the progressive share (so it always beats 777)

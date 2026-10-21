@@ -14,7 +14,7 @@ const HINT_KEY = 'gt.blackjack.hints';
 const TIP_THANKS = ['Much obliged!', 'Thank you kindly!', 'Good luck to you!', 'A true gentleman of the felt.'];
 const REJECT = {
   not_betting: 'Bets are closed', not_seated: 'Sit down first', already_ready: 'Bet locked in — wait for the deal',
-  bad_amount: 'Invalid chip', over_max: 'Table max is $100', insufficient: 'Not enough chips', no_last_bet: 'No previous bet',
+  bad_amount: 'Invalid chip', over_max: 'Over the table max', insufficient: 'Not enough chips', no_last_bet: 'No previous bet',
   under_min: 'Minimum bet is $2', vip_only: 'High rollers only: $1,000+ in the casino, or the VIP key from the casino SHOP.', no_rebuy: 'No rebuys — visit the CASINO lobby',
   broke: 'You\'re broke: claim the daily stipend or work a shift in the CASINO lobby', wallet_loading: 'Loading your balance, try again', no_insurance: 'Insurance is closed',
   not_your_turn: "It's not your turn", cant_double: "Can't double this hand", cant_split: "Can't split this hand",
@@ -96,14 +96,16 @@ const CSS = `
   box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 3px 5px rgba(0,0,0,.5), inset 0 0 0 3px rgba(0,0,0,.15);
   transition: transform .1s;
 }
-.bj-chip:hover:not(:disabled) { transform: translateY(-3px); background:
+.bj-chip:hover:not(:disabled) { transform: translateY(-3px); }
+.bj-chip:hover { background:
     radial-gradient(circle, var(--c) 0 52%, transparent 53%),
     repeating-conic-gradient(var(--c) 0 20deg, #fff 20deg 40deg); color: #111; }
 .bj-chip:active:not(:disabled) { transform: translateY(1px) scale(.95); }
 .bj-chip.mini { width: 20px; height: 20px; font-size: .55em; cursor: default; box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.5); }
 .bj-chip.c1 { --c: #ddd; color: #111; } .bj-chip.c5 { --c: #e04848; color: #fff; } .bj-chip.c25 { --c: #2f9e44; color: #fff; }
 .bj-chip.c100 { --c: #222; color: #fff; } .bj-chip.c500 { --c: #7b3fd1; color: #fff; }
-.bj-chip.c5:hover, .bj-chip.c25:hover, .bj-chip.c100:hover, .bj-chip.c500:hover { color: #fff; }
+.bj-chip.c10 { --c: #2a6fdb; color: #fff; } .bj-chip.c50 { --c: #f08c00; color: #fff; } .bj-chip.c250 { --c: #d6336c; color: #fff; } .bj-chip.c1000 { --c: #e8b923; color: #111; }
+.bj-chip.c5:hover, .bj-chip.c10:hover, .bj-chip.c25:hover, .bj-chip.c50:hover, .bj-chip.c100:hover, .bj-chip.c250:hover, .bj-chip.c500:hover { color: #fff; }
 .bj-chip.in { animation: bj-chip-in .3s cubic-bezier(.2,1.4,.4,1); }
 @keyframes bj-chip-in { from { transform: translateY(26px) scale(.6); opacity: 0; } }
 .bj-timer { width: 100%; height: 3px; background: rgba(255,255,255,.12); border-radius: 2px; overflow: hidden; }
@@ -171,7 +173,7 @@ function el(tag, cls, text) {
 function chipBreakdown(amount) {
   const out = [];
   let left = amount;
-  for (const d of [500, 100, 25, 5]) {
+  for (const d of [1000, 500, 250, 100, 50, 25, 10, 5]) {
     while (left >= d && out.length < 6) { out.push(d); left -= d; }
   }
   return out;
@@ -404,7 +406,7 @@ export function mount(container, api) {
   }
 
   function chipButton(d, disabled) {
-    const b = el('button', `bj-chip c${d}`, String(d));
+    const b = el('button', `bj-chip c${d}`, d >= 1000 ? `${d / 1000}k` : String(d));
     b.disabled = disabled;
     b.title = `Bet ${d}`;
     b.addEventListener('click', () => { sfx.play('chips'); send({ kind: 'bet', amount: d }); });

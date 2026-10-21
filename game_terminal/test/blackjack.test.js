@@ -355,7 +355,7 @@ test('invalid messages are rejected and never throw', () => {
   rejects(room, 'A', { kind: 'bet', amount: '25x' }, 'bad_amount');
   rejects(room, 'A', { kind: 'deal' }, 'under_min');
   rejects(room, 'C', { kind: 'bet', amount: 5 }, 'not_seated');
-  ok(room, 'A', { kind: 'bet', amount: 100 });
+  ok(room, 'A', { kind: 'bet', amount: 1000 });
   rejects(room, 'A', { kind: 'bet', amount: 5 }, 'over_max');
   rejects(room, 'A', { kind: 'hit' }, 'not_your_turn');
   rejects(room, 'A', { kind: 'rebuy' }, 'no_rebuy');

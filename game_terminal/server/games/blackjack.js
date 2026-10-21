@@ -28,11 +28,11 @@ const PENETRATION = 0.75;
 const START_BANKROLL = 1000; // test tables only (no wallet)
 const BOT_BANKROLL = 250;
 const MIN_BET = 2;
-const MAX_BET = 100;
-const CHIPS = [1, 5, 25, 100];
+const MAX_BET = 1000;
+const CHIPS = [1, 5, 10, 25, 50, 100, 250, 500, 1000]; // same set as roulette and slots
 const LIMITS = { type: TYPE, min: MIN_BET, max: MAX_BET, chips: CHIPS, bot: BOT_BANKROLL, vip: false };
 // The high-roller room: same game, bigger chips, and you need $1,000+ or the VIP key to sit.
-const HIGH_ROLLER = { type: 'blackjack_hr', min: 25, max: 2500, chips: [25, 100, 500, 1000], bot: 5000, vip: true };
+const HIGH_ROLLER = { type: 'blackjack_hr', min: 25, max: 2500, chips: [25, 50, 100, 250, 500, 1000], bot: 5000, vip: true };
 const MAX_HANDS = 4;
 
 const BET_MS = 15000; // after the first chip goes down

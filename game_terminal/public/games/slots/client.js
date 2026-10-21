@@ -341,7 +341,7 @@ export function mount(container, api) {
     balance.textContent = `BALANCE ${money(shownBalance)}`;
     controls.replaceChildren(el('span', 'muted', 'BET'));
     for (const b of view.bets) {
-      const btn = el('button', 'sl-bet', `$${b}`);
+      const btn = el('button', 'sl-bet', b >= 1000 ? `$${b / 1000}k` : `$${b}`);
       btn.type = 'button';
       btn.setAttribute('aria-pressed', String(b === bet));
       btn.disabled = spinning;
