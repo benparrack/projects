@@ -99,6 +99,7 @@ export const HOWTO = {
       'Each order scores doneness 40, toppings in order 40, speed 20. A 60+ order pays the full menu price, and anything over 50 tips. Bigger burgers sell for more; customers walk out if they wait too long.',
       'Stations (fryer, soda fountain, shake machine) add sides to tickets. Start one, then stop it while the needle is in the green; the fountain pours while you hold it. Sides are 40% of the order score, and getting every item right is a COMBO for +25%.',
       'Hire staff from the Staff tab: a fry cook and a soda jerk run their station for you, a prep cook stacks toppings onto a plated patty, and a host brings more customers and more patience. Each takes a wage at the end of every shift (more at bigger tiers).',
+      'Reputation: great orders (80%+) earn rep and bad ones and walk-outs lose it; every 100 rep is a star. Stars bring more customers and bigger tips, and special customers: rush hour and kids at 2★, a food critic at 3★ (Diner and up, worth double and ±40-60 rep), a celebrity at 4★ (Restaurant and up, ×5 tip, little patience).',
       'No pay cap: everything you earn goes into your casino balance. Leaving mid-shift forfeits it.',
       'Between shifts, buy upgrades in the shop (more grills, faster burners, more seats, extra toppings and more) and grow from a food truck to a diner, restaurant and franchise. Every tier multiplies your menu prices.',
     ],

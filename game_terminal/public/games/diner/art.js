@@ -109,6 +109,13 @@ const SHIRT = ['#3498db', '#e67e22', '#9b59b6', '#1abc9c', '#e74c3c', '#f1c40f']
 
 const MOUTH = { happy: 'M38 54q12 14 24 0', meh: 'M40 58h20', mad: 'M40 60q10-8 20 0' };
 // Changes a drawn face's mood in place (the patience timer does this every frame).
+// Special customers' accessories, drawn over face().
+export const HAT = {
+  critic: '<path d="M24 26q26-18 52 0q-26 6-52 0z" fill="#2b2d42"/><circle cx="50" cy="12" r="3" fill="#2b2d42"/><circle cx="40" cy="44" r="8" fill="#fff" fill-opacity=".35"/><circle cx="60" cy="44" r="8" fill="#fff" fill-opacity=".35"/><path d="M48 44h4"/>',
+  celebrity: '<path d="M28 39h44v3q0 11-10 11t-10-9h-4q0 9-10 9t-10-11z" fill="#1d1d1d"/><path d="M80 14l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#ffd23f"/>',
+  kid: '<path d="M24 30q26-26 52 0z" fill="#e63946"/><path d="M50 10v8M38 10h24" stroke-width="3"/><circle cx="50" cy="10" r="2.5" fill="#ffd23f"/>',
+};
+
 export function setMood(el, mood) {
   el.querySelector('.dn-mouth').setAttribute('d', MOUTH[mood]);
   el.querySelector('.dn-brows').setAttribute('opacity', mood === 'mad' ? 1 : 0);

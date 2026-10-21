@@ -39,10 +39,11 @@ function scoreOrder(ticket, build, servedAt, rules = cookRules(1)) {
   return Math.round(cook + tops + speed);
 }
 
-function newTicket(st, now) {
+function newTicket(st, now, special = null) {
   const pool = st.perks.toppings.slice();
   const toppings = [];
-  for (let k = Math.min(pool.length, 2 + rng(3)); k > 0; k--) toppings.push(pool.splice(rng(pool.length), 1)[0]);
+  const n = special === 'kid' ? 1 + rng(2) : 2 + rng(3);
+  for (let k = Math.min(pool.length, n); k > 0; k--) toppings.push(pool.splice(rng(pool.length), 1)[0]);
   const names = Object.keys(DONENESS);
   const doneness = names[rng(names.length)];
   const sides = {};
@@ -50,13 +51,24 @@ function newTicket(st, now) {
     const f = restaurant.STATIONS[id].flavors;
     if (rng(100) < restaurant.SIDE_ODDS) sides[id] = f[rng(f.length)];
   }
-  st.tickets.push({ id: ++st.nextId, doneness, toppings, sides, at: now });
+  const wait = Math.round(st.rules.WALK_OUT_MS * (special ? restaurant.SPECIALS[special].wait : 1));
+  st.tickets.push({ id: ++st.nextId, doneness, toppings, sides, special, wait, at: now });
+}
+
+// A new arrival: sometimes (once you have the stars) a special customer. A rush is a burst at once.
+function arrive(st, now) {
+  const ok = st.perks.specials.filter((k) => k !== 'critic' || !st.criticCame);
+  const special = ok.length && rng(100) < restaurant.SPECIAL_ODDS ? ok[rng(ok.length)] : null;
+  if (special === 'critic') st.criticCame = true;
+  if (special !== 'rush') return newTicket(st, now, special);
+  st.rushes++;
+  for (let k = 0; k < restaurant.RUSH_SIZE && st.tickets.length < st.perks.maxTickets + 2; k++) newTicket(st, now, 'rush');
 }
 
 // phase: home (the restaurant and its shop) -> shift -> report (back to home on the next start).
 function createInitialState() {
   return { phase: 'home', worker: null, endsAt: null, nextArrival: null, tickets: [], nextId: 0, grills: [], perks: null, rules: null,
-    build: { patty: null, toppings: [] }, stations: {}, tray: {}, served: [], missed: 0, combos: 0, revenue: 0, tips: 0, report: null, seq: 0 };
+    build: { patty: null, toppings: [] }, stations: {}, tray: {}, served: [], missed: 0, combos: 0, rep: 0, rushes: 0, criticCame: false, revenue: 0, tips: 0, report: null, seq: 0 };
 }
 
 const dinerOf = (room, id) => (room.wallet ? room.wallet.diner(id) : null) || restaurant.fresh();
@@ -78,13 +90,17 @@ function start(room, id, now) {
 
 function finish(room) {
   const st = room.state;
-  const before = room.wallet ? dinerOf(room, st.worker).bestShift : 0;
+  const d0 = dinerOf(room, st.worker);
+  const before = room.wallet ? d0.bestShift : 0;
+  const rep0 = d0.rep || 0;
   const earned = Math.round((st.revenue + st.tips) * 100) / 100;
   const wages = st.perks.wages;
   const net = Math.max(0, Math.round((earned - wages) * 100) / 100);
-  const paid = room.wallet ? room.wallet.payShift(st.worker, net) : net;
+  const paid = room.wallet ? room.wallet.payShift(st.worker, net, st.rep) : net;
+  const rep1 = Math.max(0, Math.min(restaurant.MAX_REP, rep0 + st.rep));
   const best = st.served.reduce((a, o) => (!a || o.score > a.score ? o : a), null);
   st.report = { served: st.served.length, missed: st.missed, combos: st.combos, revenue: st.revenue, tips: st.tips, wages, paid,
+    rep: { from: rep0, to: rep1, stars: restaurant.stars(rep1), starsBefore: restaurant.stars(rep0) },
     avg: st.served.length ? Math.round(st.served.reduce((a, o) => a + o.score, 0) / st.served.length) : 0,
     best, newBest: paid > before && paid > 0 };
   st.phase = 'report';
@@ -172,7 +188,9 @@ function act(room, id, data, now) {
       for (const [sid] of want) delete st.tray[sid];
       const { price, tip } = restaurant.orderPay(st.perks, t, score, combo);
       if (combo) st.combos++;
-      st.served.push({ id: t.id, score, price, tip, combo });
+      const rep = restaurant.orderRep(t, score);
+      st.rep += rep;
+      st.served.push({ id: t.id, score, price, tip, combo, special: t.special, rep });
       st.revenue = Math.round((st.revenue + price) * 100) / 100;
       st.tips = Math.round((st.tips + tip) * 100) / 100;
       st.tickets.splice(i, 1);
@@ -191,10 +209,14 @@ function step(room, now) {
   if (now >= st.endsAt) { finish(room); return true; }
   let changed = false;
   const before = st.tickets.length;
-  st.tickets = st.tickets.filter((t) => now - t.at < st.rules.WALK_OUT_MS);
-  if (st.tickets.length !== before) { st.missed += before - st.tickets.length; changed = true; }
+  st.tickets = st.tickets.filter((t) => now - t.at < t.wait);
+  if (st.tickets.length !== before) {
+    st.missed += before - st.tickets.length;
+    st.rep += (before - st.tickets.length) * restaurant.WALKOUT_REP;
+    changed = true;
+  }
   if (now >= st.nextArrival) {
-    if (st.tickets.length < st.perks.maxTickets) { newTicket(st, now); changed = true; }
+    if (st.tickets.length < st.perks.maxTickets) { arrive(st, now); changed = true; }
     st.nextArrival = now + Math.round(between(ARRIVE_MS) * st.perks.arriveMult);
   }
   return staffWork(st, now) || changed;
@@ -235,10 +257,10 @@ function buildView(room, id) {
   const d = id ? dinerOf(room, id) : null;
   return {
     seq: st.seq, phase: st.phase, serverNow: clock(), endsAt: st.endsAt, tickets: st.tickets, grills: st.grills, build: st.build, stations: st.stations, tray: st.tray,
-    served: st.served, missed: st.missed, revenue: st.revenue, tips: st.tips, report: st.report, perks: st.perks,
+    served: st.served, missed: st.missed, shiftRep: st.rep, revenue: st.revenue, tips: st.tips, report: st.report, perks: st.perks,
     balance: w && id ? w.balance(id) : null, guest: w && id ? w.guest(id) : true,
     restaurant: d && { ...d, perks: restaurant.perks(d), quotes: Object.fromEntries(['tier', ...restaurant.UPGRADES.map((u) => u.id)].map((k) => [k, restaurant.quote(d, k)])) },
-    catalog: { TIERS: restaurant.TIERS, UPGRADES: restaurant.UPGRADES, STATIONS: restaurant.STATIONS },
+    catalog: { TIERS: restaurant.TIERS, UPGRADES: restaurant.UPGRADES, STATIONS: restaurant.STATIONS, SPECIALS: restaurant.SPECIALS },
     rules: { ...(st.rules || { ...cookRules(1), WALK_OUT_MS }), SHIFT_MS, MAX_STACK, TOPPINGS: st.perks ? st.perks.toppings : [] },
   };
 }

@@ -141,8 +141,9 @@ function createWallet(db, { now = () => Date.now() } = {}) {
     return true;
   }
 
-  // Pays a finished work shift into the balance and onto the restaurant's record. Guests work for play money.
-  function payShift(key, n) {
+  // Pays a finished work shift into the balance and onto the restaurant's record (`rep` = the shift's
+  // reputation change). Guests work for play money.
+  function payShift(key, n, rep = 0) {
     const s = state(key);
     if (!s) return 0;
     n = round2(Math.max(0, n));
@@ -150,6 +151,7 @@ function createWallet(db, { now = () => Date.now() } = {}) {
     s.diner.shifts++;
     s.diner.earned = round2(s.diner.earned + n);
     s.diner.bestShift = Math.max(s.diner.bestShift, n);
+    s.diner.rep = Math.max(0, Math.min(restaurant.MAX_REP, (s.diner.rep || 0) + rep));
     persist(key);
     return n;
   }

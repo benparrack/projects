@@ -149,7 +149,7 @@ test('junk serves, bogus tickets and walking out earn nothing', () => {
   room.act('A', { kind: 'untop' });
   assert.strictEqual(room.act('A', { kind: 'untop' }), 'nothing');
   assert.strictEqual(room.act('A', { kind: 'serve', ticket: 1 }), null);
-  assert.deepStrictEqual(room.state.served, [{ id: 1, score: 0, price: 0, tip: 0, combo: false }]);
+  assert.deepStrictEqual(room.state.served, [{ id: 1, score: 0, price: 0, tip: 0, combo: false, special: null, rep: -4 }]);
   assert.strictEqual(T.scoreOrder({ doneness: 'rare', toppings: ['a'], at: 0 }, { patty: { cooked: T.BURNT_MS }, toppings: ['a'] }, 0), 50);
   diner.onLeave(room, { clientId: 'A' }); // walks out mid-shift: nothing paid
   assert.strictEqual(room.state.phase, 'home');
@@ -251,6 +251,48 @@ test('staff: needs gates, wages by tier, fry cook / soda jerk / prep cook work o
   room2.act('B', { kind: 'plate', slot: 0 });
   for (let t = 0; t < 5100; t += 100) { clock.now += 100; T.step(room2, clock.now); }
   assert.deepStrictEqual(room2.state.build.toppings, t2.toppings);
+});
+
+test('reputation: stars from rep, specials gated by stars and tier, critic swings, rep saved', () => {
+  assert.deepStrictEqual([0, 99, 100, 250, 500, 900].map(R.stars), [0, 0, 1, 2, 5, 5]);
+  const d = R.fresh();
+  assert.deepStrictEqual(R.perks(d).specials, []);
+  d.rep = 320;
+  assert.deepStrictEqual(R.perks(d).specials, ['rush', 'kid']); // the critic needs a Diner
+  d.tier = 2;
+  d.rep = 410;
+  const p = R.perks(d);
+  assert.deepStrictEqual([p.stars, p.specials], [4, ['rush', 'kid', 'critic', 'celebrity']]);
+  assert.strictEqual(+p.tipMult.toFixed(2), 1.4);
+  assert.deepStrictEqual([R.orderRep({}, 85), R.orderRep({}, 50), R.orderRep({}, 30)], [3, 0, -4]);
+  assert.deepStrictEqual([R.orderRep({ special: 'critic' }, 90), R.orderRep({ special: 'critic' }, 70), R.orderRep({ special: 'critic' }, 50)], [40, 0, -60]);
+  const t = { toppings: ['a', 'b'] }; // $6.50
+  const q = R.perks(R.fresh());
+  assert.deepStrictEqual(R.orderPay(q, { ...t, special: 'critic' }, 100), { price: 13, tip: 6.5 });
+  assert.deepStrictEqual(R.orderPay(q, { ...t, special: 'celebrity' }, 100), { price: 6.5, tip: 16.25 });
+  assert.deepStrictEqual(R.orderPay(q, { ...t, special: 'kid' }, 45), { price: 4.88, tip: 1.95 });
+
+  // A shift with rush customers (rng 0 picks the first eligible special: rush) and a walk-out.
+  const clock = { now: 30e9 };
+  T.setClock(() => clock.now);
+  T.setRng(() => 0);
+  const room = makeRoom(['A']);
+  room.d('A').rep = 250;
+  room.act('A', { kind: 'start' });
+  assert.strictEqual(room.state.tickets[0].special, null); // the first customer is never special
+  clock.now = room.state.nextArrival;
+  T.step(room, clock.now);
+  const rush = room.state.tickets.filter((x) => x.special === 'rush');
+  assert.strictEqual(rush.length, 3); // 2 seats + 2 over capacity, one already taken
+  assert.strictEqual(rush[0].wait, Math.round(T.WALK_OUT_MS * 0.7));
+  clock.now += rush[0].wait;
+  T.step(room, clock.now);
+  assert.strictEqual(room.state.missed, 3);
+  clock.now = room.state.endsAt;
+  T.step(room, clock.now);
+  const r = room.state.report;
+  assert.ok(r.rep.to < 250 && r.rep.from === 250);
+  assert.strictEqual(room.d('A').rep, r.rep.to);
 });
 
 (async () => {

@@ -49,7 +49,27 @@ const BURGER_PRICE = 5; // plus TOPPING_PRICE per topping on the ticket
 const TOPPING_PRICE = 0.75;
 const TIP_SHARE = 0.5; // a perfect order tips half its price
 
-const fresh = () => ({ name: 'My Food Truck', tier: 0, levels: {}, shifts: 0, bestShift: 0, earned: 0 });
+const fresh = () => ({ name: 'My Food Truck', tier: 0, levels: {}, shifts: 0, bestShift: 0, earned: 0, rep: 0 });
+
+// Reputation: 0-500, a star per 100. Every order nudges it, a walk-out costs it, and the critic can
+// make or break a night. Stars bring more customers, bigger tips and special customers.
+const MAX_REP = 500;
+const stars = (rep) => Math.min(5, Math.floor(rep / 100));
+function orderRep(ticket, score) {
+  if (ticket.special === 'critic') return score >= 85 ? 40 : score < 60 ? -60 : 0;
+  return score >= 80 ? 3 : score < 40 ? -4 : 0;
+}
+const WALKOUT_REP = -5;
+// Special customers: the stars and tier they need. `pay` multiplies the price, `tip` the tip,
+// `wait` the patience. A rush is a burst of up to RUSH_SIZE at once; the critic comes once a shift.
+const SPECIALS = {
+  rush: { name: 'RUSH HOUR', stars: 2, tier: 0, pay: 1.5, tip: 1, wait: 0.7 },
+  kid: { name: 'KID', stars: 2, tier: 0, pay: 1, tip: 1, wait: 1.2 },
+  critic: { name: 'FOOD CRITIC', stars: 3, tier: 1, pay: 2, tip: 1, wait: 1 },
+  celebrity: { name: 'CELEBRITY', stars: 4, tier: 2, pay: 1, tip: 5, wait: 0.5 },
+};
+const SPECIAL_ODDS = 15; // % of arrivals that are special, once you have the stars
+const RUSH_SIZE = 4;
 // Old docs (and docs from before a field existed) get the missing defaults.
 const normalize = (d) => Object.assign(fresh(), d || {}, { levels: { ...((d && d.levels) || {}) } });
 
@@ -59,16 +79,19 @@ const level = (d, id) => d.levels[id] || 0;
 function perks(d) {
   const L = (id) => level(d, id);
   const staff = UPGRADES.filter((u) => u.wage && L(u.id));
+  const st = stars(d.rep || 0);
   return {
     tier: d.tier,
+    stars: st,
     grills: 1 + L('grill'),
     cookMult: 0.85 ** L('burners'),
     bell: L('bell') > 0,
     toppings: TOPPINGS.slice(0, BASE_TOPPINGS + 2 * L('toppings')),
-    tipMult: 1.25 ** L('premium'),
+    tipMult: 1.25 ** L('premium') * (1 + 0.1 * st),
     maxTickets: 2 + L('seats'),
     patienceMult: 1.2 ** L('booths') * (L('host') ? 1.25 : 1),
-    arriveMult: 0.8 ** L('billboard') * (L('host') ? 0.9 : 1),
+    arriveMult: 0.8 ** L('billboard') * (L('host') ? 0.9 : 1) * (1 - 0.05 * st),
+    specials: Object.keys(SPECIALS).filter((k) => st >= SPECIALS[k].stars && d.tier >= SPECIALS[k].tier),
     priceMult: TIERS[d.tier].mult,
     stations: Object.keys(STATIONS).filter((id) => L(id) > 0),
     staff: staff.map((u) => u.id),
@@ -117,10 +140,12 @@ function sideQuality(id, want, item) {
 // A combo (every item on a ticket with sides done right) adds COMBO_BONUS of the price.
 function orderPay(p, ticket, score, combo = false) {
   const sides = Object.keys(ticket.sides || {}).reduce((a, id) => a + STATIONS[id].price, 0);
-  const price = (BURGER_PRICE + TOPPING_PRICE * ticket.toppings.length + sides) * p.priceMult;
+  const sp = SPECIALS[ticket.special] || { pay: 1, tip: 1 };
+  const price = (BURGER_PRICE + TOPPING_PRICE * ticket.toppings.length + sides) * p.priceMult * sp.pay;
   const paid = price * Math.min(1, score / 60) + (combo ? price * COMBO_BONUS : 0);
-  const tip = price * TIP_SHARE * p.tipMult * Math.max(0, score - 50) / 50;
+  let tip = price * TIP_SHARE * p.tipMult * sp.tip * Math.max(0, score - 50) / 50;
+  if (ticket.special === 'kid' && score >= 40) tip = Math.max(tip, price * 0.3); // kids always tip something
   return { price: Math.round(paid * 100) / 100, tip: Math.round(tip * 100) / 100 };
 }
 
-module.exports = { TIERS, TOPPINGS, UPGRADES, STATIONS, SIDE_ODDS, PREP_MS, fresh, normalize, perks, quote, buy, sideQuality, orderPay };
+module.exports = { TIERS, TOPPINGS, UPGRADES, STATIONS, SIDE_ODDS, PREP_MS, SPECIALS, SPECIAL_ODDS, RUSH_SIZE, MAX_REP, WALKOUT_REP, stars, orderRep, fresh, normalize, perks, quote, buy, sideQuality, orderPay };

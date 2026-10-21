@@ -45,6 +45,20 @@ export function renderHome(c) {
     if (!view.guest) nameRow.append(btn('✏️', () => { ui.renaming = true; c.rerender(); }, 'dn-btn icon'));
   }
   hero.append(nameRow);
+  // Reputation: stars, progress to the next one, and what the next star unlocks.
+  const stars = Math.min(5, Math.floor((r.rep || 0) / 100));
+  const starsRow = el('div', 'dn-starsrow');
+  starsRow.append(el('span', 'dn-stars', '★'.repeat(stars) + '☆'.repeat(5 - stars)));
+  if (stars < 5) {
+    const bar = el('div', 'dn-repbar');
+    const fill = el('i');
+    fill.style.width = `${(r.rep || 0) % 100}%`;
+    bar.append(fill);
+    const next = Object.values(view.catalog.SPECIALS).filter((x) => x.stars === stars + 1).map((x) => x.name.toLowerCase());
+    starsRow.append(bar, el('span', null, `${100 - ((r.rep || 0) % 100)} rep to ${stars + 1}★${next.length ? ` (${next.join(', ')})` : ''}`));
+  }
+  starsRow.title = 'Great orders (80%+) earn rep, bad ones and walk-outs lose it. Each star brings more customers and bigger tips.';
+  hero.append(starsRow);
 
   const stats = el('div', 'dn-stats');
   const stat = (icon, label, value) => { const s = el('div', 'dn-stat'); s.append(el('b', null, `${icon} ${value}`), el('span', null, label)); return s; };
@@ -133,6 +147,12 @@ export function renderReport(c) {
   card.append(el('div', 'dn-rule'));
   const total = line('TOTAL', money(0), 'total');
   card.append(total);
+  if (r.rep) {
+    const d = r.rep.to - r.rep.from;
+    card.append(line('Reputation', `${d >= 0 ? '+' : ''}${d} · ${'★'.repeat(r.rep.stars)}${'☆'.repeat(5 - r.rep.stars)}`, d < 0 ? 'bad' : ''));
+  }
+  if (r.rep && r.rep.stars > r.rep.starsBefore) card.append(el('div', 'dn-stamp', `NEW STAR! ${'★'.repeat(r.rep.stars)}`));
+  else if (r.rep && r.rep.stars < r.rep.starsBefore) card.append(el('div', 'dn-stamp bad', 'LOST A STAR'));
   if (r.newBest) card.append(el('div', 'dn-stamp', 'NEW BEST SHIFT!'));
   const t0 = performance.now();
   const shown = total.querySelector('b');

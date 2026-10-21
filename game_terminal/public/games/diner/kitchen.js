@@ -1,6 +1,6 @@
 // The shift: customers at the counter, the griddle, the board and the topping bins. Every press is
 // sent to the server; `live` callbacks move the timers between state updates.
-import { ICON, face, setMood } from './art.js';
+import { ICON, HAT, face, setMood } from './art.js';
 
 export const GRILL_KEYS = ['q', 'w', 'e', 'r'];
 export const STATION_KEYS = { fryer: 'f', fountain: 'd', shake: 's' };
@@ -68,6 +68,7 @@ export function renderKitchen(c, cook, rang) {
     timer.classList.toggle('low', s <= 20);
   });
   top.append(timer, el('span', 'dn-pill', `🍔 ${view.served.length} served`), el('span', 'dn-pill money', `💰 ${money(view.revenue + view.tips)}`));
+  if (view.perks.stars >= 1 || view.shiftRep) top.append(el('span', `dn-pill${view.shiftRep < 0 ? ' bad' : ''}`, `⭐ ${view.shiftRep >= 0 ? '+' : ''}${view.shiftRep}`));
   if (view.perks.staff.includes('prep')) top.append(el('span', 'dn-pill', '🔪 prep cook'));
   page.append(top);
 
@@ -75,11 +76,12 @@ export function renderKitchen(c, cook, rang) {
   const counter = el('div', 'dn-counter');
   if (!view.tickets.length) counter.append(el('div', 'dn-empty', 'No customers yet… get a patty going!'));
   for (const t of view.tickets) {
-    const cust = el('div', `dn-cust${b.patty ? ' can' : ''}${next === t ? ' next' : ''}`);
+    const cust = el('div', `dn-cust${b.patty ? ' can' : ''}${next === t ? ' next' : ''}${t.special ? ` sp ${t.special}` : ''}`);
+    if (t.special) cust.append(el('div', 'dn-badge', view.catalog.SPECIALS[t.special].name));
     cust.title = b.patty ? `Serve the burger on the board to #${t.id}` : 'Plate a patty first';
     cust.addEventListener('click', () => serve(t));
     const ring = el('div', 'dn-ring');
-    const f = face(t.id, 'happy');
+    const f = face(t.id, 'happy', HAT[t.special] || '');
     ring.append(f);
     const slip = el('div', 'dn-slip');
     const head = el('div', 'dn-slip-h');
@@ -99,7 +101,7 @@ export function renderKitchen(c, cook, rang) {
     }
     let mood = 'happy';
     live.push(() => {
-      const left = Math.max(0, 1 - (clock.now() - t.at) / R.WALK_OUT_MS);
+      const left = Math.max(0, 1 - (clock.now() - t.at) / (t.wait || R.WALK_OUT_MS));
       const color = left < 0.3 ? '#e74c3c' : left < 0.6 ? '#f39c12' : '#2ecc71';
       ring.style.background = `conic-gradient(${color} ${left * 360}deg, rgba(0,0,0,.15) 0)`;
       const m = left < 0.3 ? 'mad' : left < 0.6 ? 'meh' : 'happy';

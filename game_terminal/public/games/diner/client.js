@@ -84,6 +84,7 @@ const CSS = `
 .dn-line.total { font-size: 1.5em; color: #1e8449; }
 .dn-rule { border-top: 2px dashed var(--ink); margin: 4px 0; opacity: .5; }
 .dn-stamp { align-self: center; margin-top: 6px; border: 3px solid var(--red); color: var(--red); padding: 2px 12px; font-weight: 700; border-radius: 8px; transform: rotate(-6deg); animation: dn-stamp .5s .9s cubic-bezier(.2,1.6,.4,1) both; }
+.dn-stamp + .dn-stamp { margin-top: 2px; }
 .dn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
 
 .dn-shift { display: flex; flex-direction: column; gap: 10px; }
@@ -150,6 +151,15 @@ const CSS = `
 
 .dn-side { position: relative; } .dn-side::after { content: ''; position: absolute; right: -2px; bottom: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--fl); border: 1.5px solid var(--ink); }
 .dn-side.ok { filter: drop-shadow(0 0 3px var(--green)); } .dn-side.bad { opacity: .45; }
+.dn-badge { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); z-index: 2; white-space: nowrap; font-size: .62em; font-weight: 700; letter-spacing: .04em;
+  background: var(--ink); color: var(--yellow); border-radius: 99px; padding: 1px 8px; }
+.dn-cust.sp { position: relative; } .dn-cust.critic .dn-slip { background: #eef0ff; } .dn-cust.celebrity .dn-slip { background: #fff6d6; box-shadow: 0 0 0 3px var(--yellow); }
+.dn-cust.rush .dn-badge { background: var(--red); color: #fff; }
+.dn-pill.bad { background: #ffd6d6; }
+.dn-starsrow { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: .9em; }
+.dn-starsrow .dn-stars { font-size: 1.35em; color: #f4b400; letter-spacing: 2px; -webkit-text-stroke: 1px var(--ink); }
+.dn-repbar { width: 110px; height: 10px; border: 2px solid var(--ink); border-radius: 99px; background: #fff; overflow: hidden; }
+.dn-repbar i { display: block; height: 100%; background: var(--yellow); }
 .dn-crew { font-size: .75em; font-weight: 600; background: var(--yellow); border: 2px solid var(--ink); border-radius: 99px; padding: 0 6px; }
 .dn-wage { font-size: .8em; font-weight: 600; color: #8a5a00; }
 .dn-stations { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
@@ -285,14 +295,20 @@ export function mount(container, api) {
     if (prev && prev.phase === 'shift' && data.phase === 'report') { ui.showReport = true; sfx.play('win'); }
     if (prev && prev.phase !== 'shift' && data.phase === 'shift') rang.clear();
     if (prev && prev.phase === 'shift' && data.phase === 'shift') {
-      if (data.tickets.length > prev.tickets.length) sfx.play('chime');
+      if (data.tickets.length > prev.tickets.length) {
+        sfx.play('chime');
+        const fresh = data.tickets.filter((t) => !prev.tickets.some((p) => p.id === t.id));
+        const sp = fresh.find((t) => t.special && t.special !== 'kid');
+        if (sp) { sfx.play('go'); pop({ rush: '🏃 RUSH HOUR! ×1.5 pay', critic: '🧐 A FOOD CRITIC sat down: impress them!', celebrity: '🌟 A CELEBRITY! Huge tip, no patience' }[sp.special]); }
+      }
       if (data.served.length > prev.served.length) {
         const s = data.served[data.served.length - 1];
         sfx.play(s.score >= 60 ? 'chips' : 'point');
         pop(`${s.score >= 90 ? '😋' : s.score >= 60 ? '🙂' : '😕'} ${s.score}% · +${money(s.price + s.tip)}${s.combo ? ' · COMBO!' : ''}`);
         coins(Math.max(1, Math.round(s.score / 20)));
+        if (s.special === 'critic') setTimeout(() => pop(s.rep > 0 ? `⭐ The critic loved it! +${s.rep} rep` : s.rep < 0 ? `💔 Bad review… ${s.rep} rep` : '🧐 The critic shrugs.', s.rep < 0), 700);
       }
-      if (data.missed > prev.missed) { sfx.play('lose'); pop('😠 A customer walked out', true); }
+      if (data.missed > prev.missed) { sfx.play('lose'); pop('😠 A customer walked out · −5 rep', true); }
     }
     if (prev && prev.phase !== 'shift' && data.phase !== 'shift' && prev.restaurant && data.restaurant && data.restaurant.tier > prev.restaurant.tier) {
       sfx.play('win'); pop(`🎉 Welcome to your ${data.catalog.TIERS[data.restaurant.tier].name}!`); coins(12);
