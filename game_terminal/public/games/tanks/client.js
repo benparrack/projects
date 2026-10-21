@@ -192,7 +192,7 @@ export function mount(container, api) {
   function seatName(seat) {
     if (!view) return seat.toUpperCase();
     const id = view.players[seat];
-    if (id === 'BOT') return `🤖 Bot (${levelLabel((view.botLevels || {})[seat])})`;
+    if (id === 'BOT') return `Bot (${levelLabel((view.botLevels || {})[seat])})`;
     return nicknameFor(id) || seat.toUpperCase();
   }
   function mySeat() {
@@ -1197,7 +1197,7 @@ export function mount(container, api) {
     const seat = mySeat();
     const over = !!(view && view.phase === 'game_over' && !busy());
     results.update(over ? duelResults({
-      winner: view.winner === 'draw' ? null : view.winner, colors: COLORS, players: view.players, me: seat, nameFor: (id) => (id === 'BOT' ? '🤖 Bot' : nicknameFor(id)),
+      winner: view.winner === 'draw' ? null : view.winner, colors: COLORS, players: view.players, me: seat, nameFor: (id) => (id === 'BOT' ? 'Bot' : nicknameFor(id)),
       subtitle: `${view.endReason === 'turns' ? 'Out of shots — most HP wins · ' : ''}HP ${view.tanks.red.hp} – ${view.tanks.blue.hp} · hits ${view.stats.red.hits}/${view.stats.red.shots} vs ${view.stats.blue.hits}/${view.stats.blue.shots}`,
       onRematch: () => api.sendAction({ kind: 'resetGame' }),
     }) : null);

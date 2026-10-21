@@ -619,7 +619,7 @@ export function mount(container, api) {
       const dot = el('span', 'cw-dot');
       dot.style.background = p.color;
       dot.style.color = p.color;
-      const name = el('span', 'cw-name', `${lead ? '👑 ' : ''}${p.nickname}${p.clientId === meId ? ' (you)' : ''}${p.gaveUp ? ' · gave up' : ''}`);
+      const name = el('span', 'cw-name', `${lead ? '★ ' : ''}${p.nickname}${p.clientId === meId ? ' (you)' : ''}${p.gaveUp ? ' · gave up' : ''}`);
       li.append(dot, name);
       if (race) {
         const bar = el('span', 'cw-bar');
@@ -630,7 +630,7 @@ export function mount(container, api) {
         bar.appendChild(fill);
         li.append(bar, el('span', 'cw-pts', `${p.solved}/${words.length}`));
       } else li.append(el('span', 'cw-pts', String(p.score)));
-      li.append(el('span', 'cw-wins', `· ${p.wins}🏆`));
+      li.append(el('span', 'cw-wins', `· ${p.wins} wins`));
       playersEl.appendChild(li);
     }
   }

@@ -985,7 +985,7 @@ export function mount(container, api) {
       let tag = '';
       let fire = false;
       if (active && now >= run.startAt) {
-        if (landed.runIdx === run.idx && landed.streak >= S.FIRE_AT) { tag = '🔥 ON FIRE x2'; fire = true; }
+        if (landed.runIdx === run.idx && landed.streak >= S.FIRE_AT) { tag = 'ON FIRE x2'; fire = true; }
         else if (landed.runIdx === run.idx && landed.streak > 0) tag = `STREAK ${landed.streak}`;
       } else if (view.runs.length) {
         const mine = view.runs.filter((r) => r.shooter === c);

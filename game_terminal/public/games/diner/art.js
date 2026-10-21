@@ -2,7 +2,23 @@
 // customers' faces. Everything here is static markup; user text (the restaurant name) is set by the
 // caller with textContent on .dn-sign-text, never interpolated.
 
-export const ICON = { lettuce: '🥬', tomato: '🍅', cheese: '🧀', onion: '🧅', pickles: '🥒', bacon: '🥓', jalapeno: '🌶️', mushroom: '🍄', egg: '🍳', avocado: '🥑' };
+// 24x24 ingredient and side icons, drawn in the same ink-outlined style as the scenes.
+const ICONS = {
+  lettuce: '<path d="M3 14q2-7 5-5q2-5 4-1q3-4 5 0q4-2 4 5q-2 4-9 4t-9-3z" fill="#7bc043"/><path d="M8 15q4-3 8 0" fill="none"/>',
+  tomato: '<circle cx="12" cy="12" r="8" fill="#e63946"/><circle cx="12" cy="12" r="4" fill="#ff8a80" stroke-width="1"/>',
+  cheese: '<path d="M3 17l16-10l2 10z" fill="#ffd23f"/><circle cx="11" cy="14" r="1.4" fill="#e0a800" stroke="none"/><circle cx="16" cy="12" r="1" fill="#e0a800" stroke="none"/>',
+  onion: '<circle cx="12" cy="12" r="8" fill="#f3e5f5"/><circle cx="12" cy="12" r="5" fill="#e1bee7"/><circle cx="12" cy="12" r="2" fill="#f3e5f5"/>',
+  pickles: '<ellipse cx="8" cy="12" rx="5" ry="6" fill="#8bc34a"/><ellipse cx="16" cy="12" rx="5" ry="6" fill="#8bc34a"/><circle cx="16" cy="12" r="1" fill="#558b2f" stroke="none"/>',
+  bacon: '<path d="M3 9q3-3 6 0t6 0t6 0v5q-3 3-6 0t-6 0t-6 0z" fill="#c0392b"/><path d="M3 11.5q3-2 6 0t6 0t6 0" stroke="#ffccbc" fill="none"/>',
+  jalapeno: '<path d="M6 7q-2 8 5 12q6 2 8 0q-8-2-10-12z" fill="#2e7d32"/><path d="M6 7q0-3 3-4" fill="none"/>',
+  mushroom: '<path d="M3 13q0-8 9-8t9 8z" fill="#a1887f"/><path d="M9 13v6h6v-6" fill="#efebe9"/>',
+  egg: '<path d="M4 12q0-7 7-7q4-2 7 2q4 5-1 10q-6 4-11 0q-2-2-2-5z" fill="#fff"/><circle cx="12" cy="12" r="3.5" fill="#ffb300"/>',
+  avocado: '<path d="M12 3q-7 8-7 12a7 6 0 0 0 14 0q0-4-7-12z" fill="#558b2f"/><path d="M12 7q-4 5-4 8a4 4 0 0 0 8 0q0-3-4-8z" fill="#dce775" stroke="none"/><circle cx="12" cy="15" r="2.6" fill="#8d6e63"/>',
+  fryer: '<path d="M7 9l2-6M10 9l1-7M13 9l1-6M16 9l1-5" stroke="#f4a63a" stroke-width="2.4"/><path d="M5 9h14l-2 12h-10z" fill="#e63946"/>',
+  fountain: '<path d="M14 6l3-4" fill="none"/><path d="M6 7h12l-2 14h-8z" fill="#3498db"/><path d="M6.6 11h10.8" fill="none"/>',
+  shake: '<path d="M7 9q0-5 5-5t5 5z" fill="#fff"/><circle cx="12" cy="3.5" r="1.5" fill="#e63946" stroke-width="1"/><path d="M6 9h12l-3 12h-6z" fill="#f8bbd0"/>',
+};
+export const icon = (id) => svg(24, 24, `<g stroke-width="1.5">${ICONS[id]}</g>`, 'dn-ico');
 
 const INK = '#2b1d14';
 const svg = (w, h, body, cls = '') => {

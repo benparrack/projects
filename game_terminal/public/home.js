@@ -41,7 +41,7 @@ function waitingChips(rooms, gameLabel, join) {
 const LINE = {
   ranked: (it, g) => [`won ranked ${g(it.gameType)} `, h('span.muted', `(${it.rating})`)],
   daily: (it, g) => `placed #${it.rank} of ${it.of} in the daily ${g(it.gameType)}`,
-  streak: (it) => `hit a ${it.days}-day daily streak 🔥`,
+  streak: (it) => `hit a ${it.days}-day daily streak`,
   level: (it) => `reached level ${it.level}`,
   achievement: (it) => ['unlocked ', h('b', it.name)],
 };

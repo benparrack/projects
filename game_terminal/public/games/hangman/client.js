@@ -142,7 +142,7 @@ export function mount(container, api) {
       name.textContent = nicknameFor(r.clientId);
       const prog = document.createElement('span');
       prog.className = 'hm-wins';
-      prog.textContent = r.out ? `💀 ${r.revealed}/${view.letterCount}` : `${r.revealed}/${view.letterCount} · ${'✗'.repeat(r.wrong) || '—'}`;
+      prog.textContent = r.out ? `OUT ${r.revealed}/${view.letterCount}` : `${r.revealed}/${view.letterCount} · ${'✗'.repeat(r.wrong) || '—'}`;
       if (r.out) row.style.opacity = '0.5';
       row.append(name, prog);
       board.appendChild(row);
@@ -281,7 +281,7 @@ export function mount(container, api) {
       } else {
         if (view.out) {
           const out = document.createElement('div');
-          out.textContent = 'HANGED 💀 — waiting for the others to finish';
+          out.textContent = 'HANGED. Waiting for the others to finish';
           out.style.color = '#ff6b6b';
           root.appendChild(out);
         }
@@ -291,7 +291,7 @@ export function mount(container, api) {
     } else if (view.phase === 'round_over') {
       const result = document.createElement('div');
       result.style.fontSize = '1.2em';
-      result.textContent = view.result === 'win' ? 'SOLVED! 🎉' : 'EVERYONE HANGED 💀';
+      result.textContent = view.result === 'win' ? 'SOLVED' : 'EVERYONE HANGED';
       root.appendChild(result);
       if (view.roundWinner) {
         const who = document.createElement('div');

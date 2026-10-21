@@ -80,12 +80,12 @@ const CATEGORIES = [
       { type: 'blackjack', label: 'BLACKJACK' },
       { type: 'blackjack_hr', label: 'HIGH ROLLER BLACKJACK ($1,000+ or VIP key)' },
       { type: 'slots', label: 'SLOTS' },
-      { type: 'crash', label: 'CRASH 🚀' },
+      { type: 'crash', label: 'CRASH' },
       { type: 'plinko', label: 'PLINKO' },
-      { type: 'mines', label: 'MINES 💣' },
+      { type: 'mines', label: 'MINES' },
       { type: 'poker', label: 'POKER (TEXAS HOLD\'EM)' },
       { type: 'roulette', label: 'ROULETTE' },
-      { type: 'diner', label: 'YOUR RESTAURANT 🍔' },
+      { type: 'diner', label: 'YOUR RESTAURANT' },
     ],
   },
   {
@@ -464,7 +464,7 @@ const dailyOpts = () => ({ account: state.account, auth: state.auth, play: playD
 function handleResultRecorded(p) {
   if (p.daily) {
     const d = p.daily;
-    toast(d.rank ? `◆ DAILY: #${d.rank} of ${d.of} today. 🔥 ${d.streak}-day streak.` : `◆ DAILY: no score today, but your streak is ${d.streak}.`,
+    toast(d.rank ? `◆ DAILY: #${d.rank} of ${d.of} today. ${d.streak}-day streak.` : `◆ DAILY: no score today, but your streak is ${d.streak}.`,
       { kind: 'ok', ms: 8000, action: { label: 'BOARD', run: () => navigate('/daily') } });
   }
   const outcome = p.kind === 'solo' ? 'Run complete'

@@ -347,7 +347,7 @@ export function mount(container, api) {
       const what = p.link ? `${LINK_GAME.name} with ${partner ? partner.nickname : '…'}`
         : p.title ? `${p.title}${p.lib ? '' : ' (own ROM)'}` : p.watching ? 'watching' : 'idle';
       const invited = p.invite === me ? ' · wants to LINK' : p.invite && p.clientId === me ? ' · invite sent' : '';
-      li.innerHTML = `<span>${escapeHtml(p.nickname)}${p.clientId === me ? ' (you)' : ''}<br><small style="color:var(--fg-dim)">${escapeHtml(what + invited)}${p.watchers ? ` · ${p.watchers} 👁` : ''}</small></span>`;
+      li.innerHTML = `<span>${escapeHtml(p.nickname)}${p.clientId === me ? ' (you)' : ''}<br><small style="color:var(--fg-dim)">${escapeHtml(what + invited)}${p.watchers ? ` · ${p.watchers} watching` : ''}</small></span>`;
       if (p.clientId === me) {
         if (linked) button(li, 'UNPLUG', () => unplug());
       } else if (!p.link && !linked) {

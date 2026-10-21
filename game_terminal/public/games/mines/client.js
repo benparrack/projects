@@ -120,7 +120,7 @@ export function mount(container, api) {
         const f = await floats(v.server, v.client, Number(v.nonce), n);
         const free = Array.from({ length: TILES }, (_, i) => i);
         const out = f.map((x, i) => free.splice(Math.floor(x * (TILES - i)), 1)[0]);
-        const grid = Array.from({ length: 5 }, (_, r) => Array.from({ length: 5 }, (_, c) => (out.includes(r * 5 + c) ? '💣' : '💎')).join(''));
+        const grid = Array.from({ length: 5 }, (_, r) => Array.from({ length: 5 }, (_, c) => (out.includes(r * 5 + c) ? 'X' : '.')).join(''));
         return `Mines on tiles ${out.map((t) => t + 1).sort((a, b) => a - b).join(', ')}\n${grid.join('\n')}`;
       },
     },

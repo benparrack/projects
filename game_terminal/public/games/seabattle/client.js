@@ -30,7 +30,6 @@ const REJECT_MESSAGES = {
   power_cooldown: 'That power is still recharging',
   nothing_left: 'Nothing left to hit there',
 };
-const POWER_ICON = { barrage: '🔥', radar: '📡' };
 const cellName = (r, c) => `${COLS[c]}${r + 1}`;
 
 const CSS = `
@@ -535,16 +534,16 @@ export function mount(container, api) {
     if (view.phase === 'waiting') {
       status.textContent = 'Waiting for two admirals — take a seat or play the bot.';
     } else if (view.phase === 'placing') {
-      if (seat && !view.ready[seat]) { status.textContent = '⚓ POSITION YOUR FLEET'; status.classList.add('mine'); }
+      if (seat && !view.ready[seat]) { status.textContent = 'POSITION YOUR FLEET'; status.classList.add('mine'); }
       else if (seat) status.textContent = `Fleet locked in — waiting for ${seatName(other(seat))}…`;
       else status.textContent = 'The admirals are positioning their fleets…';
     } else if (view.phase === 'playing') {
       const ls = view.lastShot;
       if (myTurn()) {
-        status.textContent = ls && ls.by === seat && ls.result !== 'miss' ? '🎯 DIRECT HIT — FIRE AGAIN!' : '▶ YOUR TURN — FIRE!';
+        status.textContent = ls && ls.by === seat && ls.result !== 'miss' ? 'DIRECT HIT. FIRE AGAIN' : 'YOUR TURN. FIRE';
         status.classList.add('mine');
       } else if (seat) {
-        status.textContent = ls && ls.by !== seat && ls.result !== 'miss' ? `💥 ${seatName(view.turn)} hit you — firing again…` : `${seatName(view.turn)} is taking aim…`;
+        status.textContent = ls && ls.by !== seat && ls.result !== 'miss' ? `${seatName(view.turn)} hit you — firing again…` : `${seatName(view.turn)} is taking aim…`;
         if (ls && ls.by !== seat && ls.result !== 'miss') status.classList.add('alert');
       } else {
         status.textContent = `${seatName(view.turn)} to fire`;
@@ -612,27 +611,27 @@ export function mount(container, api) {
         const g = view.radar && view.radar[seat];
         let n = 0;
         if (g) for (let r = ls.r; r < ls.r + 2; r++) for (let c = ls.c; c < ls.c + 2; c++) if (g[r][c] === 'ship') n++;
-        return { text: `📡 Radar at ${cellName(ls.r, ls.c)}: ${n ? `${n} ship cell${n > 1 ? 's' : ''} found!` : 'all clear'}`, cls: n ? 'good' : '' };
+        return { text: `Radar at ${cellName(ls.r, ls.c)}: ${n ? `${n} ship cell${n > 1 ? 's' : ''} found!` : 'all clear'}`, cls: n ? 'good' : '' };
       }
-      return { text: `📡 ${who} scanned ${target} waters at ${cellName(ls.r, ls.c)}–${cellName(ls.r + 1, ls.c + 1)}`, cls: yours ? 'bad' : '' };
+      return { text: `${who} scanned ${target} waters at ${cellName(ls.r, ls.c)}–${cellName(ls.r + 1, ls.c + 1)}`, cls: yours ? 'bad' : '' };
     }
     if (ls.power === 'barrage') {
       const hits = ls.cells.filter((x) => x.result !== 'miss').length;
       const sunk = ls.cells.filter((x) => x.result === 'sunk').map((x) => shipName(x.ship));
       const line = ls.axis === 'row' ? `row ${ls.i + 1}` : `column ${COLS[ls.i]}`;
-      let text = `🔥 ${who === 'You' ? 'Your' : `${who}'s`} BARRAGE on ${line}: ${hits ? `${hits} hit${hits > 1 ? 's' : ''}` : 'all misses'}`;
+      let text = `${who === 'You' ? 'Your' : `${who}'s`} BARRAGE on ${line}: ${hits ? `${hits} hit${hits > 1 ? 's' : ''}` : 'all misses'}`;
       if (struck.length) text += ` — struck your ${struck.join(', ')}`;
       if (sunk.length) text += ` — ${sunk.join(', ')} sunk!`;
       return { text, cls: hits ? (yours ? 'bad' : 'good') : '' };
     }
     const at = cellName(ls.r, ls.c);
-    if (ls.result === 'miss') return { text: `💦 ${who} missed at ${at}`, cls: '' };
+    if (ls.result === 'miss') return { text: `${who} missed at ${at}`, cls: '' };
     if (yours) {
       const name = struck[0] || 'ship';
-      return { text: ls.result === 'sunk' ? `☠ ${who} SANK your ${name}! (${at})` : `💥 ${who} hit your ${name} at ${at}!`, cls: 'bad' };
+      return { text: ls.result === 'sunk' ? `${who} SANK your ${name}! (${at})` : `${who} hit your ${name} at ${at}!`, cls: 'bad' };
     }
-    if (ls.result === 'sunk') return { text: `☠ ${who} sank ${mine ? 'their' : target} ${shipName(ls.ship)}! (${at})`, cls: mine ? 'good' : '' };
-    return { text: `💥 ${who} hit at ${at}!`, cls: mine ? 'good' : '' };
+    if (ls.result === 'sunk') return { text: `${who} sank ${mine ? 'their' : target} ${shipName(ls.ship)}! (${at})`, cls: mine ? 'good' : '' };
+    return { text: `${who} hit at ${at}!`, cls: mine ? 'good' : '' };
   }
 
   // ---- powers ----------------------------------------------------------------------------------
@@ -700,7 +699,7 @@ export function mount(container, api) {
     if (seat && view.phase === 'playing') {
       for (const p of Object.keys(ps)) {
         const isArmed = armed && armed.power === p;
-        const b = button(`${POWER_ICON[p] || ''} ${ps[p].name.toUpperCase()} · ${isArmed ? 'AIMING' : label(seat, p)}`, () => {
+        const b = button(`${ps[p].name.toUpperCase()} · ${isArmed ? 'AIMING' : label(seat, p)}`, () => {
           if (!myTurn()) return showError('not_your_turn');
           if (left[seat][p]) return showError('power_cooldown');
           armed = isArmed ? null : { power: p, axis: (armed && armed.axis) || 'row' };
@@ -734,13 +733,13 @@ export function mount(container, api) {
     box.className = 'sb-rules';
     const on = !!view.powers;
     if (mySeat()) {
-      const b = button(`⚡ POWERS: ${on ? 'ON' : 'OFF'}`, () => { sfx.play('click'); api.sendAction({ kind: 'setPowers', on: !on }); });
+      const b = button(`POWERS: ${on ? 'ON' : 'OFF'}`, () => { sfx.play('click'); api.sendAction({ kind: 'setPowers', on: !on }); });
       if (on) b.classList.add('on');
       b.title = 'Barrage (a whole row/column) and Radar (2×2 scan) on long cooldowns';
       box.appendChild(b);
     } else {
       const t = document.createElement('b');
-      t.textContent = `⚡ POWERS: ${on ? 'ON' : 'OFF'}`;
+      t.textContent = `POWERS: ${on ? 'ON' : 'OFF'}`;
       t.style.color = on ? '#ffb000' : '#8aa';
       box.appendChild(t);
     }
@@ -799,7 +798,7 @@ export function mount(container, api) {
       const rot = button('ROTATE (R)', () => (selected ? rotate(selected) : showError('no_room')));
       rot.disabled = !selected;
       const rnd = button('RANDOMIZE', () => { draft = randomFleet(spec()); selected = null; sfx.play('whoosh'); render(); });
-      const go = button('READY ⚓', () => { sfx.play('click'); api.sendAction({ kind: 'placeFleet', ships: draft }); });
+      const go = button('READY', () => { sfx.play('click'); api.sendAction({ kind: 'placeFleet', ships: draft }); });
       go.className = 'go';
       tools.append(rot, rnd, go);
       boards.appendChild(panel('<b>YOUR FLEET</b>', 'drag to move · tap twice to rotate', frame, tools));

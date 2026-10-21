@@ -447,7 +447,7 @@ const BOT_DELAY_MAX = 1700;
 
 function nameOf(room, id) {
   const st = room.state;
-  if (isBot(id)) return `🤖 ${id.slice(4)} (${LEVEL_LABEL[st.botLevels[id]] || 'Hard'})`;
+  if (isBot(id)) return `${id.slice(4)} (${LEVEL_LABEL[st.botLevels[id]] || 'Hard'})`;
   const c = room.clients.get(id);
   if (c) return c.nickname;
   return st.names[id] || 'someone';

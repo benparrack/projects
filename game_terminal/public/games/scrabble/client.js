@@ -431,7 +431,7 @@ export function mount(container, api) {
       const box = el('div', 'scr-seat');
       if (view.phase === 'playing' && i === view.turnIdx) box.classList.add('turn');
       if (s.id === me()) box.classList.add('me');
-      box.appendChild(el('div', 'scr-seat-name', `${final && s.winner ? '👑 ' : ''}${s.name}`));
+      box.appendChild(el('div', 'scr-seat-name', `${final && s.winner ? '★ ' : ''}${s.name}`));
       box.appendChild(el('div', 'scr-seat-score', String(s.score)));
       const sub = el('div', 'scr-seat-sub');
       if (final) {

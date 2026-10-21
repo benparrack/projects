@@ -1,11 +1,10 @@
 // The shift: customers at the counter, the griddle, the board and the topping bins. Every press is
 // sent to the server; `live` callbacks move the timers between state updates.
-import { ICON, HAT, face, setMood } from './art.js';
+import { icon, HAT, face, setMood } from './art.js';
 
 export const GRILL_KEYS = ['q', 'w', 'e', 'r'];
 export const STATION_KEYS = { fryer: 'f', fountain: 'd', shake: 's' };
 const ZONE = { rare: '#e05050', medium: '#c07a40', well: '#7a5236' };
-export const SIDE_ICON = { fryer: '🍟', fountain: '🥤', shake: '🍨' };
 export const FLAVOR = { fries: '#f4c430', cola: '#5a2d1a', lemon: '#c8e64a', orange: '#ff9f1c', vanilla: '#fff3c4', chocolate: '#7b4a2a', strawberry: '#ff8fab' };
 const STATION_VERB = { fryer: ['DROP BASKET', 'PULL'], fountain: ['HOLD TO POUR', 'RELEASE'], shake: ['BLEND', 'POUR'] };
 
@@ -64,17 +63,17 @@ export function renderKitchen(c, cook, rang) {
   const timer = el('span', 'dn-pill dn-clock');
   live.push(() => {
     const s = Math.max(0, Math.ceil((view.endsAt - clock.now()) / 1000));
-    timer.textContent = `⏱ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     timer.classList.toggle('low', s <= 20);
   });
-  top.append(timer, el('span', 'dn-pill', `🍔 ${view.served.length} served`), el('span', 'dn-pill money', `💰 ${money(view.revenue + view.tips)}`));
-  if (view.perks.stars >= 1 || view.shiftRep) top.append(el('span', `dn-pill${view.shiftRep < 0 ? ' bad' : ''}`, `⭐ ${view.shiftRep >= 0 ? '+' : ''}${view.shiftRep}`));
-  if (view.perks.staff.includes('prep')) top.append(el('span', 'dn-pill', '🔪 prep cook'));
+  top.append(timer, el('span', 'dn-pill', `${view.served.length} served`), el('span', 'dn-pill money', money(view.revenue + view.tips)));
+  if (view.perks.stars >= 1 || view.shiftRep) top.append(el('span', `dn-pill${view.shiftRep < 0 ? ' bad' : ''}`, `Rep ${view.shiftRep >= 0 ? '+' : ''}${view.shiftRep}`));
+  if (view.perks.staff.includes('prep')) top.append(el('span', 'dn-pill', 'Prep cook on'));
   page.append(top);
 
   // The counter: one customer per ticket. Click one (or SPACE for the highlighted one) to serve.
   const counter = el('div', 'dn-counter');
-  if (!view.tickets.length) counter.append(el('div', 'dn-empty', 'No customers yet… get a patty going!'));
+  if (!view.tickets.length) counter.append(el('div', 'dn-empty', 'No customers yet. Start a patty.'));
   for (const t of view.tickets) {
     const cust = el('div', `dn-cust${b.patty ? ' can' : ''}${next === t ? ' next' : ''}${t.special ? ` sp ${t.special}` : ''}`);
     if (t.special) cust.append(el('div', 'dn-badge', view.catalog.SPECIALS[t.special].name));
@@ -88,13 +87,15 @@ export function renderKitchen(c, cook, rang) {
     head.append(el('span', null, `#${t.id}`), el('span', `dn-tag ${t.doneness}${b.patty && cook.donenessKey(b.patty.cooked) === t.doneness ? ' ok' : ''}`, t.doneness.toUpperCase()));
     const want = el('div', 'dn-want');
     t.toppings.forEach((x, i) => {
-      const s = el('span', b.toppings[i] == null ? '' : b.toppings[i] === x ? 'ok' : 'bad', ICON[x]);
+      const s = el('span', b.toppings[i] == null ? '' : b.toppings[i] === x ? 'ok' : 'bad');
+      s.append(icon(x));
       s.title = x;
       want.append(s);
     });
     for (const [id, f] of Object.entries(t.sides || {})) {
       const tr = view.tray[id];
-      const s = el('span', `dn-side${tr ? (tr.flavor === f ? ' ok' : ' bad') : ''}`, SIDE_ICON[id]);
+      const s = el('span', `dn-side${tr ? (tr.flavor === f ? ' ok' : ' bad') : ''}`);
+      s.append(icon(id));
       s.style.setProperty('--fl', FLAVOR[f]);
       s.title = id === 'fryer' ? 'fries' : `${f} ${id === 'shake' ? 'shake' : 'soda'}`;
       want.append(s);
@@ -188,11 +189,11 @@ export function renderKitchen(c, cook, rang) {
   R.TOPPINGS.forEach((x, i) => {
     const bin = btn('', () => { sfx.play('tick'); send({ kind: 'top', item: x }); }, 'dn-bin');
     bin.title = x;
-    bin.append(el('b', null, ICON[x]), el('span', 'dn-key', String((i + 1) % 10)));
+    bin.append(icon(x), el('span', 'dn-key', String((i + 1) % 10)));
     pad.append(bin);
   });
   const actions = el('div', 'dn-actions');
-  actions.append(btn('↶ UNDO', () => send({ kind: 'untop' }), 'dn-btn small'), btn('🗑 TRASH', () => { sfx.play('crash'); send({ kind: 'trash' }); }, 'dn-btn small'));
+  actions.append(btn('UNDO', () => send({ kind: 'untop' }), 'dn-btn small'), btn('TRASH', () => { sfx.play('crash'); send({ kind: 'trash' }); }, 'dn-btn small'));
   const serveBtn = btn('SERVE ▸', () => serve(next), 'dn-btn small go');
   serveBtn.disabled = !next;
   actions.append(serveBtn);
@@ -219,8 +220,8 @@ function renderStations(c, cook) {
     const card = el('div', `dn-station ${id}`);
     const head = el('div', 'dn-st-h');
     const crew = { fryer: 'frycook', fountain: 'jerk' }[id];
-    head.append(el('b', null, `${SIDE_ICON[id]} ${S.name}`), view.perks.staff.includes(crew)
-      ? el('span', 'dn-crew', crew === 'frycook' ? '🧑‍🍳 fry cook' : '🧃 soda jerk') : el('span', 'dn-key', STATION_KEYS[id].toUpperCase()));
+    head.append(el('b', null, S.name), view.perks.staff.includes(crew)
+      ? el('span', 'dn-crew', crew === 'frycook' ? 'Fry cook' : 'Soda jerk') : el('span', 'dn-key', STATION_KEYS[id].toUpperCase()));
     card.append(head);
     // The vessel: oil with a basket, a cup filling to the line, or the blender jug.
     const pot = el('div', `dn-pot ${id}`);

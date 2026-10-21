@@ -473,7 +473,7 @@ export function fairButton({ seeds, rotate, verify, intro }) {
     document.body.append(m);
     if (pre.server) go.click();
   };
-  const b = btn(null, '⚖ Fairness', () => open());
+  const b = btn(null, 'Fairness', () => open());
   return { el: b, open, reveal(prev) { revealed = prev; } };
 }
 

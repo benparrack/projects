@@ -17,21 +17,21 @@ const BASE_TOPPINGS = 4;
 
 // prices[i] buys level i+1; tiers[i] is the restaurant tier that level needs.
 const UPGRADES = [
-  { id: 'grill', tab: 'kitchen', name: 'Extra grill', icon: '🔥', prices: [250, 2500, 15000], tiers: [0, 1, 2], desc: 'Another patty on the go at once.' },
-  { id: 'burners', tab: 'kitchen', name: 'Hot burners', icon: '♨️', prices: [400, 3000, 20000], tiers: [0, 1, 2], desc: 'Patties cook 15% faster per level.' },
-  { id: 'bell', tab: 'kitchen', name: 'Doneness bell', icon: '🔔', prices: [300], tiers: [0], desc: 'A patty glows and dings when it hits the ticket\'s doneness.' },
-  { id: 'toppings', tab: 'kitchen', name: 'Extra toppings', icon: '🥓', prices: [200, 1500, 8000], tiers: [0, 1, 2], desc: 'Two new toppings per level. Bigger burgers sell for more.' },
-  { id: 'premium', tab: 'kitchen', name: 'Premium ingredients', icon: '🥩', prices: [500, 4000, 25000], tiers: [0, 1, 2], desc: 'Tips ×1.25 per level.' },
-  { id: 'seats', tab: 'dining', name: 'Counter seats', icon: '🪑', prices: [300, 2000, 10000], tiers: [0, 1, 2], desc: 'Room for one more customer at a time.' },
-  { id: 'booths', tab: 'dining', name: 'Comfy booths', icon: '🛋️', prices: [350, 2500, 15000], tiers: [0, 1, 2], desc: 'Customers wait 20% longer per level.' },
-  { id: 'billboard', tab: 'dining', name: 'Billboard', icon: '🪧', prices: [600, 5000, 30000], tiers: [0, 1, 2], desc: 'Customers show up 20% more often per level.' },
-  { id: 'fryer', tab: 'stations', name: 'Fryer', icon: '🍟', prices: [400], tiers: [0], desc: 'Customers order fries: drop the basket, pull it when golden.' },
-  { id: 'fountain', tab: 'stations', name: 'Soda fountain', icon: '🥤', prices: [600], tiers: [0], desc: 'Customers order drinks: hold to fill the cup to the line without spilling.' },
-  { id: 'frycook', tab: 'staff', name: 'Fry cook', icon: '🧑‍🍳', prices: [1200], tiers: [0], wage: 8, needs: 'fryer', desc: 'Keeps fries coming for every ticket that wants them, perfectly golden.' },
-  { id: 'jerk', tab: 'staff', name: 'Soda jerk', icon: '🧃', prices: [1500], tiers: [0], wage: 8, needs: 'fountain', desc: 'Pours every soda your customers order, right to the line.' },
-  { id: 'prep', tab: 'staff', name: 'Prep cook', icon: '🔪', prices: [2500], tiers: [1], wage: 15, desc: 'Once a patty is on the board, adds the next topping for you every 2.5 seconds.' },
-  { id: 'host', tab: 'staff', name: 'Host', icon: '🤵', prices: [4000], tiers: [1], wage: 20, desc: 'Seats people faster (+10% customers) and keeps them happy (+25% patience).' },
-  { id: 'shake', tab: 'stations', name: 'Shake machine', icon: '🍨', prices: [2500], tiers: [1], desc: 'Customers order milkshakes: blend the right flavour for the right time.' },
+  { id: 'grill', tab: 'kitchen', name: 'Extra grill', prices: [250, 2500, 15000], tiers: [0, 1, 2], desc: 'Another patty on the go at once.' },
+  { id: 'burners', tab: 'kitchen', name: 'Hot burners', prices: [400, 3000, 20000], tiers: [0, 1, 2], desc: 'Patties cook 15% faster per level.' },
+  { id: 'bell', tab: 'kitchen', name: 'Doneness bell', prices: [300], tiers: [0], desc: 'A patty glows and dings when it hits the ticket\'s doneness.' },
+  { id: 'toppings', tab: 'kitchen', name: 'Extra toppings', prices: [200, 1500, 8000], tiers: [0, 1, 2], desc: 'Two new toppings per level. Bigger burgers sell for more.' },
+  { id: 'premium', tab: 'kitchen', name: 'Premium ingredients', prices: [500, 4000, 25000], tiers: [0, 1, 2], desc: 'Tips ×1.25 per level.' },
+  { id: 'seats', tab: 'dining', name: 'Counter seats', prices: [300, 2000, 10000], tiers: [0, 1, 2], desc: 'Room for one more customer at a time.' },
+  { id: 'booths', tab: 'dining', name: 'Comfy booths', prices: [350, 2500, 15000], tiers: [0, 1, 2], desc: 'Customers wait 20% longer per level.' },
+  { id: 'billboard', tab: 'dining', name: 'Billboard', prices: [600, 5000, 30000], tiers: [0, 1, 2], desc: 'Customers show up 20% more often per level.' },
+  { id: 'fryer', tab: 'stations', name: 'Fryer', prices: [400], tiers: [0], desc: 'Customers order fries: drop the basket, pull it when golden.' },
+  { id: 'fountain', tab: 'stations', name: 'Soda fountain', prices: [600], tiers: [0], desc: 'Customers order drinks: hold to fill the cup to the line without spilling.' },
+  { id: 'frycook', tab: 'staff', name: 'Fry cook', prices: [1200], tiers: [0], wage: 8, needs: 'fryer', desc: 'Keeps fries coming for every ticket that wants them, perfectly golden.' },
+  { id: 'jerk', tab: 'staff', name: 'Soda jerk', prices: [1500], tiers: [0], wage: 8, needs: 'fountain', desc: 'Pours every soda your customers order, right to the line.' },
+  { id: 'prep', tab: 'staff', name: 'Prep cook', prices: [2500], tiers: [1], wage: 15, desc: 'Once a patty is on the board, adds the next topping for you every 2.5 seconds.' },
+  { id: 'host', tab: 'staff', name: 'Host', prices: [4000], tiers: [1], wage: 20, desc: 'Seats people faster (+10% customers) and keeps them happy (+25% patience).' },
+  { id: 'shake', tab: 'stations', name: 'Shake machine', prices: [2500], tiers: [1], desc: 'Customers order milkshakes: blend the right flavour for the right time.' },
 ];
 
 // Side stations. Start one (with a flavour), stop it inside `window` ms; past `ruin` it's burnt, spilt or

@@ -361,7 +361,7 @@ export function mount(container, api) {
         lives.append('♥'.repeat(p.lives));
         if (max > p.lives) lives.appendChild(el('span', 'gone', '♥'.repeat(max - p.lives)));
       } else lives.append(el('span', 'wt-stat', inPlay() ? 'watching' : ''));
-      const stat = el('span', 'wt-stat', `${p.words}w · ${p.wins}🏆`);
+      const stat = el('span', 'wt-stat', `${p.words}w · ${p.wins} wins`);
       li.append(el('span', 'wt-dot'), name, lives, stat);
       playersEl.appendChild(li);
     }

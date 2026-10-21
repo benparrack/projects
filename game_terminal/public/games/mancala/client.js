@@ -324,7 +324,7 @@ export function mount(container, api) {
     if (anim && anim.hand > 0 && anim.handPit != null) {
       const h = document.createElement('div');
       h.className = 'mc-hand';
-      h.textContent = `✋ ${anim.hand}`;
+      h.textContent = String(anim.hand);
       const c = centerOf(anim.handPit);
       h.style.left = `${c.x}px`;
       h.style.top = `${c.y - c.h / 2}px`;

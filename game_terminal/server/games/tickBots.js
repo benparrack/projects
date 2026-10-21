@@ -19,7 +19,7 @@ function newBot(players, level) {
   const name = BOT_NAMES.find((n) => !players.has(`bot-${n}`));
   if (!name) return null;
   const lv = normLevel(level);
-  return { clientId: `bot-${name}`, nickname: `🤖 ${name} (${LEVEL_LABEL[lv]})`, level: lv };
+  return { clientId: `bot-${name}`, nickname: `${name} (${LEVEL_LABEL[lv]})`, level: lv };
 }
 
 const humanCount = (players) => [...players.keys()].filter((id) => !isBotId(id)).length;

@@ -135,9 +135,9 @@ export function mount(container, api) {
   const wheel = svgEl('svg', { class: 'ws-wheel', viewBox: '0 0 300 300' });
   const sideL = el('div', 'ws-side l');
   const sideR = el('div', 'ws-side r');
-  const shuffleBtn = el('button', '', '🔀');
+  const shuffleBtn = el('button', '', 'SHUFFLE');
   shuffleBtn.title = 'Shuffle the wheel (Space)';
-  const hintBtn = el('button', '', '💡');
+  const hintBtn = el('button', '', 'HINT');
   hintBtn.title = `Reveal a letter (costs 2 points)`;
   const hintN = el('span', 'n', '0');
   hintBtn.appendChild(hintN);
@@ -460,7 +460,7 @@ export function mount(container, api) {
         fill.style.width = `${Math.round((100 * (p.progress || 0)) / snap.total)}%`;
         bar.appendChild(fill);
         c.appendChild(bar);
-        if (p.raceWins) c.appendChild(el('span', '', `🏆${p.raceWins}`));
+        if (p.raceWins) c.appendChild(el('span', '', `${p.raceWins} wins`));
       } else {
         c.appendChild(el('span', '', `${p.levelWords}w`));
       }

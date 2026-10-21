@@ -10,7 +10,7 @@ module.exports = {
   // The originals (crash, plinko, mines): typed-in bets in this range, a 2% edge (98% return), and a cap on any one payout.
   ORIGINALS: { MIN_BET: 0.1, MAX_BET: 1000, EDGE: 0.02, MAX_WIN: 250000 },
   // Lifetime amount wagered -> tier (going broke never demotes you).
-  TIERS: [['Bronze', 0, '🥉'], ['Silver', 1000, '🥈'], ['Gold', 5000, '🥇'], ['Platinum', 25000, '💠'], ['Diamond', 100000, '💎']],
+  TIERS: [['Bronze', 0, ''], ['Silver', 1000, '◇'], ['Gold', 5000, '◆'], ['Platinum', 25000, '◈'], ['Diamond', 100000, '♦']],
   // The casino shop. One item per slot is equipped; skins show only at casino tables, and nothing changes the odds.
   SHOP: [
     { id: 'felt-blue', slot: 'felt', name: 'Royal blue felt', price: 150 },
@@ -21,10 +21,10 @@ module.exports = {
     { id: 'back-gold', slot: 'back', name: 'Gold foil card backs', price: 400 },
     { id: 'slots-neon', slot: 'slots', name: 'Neon slot machine', price: 200 },
     { id: 'slots-ruby', slot: 'slots', name: 'Ruby slot machine', price: 250 },
-    { id: 'charm-clover', slot: 'charm', name: 'Four-leaf clover', glyph: '🍀', price: 50 },
-    { id: 'charm-dice', slot: 'charm', name: 'Lucky dice', glyph: '🎲', price: 100 },
-    { id: 'charm-cat', slot: 'charm', name: 'Black cat', glyph: '🐈‍⬛', price: 250 },
-    { id: 'charm-crown', slot: 'charm', name: 'Crown', glyph: '👑', price: 2500 },
+    { id: 'charm-clover', slot: 'charm', name: 'Four-leaf clover', glyph: '♣', price: 50 },
+    { id: 'charm-dice', slot: 'charm', name: 'Lucky dice', glyph: '⚄', price: 100 },
+    { id: 'charm-cat', slot: 'charm', name: 'Crescent moon', glyph: '☾', price: 250 },
+    { id: 'charm-crown', slot: 'charm', name: 'Crown', glyph: '♛', price: 2500 },
     { id: 'vip', slot: 'key', name: 'VIP key: the high-roller room at any balance', price: 750 },
   ],
 };

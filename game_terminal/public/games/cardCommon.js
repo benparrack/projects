@@ -142,7 +142,7 @@ export function handToolbar(rerender) {
     bar.appendChild(b);
   }
   const big = document.createElement('button');
-  big.textContent = handPrefs.large ? '🔍 LARGE CARDS: ON' : '🔍 LARGE CARDS: OFF';
+  big.textContent = handPrefs.large ? 'LARGE CARDS: ON' : 'LARGE CARDS: OFF';
   big.className = handPrefs.large ? 'on' : '';
   big.addEventListener('click', () => { handPrefs.large = !handPrefs.large; save(); });
   bar.appendChild(big);
@@ -162,7 +162,7 @@ export function orderArrow() {
 export const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
 export const botName = (id) => {
   const [name, level] = id.slice(4).split('~');
-  return level ? `🤖 ${name} (${levelLabel(level)})` : `🤖 ${name}`;
+  return level ? `${name} (${levelLabel(level)})` : `${name}`;
 };
 
 // "+ ADD BOT" (optionally for a specific seat) — glowing dashed button.

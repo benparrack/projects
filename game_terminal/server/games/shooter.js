@@ -295,7 +295,7 @@ function buildStatePayload(room) {
   for (const seat of SEATS) {
     const p = st.players[seat];
     const clientId = st.seats[seat];
-    const nickname = clientId === BOT ? `🤖 CPU (${botLevelOf(st, seat)[0].toUpperCase()}${botLevelOf(st, seat).slice(1)})`
+    const nickname = clientId === BOT ? `CPU (${botLevelOf(st, seat)[0].toUpperCase()}${botLevelOf(st, seat).slice(1)})`
       : clientId && room.clients.has(clientId) ? room.clients.get(clientId).nickname : null;
     players[seat] = p ? {
       clientId, nickname,

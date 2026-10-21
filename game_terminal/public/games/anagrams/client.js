@@ -328,7 +328,7 @@ export function mount(container, api) {
     const now = clock.now();
     if (!view || view.phase === 'waiting' || !view.letters) {
       overlay.hidden = false;
-      overlay.append(el('div', 'an-count', '🔤'), el('div', '', 'ANAGRAMS'),
+      overlay.append(el('div', '', 'ANAGRAMS'),
         el('div', 'an-help', 'Six letters, 60 seconds. Make as many words as you can — longer words score far more. Press START ROUND' + (api.daily ? ': one try at today\'s letters.' : ' (add a bot to play against the computer), or FIND EVERY WORD to play with no clock until you have them all.')));
       return;
     }
@@ -410,7 +410,7 @@ export function mount(container, api) {
       dot.style.background = p.color;
       dot.style.color = p.color;
       li.append(dot, el('span', 'an-name', p.clientId === myId() ? `${p.nickname} (you)` : p.nickname),
-        el('span', 'an-pts', String(p.score)), el('span', 'an-meta', `${p.count}w · ${p.wins}🏆`));
+        el('span', 'an-pts', String(p.score)), el('span', 'an-meta', `${p.count}w · ${p.wins} wins`));
       scoresEl.appendChild(li);
     }
   }

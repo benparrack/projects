@@ -30,8 +30,6 @@ const CSS = `
   20% { transform: translateX(-7px); } 40% { transform: translateX(6px); }
   60% { transform: translateX(-4px); } 80% { transform: translateX(2px); }
 }
-.gt-res-badge { font-size: 40px; line-height: 1; animation: gt-res-badge .7s cubic-bezier(.2,1.6,.4,1) .3s backwards; }
-@keyframes gt-res-badge { from { opacity: 0; transform: scale(0) rotate(-40deg); } }
 .gt-res-title {
   margin: 8px 0 2px; font-size: 26px; font-weight: bold; letter-spacing: 2px; color: var(--gt-res-c);
   text-shadow: 0 0 12px var(--gt-res-c); animation: gt-res-glow 1.8s ease-in-out .9s infinite alternate;
@@ -65,7 +63,7 @@ const CSS = `
   box-shadow: 0 0 14px -2px #39ff14; animation: gt-res-pop .35s cubic-bezier(.2,1.4,.4,1) backwards;
 }
 @media (prefers-reduced-motion: reduce) {
-  .gt-res-back, .gt-res-card, .gt-res-card.lose, .gt-res-badge, .gt-res-title, .gt-res-row, .gt-res-btns .primary, .gt-res-pill { animation: none; }
+  .gt-res-back, .gt-res-card, .gt-res-card.lose, .gt-res-title, .gt-res-row, .gt-res-btns .primary, .gt-res-pill { animation: none; }
 }
 `;
 
@@ -79,10 +77,10 @@ function ensureStyles() {
 }
 
 const OUTCOME = {
-  win: { color: '#ffd23f', badge: '🏆' },
-  lose: { color: '#ff4d4d', badge: '💀' },
-  draw: { color: '#7fd7ff', badge: '🤝' },
-  over: { color: '#39ff14', badge: '🏁' },
+  win: { color: '#ffd23f' },
+  lose: { color: '#ff4d4d' },
+  draw: { color: '#7fd7ff' },
+  over: { color: '#39ff14' },
 };
 const CONFETTI = ['#39ff14', '#ffd23f', '#ff4dd2', '#4dd2ff', '#ff7b39', '#ffffff'];
 
@@ -172,13 +170,10 @@ export function createResults(container) {
     const card = document.createElement('div');
     card.className = `gt-res-card ${opts.outcome || ''}`;
     card.style.setProperty('--gt-res-c', o.color);
-    const badge = document.createElement('div');
-    badge.className = 'gt-res-badge';
-    badge.textContent = o.badge;
     const title = document.createElement('div');
     title.className = 'gt-res-title';
     title.textContent = opts.title;
-    card.append(badge, title);
+    card.append(title);
     if (opts.subtitle) {
       const sub = document.createElement('div');
       sub.className = 'gt-res-sub';
@@ -194,7 +189,7 @@ export function createResults(container) {
         row.style.animationDelay = `${0.35 + i * 0.09}s`;
         const place = document.createElement('span');
         place.className = 'gt-res-place';
-        place.textContent = r.win ? '👑' : String(i + 1);
+        place.textContent = String(i + 1);
         const name = document.createElement('span');
         name.className = 'gt-res-name';
         name.textContent = r.name;
@@ -239,7 +234,7 @@ export function createResults(container) {
     removePill();
     pill = document.createElement('button');
     pill.className = 'gt-res-pill';
-    pill.textContent = '🏁 RESULTS';
+    pill.textContent = 'RESULTS';
     pill.addEventListener('click', () => open(lastOpts, false));
     container.appendChild(pill);
   }

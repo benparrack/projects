@@ -67,11 +67,11 @@ const WEAPON_IDS = ['pistol', 'shotgun', 'sniper'];
 const WEAPON_KEYS = { Digit1: 'pistol', Digit2: 'shotgun', Digit3: 'sniper' };
 const WEAPON_LABELS = { pistol: 'PISTOL', shotgun: 'SHOTGUN', sniper: 'SNIPER' };
 const PERK_INFO = {
-  reload: { icon: '⚡', name: 'FAST HANDS', desc: 'reloads 40% faster' },
-  doublejump: { icon: '🦘', name: 'DOUBLE JUMP', desc: 'jump again in mid-air' },
-  armor: { icon: '🛡', name: 'ARMOUR', desc: '+25 max HP' },
+  reload: { icon: 'R', name: 'FAST HANDS', desc: 'reloads 40% faster' },
+  doublejump: { icon: 'J', name: 'DOUBLE JUMP', desc: 'jump again in mid-air' },
+  armor: { icon: 'A', name: 'ARMOUR', desc: '+25 max HP' },
 };
-const perkIcons = (p) => (p && p.perks && p.perks.length ? ' ' + p.perks.map((k) => PERK_INFO[k].icon).join('') : '');
+const perkIcons = (p) => (p && p.perks && p.perks.length ? ` [${p.perks.map((k) => PERK_INFO[k].icon).join('')}]` : '');
 const WEAPON_COLORS = { pistol: 0x50555e, shotgun: 0xc06a1c, sniper: 0x2a8a48 };
 
 // Per-browser player preferences (sensitivity + keybinds) — local to this device/browser, not
@@ -445,7 +445,7 @@ export function mount(container, api) {
   seatRow.appendChild(rematchBtn);
   seatRow.appendChild(lobbySettingsBtn);
   const watchBtn = document.createElement('button');
-  watchBtn.textContent = '👁 SPECTATE';
+  watchBtn.textContent = 'SPECTATE';
   watchBtn.hidden = true;
   watchBtn.addEventListener('click', () => { spectating = true; if (latestState) applyState(latestState); });
   seatRow.appendChild(watchBtn);
@@ -543,7 +543,7 @@ export function mount(container, api) {
   }
 
   function nicknameFor(st, seat) {
-    if (st.seats[seat] === 'BOT') return `🤖 CPU (${levelLabel((st.botLevels || {})[seat])})`;
+    if (st.seats[seat] === 'BOT') return `CPU (${levelLabel((st.botLevels || {})[seat])})`;
     const p = st.players[seat];
     return (p && p.nickname) || '(empty)';
   }
@@ -1485,7 +1485,7 @@ export function mount(container, api) {
       arena.leaveSeatArenaBtn.textContent = spectating ? 'STOP WATCHING' : 'LEAVE SEAT';
       if (spectating) {
         arena.unlockHint.hidden = false;
-        arena.unlockHint.textContent = `👁 WATCHING ${me.nickname || 'PLAYER'} — CLICK/SPACE: SWITCH · ESC: STOP`;
+        arena.unlockHint.textContent = `WATCHING ${me.nickname || 'PLAYER'} — CLICK/SPACE: SWITCH · ESC: STOP`;
       }
       arena.ammoEl.textContent = me.reloading ? 'RELOADING…' : `${me.ammo[me.weapon]} / ${me.magSize}`;
       for (const id of Object.keys(arena.wslots)) arena.wslots[id].classList.toggle('active', id === me.weapon);
@@ -1517,7 +1517,7 @@ export function mount(container, api) {
         arena.perkBox.replaceChildren(...currentView.perkChoices.filter((k) => !owned.includes(k)).map((k) => {
           const b = document.createElement('button');
           b.className = 'shooter-perk';
-          b.innerHTML = `${PERK_INFO[k].icon} ${PERK_INFO[k].name}<small>${PERK_INFO[k].desc}</small>`;
+          b.innerHTML = `${PERK_INFO[k].name}<small>${PERK_INFO[k].desc}</small>`;
           b.addEventListener('click', (e) => { e.stopPropagation(); api.sendAction({ kind: 'pickPerk', perk: k }); });
           return b;
         }));

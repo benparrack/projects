@@ -129,13 +129,13 @@ test('shop: buy once, equip/unequip, guests and the broke cannot buy; tier and c
   assert.strictEqual(w.view('u1').equipped.charm, 'charm-clover'); // bought = worn
   assert.strictEqual(w.buy('u1', 'charm-clover'), 'owned');
   assert.strictEqual(w.buy('u1', 'felt-gold'), 'broke');
-  assert.strictEqual(w.flair('u1'), '🥉🍀');
+  assert.strictEqual(w.flair('u1'), '♣');
   assert.strictEqual(w.equip('u1', 'charm-clover'), null);
   assert.strictEqual(w.view('u1').equipped.charm, undefined);
   assert.strictEqual(w.equip('u1', 'felt-gold'), 'unknown'); // not owned
   w.noteBet('u1', 5000);
   assert.strictEqual(w.view('u1').tier.name, 'Gold');
-  assert.strictEqual(w.flair('u1'), '🥇');
+  assert.strictEqual(w.flair('u1'), '◆');
   assert.strictEqual(w.buy('g:x', 'charm-clover'), 'guest');
   assert.strictEqual(w.flair('g:x'), '');
 });
@@ -155,7 +155,7 @@ test('VIP: $1,000 across balance and tables, or the key; leaderboards read the d
   await w.flush();
   const b = await w.leaderboards();
   assert.deepStrictEqual(b.richest.map((r) => r.name), ['ann', 'bob']);
-  assert.deepStrictEqual(b.biggestWin, [{ name: 'bob', value: 40, tier: '🥉' }]);
+  assert.deepStrictEqual(b.biggestWin, [{ name: 'bob', value: 40, tier: '' }]);
 });
 
 (async () => {

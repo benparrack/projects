@@ -35,7 +35,6 @@ const CSS = `
 .dn .dn-btn.go:hover:not(:disabled) { background: #27ae60; color: #fff; }
 .dn .dn-btn.big { font-size: 1.35em; padding: 12px 28px; border-radius: 18px; animation: dn-throb 1.6s ease-in-out infinite; }
 .dn .dn-btn.small { padding: 4px 10px; font-size: .9em; border-radius: 10px; box-shadow: 0 3px 0 var(--ink); }
-.dn .dn-btn.icon { padding: 2px 8px; font-size: .9em; border-radius: 10px; box-shadow: 0 3px 0 var(--ink); }
 .dn .dn-btn.buy { background: var(--yellow); width: 100%; }
 .dn .dn-btn.buy:hover:not(:disabled) { background: #ffc800; }
 .dn-link { background: none; border: none; text-decoration: underline; font-size: .85em; padding: 2px; }
@@ -64,7 +63,6 @@ const CSS = `
 .dn-card.has { background: #f2fff4; }
 .dn-cardhead { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
 .dn-cardhead b { flex: 1; }
-.dn-cardicon { font-size: 1.8em; line-height: 1; }
 .dn-pips { display: flex; gap: 4px; } .dn-pips i { width: 18px; height: 8px; border-radius: 4px; border: 2px solid var(--ink); background: #eee; }
 .dn-pips i.on { background: var(--green); }
 .dn-desc { font-size: .85em; opacity: .8; flex: 1; }
@@ -187,7 +185,7 @@ const CSS = `
 .dn-fx { position: absolute; left: 0; right: 0; top: 60px; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 5; }
 .dn-pop { padding: 6px 16px; border-radius: 999px; font-weight: 700; font-size: 1.2em; background: var(--yellow); border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink); animation: dn-pop 1.8s ease-out forwards; }
 .dn-pop.bad { background: var(--red); color: #fff; }
-.dn-coin { position: absolute; font-size: 1.6em; pointer-events: none; z-index: 6; animation: dn-coin .9s cubic-bezier(.3,.7,.5,1) forwards; }
+.dn-coin { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #f5c542; border: 2px solid #b8860b; pointer-events: none; z-index: 6; animation: dn-coin .9s cubic-bezier(.3,.7,.5,1) forwards; }
 @keyframes dn-coin { from { transform: translate(0,0) scale(.6); opacity: 1; } to { transform: translate(var(--x), var(--y)) scale(1.1) rotate(var(--r)); opacity: 0; } }
 @keyframes dn-pop { 0% { transform: scale(.4); opacity: 0; } 12% { transform: scale(1.15); opacity: 1; } 25% { transform: scale(1); } 75% { opacity: 1; } 100% { transform: translateY(-40px); opacity: 0; } }
 @keyframes dn-steam { 0% { transform: translateY(0) scaleX(1); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-26px) scaleX(1.8); opacity: 0; } }
@@ -237,7 +235,7 @@ export function mount(container, api) {
   function coins(n) {
     const w = root.clientWidth;
     for (let i = 0; i < n; i++) {
-      const c = el('div', 'dn-coin', '🪙');
+      const c = el('div', 'dn-coin');
       Object.assign(c.style, { left: `${w / 2}px`, top: '90px', animationDelay: `${i * 0.05}s` });
       c.style.setProperty('--x', `${(Math.random() - 0.5) * 220}px`);
       c.style.setProperty('--y', `${-40 - Math.random() * 80}px`);
@@ -299,19 +297,19 @@ export function mount(container, api) {
         sfx.play('chime');
         const fresh = data.tickets.filter((t) => !prev.tickets.some((p) => p.id === t.id));
         const sp = fresh.find((t) => t.special && t.special !== 'kid');
-        if (sp) { sfx.play('go'); pop({ rush: '🏃 RUSH HOUR! ×1.5 pay', critic: '🧐 A FOOD CRITIC sat down: impress them!', celebrity: '🌟 A CELEBRITY! Huge tip, no patience' }[sp.special]); }
+        if (sp) { sfx.play('go'); pop({ rush: 'Rush hour: ×1.5 pay', critic: 'A food critic sat down', celebrity: 'Celebrity order: big tip, short patience' }[sp.special]); }
       }
       if (data.served.length > prev.served.length) {
         const s = data.served[data.served.length - 1];
         sfx.play(s.score >= 60 ? 'chips' : 'point');
-        pop(`${s.score >= 90 ? '😋' : s.score >= 60 ? '🙂' : '😕'} ${s.score}% · +${money(s.price + s.tip)}${s.combo ? ' · COMBO!' : ''}`);
+        pop(`${s.score}% · +${money(s.price + s.tip)}${s.combo ? ' · combo' : ''}`);
         coins(Math.max(1, Math.round(s.score / 20)));
-        if (s.special === 'critic') setTimeout(() => pop(s.rep > 0 ? `⭐ The critic loved it! +${s.rep} rep` : s.rep < 0 ? `💔 Bad review… ${s.rep} rep` : '🧐 The critic shrugs.', s.rep < 0), 700);
+        if (s.special === 'critic') setTimeout(() => pop(s.rep > 0 ? `Good review: +${s.rep} rep` : s.rep < 0 ? `Bad review: ${s.rep} rep` : 'The critic was unmoved', s.rep < 0), 700);
       }
-      if (data.missed > prev.missed) { sfx.play('lose'); pop('😠 A customer walked out · −5 rep', true); }
+      if (data.missed > prev.missed) { sfx.play('lose'); pop('Customer walked out · −5 rep', true); }
     }
     if (prev && prev.phase !== 'shift' && data.phase !== 'shift' && prev.restaurant && data.restaurant && data.restaurant.tier > prev.restaurant.tier) {
-      sfx.play('win'); pop(`🎉 Welcome to your ${data.catalog.TIERS[data.restaurant.tier].name}!`); coins(12);
+      sfx.play('win'); pop(`Upgraded to ${data.catalog.TIERS[data.restaurant.tier].name}`); coins(12);
     }
     msg = '';
     render();

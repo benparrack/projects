@@ -205,7 +205,7 @@ function buildView(room, forClientId) {
 }
 
 function botNickname(id) {
-  return `🤖 ${id.slice(4).split('~')[0]} (${LEVEL_LABEL[botLevel(id)]})`;
+  return `${id.slice(4).split('~')[0]} (${LEVEL_LABEL[botLevel(id)]})`;
 }
 
 function broadcastState(room, ctx) {

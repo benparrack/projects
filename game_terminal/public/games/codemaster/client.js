@@ -284,7 +284,7 @@ export function mount(container, api) {
     for (const t of root.querySelectorAll('[data-start]')) {
       const start = Number(t.dataset.start);
       const end = t.dataset.end ? Number(t.dataset.end) : clock.now();
-      t.textContent = `⏱ ${fmtTime(end - start)}`;
+      t.textContent = `${fmtTime(end - start)}`;
     }
   }, 500);
 
@@ -335,7 +335,7 @@ export function mount(container, api) {
     if (b && b.startedAt) {
       t.dataset.start = String(b.startedAt);
       if (b.finishedAt) t.dataset.end = String(b.finishedAt);
-      t.textContent = `⏱ ${fmtTime((b.finishedAt || clock.now()) - b.startedAt)}`;
+      t.textContent = `${fmtTime((b.finishedAt || clock.now()) - b.startedAt)}`;
     }
     return t;
   }
@@ -423,7 +423,7 @@ export function mount(container, api) {
     go.addEventListener('click', submit);
     acts.append(clr);
     if (view.phase === 'setting') {
-      const rnd = el('button', null, '🎲 RANDOM');
+      const rnd = el('button', null, 'RANDOM');
       rnd.addEventListener('click', randomDraft);
       acts.append(rnd);
     }
@@ -470,7 +470,7 @@ export function mount(container, api) {
       if (b && !b.done) {
         s.textContent = `▶ GUESS ${b.guesses.length + 1} OF ${view.maxGuesses}`;
         s.classList.add('mine');
-      } else if (b && b.solved) s.textContent = `✔ Cracked in ${b.guesses.length}! Waiting for the others…`;
+      } else if (b && b.solved) s.textContent = `Cracked in ${b.guesses.length}. Waiting for the others…`;
       else if (b) s.textContent = 'Out of guesses — waiting for the others…';
       else s.textContent = view.mode === 'race' ? 'Race in progress — you can still JOIN.' : 'Game in progress.';
     } else {

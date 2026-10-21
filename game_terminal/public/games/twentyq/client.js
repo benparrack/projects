@@ -12,7 +12,6 @@ import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
 
 const SEAT_COLOR = { p1: '#3ad7ff', p2: '#ffb000' };
-const CAT_EMOJI = { animal: '🐾', food: '🍔', object: '📦', place: '🗺️', person: '🧑', any: '❔' };
 const CAT_LABEL = { animal: 'ANIMAL', food: 'FOOD & DRINK', object: 'OBJECT', place: 'PLACE', person: 'PERSON / JOB', any: 'ANYTHING' };
 const ANSWER_LABEL = { yes: 'YES', no: 'NO', sometimes: 'SOMETIMES', unknown: "DON'T KNOW", correct: 'CORRECT!' };
 const REJECT_MESSAGES = {
@@ -225,7 +224,7 @@ export function mount(container, api) {
   // Picking panel.
   const pickPanel = el('div', 'tq-panel hot');
   const sugBox = el('div', 'tq-sugs');
-  const rerollBtn = btn('🎲 NEW SUGGESTIONS', () => api.sendAction({ kind: 'reroll' }));
+  const rerollBtn = btn('NEW SUGGESTIONS', () => api.sendAction({ kind: 'reroll' }));
   const pickInput = el('input');
   pickInput.type = 'text';
   pickInput.placeholder = 'or type your own word';
@@ -243,7 +242,7 @@ export function mount(container, api) {
   const pickRow = el('div', 'tq-row');
   pickRow.append(pickInput, pickCat, pickGo);
   const pickHint = el('div', 'tq-hint');
-  pickPanel.append(el('h4', '', '🤫 PICK A SECRET WORD'), sugBox, el('div', 'tq-row'), pickRow, pickHint);
+  pickPanel.append(el('h4', '', 'PICK A SECRET WORD'), sugBox, el('div', 'tq-row'), pickRow, pickHint);
   pickPanel.children[2].append(rerollBtn);
   pickInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitPick(); } });
   function submitPick() {
@@ -261,13 +260,13 @@ export function mount(container, api) {
   askInput.maxLength = 100;
   askInput.autocomplete = 'off';
   askInput.spellcheck = true;
-  const askBtn = btn('ASK ❓', () => submitAsk('ask'), 'tq-btn-hot');
-  const guessBtn = btn('GUESS 🎯', () => submitAsk('guess'));
+  const askBtn = btn('ASK', () => submitAsk('ask'), 'tq-btn-hot');
+  const guessBtn = btn('GUESS', () => submitAsk('guess'));
   const askRow = el('div', 'tq-row');
   askRow.append(askInput, askBtn, guessBtn);
   const ideas = el('div', 'tq-ideas');
   const askHint = el('div', 'tq-hint');
-  askPanel.append(el('h4', '', '🔍 YOUR QUESTION'), askRow, ideas, askHint);
+  askPanel.append(el('h4', '', 'YOUR QUESTION'), askRow, ideas, askHint);
   askInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitAsk('ask'); } });
   let ideasKey = '';
   function submitAsk(kind) {
@@ -299,8 +298,8 @@ export function mount(container, api) {
   const wrongBtn = btn('', () => answer('no'), 'tq-ans');
   wrongBtn.style.setProperty('--a', '#ff4d4d');
   wrongBtn.append('NOPE', Object.assign(el('kbd'), { textContent: 'N' }));
-  const gotIt = btn('✔ They got it — that IS my word', () => answer('correct'), 'tq-gotit');
-  ansPanel.append(el('h4', '', '💬 ANSWER HONESTLY'), ansQ, ansBox, gotIt);
+  const gotIt = btn('They got it: that is my word', () => answer('correct'), 'tq-gotit');
+  ansPanel.append(el('h4', '', 'ANSWER'), ansQ, ansBox, gotIt);
   function answer(v) {
     if (!isMyAnswerTurn()) return;
     api.sendAction({ kind: 'answer', value: v });
@@ -345,7 +344,7 @@ export function mount(container, api) {
   // ---------- helpers ----------
   function nicknameFor(id) {
     if (!id) return null;
-    if (id === 'BOT') return '🤖 Bot';
+    if (id === 'BOT') return 'Bot';
     const r = roster.find((x) => x.clientId === id);
     return r ? r.nickname : 'someone';
   }
@@ -401,7 +400,7 @@ export function mount(container, api) {
       box.style.setProperty('--c', SEAT_COLOR[s]);
       const row = el('div', 'row');
       row.append(el('span', 'tq-chip'), el('span', 'nm', `${seatName(s)}${view.players[s] && view.players[s] === api.getClientId() ? ' (you)' : ''}`));
-      if (inMatch && view.picker) row.appendChild(el('span', 'role', view.picker === s ? '🤫 PICKER' : '🔍 GUESSER'));
+      if (inMatch && view.picker) row.appendChild(el('span', 'role', view.picker === s ? 'PICKER' : 'GUESSER'));
       const sc = el('span', 'score', String(view.scores[s]));
       if (prevScores && view.scores[s] > prevScores[s] && !reduced()) sc.classList.add('bump');
       row.appendChild(sc);
@@ -431,7 +430,7 @@ export function mount(container, api) {
     const reveal = view.phase === 'round_over' || view.phase === 'game_over';
     const showWord = !!view.secretWord && (reveal || seat === view.picker);
     frontCat.hidden = !cat;
-    if (cat) frontCat.textContent = `${CAT_EMOJI[cat] || '❔'} ${CAT_LABEL[cat] || 'ANYTHING'}`;
+    if (cat) frontCat.textContent = CAT_LABEL[cat] || 'ANYTHING';
     frontLbl.textContent = view.phase === 'waiting' ? 'WAITING FOR PLAYERS' : view.phase === 'picking' ? 'PICKING A WORD…' : 'SECRET WORD';
     if (showWord) {
       backWord.textContent = view.secretWord;
@@ -488,7 +487,7 @@ export function mount(container, api) {
       if (!row) {
         row = el('div', `tq-q${q.kind === 'guess' ? ' guess' : ''}`);
         row.style.setProperty('--c', SEAT_COLOR[view.guesser] || '#1f8f0c');
-        row.append(el('span', 'n', String(q.n)), el('span', 't', q.kind === 'guess' ? `🎯 Is it ${/^[aeiou]/i.test(q.text) ? 'an' : 'a'} ${q.text}?` : q.text), stampFor(q));
+        row.append(el('span', 'n', String(q.n)), el('span', 't', q.kind === 'guess' ? `Is it ${/^[aeiou]/i.test(q.text) ? 'an' : 'a'} ${q.text}?` : q.text), stampFor(q));
         row.dataset.a = q.answer || '';
         const empty = log.querySelector('.empty');
         if (empty) empty.remove();
@@ -529,11 +528,11 @@ export function mount(container, api) {
         sugBox.innerHTML = '';
         view.suggestions.forEach((s, i) => {
           const b = btn('', () => { api.sendAction({ kind: 'pick', index: i }); sfx.play('select'); }, 'tq-sug');
-          b.append(el('span', 'e', CAT_EMOJI[s.category] || '❔'), el('span', '', s.word), el('small', '', CAT_LABEL[s.category].toLowerCase()));
+          b.append(el('span', '', s.word), el('small', '', CAT_LABEL[s.category].toLowerCase()));
           sugBox.appendChild(b);
         });
       }
-      pickHint.textContent = opponentBot ? '🤖 The bot only knows its built-in words — the suggestions are safe picks.' : 'The guesser sees only the category.';
+      pickHint.textContent = opponentBot ? 'The bot only knows its built-in words, so the suggestions are safe picks.' : 'The guesser sees only the category.';
       pickHint.className = `tq-hint${opponentBot ? ' warn' : ''}`;
       if (fresh) { pickInput.value = ''; }
       return;
@@ -561,7 +560,7 @@ export function mount(container, api) {
       const fresh = showPanel(ansPanel);
       const q = view.questions[view.questions.length - 1];
       const isGuess = q && q.kind === 'guess';
-      ansQ.textContent = q ? (isGuess ? `🎯 They guess: “${q.text}”` : `“${q.text}”`) : '';
+      ansQ.textContent = q ? (isGuess ? `They guess: “${q.text}”` : `“${q.text}”`) : '';
       ansQ.className = `tq-ask-q${isGuess ? ' guess' : ''}`;
       const want = isGuess ? [correctBtn, wrongBtn] : ANS_DEF.map(([v]) => ansBtns[v]);
       if (fresh || ansBox.dataset.mode !== String(isGuess)) {
@@ -580,8 +579,8 @@ export function mount(container, api) {
         const mine = seat === r.winner;
         resultBox.style.setProperty('--r', r.solved ? '#ffd36b' : '#ff7ad9');
         resultBig.textContent = r.solved
-          ? `🎉 ${r.guesser === seat ? 'YOU GOT IT' : `${seatName(r.guesser)} GOT IT`} IN ${r.questions}!`
-          : `🤐 STUMPED! ${r.picker === seat ? 'You win the round' : `${seatName(r.picker)} wins the round`}`;
+          ? `${r.guesser === seat ? 'YOU GOT IT' : `${seatName(r.guesser)} GOT IT`} IN ${r.questions}!`
+          : `STUMPED. ${r.picker === seat ? 'You win the round' : `${seatName(r.picker)} wins the round`}`;
         resultSm.textContent = `The word was “${r.word}” · +${r.points} to ${mine ? 'you' : seatName(r.winner)}`;
       }
       if (ph === 'round_over') {

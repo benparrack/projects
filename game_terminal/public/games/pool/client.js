@@ -728,7 +728,7 @@ export function mount(container, api) {
           c.save();
           c.translate(tx(cue.x), ty(cue.y));
           if (portrait) c.rotate(-Math.PI / 2);
-          c.fillText('✋ drag to place', 0, -(Sim.R + 3) * scale);
+          c.fillText('drag to place', 0, -(Sim.R + 3) * scale);
           c.restore();
         }
       }

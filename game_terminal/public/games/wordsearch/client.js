@@ -523,8 +523,8 @@ export function mount(container, api) {
       const dot = el('span', 'ws-dot');
       dot.style.background = p.color;
       dot.style.color = p.color;
-      const name = el('span', 'ws-name', `${top > 0 && p.score === top ? '👑 ' : ''}${p.nickname}${p.clientId === me ? ' (you)' : ''}`);
-      li.append(dot, name, el('span', 'ws-pts', `${p.score}`), el('span', 'ws-wins', `· ${p.wins}🏆`));
+      const name = el('span', 'ws-name', `${top > 0 && p.score === top ? '★ ' : ''}${p.nickname}${p.clientId === me ? ' (you)' : ''}`);
+      li.append(dot, name, el('span', 'ws-pts', `${p.score}`), el('span', 'ws-wins', `· ${p.wins} wins`));
       scoresEl.appendChild(li);
     }
   }

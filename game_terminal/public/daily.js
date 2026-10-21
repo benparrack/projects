@@ -54,7 +54,7 @@ export async function renderDailyCard(mount, { account, auth, play, signIn, onPa
     h('div.daily-games', buttons),
     h('div.daily-foot',
       account
-        ? h('span.daily-streak', streak ? `🔥 ${streak}-day streak` : 'Play one today to start a streak.')
+        ? h('span.daily-streak', streak ? `${streak}-day streak` : 'Play one today to start a streak.')
         : h('span.muted', 'Same board for everyone, one try a day. Sign in to play.'),
       onPage ? null : h('a.daily-board-link', { href: '/daily', 'data-link': true }, 'TODAY\'S BOARD →'))));
 }

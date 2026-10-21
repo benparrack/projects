@@ -451,7 +451,7 @@ export function mount(container, api) {
       for (const x of all) wordsEl.appendChild(chip(x.word, `${mine.has(x.word) ? '' : 'missed'} ${shown && shown.word === x.word ? 'sel' : ''}`, traced(x.word)));
     }
     if (shown) {
-      const def = el('a', null, `📖 What does ${shown.word.toUpperCase()} mean?`);
+      const def = el('a', null, `What does ${shown.word.toUpperCase()} mean?`);
       Object.assign(def, { href: `https://en.wiktionary.org/wiki/${encodeURIComponent(shown.word)}`, target: '_blank', rel: 'noopener' });
       const li = el('li', 'wh-empty');
       li.style.cssText = 'width:100%;opacity:1';
@@ -468,7 +468,7 @@ export function mount(container, api) {
     const topScore = list.length ? list[0].score : 0;
     if (over) {
       const all = el('li', `wh-score pick ${!pickedPlayer ? 'picked' : ''}`);
-      all.append(el('span', 'wh-name', '📜 All words in the grid'));
+      all.append(el('span', 'wh-name', 'All words in the grid'));
       all.addEventListener('click', () => { pickedPlayer = null; shown = null; renderScores(); renderWords(); });
       scoresEl.appendChild(all);
     }
@@ -479,9 +479,9 @@ export function mount(container, api) {
       const dot = el('span', 'wh-dot');
       dot.style.background = p.color;
       dot.style.color = p.color;
-      const crown = topScore > 0 && p.score === topScore ? '👑 ' : '';
+      const crown = topScore > 0 && p.score === topScore ? '★ ' : '';
       li.append(dot, el('span', 'wh-name', `${crown}${p.nickname}${p.clientId === me() ? ' (you)' : ''}`),
-        el('span', 'wh-pts', `${p.score}`), el('span', 'wh-cnt', `${p.count}w · ${p.wins}🏆`));
+        el('span', 'wh-pts', `${p.score}`), el('span', 'wh-cnt', `${p.count}w · ${p.wins} wins`));
       if (over) {
         li.classList.add('pick');
         if (pickedPlayer === p.clientId) li.classList.add('picked');

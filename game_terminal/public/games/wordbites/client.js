@@ -421,7 +421,7 @@ export function mount(container, api) {
       const li = el('li', p.clientId === me ? 'me' : '');
       const dot = el('span', 'dot');
       dot.style.background = p.color;
-      li.append(dot, el('span', 'nm', p.nickname), el('span', 'pts', `${p.score} · ${p.count} · ${p.wins}🏆`));
+      li.append(dot, el('span', 'nm', p.nickname), el('span', 'pts', `${p.score} · ${p.count} · ${p.wins} wins`));
       scoresEl.appendChild(li);
     }
   }

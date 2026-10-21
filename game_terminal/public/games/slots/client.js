@@ -4,7 +4,13 @@
 
 import { sfx } from '../sfx.js';
 
-const GLYPH = { CH: '🍒', LE: '🍋', BE: '🔔', BA: 'BAR', SE: '7', JP: '◆', BL: '·', BN: '★' };
+const GLYPH = { CH: 'Cherry', LE: 'Lemon', BE: 'Bell', BA: 'BAR', SE: '7', JP: '◆', BL: '·', BN: '★' };
+// Fruit and bell symbols are drawn; the rest are type.
+const ART = {
+  CH: '<path d="M16 4q6 2 10 12M16 4q-6 6-6 14" fill="none" stroke="#2e7d32" stroke-width="2.5"/><circle cx="10" cy="24" r="7" fill="#c62828"/><circle cx="25" cy="22" r="7" fill="#c62828"/><circle cx="8" cy="21" r="2" fill="#ef9a9a"/><circle cx="23" cy="19" r="2" fill="#ef9a9a"/>',
+  LE: '<path d="M4 18q0-10 14-11q14 1 14 11q0 10-14 10t-14-10z" fill="#fbc02d" stroke="#a67c00" stroke-width="2"/><path d="M12 13q4-3 9-2" fill="none" stroke="#fff59d" stroke-width="2"/>',
+  BE: '<path d="M18 5q-9 0-9 13l-4 6h26l-4-6q0-13-9-13z" fill="#f9a825" stroke="#8d6e00" stroke-width="2"/><circle cx="18" cy="27" r="3" fill="#8d6e00"/>',
+};
 const ORDER = ['CH', 'LE', 'BE', 'BA', 'SE', 'JP', 'BL', 'BN'];
 const PAYTABLE = [['JP', '500x + POT'], ['SE', '100x'], ['BA', '40x'], ['BE', '20x'], ['LE', '10x'], ['CH', '10x']];
 const PAYS = new Set(['CH', 'LE', 'BE', 'BA', 'SE', 'JP']); // a pair of these on reels 1-2 teases reel 3
@@ -49,6 +55,7 @@ const CSS = `
 .sl-sym.BA span { font-size: 18px; letter-spacing: .08em; color: #fffdf6; background: linear-gradient(180deg, #333, #000); padding: 4px 8px; border-radius: 3px; border: 2px solid #c9a24a; }
 .sl-sym.JP { font-size: 50px; color: #19b5f2; text-shadow: 0 0 10px rgba(25,181,242,.7), 0 2px 0 #045; }
 .sl-sym.BL { color: #b8b0a0; }
+.sl-sym svg { width: 70%; height: 70%; }
 .sl-sym.BN { font-size: 46px; color: #ffd23f; -webkit-text-stroke: 2px #8a2be2; text-shadow: 0 0 10px rgba(138,43,226,.6); }
 .sl-ladder { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 6px 0 2px; }
 .sl-ladder div { border-radius: 6px; padding: 2px 4px; text-align: center; font-family: Georgia, serif; font-weight: bold; font-size: .72em; line-height: 1.2; color: #fff; border: 1px solid rgba(255,255,255,.35); }
@@ -91,7 +98,7 @@ const CSS = `
 .sl-others { font-size: .85em; width: 100%; max-width: 420px; }
 .sl-others li { display: flex; justify-content: space-between; gap: 8px; }
 .sl-fx { position: absolute; inset: -40px -20px -20px; pointer-events: none; overflow: hidden; z-index: 5; }
-.sl-coin { position: absolute; top: -30px; font-size: 22px; animation: sl-fall var(--t) cubic-bezier(.3,.1,.6,1) var(--d) forwards; opacity: 0; }
+.sl-coin { position: absolute; top: -30px; width: 18px; height: 18px; border-radius: 50%; background: #f5c542; border: 2px solid #b8860b; animation: sl-fall var(--t) cubic-bezier(.3,.1,.6,1) var(--d) forwards; opacity: 0; }
 .sl-banner { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); white-space: nowrap; font-family: Georgia, serif; font-weight: bold; font-size: 2.4em;
   color: #ffd23f; text-shadow: 0 0 14px #ff8c00, 0 3px 0 #7a3b00, 0 0 30px #ffbf00; animation: sl-banner 2.6s ease-out forwards; z-index: 6; }
 .sl-banner.jp { color: #39ff14; text-shadow: 0 0 18px #39ff14, 0 3px 0 #064; font-size: 2.8em; }
@@ -127,7 +134,7 @@ export function mount(container, api) {
   container.append(style, root);
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const sym = (s) => { const d = el('div', `sl-sym ${s}`); if (s === 'BA') d.append(el('span', null, 'BAR')); else d.textContent = GLYPH[s]; return d; };
+  const sym = (s) => { const d = el('div', `sl-sym ${s}`); if (ART[s]) d.innerHTML = `<svg viewBox="0 0 36 32">${ART[s]}</svg>`; else if (s === 'BA') d.append(el('span', null, 'BAR')); else d.textContent = GLYPH[s]; return d; };
   const prize = (tier, b) => (view.bonusTiers.find(([n]) => n === tier) || [0, 0])[1] * b;
   const name = (id) => (roster.find((r) => r.clientId === id) || {}).nickname || 'someone';
   const randSym = () => ORDER[Math.floor(Math.random() * ORDER.length)];
@@ -167,7 +174,8 @@ export function mount(container, api) {
   const pay = el('div', 'sl-pay');
   const row3 = (s) => { const d = el('span'); d.append(sym(s), sym(s), sym(s)); return d; };
   for (const [s, x] of PAYTABLE) pay.append(row3(s), el('span', null, x));
-  pay.append(el('span', null, '🍒 🍒 any'), el('span', null, '3x'), el('span', null, '🍒 any'), el('span', null, '1x'));
+  { const d = el('span'); d.append(sym('CH'), sym('CH'), el('span', null, ' any')); pay.append(d, el('span', null, '3x')); }
+  { const d = el('span'); d.append(sym('CH'), el('span', null, ' any')); pay.append(d, el('span', null, '1x')); }
   { const d = el('span'); d.append(sym('BN'), sym('BN'), el('span', null, ' any')); pay.append(d, el('span', null, 'BONUS')); }
   const others = el('ul', 'sl-others');
   root.append(cab, line, balance, controls, pay, others);
@@ -216,7 +224,7 @@ export function mount(container, api) {
     const w = fx.clientWidth || 300;
     const h = fx.clientHeight || 400;
     for (let i = 0; i < count; i++) {
-      const c = el('span', 'sl-coin', i % 5 === 0 ? '💰' : '🪙');
+      const c = el('span', 'sl-coin');
       c.style.left = `${Math.random() * w}px`;
       c.style.setProperty('--d', `${Math.random() * 0.8}s`);
       c.style.setProperty('--t', `${1.1 + Math.random() * 0.9}s`);

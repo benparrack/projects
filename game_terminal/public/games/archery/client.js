@@ -323,7 +323,7 @@ export function mount(container, api) {
   }
   const seatName = (seat) => {
     const id = view.players[seat];
-    if (id === 'BOT') return `🤖 Bot (${((view.botLevels || {})[seat] || 'hard').replace(/^./, (c) => c.toUpperCase())})`;
+    if (id === 'BOT') return `Bot (${((view.botLevels || {})[seat] || 'hard').replace(/^./, (c) => c.toUpperCase())})`;
     return nicknameFor(id) || '(empty)';
   };
   function mySeat() {

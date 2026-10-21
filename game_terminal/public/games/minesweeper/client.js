@@ -350,17 +350,17 @@ export function mount(container, api) {
       status.textContent = `${seat === view.winner ? 'YOU WIN' : `${SEAT_LABEL[view.winner]} (${seatName(view.winner)}) WINS`} — cleared in ${fmt(view.elapsedMs)}`;
       status.style.color = '#ffb000';
     } else if (seat && frozenUntil[seat] > now) {
-      status.textContent = `💥 FROZEN ${Math.ceil((frozenUntil[seat] - now) / 1000)}s · ${fmt(now - clockBase)}`;
+      status.textContent = `FROZEN ${Math.ceil((frozenUntil[seat] - now) / 1000)}s · ${fmt(now - clockBase)}`;
       status.classList.add('frozen');
     } else {
-      status.textContent = `⏱ ${fmt(now - clockBase)} · ${view.mines} mines · first to clear wins`;
+      status.textContent = `${fmt(now - clockBase)} · ${view.mines} mines · first to clear wins`;
     }
     for (const s of ['p1', 'p2']) {
       const g = grids[s];
       if (!g || !g.freeze) continue;
       const left = frozenUntil[s] - now;
       g.freeze.classList.toggle('on', view.phase === 'playing' && left > 0);
-      g.freeze.textContent = left > 0 ? `💥 ${Math.ceil(left / 1000)}` : '';
+      g.freeze.textContent = left > 0 ? `${Math.ceil(left / 1000)}` : '';
     }
   }
 

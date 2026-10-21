@@ -14,7 +14,7 @@ export function renderTurns(mount, games, { gameLabel, join, remove }) {
   };
   mount.replaceChildren(h('section.turns-card', { 'aria-labelledby': 'turns-title' },
     h('div.turns-head',
-      h('h2#turns-title.turns-title', '♟ YOUR GAMES'),
+      h('h2#turns-title.turns-title', 'YOUR GAMES'),
       mine ? h('span.turns-badge', `${mine} YOUR MOVE`) : null,
       h('span.muted.turns-hint', 'Played by turns. Move whenever you like.')),
     h('ul.turns-rows', games.map((g) => {
