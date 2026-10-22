@@ -238,24 +238,33 @@ export function autoFields(st) {
     wrap.append(field(label, s.el).el, pct.el);
     return { el: wrap, read: () => ({ mode, pct: Number(pct.get()) || 0 }), disable(on) { s.disable(on); pct.disable(on || mode === 'reset'); } };
   };
+  // Base bet: the Bet Amount field, or a share of the balance taken fresh on every reset so it grows with you.
+  let sizeMode = st.get('sizeMode', 'fixed');
+  const sizePct = numberInput({ value: st.get('sizePct', 1), step: '0.1', min: 0.1, suffix: '%', onChange: (v) => st.set('sizePct', Math.min(100, Math.max(0.1, Number(v) || 1))) });
+  const sizeSeg = seg(['fixed', 'pct'], sizeMode, (m) => { sizeMode = m; st.set('sizeMode', m); sizePct.disable(m === 'fixed'); }, { fixed: 'Fixed', pct: '% of Balance' });
+  sizePct.disable(sizeMode === 'fixed');
+  const size = el('div', 'og-field');
+  size.append(field('Base Bet', sizeSeg.el).el, sizePct.el);
   const onWin = rule('win', 'On Win');
   const onLoss = rule('loss', 'On Loss');
   const stopP = numberInput({ value: st.get('stopProfit', ''), step: '0.01', min: 0, prefix: '$', onChange: (v) => st.set('stopProfit', v) });
   const stopL = numberInput({ value: st.get('stopLoss', ''), step: '0.01', min: 0, prefix: '$', onChange: (v) => st.set('stopLoss', v) });
   const row = el('div', 'og-row2');
   row.append(field('Stop on Profit', stopP.el).el, field('Stop on Loss', stopL.el).el);
-  box.append(field('Number of Bets', count.el).el, onWin.el, onLoss.el, row);
+  box.append(field('Number of Bets', count.el).el, size, onWin.el, onLoss.el, row);
   return {
     el: box,
-    read: () => ({ count: Math.max(0, Math.floor(Number(count.get()) || 0)), onWin: onWin.read(), onLoss: onLoss.read(), stopProfit: Number(stopP.get()) || 0, stopLoss: Number(stopL.get()) || 0 }),
-    disable(on) { count.disable(on); onWin.disable(on); onLoss.disable(on); stopP.disable(on); stopL.disable(on); },
+    read: () => ({ count: Math.max(0, Math.floor(Number(count.get()) || 0)), sizePct: sizeMode === 'pct' ? Math.min(100, Number(sizePct.get()) || 0) : 0, onWin: onWin.read(), onLoss: onLoss.read(), stopProfit: Number(stopP.get()) || 0, stopLoss: Number(stopL.get()) || 0 }),
+    disable(on) { count.disable(on); sizeSeg.disable(on); sizePct.disable(on || sizeMode === 'fixed'); onWin.disable(on); onLoss.disable(on); stopP.disable(on); stopL.disable(on); },
   };
 }
 
 // Runs the auto rules: `next(profit)` after each settled bet returns the next bet, or null to stop
 // (with `reason` saying why).
-export function autoRunner(rules, base, limits) {
-  let bet = base;
+export function autoRunner(rules, base, limits, balance) {
+  const clamp = (v) => Math.min(limits.max, Math.max(limits.min, v));
+  const baseFor = (bal) => (rules.sizePct && bal != null ? clamp(round2(bal * rules.sizePct / 100)) : base);
+  let bet = baseFor(balance);
   let left = rules.count || Infinity;
   let net = 0;
   const r = {
@@ -270,8 +279,7 @@ export function autoRunner(rules, base, limits) {
       if (rules.stopProfit && net >= rules.stopProfit) { r.reason = `Stopped on profit (${money(net)}).`; return null; }
       if (rules.stopLoss && -net >= rules.stopLoss) { r.reason = `Stopped on loss (${money(net)}).`; return null; }
       const rule = profit > 0 ? rules.onWin : rules.onLoss;
-      bet = rule.mode === 'reset' ? base : round2(bet * (1 + rule.pct / 100));
-      bet = Math.min(limits.max, Math.max(limits.min, bet));
+      bet = clamp(rule.mode === 'reset' ? baseFor(balance) : round2(bet * (1 + rule.pct / 100)));
       if (balance != null && balance < bet) { r.reason = 'Not enough balance for the next bet.'; return null; }
       return bet;
     },

@@ -236,7 +236,7 @@ export function mount(container, api) {
     if (!view) return;
     if (mode === 'Auto') {
       if (runner) { stopAuto(); return; }
-      runner = autoRunner(auto.read(), amount.get(), view.limits);
+      runner = autoRunner(auto.read(), amount.get(), view.limits, myBalance());
       if (view.phase === 'betting' && !myBet()) placeBet(runner.bet); else queued = true;
       renderPanel();
       return;
