@@ -409,6 +409,31 @@ test('crash: a round: bets, auto cash-out at its target, manual cash-out, the re
   T.setClock(() => Date.now());
 });
 
+test('crash: alone, the round launches on your bet and skips to the crash once you cash out', () => {
+  const T = crash._test;
+  let now = 1000;
+  T.setClock(() => now);
+  T.forcePoint(50);
+  const room = makeRoom(crash, ['A']);
+  T.forcePoint(null);
+  assert.strictEqual(room.act('A', { kind: 'bet', bet: 10, auto: 2 }), null);
+  T.step(room);
+  assert.strictEqual(room.state.phase, 'running', 'no countdown wait when alone');
+  now += T.timeFor(1.5);
+  T.step(room);
+  assert.strictEqual(room.state.phase, 'running', 'still riding');
+  now += T.timeFor(2) - T.timeFor(1.5);
+  T.step(room);
+  assert.strictEqual(room.state.bets.A.out, 2);
+  assert.strictEqual(room.state.phase, 'crashed', 'skips to the crash once nothing is riding');
+  assert.strictEqual(room.state.history[0].point, 50);
+  assert.strictEqual(room.bal('A').balance, START_BALANCE + 10);
+  now += T.SOLO_CRASHED_MS;
+  T.step(room);
+  assert.strictEqual(room.state.phase, 'betting');
+  T.setClock(() => Date.now());
+});
+
 (async () => {
   for (const { name, fn } of tests) {
     try { await fn(); console.log(`ok   ${name}`); } catch (err) { failures++; console.log(`FAIL ${name}\n     ${err.stack}`); }

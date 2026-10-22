@@ -17,6 +17,7 @@ const MAX_PLAYERS = 12;
 const K = 0.00006; // growth per ms: 2x at 11.6s, 10x at 38s, 100x at 77s
 const BET_MS = 7000;
 const CRASHED_MS = 3500;
+const SOLO_CRASHED_MS = 1500;
 const MAX_CRASH = 10000;
 const MIN_AUTO = 1.01;
 const HISTORY = 30;
@@ -50,9 +51,11 @@ function cashOut(room, id, b, mult) {
 }
 
 // Advances the round to `now`; true if anything changed.
+// Alone in the room it fast-forwards: launch as soon as you bet, skip to the crash once nothing is riding.
 function step(room, now = clock()) {
   const st = room.state;
-  if (st.phase === 'betting' && now >= st.phaseAt + BET_MS) {
+  const solo = room.clients.size === 1;
+  if (st.phase === 'betting' && (now >= st.phaseAt + BET_MS || (solo && Object.keys(st.bets).length))) {
     st.phase = 'running';
     st.phaseAt = now;
     return true;
@@ -63,7 +66,7 @@ function step(room, now = clock()) {
     for (const [id, b] of Object.entries(st.bets)) {
       if (b.out == null && b.auto && b.auto <= st.point && el >= timeFor(b.auto)) { cashOut(room, id, b, b.auto); changed = true; }
     }
-    if (el >= timeFor(st.point)) {
+    if (el >= timeFor(st.point) || (solo && !Object.values(st.bets).some((b) => b.out == null))) {
       for (const [id, b] of Object.entries(st.bets)) if (b.out == null) settle(room, id, b.bet, 0, 0);
       st.phase = 'crashed';
       st.phaseAt = now;
@@ -72,7 +75,7 @@ function step(room, now = clock()) {
     }
     return changed;
   }
-  if (st.phase === 'crashed' && now >= st.phaseAt + CRASHED_MS) {
+  if (st.phase === 'crashed' && now >= st.phaseAt + (solo ? SOLO_CRASHED_MS : CRASHED_MS)) {
     newRound(st);
     return true;
   }
@@ -159,5 +162,5 @@ module.exports = {
     if (err) { reject(room, id, err); return; }
     push(room);
   },
-  _test: { growth, timeFor, pointFrom, step, K, BET_MS, CRASHED_MS, setClock(fn) { clock = fn; }, forcePoint(p) { forcePoint = p; } },
+  _test: { growth, timeFor, pointFrom, step, K, BET_MS, CRASHED_MS, SOLO_CRASHED_MS, setClock(fn) { clock = fn; }, forcePoint(p) { forcePoint = p; } },
 };

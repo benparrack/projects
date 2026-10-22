@@ -121,6 +121,7 @@ export const HOWTO = {
       'Bet during the 7-second countdown ($0.10 to $1,000). When the rocket launches, your bet rides the multiplier.',
       'Cash out any time to win bet x the current multiplier. Still riding when it crashes? The bet is gone. About 3% of rounds bust instantly at 1.00x.',
       'Set an Auto Cash Out (say 2.00x) and the server cashes you out exactly there, even if your connection lags.',
+      'Playing alone, rounds fast-forward: the rocket launches as soon as you bet and skips to the crash once you have cashed out.',
       'Provably fair: each round\'s seed hash is shown before betting and the seed is revealed at the crash. Click any past round to verify it. Returns 98%.',
     ],
     controls: ['BET / CANCEL / CASH OUT, or Space. Bet between rounds to queue for the next one. AUTO bets every round with on-win / on-loss rules and stop limits.'],
