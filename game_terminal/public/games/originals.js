@@ -249,13 +249,18 @@ export function autoFields(st) {
   const onLoss = rule('loss', 'On Loss');
   const stopP = numberInput({ value: st.get('stopProfit', ''), step: '0.01', min: 0, prefix: '$', onChange: (v) => st.set('stopProfit', v) });
   const stopL = numberInput({ value: st.get('stopLoss', ''), step: '0.01', min: 0, prefix: '$', onChange: (v) => st.set('stopLoss', v) });
+  // Stop limits in dollars, or as a % of the balance when the autobet started (locks in a big win).
+  let stopUnit = st.get('stopUnit', 'usd');
+  const unitMarks = () => { for (const n of [stopP, stopL]) n.el.querySelector('b').textContent = stopUnit === 'pct' ? '%' : '$'; };
+  const unitSeg = seg(['usd', 'pct'], stopUnit, (m) => { stopUnit = m; st.set('stopUnit', m); unitMarks(); }, { usd: '$', pct: '% of Balance' });
+  unitMarks();
   const row = el('div', 'og-row2');
   row.append(field('Stop on Profit', stopP.el).el, field('Stop on Loss', stopL.el).el);
-  box.append(field('Number of Bets', count.el).el, size, onWin.el, onLoss.el, row);
+  box.append(field('Number of Bets', count.el).el, size, onWin.el, onLoss.el, field('Stop Limits In', unitSeg.el).el, row);
   return {
     el: box,
-    read: () => ({ count: Math.max(0, Math.floor(Number(count.get()) || 0)), sizePct: sizeMode === 'pct' ? Math.min(100, Number(sizePct.get()) || 0) : 0, onWin: onWin.read(), onLoss: onLoss.read(), stopProfit: Number(stopP.get()) || 0, stopLoss: Number(stopL.get()) || 0 }),
-    disable(on) { count.disable(on); sizeSeg.disable(on); sizePct.disable(on || sizeMode === 'fixed'); onWin.disable(on); onLoss.disable(on); stopP.disable(on); stopL.disable(on); },
+    read: () => ({ count: Math.max(0, Math.floor(Number(count.get()) || 0)), sizePct: sizeMode === 'pct' ? Math.min(100, Number(sizePct.get()) || 0) : 0, onWin: onWin.read(), onLoss: onLoss.read(), stopProfit: Number(stopP.get()) || 0, stopLoss: Number(stopL.get()) || 0, stopPct: stopUnit === 'pct' }),
+    disable(on) { count.disable(on); sizeSeg.disable(on); sizePct.disable(on || sizeMode === 'fixed'); onWin.disable(on); onLoss.disable(on); unitSeg.disable(on); stopP.disable(on); stopL.disable(on); },
   };
 }
 
@@ -265,6 +270,8 @@ export function autoRunner(rules, base, limits, balance) {
   const clamp = (v) => Math.min(limits.max, Math.max(limits.min, v));
   const baseFor = (bal) => (rules.sizePct && bal != null ? clamp(round2(bal * rules.sizePct / 100)) : base);
   let bet = baseFor(balance);
+  const stopAt = (v) => (rules.stopPct ? round2((balance || 0) * v / 100) : v);
+  const stopProfit = stopAt(rules.stopProfit), stopLoss = stopAt(rules.stopLoss);
   let left = rules.count || Infinity;
   let net = 0;
   const r = {
@@ -276,8 +283,8 @@ export function autoRunner(rules, base, limits, balance) {
       net = round2(net + profit);
       left--;
       if (left <= 0) { r.reason = 'Finished all bets.'; return null; }
-      if (rules.stopProfit && net >= rules.stopProfit) { r.reason = `Stopped on profit (${money(net)}).`; return null; }
-      if (rules.stopLoss && -net >= rules.stopLoss) { r.reason = `Stopped on loss (${money(net)}).`; return null; }
+      if (stopProfit && net >= stopProfit) { r.reason = `Stopped on profit (${money(net)}).`; return null; }
+      if (stopLoss && -net >= stopLoss) { r.reason = `Stopped on loss (${money(net)}).`; return null; }
       const rule = profit > 0 ? rules.onWin : rules.onLoss;
       bet = clamp(rule.mode === 'reset' ? baseFor(balance) : round2(bet * (1 + rule.pct / 100)));
       if (balance != null && balance < bet) { r.reason = 'Not enough balance for the next bet.'; return null; }
