@@ -59,7 +59,7 @@ export const CSS = `
 .og-tabs button { background: transparent; border: 0; color: var(--muted); border-radius: 999px; padding: 6px 0; font-weight: 600; font-size: 13px; }
 .og-tabs button[aria-pressed="true"] { background: var(--panel2); color: var(--text); box-shadow: 0 2px 6px rgba(0,0,0,.4); }
 .og-field { display: flex; flex-direction: column; gap: 4px; }
-.og-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-weight: 600; }
+.og-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); font-weight: 600; }
 .og-label span:last-child { color: var(--text); opacity: .8; }
 .og-input { display: flex; align-items: center; background: var(--input); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; height: 38px; transition: border-color .15s; }
 .og-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(91,124,255,.25); }
@@ -70,6 +70,8 @@ export const CSS = `
 .og-input .og-mini { height: 100%; border: 0; border-left: 1px solid var(--line); background: var(--panel2); color: var(--text); font-weight: 700; font-size: 12px; padding: 0 10px; }
 .og-input .og-mini:hover:not(:disabled) { background: #2a3470; }
 .og-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.og-seg.og-unit { gap: 2px; grid-auto-columns: auto; }
+.og-seg.og-unit button { padding: 1px 7px; font-size: 11px; border-radius: 5px; text-transform: none; }
 .og-seg button { background: var(--input); border: 1px solid var(--line); color: var(--muted); border-radius: 7px; padding: 7px 0; font-weight: 700; font-size: 12px; text-transform: capitalize; }
 .og-seg button[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: rgba(91,124,255,.18); }
 .og .og-bet { height: 46px; border: 0; border-radius: 9px; font-weight: 800; font-size: 16px; color: #fff; letter-spacing: .3px;
@@ -209,19 +211,45 @@ export function select(options, value, onChange) {
   return { el: wrap, get: () => s.value, set(v) { s.value = String(v); }, disable(on) { s.disabled = on; } };
 }
 
-// Bet amount with ½ and 2x, clamped to the table limits; remembered per game.
+// Bet amount with ½ and 2x, clamped to the table limits; remembered per game. The $ / % toggle bets a
+// share of the balance instead: get() still returns dollars, worked out from the balance at that moment.
 export function amountField(st, limits, getBalance) {
   const clamp = (v) => round2(Math.min(limits.max, Math.max(limits.min, Number(v) || limits.min)));
+  const clampPct = (v) => Math.min(100, Math.max(0.1, round2(Number(v) || 1)));
+  let unit = st.get('betUnit', 'usd');
   let value = clamp(st.get('bet', 1));
+  let pct = clampPct(st.get('betPct', 1));
+  const cur = () => (unit === 'pct' ? pct : value);
   const n = numberInput({
-    value: value.toFixed(2), step: '0.01', min: limits.min, max: limits.max, prefix: '$',
+    value: '', step: '0.01', prefix: '$',
     onChange: (v) => set(v),
-    extras: [['½', () => set(value / 2)], ['2×', () => set(value * 2)], ['MAX', () => set(Math.min(limits.max, getBalance()))]],
+    extras: [['½', () => set(cur() / 2)], ['2×', () => set(cur() * 2)], ['MAX', () => set(unit === 'pct' ? 100 : Math.min(limits.max, getBalance()))]],
   });
-  function set(v) { value = clamp(v); n.set(value.toFixed(2)); st.set('bet', value); f.right.textContent = ''; for (const fn of listeners) fn(value); }
+  const mark = n.el.querySelector('b');
+  const get = () => (unit === 'pct' ? clamp(getBalance() * pct / 100) : value);
+  const changed = () => { for (const fn of listeners) fn(get()); };
+  function show() {
+    const p = unit === 'pct';
+    mark.textContent = p ? '%' : '$';
+    n.input.min = p ? 0.1 : limits.min;
+    n.input.max = p ? 100 : limits.max;
+    n.set(p ? String(pct) : value.toFixed(2));
+  }
+  function set(v) {
+    if (unit === 'pct') { pct = clampPct(v); st.set('betPct', pct); } else { value = clamp(v); st.set('bet', value); }
+    show(); changed();
+  }
+  const unitSeg = seg(['usd', 'pct'], unit, (u) => { unit = u; st.set('betUnit', u); show(); changed(); }, { usd: '$', pct: '% of Balance' });
+  unitSeg.el.classList.add('og-unit');
   const listeners = [];
   const f = field('Bet Amount', n.el);
-  return { el: f.el, get: () => value, set, disable: n.disable, onChange(fn) { listeners.push(fn); }, label: f.right };
+  f.right.append(unitSeg.el);
+  show();
+  return {
+    el: f.el, get, set, onChange(fn) { listeners.push(fn); },
+    pct: () => (unit === 'pct' ? pct : 0),
+    disable(on) { n.disable(on); unitSeg.disable(on); },
+  };
 }
 
 // Auto-bet rules, Stake/Rainbet style: number of bets (0 = until stopped), what to do to the bet on
@@ -238,13 +266,6 @@ export function autoFields(st) {
     wrap.append(field(label, s.el).el, pct.el);
     return { el: wrap, read: () => ({ mode, pct: Number(pct.get()) || 0 }), disable(on) { s.disable(on); pct.disable(on || mode === 'reset'); } };
   };
-  // Base bet: the Bet Amount field, or a share of the balance taken fresh on every reset so it grows with you.
-  let sizeMode = st.get('sizeMode', 'fixed');
-  const sizePct = numberInput({ value: st.get('sizePct', 1), step: '0.1', min: 0.1, suffix: '%', onChange: (v) => st.set('sizePct', Math.min(100, Math.max(0.1, Number(v) || 1))) });
-  const sizeSeg = seg(['fixed', 'pct'], sizeMode, (m) => { sizeMode = m; st.set('sizeMode', m); sizePct.disable(m === 'fixed'); }, { fixed: 'Fixed', pct: '% of Balance' });
-  sizePct.disable(sizeMode === 'fixed');
-  const size = el('div', 'og-field');
-  size.append(field('Base Bet', sizeSeg.el).el, sizePct.el);
   const onWin = rule('win', 'On Win');
   const onLoss = rule('loss', 'On Loss');
   const stopP = numberInput({ value: st.get('stopProfit', ''), step: '0.01', min: 0, prefix: '$', onChange: (v) => st.set('stopProfit', v) });
@@ -256,11 +277,11 @@ export function autoFields(st) {
   unitMarks();
   const row = el('div', 'og-row2');
   row.append(field('Stop on Profit', stopP.el).el, field('Stop on Loss', stopL.el).el);
-  box.append(field('Number of Bets', count.el).el, size, onWin.el, onLoss.el, field('Stop Limits In', unitSeg.el).el, row);
+  box.append(field('Number of Bets', count.el).el, onWin.el, onLoss.el, field('Stop Limits In', unitSeg.el).el, row);
   return {
     el: box,
-    read: () => ({ count: Math.max(0, Math.floor(Number(count.get()) || 0)), sizePct: sizeMode === 'pct' ? Math.min(100, Number(sizePct.get()) || 0) : 0, onWin: onWin.read(), onLoss: onLoss.read(), stopProfit: Number(stopP.get()) || 0, stopLoss: Number(stopL.get()) || 0, stopPct: stopUnit === 'pct' }),
-    disable(on) { count.disable(on); sizeSeg.disable(on); sizePct.disable(on || sizeMode === 'fixed'); onWin.disable(on); onLoss.disable(on); unitSeg.disable(on); stopP.disable(on); stopL.disable(on); },
+    read: () => ({ count: Math.max(0, Math.floor(Number(count.get()) || 0)), onWin: onWin.read(), onLoss: onLoss.read(), stopProfit: Number(stopP.get()) || 0, stopLoss: Number(stopL.get()) || 0, stopPct: stopUnit === 'pct' }),
+    disable(on) { count.disable(on); onWin.disable(on); onLoss.disable(on); unitSeg.disable(on); stopP.disable(on); stopL.disable(on); },
   };
 }
 

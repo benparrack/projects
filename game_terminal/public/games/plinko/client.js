@@ -230,7 +230,7 @@ export function mount(container, api) {
     msg.textContent = '';
     if (mode === 'Manual') { if (drop(amount.get())) sfx.play('pop'); return; }
     if (runner) { stopAuto(); return; }
-    runner = autoRunner(auto.read(), amount.get(), limits(), serverBalance);
+    runner = autoRunner({ ...auto.read(), sizePct: amount.pct() }, amount.get(), limits(), serverBalance);
     renderPanel();
     autoStep();
   }

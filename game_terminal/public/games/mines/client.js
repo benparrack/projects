@@ -302,7 +302,7 @@ export function mount(container, api) {
 
   function startAuto() {
     if (!picked.size) { msg.textContent = REJECT.bad_tiles; return; }
-    runner = autoRunner(auto.read(), amount.get(), view.limits, serverBalance);
+    runner = autoRunner({ ...auto.read(), sizePct: amount.pct() }, amount.get(), view.limits, serverBalance);
     autoStep();
   }
   function autoStep() {
