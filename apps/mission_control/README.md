@@ -2,7 +2,7 @@
 
 A glanceable terminal dashboard: system stats (with rolling CPU/memory
 history sparklines), weather, calendar, git/project status across `../`
-(this repo), what's next on `TODO_FIRST.md`, and what's currently playing.
+(this repo), what's next in `IDEAS.md`, and what's currently playing.
 
 ## Setup
 

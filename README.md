@@ -76,4 +76,4 @@ Mostly single-prompt builds. They still work. Open the `index.html` or see the f
 
 ## IDEAS.md
 
-Every project idea in one file: [IDEAS.md](IDEAS.md). Current picks are in [TODO_FIRST.md](TODO_FIRST.md).
+One file for project status and ideas: [IDEAS.md](IDEAS.md). The top of it lists what's in progress and what's done. The rest is the idea backlog.

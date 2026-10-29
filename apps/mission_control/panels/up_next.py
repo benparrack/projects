@@ -6,8 +6,13 @@ from pathlib import Path
 
 from .base import Panel
 
-_UNCHECKED = re.compile(r"^- \[ \] \*\*(.+?)\*\*", re.MULTILINE)
-_CHECKED = re.compile(r"^- \[x\] \*\*(.+?)\*\*", re.MULTILINE | re.IGNORECASE)
+_ITEM = re.compile(r"^- \*\*(.+?)\*\*", re.MULTILINE)
+
+
+def _section(text: str, title: str) -> str:
+    """Body of the top-level `# <title>` section of IDEAS.md, up to the next `# ` heading."""
+    m = re.search(rf"^# {re.escape(title)}\n(.*?)(?=^# |\Z)", text, re.MULTILINE | re.DOTALL)
+    return m.group(1) if m else ""
 _STOCKED = re.compile(r"^\*\*Status:\*\*\s*Stocked, not started\.", re.MULTILINE)
 
 
@@ -17,16 +22,15 @@ class UpNextPanel(Panel):
         self._projects_dir = config.projects_dir
 
     async def refresh_data(self) -> None:
-        todo_path = self._projects_dir / "TODO_FIRST.md"
         ideas_path = self._projects_dir / "IDEAS.md"
-        text = await asyncio.to_thread(self._read, todo_path)
+        ideas_text = await asyncio.to_thread(self._read, ideas_path)
 
-        if text is None:
-            self.update(f"[dim]No TODO_FIRST.md found in {self._projects_dir}[/dim]")
+        if ideas_text is None:
+            self.update(f"[dim]No IDEAS.md found in {self._projects_dir}[/dim]")
             return
 
-        unchecked = _UNCHECKED.findall(text)
-        checked = _CHECKED.findall(text)
+        unchecked = _ITEM.findall(_section(ideas_text, "Up next"))
+        checked = _ITEM.findall(_section(ideas_text, "Done"))
 
         lines = []
         if unchecked:
@@ -34,11 +38,10 @@ class UpNextPanel(Panel):
             for item in unchecked[1:4]:
                 lines.append(f"  then {item}")
         else:
-            lines.append("[dim]Nothing queued in TODO_FIRST.md[/dim]")
+            lines.append("[dim]Nothing queued in IDEAS.md[/dim]")
 
         lines.append(f"\n{len(checked)} done, {len(unchecked)} queued")
 
-        ideas_text = await asyncio.to_thread(self._read, ideas_path)
         if ideas_text:
             stocked = len(_STOCKED.findall(ideas_text))
             lines.append(f"{stocked} more ideas stocked in IDEAS.md")

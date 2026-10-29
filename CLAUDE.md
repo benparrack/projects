@@ -20,17 +20,17 @@ indexes every project. `app-launch` is the shared launcher behind the
 
 ## Start of session
 
-Before starting work on anything here, read `TODO_FIRST.md` in this directory in
-full — it's short (the current picks from `IDEAS.md`, plus a "Done" log) and gives
-situational awareness across all the sub-projects cheaply.
+Before starting work on anything here, read the top of `IDEAS.md` in this
+directory: from the start through the **Other tracked work** section, stopping at
+`# General backlog`. That part (Up next, Done, Other tracked work) is the status
+overview across all the sub-projects.
 
-For `IDEAS.md` (the full numbered backlog, each entry with enough context to pick
-back up cold — much longer, and grows over time):
-- If Ben already named a sub-project or idea number to work on, don't full-read
-  it — just look up that one entry (grep the number/name) plus anything
-  `TODO_FIRST.md` already told you.
+The rest of `IDEAS.md` is the full backlog, each entry with enough context to pick
+back up cold. It's much longer and grows over time:
+- If Ben already named a sub-project or idea number to work on, don't read the
+  backlog in full. Just look up that one entry (grep the number/name).
 - If there's no clear target yet (Ben's asking what to work on next, or starting
-  something genuinely new), skim `IDEAS.md` fully — that's what it's for.
+  something genuinely new), skim the backlog fully. That's what it's for.
 
 ## Browser automation
 
@@ -116,5 +116,5 @@ fixes that actually move this number:
   `.claude/rules/game_terminal.md` for an example) over adding to this file —
   it only loads into context when that sub-project's files are actually read.
 - When picking up new work, prefer finishing/polishing an in-progress idea from
-  `TODO_FIRST.md` over starting something new from `IDEAS.md`, unless Ben asks
+  the Up next section of `IDEAS.md` over starting something new from its backlog, unless Ben asks
   otherwise.
