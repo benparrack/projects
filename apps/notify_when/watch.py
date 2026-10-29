@@ -24,7 +24,7 @@ UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Fi
 def load_env():
     """NTFY_ALERT_TOPIC from ./.env, falling back to flip-bot's (same phone topic everything else uses)."""
     env = {}
-    for p in (HERE.parent / "money/flip-bot/.env", HERE / ".env"):
+    for p in (HERE.parent.parent / "money/flip-bot/.env", HERE / ".env"):
         if p.exists():
             for line in p.read_text().splitlines():
                 k, _, v = line.partition("=")

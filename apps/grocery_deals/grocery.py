@@ -417,9 +417,9 @@ def report(result):
 
 
 def push(title, message):
-    """Same ntfy topic as the other bots: ./.env, else ../money/flip-bot/.env."""
+    """Same ntfy topic as the other bots: ./.env, else ../../money/flip-bot/.env."""
     topic = None
-    for p in (HERE / ".env", HERE.parent / "money/flip-bot/.env"):
+    for p in (HERE / ".env", HERE.parent.parent / "money/flip-bot/.env"):
         if p.exists() and not topic:
             topic = next((l.split("=", 1)[1].strip().strip("\"'") for l in p.read_text().splitlines()
                           if l.startswith("NTFY_ALERT_TOPIC=")), None)

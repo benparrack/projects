@@ -40,7 +40,7 @@ Install the menu entry (`.desktop` files don't expand `~`):
     python3 grocery.py browse [word]  # every offer at your stores
     python3 grocery.py stores kvantum # find store ids
 
-Pushes go to `NTFY_ALERT_TOPIC` from `./.env`, else `../money/flip-bot/.env`.
+Pushes go to `NTFY_ALERT_TOPIC` from `./.env`, else `../../money/flip-bot/.env`.
 
 ## Weekly push (Mondays 08:00, or at next boot if the computer was off)
 

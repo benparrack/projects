@@ -9,7 +9,7 @@ a price drops below X, something comes back in stock, a page changes. (`USEFULL_
 2. Try it: `python3 watch.py check "My watch"` prints the extracted value and whether the condition holds.
 3. `python3 watch.py list` shows every watch's last value, and HIT / ok / ERROR.
 
-Pushes go to `NTFY_ALERT_TOPIC`, read from `./.env` or else `../money/flip-bot/.env` (the same phone topic as
+Pushes go to `NTFY_ALERT_TOPIC`, read from `./.env` or else `../../money/flip-bot/.env` (the same phone topic as
 the other bots). A push only fires when a condition *turns* true; a watch that fails 3 times in a row
 sends one "watch broken" push.
 
