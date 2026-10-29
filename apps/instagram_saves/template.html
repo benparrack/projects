@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Saved Pile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column (~70ch) for the write-ups; cards and the post browser widen to 1100px.
+   Identity: the bookmark ribbon you tap to save, used as the one recurring mark. */
+:root {
+  --bg: #f6f6f8; --card: #ffffff; --ink: #18191d; --muted: #5d6170; --faint: #8a8e9b;
+  --line: #e2e3e9; --accent: #b8195a; --accent-soft: #fbe7ef;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #9a9da8;
+  --display: "Young Serif", Georgia, "Times New Roman", serif;
+  --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #131418; --card: #1b1c21; --ink: #ecedf1; --muted: #a3a7b3; --faint: #7c808c;
+  --line: #2b2d34; --accent: #f06b9d; --accent-soft: #3a1a28;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #6d707b;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #131418; --card: #1b1c21; --ink: #ecedf1; --muted: #a3a7b3; --faint: #7c808c;
+  --line: #2b2d34; --accent: #f06b9d; --accent-soft: #3a1a28;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #6d707b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--body); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.wrap { max-width: 1100px; margin: 0 auto; padding-inline: 20px; }
+.prose { max-width: 70ch; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); letter-spacing: -0.01em; }
+h2 { font-size: clamp(1.6rem, 3.6vw, 2.2rem); }
+h3 { font-size: 1.3rem; }
+.eyebrow { font: 600 0.78rem/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.muted { color: var(--muted); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+section { padding-block: 56px 8px; }
+.sec-head { display: grid; gap: 10px; margin-bottom: 26px; }
+.sec-head p { margin: 0; color: var(--muted); max-width: 70ch; }
+
+/* ribbon: Instagram's save bookmark, the page's one mark */
+.ribbon { width: 14px; height: 20px; flex: none; background: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); }
+
+header { padding-block: 64px 8px; }
+header .title { display: flex; align-items: center; gap: 16px; margin-block: 14px 22px; }
+header .title .ribbon { width: 26px; height: 38px; }
+.lede { font-size: 1.12rem; display: grid; gap: 14px; }
+.lede p { margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 34px 0 0; }
+.stats div { background: var(--card); padding: 16px 18px; }
+.stats dt { font-size: 0.85rem; color: var(--muted); }
+.stats dd { margin: 2px 0 0; font: 400 1.7rem/1.2 var(--display); font-variant-numeric: tabular-nums; }
+
+/* chart */
+.chart-box { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px; position: relative; }
+.chart-scroll { overflow-x: auto; }
+#chart { display: block; width: 100%; height: auto; }
+#chart text { fill: var(--muted); font: 12px var(--mono); }
+#chart .grid { stroke: var(--line); stroke-width: 1; }
+#chart rect.seg { stroke: var(--card); stroke-width: 2; }
+#chart g.col:hover rect.seg { opacity: 0.85; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 14px; padding: 0; list-style: none; font-size: 0.9rem; }
+.legend li { display: flex; align-items: center; gap: 7px; }
+.sw { width: 11px; height: 11px; border-radius: 3px; flex: none; display: inline-block; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 0.85rem;
+  padding: 10px 12px; border-radius: 8px; min-width: 190px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); }
+.tip b { font-family: var(--mono); }
+.tip table { border-collapse: collapse; margin-top: 4px; width: 100%; }
+.tip td { padding: 1px 0; }
+.tip td:last-child { text-align: right; font-family: var(--mono); padding-left: 14px; }
+.chart-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 0.85rem; color: var(--muted); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.tbl-wrap { overflow-x: auto; margin-top: 14px; }
+.tbl { border-collapse: collapse; font-size: 0.88rem; width: 100%; }
+.tbl th, .tbl td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.tbl th:first-child, .tbl td:first-child { text-align: left; }
+.tbl td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* picks */
+.picks { columns: 300px 3; column-gap: 40px; }
+.pick-group { break-inside: avoid; margin-bottom: 28px; }
+.pick-group h3 { display: flex; align-items: baseline; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.pick-group h3 .num { font-size: 0.8rem; color: var(--faint); }
+.pick-group ul { list-style: none; margin: 0; padding: 0; }
+.pick-group li { padding-block: 10px; border-bottom: 1px dashed var(--line); }
+.pick-group li a { text-decoration: none; display: grid; gap: 2px; }
+.pick-group li a:hover strong { text-decoration: underline; text-underline-offset: 3px; }
+.pick-group .why { color: var(--muted); font-size: 0.93rem; }
+.pick-group .meta { font: 0.75rem var(--mono); color: var(--faint); }
+
+/* category cards */
+.cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+.cat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cat-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.cat-top h3 { display: flex; align-items: center; gap: 9px; }
+.cat-count { font: 0.85rem var(--mono); color: var(--muted); white-space: nowrap; }
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 34px; }
+.spark span { flex: 1; opacity: 0.85; border-radius: 3px 3px 0 0; min-height: 2px; }
+.spark-axis { display: flex; justify-content: space-between; font: 0.68rem var(--mono); color: var(--faint); margin-top: 4px; }
+.cat p { margin: 0; }
+.cat .hoped { font-size: 0.95rem; color: var(--muted); }
+.cat .hoped b { color: var(--ink); font-weight: 700; }
+.mix { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 0.74rem/1 var(--mono); padding: 5px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.chip.i-learn, .chip.i-try, .chip.i-buy, .chip.i-place { background: var(--accent-soft); color: var(--ink); border-color: transparent; }
+.examples { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 0.92rem; }
+.examples a { text-decoration: none; display: flex; gap: 8px; }
+.examples a:hover span { text-decoration: underline; text-underline-offset: 3px; }
+.examples .ribbon { width: 8px; height: 12px; margin-top: 6px; opacity: 0.6; }
+.cat .go { margin-top: auto; align-self: flex-start; }
+.btn { font: 700 0.9rem var(--body); border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* browser */
+.controls { display: flex; flex-wrap: wrap; gap: 10px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2;
+  background: var(--bg); padding-block: 12px; border-bottom: 1px solid var(--line); }
+.controls input, .controls select { font: 0.95rem var(--body); color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; min-width: 0; }
+.controls input { flex: 1 1 240px; }
+.controls select { flex: 0 1 auto; max-width: 100%; }
+.result-line { margin: 14px 0 4px; color: var(--muted); font-size: 0.9rem; }
+.rows { list-style: none; margin: 0; padding: 0; }
+.row a { display: grid; grid-template-columns: 104px 1fr; gap: 4px 18px; padding: 14px 4px; border-bottom: 1px solid var(--line); text-decoration: none; }
+.row a:hover { background: var(--card); }
+.row .date { white-space: nowrap; font: 0.8rem/1.9 var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; }
+.row .body { min-width: 0; display: grid; gap: 3px; }
+.row .sum { font-weight: 700; }
+.row .cap { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+.row .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 0.82rem; color: var(--faint); }
+.row .meta .catname { display: inline-flex; align-items: center; gap: 6px; }
+.row mark { background: var(--accent-soft); color: inherit; border-radius: 3px; }
+.more { display: flex; justify-content: center; padding-block: 22px; }
+.empty { padding: 40px 0; color: var(--muted); }
+footer { padding-block: 60px 50px; color: var(--faint); font-size: 0.88rem; }
+footer p { margin: 0 0 8px; max-width: 75ch; }
+@media (max-width: 560px) {
+  .wrap { padding-inline: 16px; }
+  .row a { grid-template-columns: 1fr; }
+  .cats { grid-template-columns: 1fr; }
+  .picks { columns: 1; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <p class="eyebrow" id="eyebrow"></p>
+  <div class="title"><span class="ribbon" aria-hidden="true"></span><h1>The Saved Pile</h1></div>
+  <div class="lede prose" id="overview"></div>
+  <dl class="stats" id="stats"></dl>
+</header>
+
+<section class="wrap" id="timeline" aria-labelledby="tl-h">
+  <div class="sec-head">
+    <h2 id="tl-h">What you saved, year by year</h2>
+    <p id="tl-note"></p>
+  </div>
+  <div class="chart-box">
+    <ul class="legend" id="legend"></ul>
+    <div class="chart-scroll"><svg id="chart" role="img" aria-labelledby="tl-h"></svg></div>
+    <div class="tip" id="tip" hidden></div>
+    <div class="chart-foot"><span id="chart-foot-note"></span><button class="linkbtn" id="tbl-toggle" aria-expanded="false" aria-controls="tbl-wrap">Show as a table</button></div>
+    <div class="tbl-wrap" id="tbl-wrap" hidden></div>
+  </div>
+</section>
+
+<section class="wrap" id="picks-sec" aria-labelledby="pk-h">
+  <div class="sec-head">
+    <h2 id="pk-h">Worth coming back to</h2>
+    <p id="picks-intro"></p>
+  </div>
+  <div class="picks" id="picks"></div>
+</section>
+
+<section class="wrap" id="cats-sec" aria-labelledby="ct-h">
+  <div class="sec-head">
+    <h2 id="ct-h">The categories</h2>
+    <p>Each one with what's in it and what you were probably after. Bars show saves per year, 2020 to 2026.</p>
+  </div>
+  <div class="cats" id="cats"></div>
+</section>
+
+<section class="wrap" id="browse" aria-labelledby="br-h">
+  <div class="sec-head">
+    <h2 id="br-h">Browse everything</h2>
+    <p>Search summaries, captions, topics and account names. Every row opens the original post on Instagram.</p>
+  </div>
+  <div class="controls" role="search">
+    <label class="sr" for="q" hidden>Search</label>
+    <input id="q" type="search" placeholder="Search: pasta, deadlift, chord, Tokyo…" autocomplete="off" aria-label="Search saved posts">
+    <select id="f-cat" aria-label="Category"></select>
+    <select id="f-int" aria-label="Why saved"></select>
+    <select id="f-year" aria-label="Year saved"></select>
+    <select id="f-sort" aria-label="Sort">
+      <option value="new">Newest first</option>
+      <option value="old">Oldest first</option>
+    </select>
+  </div>
+  <p class="result-line" id="result-line" aria-live="polite"></p>
+  <ul class="rows" id="rows"></ul>
+  <div class="more"><button class="btn" id="more" hidden>Show more</button></div>
+</section>
+
+<footer class="wrap" id="footer"></footer>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const posts = D.posts, cfg = D.cfg;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmt = (n) => n.toLocaleString("en-US");
+  const IG = "https://www.instagram.com/";
+  const INTENT = { learn: "To learn", try: "To try", buy: "To buy", place: "To visit", inspiration: "Inspiration",
+    music: "Music", funny: "Funny", relatable: "Relatable", other: "Other" };
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const niceDate = (d) => `${MONTHS[+d.slice(5, 7) - 1]} ${+d.slice(8, 10)}, ${d.slice(0, 4)}`;
+
+  // categories: config order is irrelevant; sort by size, "misc" always last
+  const cats = cfg.categories.concat([cfg.misc]);
+  const byId = Object.fromEntries(cats.map((c) => [c.id, c]));
+  const count = {};
+  posts.forEach((p) => { count[p.k] = (count[p.k] || 0) + 1; });
+  const sorted = cats.filter((c) => count[c.id]).sort((a, b) => (a.id === "misc") - (b.id === "misc") || count[b.id] - count[a.id]);
+  // chart colors follow the category (fixed by overall size), never re-ranked by filters
+  const top = sorted.filter((c) => c.id !== "misc").slice(0, 7);
+  const color = (id) => { const i = top.findIndex((c) => c.id === id); return i < 0 ? "var(--s8)" : `var(--s${i + 1})`; };
+  const years = [...new Set(posts.map((p) => p.d.slice(0, 4)))].sort();
+  const first = posts.reduce((a, p) => (p.d < a ? p.d : a), "9999"), last = posts.reduce((a, p) => (p.d > a ? p.d : a), "");
+
+  // header
+  $("eyebrow").textContent = `Ben's Instagram saves · ${niceDate(first)} to ${niceDate(last)}`;
+  $("overview").innerHTML = cfg.overview;
+  const owners = new Set(posts.map((p) => p.o)).size;
+  const doers = posts.filter((p) => ["learn", "try", "buy", "place"].includes(p.i)).length;
+  $("stats").innerHTML = [
+    ["Saved posts", fmt(posts.length)],
+    ["Different accounts", fmt(owners)],
+    ["Saved to learn, try, buy or visit", `${Math.round((doers / posts.length) * 100)}%`],
+    ["Busiest year", (() => { const y = {}; posts.forEach((p) => { y[p.d.slice(0, 4)] = (y[p.d.slice(0, 4)] || 0) + 1; });
+      const b = Object.entries(y).sort((a, b) => b[1] - a[1])[0]; return `${b[0]} <span class="muted" style="font-size:.9rem">(${fmt(b[1])})</span>`; })()],
+  ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+
+  // stacked bars by year
+  const series = top.map((c) => c.id).concat(["_rest"]);
+  const label = (id) => (id === "_rest" ? "All other categories" : byId[id].name);
+  const yearData = years.map((y) => {
+    const row = { y, total: 0 };
+    series.forEach((s) => { row[s] = 0; });
+    posts.forEach((p) => { if (p.d.startsWith(y)) { row.total++; row[series.includes(p.k) ? p.k : "_rest"]++; } });
+    return row;
+  });
+  $("legend").innerHTML = series.map((s) => `<li><span class="sw" style="background:${s === "_rest" ? "var(--s8)" : color(s)}"></span>${esc(label(s))}</li>`).join("");
+  // draw at the real pixel width so axis text stays 12px on phones
+  const W = Math.max(320, Math.round($("chart").getBoundingClientRect().width) || 760), H = 320, L = 48, R = 12, T = 12, B = 30;
+  const max = Math.max(...yearData.map((r) => r.total));
+  const step = max > 1500 ? 500 : max > 600 ? 200 : 100;
+  const yMax = Math.ceil(max / step) * step;
+  const yS = (v) => T + (H - T - B) * (1 - v / yMax);
+  const band = (W - L - R) / years.length, bw = Math.min(64, band * 0.62);
+  let svg = "";
+  for (let v = 0; v <= yMax; v += step) svg += `<line class="grid" x1="${L}" x2="${W - R}" y1="${yS(v)}" y2="${yS(v)}"/><text x="${L - 8}" y="${yS(v) + 4}" text-anchor="end">${fmt(v)}</text>`;
+  yearData.forEach((r, i) => {
+    const x = L + band * i + (band - bw) / 2;
+    let acc = 0, segs = "";
+    const live = series.filter((s) => r[s] > 0);
+    live.forEach((s, j) => {
+      const y0 = yS(acc), y1 = yS(acc + r[s]); acc += r[s];
+      const h = Math.max(0, y0 - y1);
+      const isTop = j === live.length - 1;
+      // only the top segment gets rounded data-end corners
+      segs += isTop
+        ? `<path class="seg" d="M${x},${y0} V${y1 + Math.min(4, h)} Q${x},${y1} ${x + 4},${y1} H${x + bw - 4} Q${x + bw},${y1} ${x + bw},${y1 + Math.min(4, h)} V${y0} Z" fill="${s === "_rest" ? "var(--s8)" : color(s)}" stroke="var(--card)" stroke-width="2"/>`
+        : `<rect class="seg" x="${x}" y="${y1}" width="${bw}" height="${h}" fill="${s === "_rest" ? "var(--s8)" : color(s)}"/>`;
+    });
+    svg += `<g class="col" data-i="${i}">${segs}<rect x="${L + band * i}" y="${T}" width="${band}" height="${H - T - B}" fill="transparent"/>` +
+      `<text x="${x + bw / 2}" y="${H - 10}" text-anchor="middle">${r.y}</text>` +
+      `<text x="${x + bw / 2}" y="${yS(r.total) - 6}" text-anchor="middle" style="fill:var(--ink)">${fmt(r.total)}</text></g>`;
+  });
+  const chart = $("chart");
+  chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  chart.innerHTML = svg;
+  const tip = $("tip"), box = chart.closest(".chart-box");
+  chart.querySelectorAll("g.col").forEach((g) => {
+    const show = (ev) => {
+      const r = yearData[+g.dataset.i];
+      tip.innerHTML = `<b>${r.y}</b> · ${fmt(r.total)} saves<table>${series.slice().reverse().filter((s) => r[s]).map((s) =>
+        `<tr><td><span class="sw" style="background:${s === "_rest" ? "var(--s8)" : color(s)}"></span> ${esc(label(s))}</td><td>${fmt(r[s])}</td></tr>`).join("")}</table>`;
+      tip.hidden = false;
+      const bb = box.getBoundingClientRect(), gb = g.getBoundingClientRect();
+      let left = gb.right - bb.left + 8;
+      if (left + tip.offsetWidth > bb.width) left = gb.left - bb.left - tip.offsetWidth - 8;
+      tip.style.left = `${Math.max(8, left)}px`;
+      tip.style.top = `${Math.max(8, (ev.clientY ?? gb.top + 40) - bb.top - 40)}px`;
+    };
+    g.addEventListener("mousemove", show);
+    g.addEventListener("mouseleave", () => { tip.hidden = true; });
+    g.addEventListener("click", show);
+  });
+  $("tbl-wrap").innerHTML = `<table class="tbl"><thead><tr><th>Category</th>${years.map((y) => `<th>${y}</th>`).join("")}<th>Total</th></tr></thead><tbody>${
+    series.map((s) => `<tr><td>${esc(label(s))}</td>${yearData.map((r) => `<td>${fmt(r[s])}</td>`).join("")}<td>${fmt(yearData.reduce((a, r) => a + r[s], 0))}</td></tr>`).join("")
+  }<tr><td><b>All</b></td>${yearData.map((r) => `<td><b>${fmt(r.total)}</b></td>`).join("")}<td><b>${fmt(posts.length)}</b></td></tr></tbody></table>`;
+  $("tbl-toggle").addEventListener("click", (e) => {
+    const w = $("tbl-wrap"); w.hidden = !w.hidden;
+    e.target.setAttribute("aria-expanded", String(!w.hidden));
+    e.target.textContent = w.hidden ? "Show as a table" : "Hide the table";
+  });
+  $("tl-note").textContent = cfg.timeline_note || "";
+  $("chart-foot-note").textContent = `${last.slice(0, 4)} runs to ${niceDate(last)}. Hover or tap a bar for the breakdown.`;
+
+  // curated picks
+  $("picks-intro").textContent = cfg.picks_intro || "";
+  const pickGroups = {};
+  (cfg.picks || []).forEach((p) => { (pickGroups[p.group] ||= []).push(p); });
+  const postByU = Object.fromEntries(posts.map((p) => [p.u, p]));
+  $("picks").innerHTML = Object.entries(pickGroups).map(([g, items]) => `<div class="pick-group"><h3>${esc(g)} <span class="num">${items.length}</span></h3><ul>${
+    items.map((it) => { const p = postByU[it.u] || {};
+      return `<li><a href="${IG + esc(it.u)}" target="_blank" rel="noopener"><strong>${esc(it.title)}</strong><span class="why">${esc(it.why)}</span><span class="meta">@${esc(p.o || "")}${p.d ? " · saved " + niceDate(p.d) : ""}</span></a></li>`; }).join("")
+  }</ul></div>`).join("");
+
+  // category cards
+  $("cats").innerHTML = sorted.map((c) => {
+    const mine = posts.filter((p) => p.k === c.id);
+    const perYear = years.map((y) => mine.filter((p) => p.d.startsWith(y)).length);
+    const peak = Math.max(...perYear, 1);
+    const im = {}; mine.forEach((p) => { if (p.i) im[p.i] = (im[p.i] || 0) + 1; });
+    const mix = Object.entries(im).sort((a, b) => b[1] - a[1]).slice(0, 4)
+      .map(([i, n]) => `<span class="chip i-${esc(i)}">${esc(INTENT[i] || i)} ${Math.round((n / mine.length) * 100)}%</span>`).join("");
+    const ex = (c.examples || []).map((u) => postByU[u]).filter(Boolean).slice(0, 3)
+      .map((p) => `<li><a href="${IG + esc(p.u)}" target="_blank" rel="noopener"><span class="ribbon" aria-hidden="true"></span><span>${esc(p.s || p.c)}</span></a></li>`).join("");
+    return `<article class="cat" id="cat-${esc(c.id)}">
+      <div class="cat-top"><h3><span class="sw" style="background:${color(c.id)}"></span>${esc(c.name)}</h3><span class="cat-count">${fmt(mine.length)} · ${((mine.length / posts.length) * 100).toFixed(1)}%</span></div>
+      <div><div class="spark" role="img" aria-label="Saves per year: ${years.map((y, i) => `${y} ${perYear[i]}`).join(", ")}">${perYear.map((n, i) => `<span style="height:${Math.max(2, (n / peak) * 100)}%;background:${color(c.id)}" title="${years[i]}: ${n}"></span>`).join("")}</div>
+      <div class="spark-axis"><span>${years[0]}</span><span>${years[years.length - 1]}</span></div></div>
+      <p>${c.blurb || ""}</p>
+      ${c.hoped ? `<p class="hoped"><b>Why you saved these:</b> ${c.hoped}</p>` : ""}
+      <div class="mix">${mix}</div>
+      ${ex ? `<ul class="examples">${ex}</ul>` : ""}
+      <button class="btn go" data-cat="${esc(c.id)}">Browse all ${fmt(mine.length)} →</button>
+    </article>`;
+  }).join("");
+  $("cats").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-cat]"); if (!b) return;
+    $("f-cat").value = b.dataset.cat; $("q").value = ""; $("f-int").value = ""; $("f-year").value = "";
+    run(); $("browse").scrollIntoView();
+  });
+
+  // browser
+  $("f-cat").innerHTML = `<option value="">All categories</option>` + sorted.map((c) => `<option value="${esc(c.id)}">${esc(c.name)} (${fmt(count[c.id])})</option>`).join("");
+  const ic = {}; posts.forEach((p) => { if (p.i) ic[p.i] = (ic[p.i] || 0) + 1; });
+  $("f-int").innerHTML = `<option value="">Any reason</option>` + Object.keys(INTENT).filter((i) => ic[i]).map((i) => `<option value="${i}">${INTENT[i]} (${fmt(ic[i])})</option>`).join("");
+  $("f-year").innerHTML = `<option value="">Any year</option>` + years.slice().reverse().map((y) => `<option value="${y}">${y}</option>`).join("");
+  const hay = posts.map((p) => `${p.s} ${p.c} ${p.t} ${p.o} ${byId[p.k]?.name || ""}`.toLowerCase());
+  const PAGE = 60;
+  let hits = [], shown = 0, terms = [];
+  const hl = (s) => {
+    let out = esc(s);
+    terms.forEach((t) => { if (t.length > 1) out = out.replace(new RegExp(`(${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/&/g, "&amp;")})`, "gi"), "<mark>$1</mark>"); });
+    return out;
+  };
+  const rowHtml = (p) => `<li class="row"><a href="${IG + esc(p.u)}" target="_blank" rel="noopener">
+      <span class="date">${niceDate(p.d)}</span>
+      <span class="body"><span class="sum">${hl(p.s || "(no description)")}</span>${p.c ? `<span class="cap">${hl(p.c)}${p.c.length >= 220 ? "…" : ""}</span>` : ""}
+      <span class="meta"><span>@${hl(p.o)}</span><span class="catname"><span class="sw" style="background:${color(p.k)}"></span>${esc(byId[p.k]?.name || "")}</span>${p.i ? `<span class="chip i-${esc(p.i)}">${esc(INTENT[p.i] || p.i)}</span>` : ""}<span>Open on Instagram ↗</span></span></span></a></li>`;
+  function run() {
+    terms = $("q").value.toLowerCase().split(/\s+/).filter(Boolean);
+    const k = $("f-cat").value, it = $("f-int").value, y = $("f-year").value;
+    hits = [];
+    posts.forEach((p, i) => {
+      if (k && p.k !== k) return;
+      if (it && p.i !== it) return;
+      if (y && !p.d.startsWith(y)) return;
+      if (terms.length && !terms.every((t) => hay[i].includes(t))) return;
+      hits.push(p);
+    });
+    if ($("f-sort").value === "new") hits.reverse(); // posts arrive oldest-first
+    shown = 0; $("rows").innerHTML = ""; more();
+    $("result-line").textContent = hits.length === posts.length ? `All ${fmt(posts.length)} posts` : `${fmt(hits.length)} of ${fmt(posts.length)} posts`;
+    if (!hits.length) $("rows").innerHTML = `<li class="empty">Nothing matches. Try fewer words, or set the filters back to "All".</li>`;
+  }
+  function more() {
+    const next = hits.slice(shown, shown + PAGE);
+    $("rows").insertAdjacentHTML("beforeend", next.map(rowHtml).join(""));
+    shown += next.length;
+    $("more").hidden = shown >= hits.length;
+    $("more").textContent = `Show more (${fmt(hits.length - shown)} left)`;
+  }
+  let timer;
+  $("q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 120); });
+  ["f-cat", "f-int", "f-year", "f-sort"].forEach((id) => $(id).addEventListener("change", run));
+  $("more").addEventListener("click", more);
+  run();
+
+  $("footer").innerHTML = cfg.footer || "";
+})();
+</script>
+</body>
+</html>

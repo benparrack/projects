@@ -1,0 +1,4 @@
+data/
+.venv/
+# hand-written write-up of the saves, personal
+categories.json

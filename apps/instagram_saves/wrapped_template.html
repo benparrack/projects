@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Saves Wrapped</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Two parts: an Instagram-story recap (tap through), then the quest board: everything saved "to do
+   someday", deduped into checklists that remember what you've done (localStorage, this browser only). */
+:root {
+  --bg: #f6f6f8; --card: #ffffff; --ink: #18191d; --muted: #5d6170; --faint: #8a8e9b;
+  --line: #e2e3e9; --accent: #b8195a; --accent-soft: #fbe7ef; --done: #1a7f52;
+  --story-a: #2b0f3a; --story-b: #b8195a; --story-ink: #fff;
+  --display: "Young Serif", Georgia, "Times New Roman", serif;
+  --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #131418; --card: #1b1c21; --ink: #ecedf1; --muted: #a3a7b3; --faint: #7c808c;
+  --line: #2b2d34; --accent: #f06b9d; --accent-soft: #3a1a28; --done: #4cc38a;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #131418; --card: #1b1c21; --ink: #ecedf1; --muted: #a3a7b3; --faint: #7c808c;
+  --line: #2b2d34; --accent: #f06b9d; --accent-soft: #3a1a28; --done: #4cc38a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--body); }
+a { color: inherit; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+h1, h2 { font-family: var(--display); font-weight: 400; line-height: 1.1; margin: 0; text-wrap: balance; }
+
+/* ---------- story ---------- */
+.story { position: relative; height: 100svh; min-height: 520px; overflow: hidden; color: var(--story-ink);
+  background: radial-gradient(120% 90% at 20% 0%, var(--story-b), var(--story-a) 70%); user-select: none; }
+.story[data-hue="1"] { --story-a: #0d2340; --story-b: #2a78d6; }
+.story[data-hue="2"] { --story-a: #3a1606; --story-b: #eb6834; }
+.story[data-hue="3"] { --story-a: #06291c; --story-b: #1baf7a; }
+.story[data-hue="4"] { --story-a: #1d1446; --story-b: #6250d6; }
+.story { transition: background .6s; }
+.bars { position: absolute; top: 14px; left: 16px; right: 16px; display: flex; gap: 4px; z-index: 2; }
+.bars i { flex: 1; height: 3px; border-radius: 2px; background: rgb(255 255 255 / .3); overflow: hidden; }
+.bars i b { display: block; height: 100%; width: 0; background: #fff; }
+.bars i.past b { width: 100%; }
+.bars i.now b { animation: fill var(--dur, 6s) linear forwards; }
+.story.paused .bars i.now b { animation-play-state: paused; }
+@keyframes fill { to { width: 100%; } }
+.slide { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center;
+  padding: 64px max(24px, calc(50% - 300px)) 90px; opacity: 0; transform: translateY(14px);
+  transition: opacity .45s, transform .45s; pointer-events: none; }
+/* the active slide sits above the tap zones but lets taps fall through, except on its links and buttons */
+.slide.on { opacity: 1; transform: none; z-index: 2; }
+.slide.on a, .slide.on button { pointer-events: auto; }
+.slide .k { font: 600 13px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; opacity: .75; margin-bottom: 18px; }
+.slide .big { font: 400 clamp(64px, 18vw, 150px)/0.95 var(--display); letter-spacing: -.02em; }
+.slide h2 { font-size: clamp(30px, 6.5vw, 52px); }
+.slide p { font-size: clamp(17px, 2.6vw, 21px); max-width: 34ch; margin: 18px 0 0; opacity: .92; }
+.slide .note { font-size: 15px; opacity: .7; margin-top: 10px; }
+.slide ol { list-style: none; padding: 0; margin: 22px 0 0; font-size: clamp(18px, 3vw, 24px); }
+.slide ol li { display: flex; gap: 14px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid rgb(255 255 255 / .18); }
+.slide ol li span { font: 600 14px var(--mono); opacity: .7; min-width: 3ch; }
+.slide ol li em { margin-left: auto; font: 14px var(--mono); font-style: normal; opacity: .75; }
+.yrs { display: flex; align-items: flex-end; gap: 8px; height: 180px; margin-top: 26px; max-width: 520px; }
+.yrs div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; font: 12px var(--mono); }
+.yrs div b { width: 100%; background: #fff; border-radius: 4px 4px 0 0; min-height: 2px; transform-origin: bottom; transform: scaleY(0); transition: transform .8s cubic-bezier(.2,.8,.2,1); }
+.slide.on .yrs div b { transform: scaleY(1); }
+.eras { margin-top: 24px; display: grid; gap: 4px; font-size: clamp(16px, 2.6vw, 20px); }
+.eras div { display: flex; gap: 16px; } .eras span { font: 14px/1.9 var(--mono); opacity: .7; }
+.tap { position: absolute; top: 0; bottom: 0; width: 35%; z-index: 1; background: none; border: 0; }
+.tap.l { left: 0; } .tap.r { right: 0; width: 65%; }
+.skip { position: absolute; right: 16px; bottom: max(18px, env(safe-area-inset-bottom)); z-index: 3;
+  background: rgb(255 255 255 / .16); border: 1px solid rgb(255 255 255 / .35); color: #fff; border-radius: 999px; padding: 10px 18px; }
+.cta { pointer-events: auto; position: relative; z-index: 3; align-self: flex-start; margin-top: 28px; background: #fff; color: #18191d;
+  border: 0; border-radius: 999px; padding: 14px 26px; font-weight: 700; font-size: 17px; }
+.hint { position: absolute; left: 16px; bottom: max(24px, env(safe-area-inset-bottom)); font: 12px var(--mono); opacity: .6; z-index: 2; }
+
+/* ---------- quests ---------- */
+.wrap { max-width: 860px; margin: 0 auto; padding: 56px 16px 80px; }
+.head { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: end; justify-content: space-between; }
+.head h1 { font-size: clamp(34px, 6vw, 48px); }
+.head p { color: var(--muted); margin: 8px 0 0; max-width: 52ch; }
+.meter { margin-top: 22px; height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.meter b { display: block; height: 100%; background: var(--done); width: 0; transition: width .4s; }
+.meterl { font: 13px var(--mono); color: var(--muted); margin-top: 8px; }
+.pick { background: var(--accent); color: #fff; border: 0; border-radius: 999px; padding: 12px 22px; font-weight: 700; white-space: nowrap; }
+.picked { margin-top: 18px; padding: 18px 20px; border-radius: 14px; background: var(--accent-soft); border: 1px solid var(--accent); display: none; }
+.picked.show { display: block; }
+.picked .k { font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.picked h2 { font-size: 26px; margin: 6px 0 4px; }
+@media (min-width: 700px) { .tabs { flex-wrap: wrap; } }
+.tabs { display: flex; gap: 8px; overflow-x: auto; margin: 30px -16px 0; padding: 2px 16px 6px; scrollbar-width: none; }
+.tabs button { flex: none; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 8px 14px; font-size: 15px; }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tabs small { font: 12px var(--mono); opacity: .7; margin-left: 6px; }
+.tools { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+.tools input[type=search] { flex: 1 1 220px; min-width: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; }
+.tools label { color: var(--muted); font-size: 15px; display: flex; gap: 6px; align-items: center; }
+.list { list-style: none; padding: 0; margin: 16px 0 0; }
+.q { display: grid; grid-template-columns: 28px 1fr auto; gap: 4px 12px; padding: 14px 4px; border-bottom: 1px solid var(--line); align-items: start; }
+.q input { width: 22px; height: 22px; margin: 3px 0 0; accent-color: var(--done); }
+.q .n { font-weight: 700; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
+.q .t { color: var(--muted); font-size: 15px; grid-column: 2 / 4; overflow-wrap: anywhere; }
+.q .links { grid-column: 2 / 4; font: 13px var(--mono); color: var(--faint); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.q .links a { color: var(--accent); }
+.q .x { font: 600 12px var(--mono); color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 3px 9px; white-space: nowrap; }
+.q.done .n { text-decoration: line-through; color: var(--faint); }
+.more { display: block; margin: 20px auto 0; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; }
+.empty { color: var(--muted); padding: 30px 0; text-align: center; }
+.foot { color: var(--faint); font-size: 14px; margin-top: 40px; }
+@media (prefers-reduced-motion: reduce) { .slide, .yrs div b, .meter b, .story { transition: none; } .bars i.now b { animation: none; width: 100%; } }
+</style>
+</head>
+<body>
+<section class="story" id="story" aria-label="Your saves, the story" aria-roledescription="slideshow">
+  <div class="bars" id="bars"></div>
+  <div id="slides"></div>
+  <button class="tap l" id="prev" aria-label="Previous slide"></button>
+  <button class="tap r" id="next" aria-label="Next slide"></button>
+  <span class="hint">tap · ← → · space to pause</span>
+  <button class="skip" id="skip">Skip to quests ↓</button>
+</section>
+
+<main class="wrap" id="quests">
+  <div class="head">
+    <div>
+      <h1>The someday list</h1>
+      <p id="lede"></p>
+    </div>
+    <button class="pick" id="pick">🎲 Pick one for me</button>
+  </div>
+  <div class="meter" role="progressbar" aria-label="Quests done" id="meter"><b></b></div>
+  <div class="meterl" id="meterl"></div>
+  <div class="picked" id="picked" aria-live="polite"></div>
+  <div class="tabs" id="tabs" role="toolbar" aria-label="Quest type"></div>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Search quests…" aria-label="Search quests">
+    <label><input type="checkbox" id="multi"> Saved 2+ times</label>
+    <label><input type="checkbox" id="hide"> Hide done</label>
+  </div>
+  <ul class="list" id="list"></ul>
+  <button class="more" id="more" hidden>Show more</button>
+  <p class="foot">Pulled out of your saved posts' captions by a local model, so roughly 1 in 10 may be off. Ticks are kept in this browser only.</p>
+</main>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+const { stats: S, quests: Q } = JSON.parse(document.getElementById("data").textContent);
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = n => n.toLocaleString("en-US");
+const day = d => new Date(d + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+const month = m => new Date(m + "-15T12:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+const IG = u => "https://www.instagram.com/" + u;
+const KINDS = { song: ["🎸", "Songs to play"], recipe: ["🍳", "Dishes to cook"], exercise: ["🏋️", "Moves to train"],
+  watch: ["🎬", "Things to watch"], skill: ["🛠️", "Skills to practise"], gear: ["🛒", "Gear to buy"], place: ["📍", "Places to go"] };
+
+/* ---------- story ---------- */
+const maxY = Math.max(...S.years.map(y => y[1]));
+// collapse consecutive years with the same top category into eras
+const eras = [];
+for (const [y, t] of S.yearTop) {
+  const name = t[0] ? t[0][0] : "—", last = eras[eras.length - 1];
+  if (last && last.name === name) last.to = y; else eras.push({ from: y, to: y, name });
+}
+const multi = Q.filter(q => q.u.length > 1);
+const per = Math.round(S.bigMonth.n / 30);
+const slides = [
+  { hue: 0, html: `<div class="k">Saves Wrapped</div><div class="big">${fmt(S.total)}</div>
+      <p>posts saved since ${day(S.first.d)}. Six years of "I'll come back to this."</p><p class="note">Let's see what they say about you.</p>` },
+  { hue: 1, html: `<div class="k">Where it started · ${day(S.first.d)}</div><h2>${esc(S.first.s)}</h2>
+      <p>Your very first save. <a href="${IG(S.first.u)}" target="_blank" rel="noopener">See it</a></p>` },
+  { hue: 4, html: `<div class="k">It got out of hand</div><h2>${fmt(S.years[0][1])} → ${fmt(maxY)} saves a year</h2>
+      <div class="yrs">${S.years.map(([y, n]) => `<div><span>${fmt(n)}</span><b style="height:${n / maxY * 100}%"></b><span>${y}</span></div>`).join("")}</div>` },
+  { hue: 2, html: `<div class="k">Your eras</div><h2>From ${esc(eras[0].name.toLowerCase())} to ${esc(eras[eras.length - 1].name.toLowerCase())}</h2>
+      <div class="eras">${eras.map(e => `<div><span>${e.from}${e.to !== e.from ? "–" + e.to.slice(2) : ""}</span>${esc(e.name)}</div>`).join("")}</div>` },
+  { hue: 3, html: `<div class="k">All-time top 5</div><h2>What you save most</h2>
+      <ol>${S.cats.map(([n, c], i) => `<li><span>${i + 1}</span>${esc(n)}<em>${fmt(c)}</em></li>`).join("")}</ol>` },
+  { hue: 0, html: `<div class="k">Your biggest day · ${day(S.bigDay.d)}</div><div class="big">${S.bigDay.n}</div>
+      <p>saves in one day. Mostly ${S.bigDay.top.slice(0, 2).map(t => esc(t[0].toLowerCase())).join(" and ")}.</p>` },
+  { hue: 1, html: `<div class="k">Your biggest month · ${month(S.bigMonth.m)}</div><div class="big">${fmt(S.bigMonth.n)}</div>
+      <p>saves. That's about ${per} a day, every day.</p>` },
+  { hue: 4, html: `<div class="k">Longest streak</div><div class="big">${S.streak.n} days</div>
+      <p>in a row with at least one save, ${day(S.streak.start)} to ${day(S.streak.end)}.</p>
+      <p class="note">You saved something on ${fmt(S.activeDays)} different days in total.</p>` },
+  { hue: 2, html: `<div class="k">The accounts you keep coming back to</div><h2>Your top 5</h2>
+      <ol>${S.owners.map(([o, n], i) => `<li><span>${i + 1}</span>@${esc(o)}<em>${n}</em></li>`).join("")}</ol>` },
+  ...(multi.length ? [{ hue: 3, html: `<div class="k">Saved it twice. Or more.</div><h2>You really meant these</h2>
+      <ol>${multi.slice(0, 5).map((q, i) => `<li><span>${KINDS[q.k][0]}</span>${esc(q.n)}<em>×${q.u.length}</em></li>`).join("")}</ol>` }] : []),
+  { hue: 0, html: `<div class="k">The someday list</div><div class="big">${fmt(Q.length)}</div>
+      <p>things you saved to learn, cook, play, watch or try. They're all in one list now, so you can tick them off.</p>
+      <button class="cta" id="go">Start the quests ↓</button>` },
+];
+const DUR = 6000;
+$("slides").innerHTML = slides.map((s, i) => `<div class="slide" aria-hidden="true" data-i="${i}">${s.html}</div>`).join("");
+$("bars").innerHTML = slides.map(() => "<i><b></b></i>").join("");
+$("story").style.setProperty("--dur", DUR / 1000 + "s");
+let cur = 0, timer = null, left = DUR, started = 0;
+const els = [...document.querySelectorAll(".slide")], bars = [...document.querySelectorAll(".bars i")];
+function show(i) {
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  els.forEach((e, j) => { e.classList.toggle("on", j === cur); e.setAttribute("aria-hidden", j !== cur); e.inert = j !== cur; });
+  bars.forEach((b, j) => { b.className = j < cur ? "past" : ""; });
+  void bars[cur].offsetWidth; // restart the fill animation
+  bars[cur].className = cur === slides.length - 1 ? "past" : "now";
+  $("story").dataset.hue = slides[cur].hue;
+  $("story").classList.remove("paused");
+  left = DUR; arm();
+}
+function arm() {
+  clearTimeout(timer);
+  if (cur < slides.length - 1) { started = Date.now(); timer = setTimeout(() => show(cur + 1), left); }
+}
+function togglePause() {
+  const st = $("story");
+  if (st.classList.toggle("paused")) { clearTimeout(timer); left -= Date.now() - started; } else arm();
+}
+const toQuests = () => { clearTimeout(timer); $("quests").scrollIntoView({ behavior: "smooth" }); };
+$("next").onclick = () => show(cur + 1);
+$("prev").onclick = () => show(cur - 1);
+$("skip").onclick = toQuests;
+$("slides").addEventListener("click", e => { if (e.target.id === "go") toQuests(); });
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input")) return;
+  const r = $("story").getBoundingClientRect();
+  if (r.bottom < innerHeight / 2) return; // story scrolled away: keys belong to the page
+  if (e.key === "ArrowRight") show(cur + 1);
+  else if (e.key === "ArrowLeft") show(cur - 1);
+  else if (e.key === " ") { e.preventDefault(); togglePause(); }
+});
+// stop auto-advancing once the story is off screen
+new IntersectionObserver(([en]) => { if (!en.isIntersecting) clearTimeout(timer); else if (!$("story").classList.contains("paused")) arm(); }, { threshold: .5 }).observe($("story"));
+show(0);
+
+/* ---------- quests ---------- */
+let done = new Set();
+try { done = new Set(JSON.parse(localStorage.getItem("saves-wrapped-done") || "[]")); } catch {}
+const save = () => { try { localStorage.setItem("saves-wrapped-done", JSON.stringify([...done])); } catch {} };
+const counts = {};
+Q.forEach(q => counts[q.k] = (counts[q.k] || 0) + 1);
+const kinds = Object.keys(KINDS).filter(k => counts[k]);
+let kind = "all", shown = 60;
+$("lede").textContent = `${fmt(Q.length)} things from ${fmt(Q.reduce((a, q) => a + q.u.length, 0))} posts you saved to learn, try or buy. Duplicates are merged; the ones you saved more than once come first.`;
+$("tabs").innerHTML = [["all", "✨", "All", Q.length], ...kinds.map(k => [k, ...KINDS[k], counts[k]])]
+  .map(([k, e, n, c]) => `<button data-k="${k}" aria-pressed="${k === kind}">${e} ${n}<small>${fmt(c)}</small></button>`).join("");
+$("tabs").onclick = e => { const b = e.target.closest("button"); if (!b) return; kind = b.dataset.k; shown = 60;
+  $("tabs").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); render(); };
+["q", "multi", "hide"].forEach(id => $(id).addEventListener("input", () => { shown = 60; render(); }));
+$("more").onclick = () => { shown += 120; render(); };
+
+function filtered() {
+  const s = $("q").value.trim().toLowerCase();
+  return Q.filter(q => (kind === "all" || q.k === kind) && (!$("multi").checked || q.u.length > 1) &&
+    (!$("hide").checked || !done.has(q.id)) && (!s || (q.n + " " + q.tip + " " + q.s).toLowerCase().includes(s)));
+}
+const links = q => q.u.slice(0, 6).map((u, i) => `<a href="${IG(u)}" target="_blank" rel="noopener">post${q.u.length > 1 ? " " + (i + 1) : ""}</a>`).join("")
+  + (q.u.length > 6 ? `<span>+${q.u.length - 6} more</span>` : "");
+function item(q) {
+  return `<li class="q${done.has(q.id) ? " done" : ""}" data-id="${esc(q.id)}">
+    <input type="checkbox" ${done.has(q.id) ? "checked" : ""} aria-label="Done: ${esc(q.n)}">
+    <div class="n">${KINDS[q.k][0]} ${esc(q.n)}</div>${q.u.length > 1 ? `<span class="x">saved ×${q.u.length}</span>` : "<span></span>"}
+    <div class="t">${esc(q.tip || q.s)}</div>
+    <div class="links">${links(q)}<span>${q.d}</span></div></li>`;
+}
+function render() {
+  const f = filtered();
+  $("list").innerHTML = f.length ? f.slice(0, shown).map(item).join("") : `<li class="empty">Nothing matches.</li>`;
+  $("more").hidden = f.length <= shown;
+  $("more").textContent = `Show more (${fmt(f.length - shown)} left)`;
+  const pool = kind === "all" ? Q : Q.filter(q => q.k === kind), d = pool.filter(q => done.has(q.id)).length;
+  $("meter").querySelector("b").style.width = (pool.length ? d / pool.length * 100 : 0) + "%";
+  $("meter").setAttribute("aria-valuenow", d); $("meter").setAttribute("aria-valuemax", pool.length);
+  $("meterl").textContent = `${fmt(d)} of ${fmt(pool.length)} done${kind === "all" ? "" : " · " + KINDS[kind][1].toLowerCase()}`;
+}
+$("list").addEventListener("change", e => {
+  const li = e.target.closest(".q"); if (!li) return;
+  e.target.checked ? done.add(li.dataset.id) : done.delete(li.dataset.id);
+  li.classList.toggle("done", e.target.checked); save(); render();
+});
+$("pick").onclick = () => {
+  const pool = Q.filter(q => (kind === "all" || q.k === kind) && !done.has(q.id));
+  if (!pool.length) { $("picked").innerHTML = "<h2>All done here. Seriously?</h2>"; $("picked").classList.add("show"); return; }
+  // things saved more than once are weighted up: you clearly wanted them
+  const bag = pool.flatMap(q => Array(Math.min(q.u.length, 4)).fill(q));
+  const q = bag[Math.floor(Math.random() * bag.length)];
+  $("picked").innerHTML = `<div class="k">${KINDS[q.k][0]} ${KINDS[q.k][1]} · today's quest</div><h2>${esc(q.n)}</h2>
+    <div>${esc(q.tip || q.s)}</div><div class="links" style="margin-top:8px;font:13px var(--mono)">${links(q)}</div>`;
+  $("picked").classList.add("show");
+};
+render();
+</script>
+</body>
+</html>
