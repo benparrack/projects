@@ -1,8 +1,17 @@
 {
   "bashOutputMaxChars": 15000,
+  "hooks": {
+    "SubagentStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/subagent-graphify.sh" }
+        ]
+      }
+    ]
+  },
   "statusLine": {
     "type": "command",
-    "command": "npx -y ccstatusline@latest",
+    "command": "/home/ben/AppDev/Tools/nvm/versions/node/v22.23.2/bin/node /home/ben/AppDev/Tools/nvm/versions/node/v22.23.2/lib/node_modules/ccstatusline/dist/ccstatusline.js",
     "padding": 0
   }
 }
