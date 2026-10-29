@@ -12,29 +12,31 @@ something in the middle.
 
 ## Games
 
-- **Shared Drawing Canvas** — everyone in a room draws on the same canvas in real time.
-- **Hangman** — one player picks a word, everyone else guesses letters.
-- **Checkers** — standard American rules, mandatory capture/multi-jump/kinging.
-- **Chess** — standard rules.
-- **Slither** — real-time multiplayer snake: steer with the mouse, hold click/Space to boost,
-  eat food to grow, avoid walls and other snakes. The first game driven by a server-side tick
-  loop rather than only reacting to player messages (see `FUTURE.md`).
-- **Connect 4** — standard rules, 7x6 grid, click a column to drop a piece.
+59 games in eight menu tabs (the full list is `CATEGORIES` in `public/hub.js`):
 
-Checkers, Chess, and Connect 4 all support a "PLAY VS BOT" seat button for solo play against a
-CPU opponent — see `FUTURE.md`'s "Bot/CPU opponents" section. (This list predates several other
-games already shipped in `server/games/`/`public/games/` — see those directories or
-`TODO_FIRST.md` for the full current roster.)
+- **CARD GAMES**: War, Crazy Eights, BS, Spades, Hearts.
+- **CASINO**: Blackjack (plus a high-roller table), Slots, Crash, Plinko, Mines, Texas Hold'em
+  and Roulette, all on one money balance per account. Going broke means working shifts at your
+  own restaurant (the Diner). Money never shows outside this tab (see `public/casino/`,
+  `server/casino/`).
+- **BOARD GAMES**: Checkers, Chess, Four in a Row, Backgammon, Reversi, Gomoku, Mancala, Dots
+  and Boxes, Codebreaker, Minesweeper race, Blockade.
+- **ARENA & REAL-TIME**: Slither, Light Cycles, Arena Duel (1v1 FPS), Slope (3D runner), Maze
+  Dash. These run on a server-side tick loop instead of only reacting to messages.
+- **WORD GAMES**: Wordle, Word Tiles, Word Wheel, Word Search, Hangman, Anagrams, Word Bites,
+  Word Hunt, Word Trails, Crossword, 20 Questions.
+- **POCKET CLASSICS**: quick head-to-head games (Pool, Cup Pong, Darts, Basketball, Sea Battle,
+  Filler, Tanks, Mini Golf, Archery, Shuffleboard, Bowling, Knockout, Paintball, Alley Ball)
+  plus some board and word games from the other tabs.
+- **PARTY & DRAWING**: Shared Drawing Canvas, Sketch & Guess, Drawing Phone.
+- **RETRO**: a Game Boy emulator with watch and link-cable play (synced from `../games/gameboy/`).
 
-The **POCKET CLASSICS** tab has quick head-to-head games: Pool, Cup Pong, Darts, Basketball,
-Sea Battle, Filler, Word Hunt, Word Bites, 20 Questions, Tanks, Mini Golf, Archery,
-Shuffleboard, Bowling, Knockout, Paintball and Alley Ball. The **WORD GAMES** tab has Word Hunt,
-Word Bites, Word Trails, Crossword, 20 Questions and others. Every game there has PLAY VS BOT at
-Easy/Medium/Hard/Expert. The physics games share a deterministic `sim.js` between server and
+Every turn-based or competitive game has PLAY VS BOT at Easy/Medium/Hard/Expert
+(`server/games/ai/`). The physics games share a deterministic `sim.js` between server and
 client (see `public/games/cuppong/`), and the server's result is the authoritative one.
 
 More games plug into the same hub without touching the core server/room code — see
-`server/games/index.js` and the `GAMES` array in `public/hub.js`.
+`server/games/index.js` and `CATEGORIES` in `public/hub.js`.
 
 ## Run locally
 
@@ -47,6 +49,9 @@ npm start
 
 Then open `http://localhost:3000`.
 
+Tests are plain Node scripts, one per area: `npm test` runs them all, or run one with
+`node test/chess.test.js`.
+
 ## Architecture
 
 - `server/index.js` — one Node process serves both static files and the WebSocket endpoint
@@ -54,7 +59,7 @@ Then open `http://localhost:3000`.
 - `server/roomManager.js` — game-agnostic room lifecycle (create/join/leave/cleanup).
 - `server/games/<name>.js` — one plugin per mini-game (state, message handling, snapshot for
   late joiners). Adding a new game is: new plugin file, one line in `server/games/index.js`,
-  a matching `public/games/<name>/client.js`, and one entry in `public/hub.js`'s `GAMES` list.
+  a matching `public/games/<name>/client.js`, and one entry in `public/hub.js`'s `CATEGORIES`.
 - `server/protocol.js` / `public/protocol.js` — the WebSocket message envelope and type
   constants, hand-kept in sync between server and client (no bundler in this repo).
 

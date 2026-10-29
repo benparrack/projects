@@ -1,10 +1,7 @@
-# Game Terminal — Future Plans
+# Game Terminal — Design Notes
 
-Backlog and design notes for what comes next in this project. See `README.md` for how to run
-and deploy it, and `IDEAS.md` #11 (repo root) for where this project originated.
-
-**Shipped so far:** Shared Drawing Canvas, Hangman, Checkers, Chess, Slither, Connect 4 — all
-live at https://game-terminal.onrender.com.
+Design writeups for the earlier games, kept because code comments point here. Every section
+marked "shipped" is built; the current roster is in `README.md`.
 
 ---
 
@@ -610,7 +607,7 @@ category fits (or a new category) instead of one line in a flat list. See commit
 
 - **Adding an event-driven game** (like the first four): new `server/games/<name>.js` +
   `public/games/<name>/client.js`, one line in `server/games/index.js`, one entry in
-  `public/hub.js`'s `GAMES` array. Core room/connection code
+  `public/hub.js`'s `CATEGORIES`. Core room/connection code
   (`server/roomManager.js`, `server/protocol.js`, `server/index.js`) shouldn't need to change.
 - **Adding a real-time tick-loop game** (like slither): same plugin/registry/hub wiring as
   above, plus export `tickIntervalMs` (ms between ticks) and `tick(room, ctx)` from the plugin.
