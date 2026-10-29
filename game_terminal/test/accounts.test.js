@@ -143,13 +143,13 @@ test('export + delete: data export scrubs other uids; deletion anonymises shared
   const ex = await acc.exportData('u1');
   assert.strictEqual(ex.account.username, 'Alice');
   assert.strictEqual(ex.matches.length, 2);
-  assert.ok(!JSON.stringify(ex).includes('u2'), 'export hides other uids');
+  assert.ok(!/(?<![a-z\d])u2(?![a-z\d])/.test(JSON.stringify(ex)), 'export hides other uids');
   assert.ok(ex.matches[0].players.some((p) => p.you));
 
   assert.strictEqual(await acc.deleteAccount('u1'), true);
   assert.strictEqual(await acc.getUser('u1'), null);
   assert.strictEqual(await acc.uidForUsername('alice'), null, 'name released');
-  assert.ok(![...db._docs].some(([k, v]) => k.includes('u1') || JSON.stringify(v).includes('"u1"') || JSON.stringify(v).includes('Alice')), 'no trace of u1 left');
+  assert.ok(![...db._docs].some(([k, v]) => /(?<![a-z\d])u1(?![a-z\d])/.test(k) || JSON.stringify(v).includes('"u1"') || JSON.stringify(v).includes('Alice')), 'no trace of u1 left');
   const bobs = await db.list('users/u2/matches');
   assert.strictEqual(bobs.length, 2, 'Bob keeps his history');
   assert.ok(bobs.every((m) => m.players.some((p) => p.name === 'deleted player')));

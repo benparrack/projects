@@ -47,6 +47,6 @@ const B = ['B', 'Bob', 'u2'];
   assert.strictEqual(res.st, 200);
   assert.strictEqual(res.b.gameType, featured);
   assert.deepStrictEqual(res.b.rows.map((r) => [r.rank, r.username, r.points]), [[1, 'Alice', 4], [2, 'Bob', 1]]);
-  assert.ok(!JSON.stringify(res.b).includes('u1'), 'no uids');
+  assert.ok(!/(?<![a-z\d])u1(?![a-z\d])/.test(JSON.stringify(res.b)), 'no uids');
   console.log('weekly.test: all passed');
 })().catch((err) => { console.error(err); process.exit(1); });

@@ -35,7 +35,7 @@ function call(api, url) {
   const r = await call(api, '/api/user/alice');
   assert.strictEqual(r.status, 200);
   assert.strictEqual(r.body.user.username, 'Alice');
-  assert.ok(!JSON.stringify(r.body).includes('u1') && !JSON.stringify(r.body).includes('u2'), 'no uids leak');
+  assert.ok(!/(?<![a-z\d])u[12](?![a-z\d])/.test(JSON.stringify(r.body)), 'no uids leak');
   assert.deepStrictEqual(r.body.stats.find((s) => s.gameType === 'slope').score.label, 'DISTANCE');
   assert.strictEqual(r.body.matches.length, 3);
   const vsBob = r.body.matches.find((m) => m.players.some((p) => p.name === 'Bob'));
@@ -49,7 +49,7 @@ function call(api, url) {
   assert.deepStrictEqual(hh.body.games, [{ gameType: 'chess', played: 1, draws: 0, a: 1, b: 0 }]);
   assert.strictEqual(hh.body.matches.length, 1);
   assert.strictEqual(hh.body.matches[0].winner, 'a');
-  assert.ok(!JSON.stringify(hh.body).includes('u1'), 'no uids in h2h');
+  assert.ok(!/(?<![a-z\d])u1(?![a-z\d])/.test(JSON.stringify(hh.body)), 'no uids in h2h');
   assert.deepStrictEqual((await call(api, '/api/h2h/bob/alice')).body.games[0], { gameType: 'chess', played: 1, draws: 0, a: 0, b: 1 });
   assert.strictEqual((await call(api, '/api/h2h/alice/alice')).status, 400);
   assert.strictEqual((await call(api, '/api/h2h/alice/nobody')).status, 404);

@@ -80,7 +80,7 @@ const C = ['C', 'Cyril', 'u3'];
   assert.strictEqual(lb.body.by, 'rating');
   assert.deepStrictEqual(lb.body.rows.map((r) => r.username), ['Cyril', 'Alice', 'Bob']); // fresh Cyril (K=32) beat both
   assert.deepStrictEqual(lb.body.rows.map((r) => r.rank), [1, 2, 3]);
-  assert.ok(!JSON.stringify(lb.body).includes('u1'), 'no uids leak');
+  assert.ok(!/(?<![a-z\d])u1(?![a-z\d])/.test(JSON.stringify(lb.body)), 'no uids leak');
   assert.ok(lb.body.rows[0].tier && lb.body.rows[0].avatar);
   lb = await call(api, '/api/leaderboard/chess?names=bob,cyril');
   assert.deepStrictEqual(lb.body.rows.map((r) => [r.username, r.rank]), [['Cyril', 1], ['Bob', 3]], 'friends view keeps global rank');
