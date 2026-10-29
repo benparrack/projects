@@ -74,6 +74,6 @@ Mostly single-prompt builds. They still work. Open the `index.html` or see the f
 | [stockholm3d](playground/stockholm3d) | 3D explorer of central Stockholm from open data |
 | [terrain_generator](playground/terrain_generator) | Procedural terrain generator |
 
-## ideas/
+## IDEAS.md
 
-Idea backlogs: [IDEAS.md](ideas/IDEAS.md) (main numbered list), [NEW_IDEAS.md](ideas/NEW_IDEAS.md), [USEFULL_IDEAS.md](ideas/USEFULL_IDEAS.md), [game_ideas.md](ideas/game_ideas.md), [CV_IDEAS.md](ideas/CV_IDEAS.md). Current picks are in [TODO_FIRST.md](TODO_FIRST.md).
+Every project idea in one file: [IDEAS.md](IDEAS.md). Current picks are in [TODO_FIRST.md](TODO_FIRST.md).

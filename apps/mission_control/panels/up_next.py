@@ -18,7 +18,7 @@ class UpNextPanel(Panel):
 
     async def refresh_data(self) -> None:
         todo_path = self._projects_dir / "TODO_FIRST.md"
-        ideas_path = self._projects_dir / "ideas" / "IDEAS.md"
+        ideas_path = self._projects_dir / "IDEAS.md"
         text = await asyncio.to_thread(self._read, todo_path)
 
         if text is None:

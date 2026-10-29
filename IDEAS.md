@@ -1,6 +1,16 @@
-# Project Ideas
+# Ideas
 
-Backlog of self-directed project ideas. Each entry has enough context to pick back up cold in a future session.
+The one backlog for every project idea in this repo. Each entry has enough context to pick back up cold.
+
+| Section | IDs | What's in it |
+|---|---|---|
+| [General backlog](#general-backlog) | #0 to #44 | The original list: games, visualizers, tools |
+| [Big builds](#big-builds) | N1 to N18 | Hard single-prompt builds with an objective self-check |
+| [Useful](#useful) | U1 to U15 | Things Ben would actually use day to day |
+| [Games](#games) | G1 to G6 | Standalone games with a hard core system |
+| [Computer vision](#computer-vision) | none | Follow-ups to the ASL project |
+
+To look up one entry, grep its heading: `## 22.`, `## N5.`, `## U1.` or `## G2.`.
 
 **Shipped entries stay short:** once an idea is Done, its "Why this one" and "What it needs when
 resumed" sections get cut — that planning context no longer matters once built, and any lasting
@@ -10,6 +20,8 @@ keeping shipped entries to a one-line pointer keeps that fixed per-session cost 
 forever as more ideas ship.
 
 ---
+
+# General backlog
 
 ## 0. 3D-Rendered Games (WebGL / Three.js)
 
@@ -613,3 +625,696 @@ day, read in real depth rather than a one-line trivia fact.
 - Keep user state (done flags, notes, personal tasks) separate from synced data so a re-sync never wipes it. Dedupe on the event UID.
 - Done when: paste a real Canvas feed URL, see classes and assignments appear, check some off, re-sync, and the checkmarks survive.
 - Question for Ben: personal tool for his own Canvas, or something friends could use (hosted, accounts, phone)? That decides local web app vs hosted PWA.
+
+---
+
+# Big builds
+
+Generated 2026-09-28. Each one is meant to be run from a single well-planned
+prompt with full permissions and no follow-up questions. They're picked to be
+completely different from everything in the general backlog, and to have an objective
+way for the model to check its own work: test suites, reference diffs, or
+rendered output it can inspect.
+
+Recommended picks: **N1** (best mix of cool and objectively checkable),
+**N2** (most different kind of stress test), **N5** (most personal payoff).
+
+---
+
+## N1. Web Browser Engine From Scratch
+
+**Status:** Stocked, not started.
+**Pitch:** A from-scratch browser engine: HTML tokenizer/parser → DOM, CSS parser + cascade/specificity, block and inline layout, painting to a canvas. Has a URL bar and loads real, simple sites (Wikipedia articles, Hacker News, old personal pages).
+
+**Why this one:** "I browsed Wikipedia in a browser Claude wrote" is a great demo, and correctness is checkable against a real browser.
+
+**What it needs when resumed:**
+- Done when: renders a chosen set of real pages recognizably close to Firefox (screenshot diffs via Playwright); passes a small web-platform-tests subset.
+- Runs in the browser with a fetch proxy (small local server) to get around CORS.
+- Stretch: links + history, forms, basic flexbox, images, a devtools-style DOM/box-model inspector.
+
+---
+
+## N2. Code-Rendered Animated Short Film
+
+**Status:** ✅ Done 2026-09-28 — "LANTERN", 2:56, 1080p60, in `playground/animated_short/` (`./make_film.sh` re-renders everything in ~8 min; film at `playground/animated_short/output/film.mp4`, git-ignored). Was: brief locked (sci-fi/awe, wordless, style = Claude's pick). Prompt in `playground/animated_short/PROMPT.md`.
+**Pitch:** A 2–3 minute animated short made entirely in code: Three.js or a custom renderer, a real script/storyboard, procedurally synthesized score and sound effects, exported to `.mp4` via ffmpeg.
+
+**Why this one:** The end product is an actual film to watch and share. It stresses creative and directorial judgment, unlike anything else in the repo.
+
+**What it needs when resumed:**
+- Done when: a finished `.mp4` with a beginning/middle/end, synced audio, and no rendering glitches.
+- Self-review loop: render keyframes/contact sheets, inspect them, fix composition, pacing and audio sync.
+- Deterministic frame-by-frame offline rendering (not real-time capture) so the output is stable.
+- Write `SCRIPT.md` + storyboard first; keep the scope to one location and 1–2 characters.
+
+---
+
+## N3. Hobby Operating System
+
+**Status:** Stocked, not started.
+**Pitch:** A bootable OS (x86 or RISC-V): bootloader, memory management (paging + allocator), preemptive multitasking, a simple filesystem, a shell with a few programs, maybe a tiny game. Boots in QEMU and in the browser via v86, so anyone can try it from a link.
+
+**Why this one:** Low-level systems work where bugs are brutal (triple faults, stack corruption), but progress is still testable.
+
+**What it needs when resumed:**
+- Done when: boots to a shell, runs multiple processes, reads/writes files that persist, and runs in-browser via v86.
+- Testing: headless QEMU with scripted tests over the serial console.
+- Dependencies: QEMU + a cross-compiler toolchain. Ben may need to run one `sudo apt install` before starting.
+
+---
+
+## N4. SQL Database From Scratch
+
+**Status:** Stocked, not started.
+**Pitch:** A real database engine: page-based B-tree storage, SQL parser, query planner, transactions, write-ahead log, crash recovery. Plus a web "explain" view that animates how a query executes through the plan and pages.
+
+**Why this one:** The most rigorous engineering test of the set: correctness is fully objective. It's the least flashy, which the visualizer offsets.
+
+**What it needs when resumed:**
+- Done when: passes a chosen subset of SQLite's sqllogictest suite, and survives kill-it-mid-write crash tests with no data loss.
+- Stretch: indexes + planner choosing between them, joins, concurrent readers.
+
+---
+
+## N5. Stockholm in 3D
+
+**Status:** Done 2026-09-28, including all three stretch goals. The code is in `playground/stockholm3d/`: run `./build.sh`, then `./serve.sh`.
+**Pitch:** A browser 3D explorer of Stockholm built from open data: OpenStreetMap buildings extruded to their real heights, elevation data, water, and a day/night cycle with the correct sun position for Stockholm's latitude and date. Fly-through camera, click a building for its info.
+
+**Why this one:** Personal while Ben is living in Stockholm (through ~Dec 2026). Real-world data, unlike the procedural `playground/terrain_generator/`.
+
+**What it needs when resumed:**
+- Done when: central Stockholm (Gamla stan, Södermalm, Norrmalm, Djurgården at minimum) renders smoothly, and landmarks are recognizable in screenshots.
+- Data: OSM extract (Overpass or Geofabrik) + open elevation data. No API keys needed.
+- Preprocess the data into compact tiles offline so the browser loads fast.
+- Stretch: seasons/snow, the real sunrise/sunset times (very short days in December), walking mode.
+
+---
+
+## N6. Tiny GPT With No ML Libraries
+
+**Status:** Stocked, not started.
+**Pitch:** A from-scratch autograd engine and transformer, trained locally on something fun (Swedish text, Strindberg, etc.), with an interactive page that shows attention patterns and token probabilities live as it generates.
+
+**Why this one:** Builds the whole stack from the math up, with no PyTorch, and makes an otherwise invisible process visible.
+
+**What it needs when resumed:**
+- Done when: gradient checks pass against numerical gradients, the loss curve drops meaningfully, and it generates recognizable text in the training style.
+- CPU-only training, so the model stays small: expect fun, semi-coherent output, not smart output.
+- Tokenizer from scratch too (char-level or small BPE).
+
+---
+
+## N7. A Fully Realized Fictional World
+
+**Status:** Stocked, not started.
+**Pitch:** A constructed language with real grammar and a dictionary, plus a generator for its writing system. On top of that: a wiki with history, a timeline, maps, and a virtual museum of artifacts.
+
+**Why this one:** A creative-writing and worldbuilding stress test at scale, different from all the engineering-heavy ideas.
+
+**What it needs when resumed:**
+- Done when: the conlang has a documented grammar and dictionary, and the wiki has dozens of interlinked pages, a timeline and maps.
+- Automated consistency checks: every conlang phrase on the wiki parses under the grammar, no timeline contradictions, no broken wiki links.
+- Judging is more subjective than the others; lean on those checks.
+
+---
+
+**Batch 2, generated 2026-09-28.**
+
+Same rules: one well-planned prompt, full permissions, and an objective way
+for the model to check its own work. None of these overlap the general backlog, batch 1,
+or an existing directory.
+
+Recommended picks: **N8** (hardest objective test), **N12** (most personal:
+ISS passes over Stockholm), **N16** (most unusual kind of check: a speech
+recognizer grades the output).
+
+---
+
+## N8. Self-Hosting C Compiler
+
+**Status:** Stocked, not started.
+**Pitch:** A compiler for a real subset of C (structs, pointers, arrays, function pointers, a preprocessor) that emits x86-64 assembly: lexer, parser, type checker, an SSA IR with a few optimization passes, and register allocation. The finish line is self-hosting: the compiler compiles itself, and that binary compiles itself again to a byte-identical result.
+
+**Why this one:** `IDEAS.md` #1/#36 are interpreters; this goes all the way down to machine code. Self-hosting is an unfakeable finish line.
+
+**What it needs when resumed:**
+- Done when: passes a public C test suite subset (e.g. `c-testsuite`), is self-hosting with a stage2 == stage3 check, and a benchmark shows optimizations beat its own `-O0`.
+- Uses the system `as`/`ld` for assembling and linking; the compiler itself uses no LLVM or libraries.
+- Stretch: a browser page that shows source → IR → assembly side by side, with passes stepping.
+
+---
+
+## N9. Git, Reimplemented
+
+**Status:** Stocked, not started.
+**Pitch:** A from-scratch git: object store (blob/tree/commit/tag), zlib, the index, `add`/`commit`/`log`/`diff`/`branch`/`checkout`/`merge` (with a real three-way merge), packfiles with delta compression, and `clone`/`fetch`/`push` over the smart HTTP protocol, so it can clone a real GitHub repo.
+
+**Why this one:** It's checkable against the real thing: every repo it writes must pass `git fsck` and be readable by real git, and every repo real git writes must be readable by it.
+
+**What it needs when resumed:**
+- Done when: it clones a medium-size public GitHub repo byte-for-byte (same tree hashes as real git), round-trips repos with real git both ways, and passes a differential fuzz test against real git on random edit/commit/merge sequences.
+- Stretch: a browser visualizer of the object graph that animates as you commit, branch and merge.
+
+---
+
+## N10. A Computer From NAND Gates
+
+**Status:** Stocked, not started.
+**Pitch:** Build a CPU up from a single NAND primitive: gates → adders/ALU → registers/RAM → a custom 16-bit CPU. Then an assembler, a tiny high-level language compiled to it, and a game (Tetris or Snake) running on the simulated gates. A browser view lets you zoom from the running game down to individual gates toggling.
+
+**Why this one:** Different from the Game Boy emulator (#33): here the hardware is the thing being built, not emulated from a spec. Every layer gets its own truth-table and program tests.
+
+**What it needs when resumed:**
+- Done when: every chip passes exhaustive or randomized truth-table tests, the CPU passes an instruction-level test suite, and the game is playable at a usable speed. Gate-level simulation will need compiling or levelizing the netlist to be fast enough.
+- Stretch: export the design to Verilog and simulate it in Icarus/Verilator as a second opinion.
+
+---
+
+## N11. Raft Key-Value Store + Jepsen-Style Torture Tester
+
+**Status:** Stocked, not started.
+**Pitch:** A distributed, replicated key-value store on Raft (leader election, log replication, snapshots, membership changes), plus a fault injector that partitions the network, kills nodes, pauses them and skews clocks while clients hammer it. A linearizability checker proves no acknowledged write was lost or reordered.
+
+**Why this one:** Distributed systems are the classic domain where "it works in the demo" means nothing. The checker makes correctness objective.
+
+**What it needs when resumed:**
+- Done when: thousands of randomized fault schedules pass the linearizability check (Knossos/Porcupine-style, written from scratch). Planted bugs (e.g. skip the term check) must be caught, which proves the tester works.
+- Deterministic simulation mode (seeded, single-threaded, fake network and clock), so any failure replays exactly.
+- Stretch: a browser timeline that replays a run: nodes, messages flying, elections, and the partition that caused an anomaly.
+
+---
+
+## N12. Satellite Tracker — What's Over Stockholm Right Now
+
+**Status:** Stocked, not started.
+**Pitch:** SGP4/SDP4 orbit propagation implemented from the spec, fed with live TLEs from CelesTrak. It drives a 3D globe with the ~10k active satellites, Starlink trains, ISS ground tracks, and a pass predictor for Stockholm: when the ISS or other bright satellites will be visible tonight (sunlit satellite, dark sky), and where to look.
+
+**Why this one:** Real physics plus real data, and there's an official answer key. It also has a personal payoff: go outside and actually see the predicted pass.
+
+**What it needs when resumed:**
+- Done when: matches the official SGP4 verification test vectors (Vallado's `SGP4-VER.TLE`) to within millimetres, and ISS pass times for Stockholm agree with Heavens-Above to within a few seconds.
+- No API keys needed (CelesTrak is open).
+- Stretch: a phone-friendly page with a compass/AR "look here" arrow, and notifications before good passes (reuse the ntfy setup from `money/flip-bot/`).
+
+---
+
+## N13. Spreadsheet App With an Excel-Compatible Formula Engine
+
+**Status:** Stocked, not started.
+**Pitch:** A browser spreadsheet: a virtualized grid for 1M rows, a formula parser and evaluator for ~150 common functions, a dependency graph with incremental recalculation, circular-reference detection, array formulas/spill, charts, and `.xlsx` import/export.
+
+**Why this one:** Deceptively deep (Excel's semantics are full of edge cases), and there's a perfect oracle: LibreOffice headless computes the same workbooks.
+
+**What it needs when resumed:**
+- Done when: a corpus of generated and real `.xlsx` files recalculates to the same values as `soffice --headless`, incremental recalc stays interactive on a 100k-formula sheet, and exported files open cleanly in LibreOffice.
+- Dependency: `libreoffice` installed for the oracle (may need one `sudo apt install`).
+- Stretch: live multi-user editing, reusing ideas from `game_terminal/`.
+
+---
+
+## N14. Font Rasterizer + Text Shaper From Scratch
+
+**Status:** Stocked, not started.
+**Pitch:** Parse TrueType/OpenType files (glyf, cmap, hmtx, kern, GPOS/GSUB basics) and rasterize glyph outlines with exact-coverage antialiasing. Add a line-breaker (Knuth-Plass) and hyphenation, and typeset a book chapter into a PDF writer that is also written from scratch.
+
+**Why this one:** Small in scope, but pixel-level objective: every glyph can be diffed against FreeType, and every line break against TeX.
+
+**What it needs when resumed:**
+- Done when: rendered glyphs across several fonts match FreeType's output within a small per-pixel error, ligatures and kerning match HarfBuzz on a test string set, and the typeset PDF opens in real viewers and looks professionally set.
+- Stretch: variable fonts, and a playground page with live Knuth-Plass vs greedy line-breaking comparisons.
+
+---
+
+## N15. Design an Original Board Game, Balanced by AI Playtesters
+
+**Status:** Stocked, not started.
+**Pitch:** Claude invents an original tabletop game (theme, mechanics, rulebook), implements it as a rules engine, and runs thousands of simulated games with MCTS/heuristic bots to tune the balance. Iterate until the design is healthy. Output: a polished print-and-play PDF (cards, board, rulebook) plus a playable web version.
+
+**Why this one:** A design-judgement stress test with numbers behind it, unlike N7's worldbuilding. Different from the card/board game *AIs* in `game_terminal/` (#34): here the game itself is the product.
+
+**What it needs when resumed:**
+- Done when: first-player win rate is within ±3%, no single strategy dominates (bots with different strategy weights all win meaningfully often), games end in a target length, and a written design log explains each balance change with the data behind it.
+- Stretch: add it to `game_terminal/` as a new multiplayer game type.
+
+---
+
+## N16. Speech Synthesizer From Scratch, Graded by Whisper
+
+**Status:** Stocked, not started.
+**Pitch:** A text-to-speech engine with no neural nets: English (and maybe Swedish) text normalization → phonemes via rules plus a pronouncing dictionary → prosody → a formant or articulatory synthesizer (vocal tract model) → audio. Includes a web page where you type and hear it, with the spectrogram and vocal-tract shape animated.
+
+**Why this one:** It closes the loop with an objective judge: run the output through Whisper and measure the word error rate. Self-improvement becomes a measurable number.
+
+**What it needs when resumed:**
+- Done when: Whisper transcribes a held-out set of sentences with a low WER (target under 10%), and the voice sounds like a 1980s DECtalk rather than noise.
+- Dependency: `openai-whisper` or `whisper.cpp` locally, as the judge only. The RTX 4060 makes this fast.
+- Stretch: singing mode (feed it a melody), and Swedish with its pitch accent. Ben could test the Swedish on locals.
+
+---
+
+## N17. Evolved Virtual Creatures
+
+**Status:** Stocked, not started.
+**Pitch:** Karl Sims–style evolution: creatures made of rigid blocks and motorized joints, with bodies and neural controllers co-evolved in a physics engine written from scratch. Fitness tasks are walking, swimming, jumping and competing for a cube. The result is a browser "zoo" of champions with their family trees.
+
+**Why this one:** Emergent behaviour you can't design by hand, backed by a deterministic simulation. It's different from boids (#3): here the bodies themselves evolve.
+
+**What it needs when resumed:**
+- Done when: the physics engine passes conservation and stability tests (no explosions and no energy gain in a passive stack), fitness curves climb across seeded runs, and at least three qualitatively different locomotion strategies emerge (rendered clips for comparison).
+- Deterministic, headless evolution on all CPU cores; the browser only replays saved genomes.
+- Stretch: a head-to-head tournament mode, and letting the viewer breed creatures by hand.
+
+---
+
+## N18. Game Boy / Game Boy Color Emulator
+
+**Status:** Done 2026-09-28. The code is in `games/gameboy/` and it's playable in `game_terminal/` (RETRO → GAME BOY).
+**Pitch:** A cycle-stepped DMG + CGB emulator written from scratch in vanilla JS (CPU, PPU, APU, timer, MBC1/2/3+RTC/5). It comes with a browser player (AudioWorklet audio, IndexedDB saves, save states, rewind, fast-forward, gamepad and touch) and bundles only free homebrew.
+
+**Why this one:** Public test ROMs (Blargg, Mooneye, acid2) grade accuracy objectively, and a finished emulator slots into game_terminal as a new room.
+
+**What it needs when resumed:**
+- Done when: most test ROMs pass (currently 131/141), homebrew is playable at full speed with sound, and it works in game_terminal. All three are met.
+- Remaining accuracy failures: `dmg_sound` 09/12, the Mooneye `boot_*` tests, and 5 PPU timing edge cases (listed in `games/gameboy/README.md`).
+- game_terminal spectating replays the streamer's keyframe and inputs in lockstep. `games/gameboy/test/determinism.js` must keep passing, and after editing `games/gameboy/` you have to run `games/gameboy/tools/sync-game-terminal.sh`.
+- Stretch: link-cable multiplayer between two game_terminal players (serial port over WS, lockstep), a debugger panel, and more bundled homebrew.
+
+---
+
+# Useful
+
+Generated 2026-10-11. Unlike the general backlog and the big builds, these are picked
+for being useful, not flashy. They're aimed at Ben's real situation: a student
+in Stockholm until ~end of Dec 2026, on a tight budget, with ntfy push
+notifications already working (flip-bot, trading-cockpit).
+
+Grouped by what they save: money, time, or stalled work in this repo.
+
+---
+
+## U1. Grocery Deal Matcher
+
+**Status:** Built 2026-10-11 in `apps/grocery_deals/`: ICA (Kvantum Kungsholmen) + Willys + Hemköp, a desktop app with live deals and an in-app list editor, and a Monday 08:00 push. Same day: Trip tab (shopping list from picked deals, send to phone via ntfy), price history (`history.db`, "best price in N wks"), Coop + Lidl sources, daily 09:00 alerts for new list matches. Ben wants to develop this one the most.
+**Pitch:** Scrapes the weekly offers from nearby Willys, ICA, Coop and Lidl stores and matches them against a standing shopping list. Every Monday it sends a push like "Willys has your chicken and oat milk on sale, ~140 kr saved."
+
+**Why this one:** You'd use it every week, and the savings are small but real on a student budget.
+
+**What it needs when resumed:**
+- Done when: a weekly ntfy digest lists the matched offers per store, with the estimated savings.
+- Check how each chain publishes offers (an API behind the website, a JSON endpoint, or HTML) before writing scrapers.
+- Fuzzy matching between list items and offer names ("havredryck" ↔ "Oatly Barista 1L").
+- Stretch: suggest which single store to go to this week.
+
+---
+
+## U2. Personal Finance Dashboard
+
+**Status:** Stocked, not started. Same as `IDEAS.md` #37.
+**Pitch:** Drop in bank CSV exports. It sorts transactions into categories, finds subscriptions you forgot about, flags odd charges, and forecasts whether your money lasts until December.
+
+**Why this one:** It answers "am I on track?" without a spreadsheet, and it runs fully locally.
+
+**What it needs when resumed:**
+- Done when: your real exports are categorized correctly ≥90% of the time, and a correction UI learns rules from your fixes.
+- Need to know first: which bank(s), and whether they're USD, SEK or both (currency conversion).
+- A format adapter per bank, and dedup across overlapping exports.
+- Subscription detection: same merchant, a regular interval, a similar amount.
+
+---
+
+## U3. Flight-Home Price Watcher
+
+**Status:** Stocked, not started.
+**Pitch:** Tracks Stockholm → home fares for late December and pushes when a price drops or looks like the low for that route.
+
+**Why this one:** It's timely: prices for the end-of-December window are moving now, and a one-time saving here could be large.
+
+**What it needs when resumed:**
+- Done when: it checks on a schedule, keeps a price history per date and route, and pushes on a real drop.
+- Need to know first: the destination airport(s), date flexibility, and airlines Ben would accept.
+- Find a data source that doesn't block scrapers (a free flights API, or Google Flights via a headless browser as a fallback).
+
+---
+
+## U4. Deadline Radar
+
+**Status:** Stocked, not started.
+**Pitch:** Pulls every course calendar (Canvas or KTH/SU iCal feeds) into one list and sends a morning push like "2 things due this week; the lab report is in 3 days."
+
+**Why this one:** No more surprise deadlines, and it's very little code once the feeds are in hand.
+
+**What it needs when resumed:**
+- Done when: all courses' deadlines show up in one place, and daily plus 3-day/1-day pushes fire correctly.
+- Need to know first: which LMS the school uses, and whether it exposes an iCal feed URL (Canvas does).
+- Stretch: a manual-add option for deadlines that only appear in course PDFs.
+
+---
+
+## U5. "Leave Now" Transit Pings
+
+**Status:** Stocked, not started.
+**Pitch:** Uses SL's real-time departures (Trafiklab's free API) for your regular trips. It pushes when you need to leave to catch the next train or bus, accounting for delays.
+
+**Why this one:** It's daily and practical, and a first version is about one evening of work.
+
+**What it needs when resumed:**
+- Done when: for a configured trip and arrival time, a "leave in 5 min" push arrives that matches real departures.
+- A free Trafiklab API key (Ben signs up).
+- Config: home stop, regular destinations, walking time to the stop.
+- Stretch: a mission_control panel showing the next departures.
+
+---
+
+## U6. Ask Your Course Materials
+
+**Status:** Stocked, not started.
+**Pitch:** Local search over your lecture PDFs and slides that answers questions with page citations ("where did the lecture define X?").
+
+**Why this one:** Most useful before exams, and it turns a pile of PDFs into something you can query.
+
+**What it needs when resumed:**
+- Done when: questions about real course material come back with correct page citations.
+- PDF text extraction, chunking, and keyword search to start (embeddings only if keyword search falls short).
+- Optional Claude answer layer when `ANTHROPIC_API_KEY` is set; plain search results otherwise.
+
+---
+
+## U7. "Waiting on Ben" Board
+
+**Status:** Stocked, not started.
+**Pitch:** One page or terminal command listing every manual step that's blocking a project in this repo, with the exact steps for each. Items tick off as you finish them.
+
+**Why this one:** Several finished projects are stalled only on Ben's manual steps: publishing the Roblox games, Tradera keys for flip-bot, Clip Studio account setup, and linking a broker to trading-cockpit. Clearing those gets more value out of work that's already done than building anything new.
+
+**What it needs when resumed:**
+- Done when: running one command shows each open blocker, its steps, and its status, and checks status automatically where possible (e.g. whether a key is present in `.env`).
+- Source the blockers from `TODO_FIRST.md` and each project's SETUP.md/PROGRESS.md.
+- Keep it tiny: a script plus a short checklist file, not an app.
+
+---
+
+## U8. Subscription Killer
+
+**Status:** Stocked, not started.
+**Pitch:** Finds recurring charges in your email receipts (or the U2 finance CSVs) and pushes about 3 days before each renewal: "Spotify renews Friday, still using it?"
+
+**Why this one:** Forgotten subscriptions are the easiest money to save, and a heads-up before renewal is the only point where it's easy to act.
+
+**What it needs when resumed:**
+- Done when: every real recurring charge is detected with its next renewal date, and pre-renewal pushes fire on time.
+- Source: Gmail (IMAP or the API, read-only, receipts only) or the U2 CSVs; decide which before building.
+- Detection: same merchant, a regular interval, a similar amount (shared with U2).
+- Stretch: a one-tap "cancel" link per service.
+
+---
+
+## U9. Second-Hand Price Checker
+
+**Status:** Stocked, not started.
+**Pitch:** Paste a Blocket or Tradera link (or type an item) and it shows what that item actually sells for, based on sold and completed listings, with a fair-price range.
+
+**Why this one:** Useful for buying furniture or winter gear cheaply now, and for pricing everything when you sell up before leaving in December.
+
+**What it needs when resumed:**
+- Done when: for a real listing it returns comparable sold items and a price range that matches what Ben would judge fair.
+- Reuse `money/flip-bot/`: it already has `fair_value`, `trimmed_median` and listing matching.
+- Check what Blocket exposes. Tradera's API needs the dev keys that are already pending for flip-bot.
+
+---
+
+## U10. Receipt Splitter
+
+**Status:** Stocked, not started.
+**Pitch:** Snap a photo of a receipt, tap who had what, and get each person's share plus a Swish payment link or QR code.
+
+**Why this one:** It's for flatmates, group dinners and trips, and you'd use it right away.
+
+**What it needs when resumed:**
+- Done when: a real Swedish receipt photo is parsed into items and amounts correctly, and the split and Swish links work on a phone.
+- A phone-first web page (PWA, like trading-cockpit's).
+- OCR: Claude vision if `ANTHROPIC_API_KEY` is set, otherwise local Tesseract with manual fixes.
+- Swish deep links use the `swish://payment?data=...` format; verify it against the current Swish docs.
+- Handles shared items, tip and rounding.
+
+---
+
+## U11. Daily "Plan My Day" Brief
+
+**Status:** Stocked, not started.
+**Pitch:** One morning push combining deadlines (U4), transit (U5), the weather ("bring a jacket, 4°C and rain at 17:00") and the first event in your calendar.
+
+**Why this one:** One glance replaces opening four apps, and it ties several of the other ideas together.
+
+**What it needs when resumed:**
+- Done when: a single ntfy push arrives at a set time every morning with accurate data from each source.
+- Weather from SMHI's free open API (no key needed).
+- Start with whatever sources exist; plug in U4/U5 as they get built.
+- Note: `claude-control` already has morning-hello timers, so reuse that scheduling.
+
+---
+
+## U12. Swedish From Your Own Life
+
+**Status:** Stocked, not started.
+**Pitch:** Snap signs, menus, texts and screenshots. It pulls out the words you don't know and turns them into spaced-repetition flashcards, with the photo as context.
+
+**Why this one:** The vocabulary you actually ran into sticks far better than textbook lists.
+
+**What it needs when resumed:**
+- Done when: a photo becomes sensible cards (word, translation, example sentence from the photo), and a daily review works on the phone.
+- Phone-first PWA. OCR plus translation via Claude, or a local fallback.
+- An SM-2-style scheduler, with known words filtered out over time.
+- Stretch: export to Anki.
+
+---
+
+## U13. Lecture Recorder → Notes
+
+**Status:** Maybe. Stocked, not started.
+**Pitch:** Turns a lecture recording into structured notes with timestamps, key terms and a summary.
+
+**Why this one:** Notes you can search and review without re-watching the lecture.
+
+**Battery concern (Ben):** He doesn't want the laptop recording all class. Design around that: **record on the phone** (its built-in recorder), then drop the file in a folder. Transcription runs later on the desktop's RTX 4060 while it's plugged in, so nothing runs during class.
+
+**What it needs when resumed:**
+- Done when: a real lecture recording becomes accurate notes in a few minutes on the desktop.
+- Reuse Clip Studio's transcription (`money/clip-studio/app/transcribe.py`).
+- A watched folder plus Syncthing or a manual copy from the phone.
+- Pairs well with U6: notes become searchable alongside the slides.
+
+---
+
+## U14. Universal "Notify Me When" Tool
+
+**Status:** Built 2026-10-11 in `apps/notify_when/`, timer running every 10 min. Pinned (paused) by Ben the same day.
+**Pitch:** Watch any page or API and push to ntfy when a condition is true: "when this item is back in stock," "when this price < X," "when this page changes."
+
+**Why this one:** One generic tool covers several narrow ideas (U3 price drops, restocks, ticket releases, course seats opening).
+
+**What it needs when resumed:**
+- Done when: adding a watch is one line (URL + selector/JSON path + condition), and pushes fire only on real changes, with no spam.
+- Plain fetch first, with a headless browser fallback for JS-heavy pages.
+- Runs on a systemd timer (like copy-trader), and keeps a small history per watch.
+- Stretch: "watch this" from the phone via an ntfy action or a tiny web form.
+
+---
+
+## U15. Weekly Repo Digest
+
+**Status:** Stocked, not started.
+**Pitch:** Every Sunday, a short summary of what got built in this repo that week, what's stalled and on what, and where the Claude tokens went.
+
+**Why this one:** It keeps the many parallel sub-projects legible without re-reading `TODO_FIRST.md`, and spots projects that are quietly stuck.
+
+**What it needs when resumed:**
+- Done when: a Sunday push or page shows commits by sub-project, stalled items, and token use by project, all matching reality.
+- Git log for what got built; U7's blocker list for what's stalled.
+- Reuse `apps/claude_usage_analyst/` for token and cost data.
+
+---
+
+# Games
+
+Standalone, complex game concepts, picked so they don't repeat anything already in
+the sections above or the existing sub-projects. Each one has a genuinely
+hard core system, not just content. Generated 2026-10-01.
+
+**Status:** G2 Loop Heist was built: `games/loop_heist/`.
+
+---
+
+## G1. Clockwork Manor — a procedural murder mystery that actually happens
+
+A country house with about 10 NPCs. Each has a daily schedule, motives,
+relationships and secrets. The murder is **not scripted**: the killer plans it and
+carries it out inside the simulation. Each witness's memories come only from what
+that NPC could actually perceive: line of sight, sound through walls, timestamps.
+The player walks the house, finds physical evidence (mud on boots, a stopped
+clock, a missing letter opener) and questions people. The guilty NPC lies, and so
+do NPCs hiding unrelated secrets. Their lies stay consistent with each other. The
+player builds a deduction board and makes an accusation.
+
+- **Hard core:** the agent simulation, a perception model (vision plus sound
+  propagation), and a lie engine that stays consistent. A solvability checker
+  guarantees that every seed can be deduced from the evidence that is available.
+- **Wow moment:** after the accusation, replay the whole day from the simulation
+  and see exactly how it happened.
+- **Optional:** an LLM voices the dialogue, but the facts and the lies underneath
+  stay deterministic.
+
+## G2. Loop Heist — plan a robbery with copies of yourself
+
+A top-down stealth heist. The player plays each crew member **one after another in
+the same ~90-second loop**, and every earlier run replays alongside the current
+one. Loop 1 cuts the power, then loop 2 slips past the guards it left blind, and
+so on. Guards have vision cones, investigate sounds, raise alarms and react to
+bodies and to open doors. If a later run changes what an earlier clone ran into
+(you opened a door that clone #1 expected to be shut), the game finds the
+**paradox** and that clone desyncs: it freezes or panics, shown visually, and you
+fix the plan.
+
+- **Hard core:**
+  - A fully deterministic fixed-tick simulation with no float drift and no
+    `Math.random` outside a seeded RNG.
+  - Each clone is stored as an input recording that gets replayed.
+  - Desync detection: check the replayed clone's expected state and observations
+    against what actually happens.
+  - Guard AI with patrols, vision cones, hearing, suspicion levels, investigation,
+    alarm propagation and radio check-ins.
+  - Procedural buildings with security systems: cameras, keycards, laser grids,
+    vault timers, power circuits, alarm panels.
+- **Design hooks:** a timeline scrubber to rewind and inspect all clones, a crew
+  with distinct roles (hacker, muscle, cracker, lookout) and gadgets, scoring
+  (loot vs. number of clones vs. time), and handcrafted tutorial heists followed by
+  a procedural campaign.
+- **Likely stack:** browser (TypeScript + Canvas/WebGL or PixiJS), standalone in
+  its own folder. Test determinism with headless Node sims: replay the same inputs
+  and assert identical state hashes.
+
+## G3. Hull Breach — a starship crew sim with real physical systems
+
+FTL meets Oxygen Not Included. Every ship tile simulates air pressure and gas mix,
+heat, fire spread, and a power grid the player wires by hand. A hull breach really
+vents air: crew get pulled toward it and doors slam under pressure. The player sets
+crew priorities and survives procedurally generated encounters across a sector map.
+
+- **Hard core:** a fluid and gas simulation on a grid, electrical circuits, crew AI
+  with pathfinding and a job/priority system, and ship-to-ship combat.
+
+## G4. Burn — a 2D space program
+
+Build rockets from parts (tanks, engines, decouplers, struts) and fly them with
+real orbital mechanics. Plan maneuver nodes, use gravity assists, do orbital
+rendezvous, and land on moons with no atmosphere using suicide burns. Career mode
+has contracts and a budget.
+
+- **Hard core:** a rigid-body physics engine with staging, a stable orbit
+  integrator (patched conics plus time warp), a maneuver planner with trajectory
+  prediction, and a rocket editor.
+
+## G5. Assembly Line — a factory automation game
+
+Factorio-lite. Mine ore, then run it through belts, inserters, smelters and
+assemblers, with recipe trees, power and trains. The goal is a megaproject such as
+a rocket launch.
+
+- **Hard core:** a deterministic tick simulation that stays fast with 10,000+
+  items in motion. That needs real data structures: belts as compressed lanes with
+  gap tracking, not per-item updates.
+
+## G6. Contraption — a 2D physics vehicle and siege builder
+
+Besiege in 2D. Build machines from beams, wheels, motors, springs, pistons and
+catapult arms, with logic gates driven by key bindings. Then beat physics puzzle
+levels: cross a canyon, break a castle, deliver an egg intact.
+
+- **Hard core:** a custom constraint-based physics engine with joints, breakable
+  connections and soft bodies, plus a building editor.
+
+---
+
+# Computer vision
+
+Computer-vision project ideas, following on from the ASL project. **ASL isn't in this
+repo.** It lives at `~/school/ml-project/asl-recognition/` (it started as a possible
+school project and is now a personal one). It has a landmark MLP for static letters,
+a J/Z motion-trajectory model, a GISLR 250-word transformer, and the SignDesk
+dashboard. "Reuses ASL" below means borrowing from it.
+
+Existing repo code worth stealing: `playground/hand_paintbrush/` (MediaPipe hands),
+`money/clip-studio/app/faces.py` and `money/stream-clipper/face_track.py` (face tracking).
+
+Difficulty: ★ weekend · ★★ a few sessions · ★★★ research-y.
+
+## Ties into existing projects
+
+1. **Limber form coach** ★★. A pose-tracking webcam runs during stretch routines. The
+   hold timer only counts while you're actually in the pose, it measures hip and
+   hamstring angles, and it logs range of motion over weeks. This turns Limber's
+   "range check-ins" into real measurements.
+2. **Crux beta reader** ★★★. Point your phone at a climbing video. It tracks your body
+   and limbs on the wall, draws your hip path, and flags dead points and hesitations.
+   You can compare two attempts at the same route side by side.
+3. **Gesture-controlled game_terminal games** ★★. Webcam input for some of the 51
+   games, e.g. Pong with your hand as the paddle, or real-hand rock-paper-scissors.
+   Reuses the ASL hand classifier.
+
+## Same shape as ASL (classifying hands or bodies)
+
+4. **Fingerspelling typing racer** ★★. Words fall and you fingerspell them before
+   they land. Multiplayer through game_terminal. Reuses the ASL letter + J/Z models.
+5. **Air instrument** ★★. Hand height sets pitch, finger count picks the chord
+   (theremin meets guitar). The fun part is keeping latency low.
+6. **Gesture hotkeys** ★. Hold up a gesture and it triggers an action: mute, a
+   Discord reaction, the next slide. Small and useful every day.
+
+## Different CV skills (for range)
+
+7. **Chessboard reader** ★★★. A camera on a real board reads the position and shows
+   engine analysis live. Covers detection plus perspective warping.
+8. **Rubik's cube solver** ★★. Show each face to the webcam. It reads the colors and
+   guides you through the solve with AR arrows over the cube.
+9. **Gaze/attention tracker** ★★★. Webcam eye tracking while studying: a heatmap of
+   where you looked on screen, plus focus streaks.
+10. **Juggling / keepy-uppy counter** ★★. Ball tracking with trajectory prediction.
+    Fast-object tracking is a different skill from landmark models.
+
+## Batch 2 (2026-10-16)
+
+11. **ASL live captions in video calls** ★★. SignDesk output feeds a virtual webcam
+    (v4l2loopback) with captions burned in, so Zoom/Discord just shows them.
+    Reuses ASL almost entirely. The new parts are the camera plumbing and smoothing.
+12. **ASL tutor with per-finger feedback** ★★. It shows a sign, you copy it, and it
+    compares your landmarks to the reference and says *which* finger is wrong, so
+    you get more than a pass/fail. Reuses ASL landmarks plus SignDesk practice mode.
+13. **Gesture-triggered clip markers** ★. A streamer flashes a hand sign on camera,
+    and Clip Studio / stream-clipper marks that moment as a clip. Reuses the ASL
+    classifier and plugs into an existing money project.
+14. **Climbing-wall hold mapper** ★★★. Photograph a wall, segment holds by color, tap
+    the holds of a route, and it saves into Crux (which already stores hold color).
+15. **Posture nag** ★. A webcam measures neck/shoulder angle while you study and sends
+    an ntfy ping after N minutes of slouching. Reuses Limber's ntfy setup.
+16. **Flip-bot listing vision** ★★★. Identify the item and its condition from Tradera
+    listing photos (brand, damage, "is this the real thing"), then feed that into
+    fair-value pricing. CV that could earn money.
+17. **Hand-gesture 3D navigation** ★★. Fly around Stockholm in 3D with your hands, e.g.
+    pinch-drag to pan, two hands to zoom and rotate (Minority Report style).
+18. **Shadow puppet creatures** ★★. Classify hand-shadow shapes (dog, bird, rabbit) and
+    swap them for animated creatures that copy your hand movements.
+19. **Paper puzzle AR solver** ★★. Point at a sudoku or nonogram on paper. It finds
+    the grid, reads the digits, and overlays the solution in the right perspective.
+20. **Rep counter + workout race** ★★. Pushups/squats/pullups counted with form
+    scoring (half reps don't count). Race friends live in game_terminal.
+21. **Just Dance clone** ★★. Pose matching against a dance video, scored per beat. Any
+    YouTube video becomes a level (pose-extract it offline).
+22. **Face-mesh avatar** ★★. A VTuber-style puppet driven by your face and hands,
+    usable as your game_terminal player avatar.
+23. **Small-vocabulary lip reading** ★★★. Recognize ~20 words from mouth landmarks.
+    Same sequence-model setup as the ASL word transformer, but with the face.
+24. **Window bird feeder cam** ★★. Detects visitors and classifies species (Stockholm
+    birds), keeps a daily log, and auto-clips the best frames.
+25. **Real playing-card reader** ★★. Detect cards on a table and score poker hands /
+    blackjack totals live. Useful for in-person game nights.

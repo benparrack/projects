@@ -1,6 +1,6 @@
 # Loop Heist — progress
 
-Built autonomously in a `/loop`. The design is in `../game_ideas.md` #2.
+Built autonomously in a `/loop`. The design is in `../../IDEAS.md` G2.
 
 ## Milestones
 - [x] 1. Deterministic sim core: integer math, hardcoded trig table, seeded RNG, tile world, movement/collision, doors/keys/loot/van, state hash, snapshots

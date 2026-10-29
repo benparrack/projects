@@ -13,7 +13,7 @@ If a session dies, read this first, then `REVIEW.md` (latest pass) and `SCRIPT.m
 - [x] Review pass 3 (final-quality stills) → approved
 - [x] README.md + one-command `./make_film.sh`
 - [x] Final render `output/film.mp4`: ffprobe says h264 High 1920×1080 60/1, aac LC 48 kHz stereo, 176.000 s, 10 560 frames, ~1.04 GB. `./make_film.sh` takes 7 m 56 s end to end (audio ~85 s + shots 396 s). `output/film.mp4` (1920×1080, 60 fps, H.264 + AAC), ffprobe check
-- [x] NEW_IDEAS.md N2 → done, TODO_FIRST.md done line
+- [x] IDEAS.md N2 → done, TODO_FIRST.md done line
 
 **Status: DONE (2026-09-28).**
 

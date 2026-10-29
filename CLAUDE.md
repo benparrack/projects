@@ -12,8 +12,7 @@ one cohesive product.
 - `playground/`: one-shot demos and experiments. Kept but rarely touched.
 - `money/`: money-making experiments (trading, bots, Roblox).
 - `game_terminal/`: the big multiplayer hub, kept at the top level.
-- `ideas/`: idea backlogs (`IDEAS.md`, `NEW_IDEAS.md`, `USEFULL_IDEAS.md`,
-  `game_ideas.md`, `CV_IDEAS.md`).
+- `IDEAS.md` (root): the one idea backlog, sectioned by ID (#, N, U, G, CV).
 
 New projects go in the matching category folder, not the root. `README.md`
 indexes every project. `app-launch` is the shared launcher behind the
@@ -22,16 +21,16 @@ indexes every project. `app-launch` is the shared launcher behind the
 ## Start of session
 
 Before starting work on anything here, read `TODO_FIRST.md` in this directory in
-full — it's short (the current picks from `ideas/IDEAS.md`, plus a "Done" log) and gives
+full — it's short (the current picks from `IDEAS.md`, plus a "Done" log) and gives
 situational awareness across all the sub-projects cheaply.
 
-For `ideas/IDEAS.md` (the full numbered backlog, each entry with enough context to pick
+For `IDEAS.md` (the full numbered backlog, each entry with enough context to pick
 back up cold — much longer, and grows over time):
 - If Ben already named a sub-project or idea number to work on, don't full-read
   it — just look up that one entry (grep the number/name) plus anything
   `TODO_FIRST.md` already told you.
 - If there's no clear target yet (Ben's asking what to work on next, or starting
-  something genuinely new), skim `ideas/IDEAS.md` fully — that's what it's for.
+  something genuinely new), skim `IDEAS.md` fully — that's what it's for.
 
 ## Browser automation
 
@@ -48,7 +47,7 @@ Chromium-family browsers on the same machine). For any project using
 `requestPointerLock` (FPS-style mouselook, etc.) or 3D shooter games generally,
 default to testing/playing in **actual Google Chrome** (not Chromium — Ben has it
 installed and it's worked best in practice across these games), and mention this
-tradeoff if the user hasn't already made the call for that project. See ideas/IDEAS.md
+tradeoff if the user hasn't already made the call for that project. See IDEAS.md
 entry "0. 3D-Rendered Games" for the full writeup.
 
 ## Git safety with concurrent sessions
@@ -117,5 +116,5 @@ fixes that actually move this number:
   `.claude/rules/game_terminal.md` for an example) over adding to this file —
   it only loads into context when that sub-project's files are actually read.
 - When picking up new work, prefer finishing/polishing an in-progress idea from
-  `TODO_FIRST.md` over starting something new from `ideas/IDEAS.md`, unless Ben asks
+  `TODO_FIRST.md` over starting something new from `IDEAS.md`, unless Ben asks
   otherwise.
