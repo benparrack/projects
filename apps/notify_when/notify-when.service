@@ -1,0 +1,11 @@
+# systemd --user unit, started every 10 min by notify-when.timer. Install: see README.
+[Unit]
+Description=notify-when: check watches and push to ntfy
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/apps/notify_when
+ExecStart=/usr/bin/python3 %h/projects/apps/notify_when/watch.py run
+TimeoutStartSec=5min
+Nice=10

@@ -1,0 +1,10 @@
+# systemd --user unit, started daily by grocery-deals-alert.timer. Install: see README.
+[Unit]
+Description=grocery-deals: push list matches that appeared since the last push
+After=network-online.target grocery-deals.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/apps/grocery_deals
+ExecStart=/usr/bin/python3 %h/projects/apps/grocery_deals/grocery.py alert
+TimeoutStartSec=5min

@@ -1,0 +1,87 @@
+# grocery-deals
+
+This week's offers at your ICA, Willys, Hemköp, Coop and Lidl stores, matched against a standing shopping list. A desktop
+app shows the live deals at any time, and a weekly push to your phone every Monday morning names the best
+store to go to. (`USEFULL_IDEAS.md` U1.)
+
+## The app
+
+**Grocery Deals** in the app menu (or run `./grocery-deals-app`). It starts a local server on
+`127.0.0.1:5077` if one isn't already running, then opens it in a Chrome app window. The server exits on its
+own after 2 h without use.
+
+- **My list**: per list item, every matching offer across your stores, biggest saving first. The cards at the
+  top show each store's total saving on your list; the best store is highlighted.
+- **All deals**: every offer, searchable. Sort by kr off, % off or price per kg/l (worked out from the pack size when the deal is per piece), filter by category or store, member prices
+  on or off. Offers that are identical at two stores of one chain are shown once.
+- **Trip**: press **+** on any deal to put it on this week's trip, grouped by store, with what you'll save.
+  Add anything else (toilet paper, …) as free text. Tick things off as they go in the basket, then
+  "Clear ticked". Saved in `trip.json`; entries whose offer has ended are flagged. Ticked entries you clear count
+  as bought: their saving goes into `saved.json`, and the receipt shows the total saved this month.
+  **📱 Send to phone** pushes the not-yet-ticked list to your phone via ntfy, so you have it in the store
+  without the laptop. (The app itself is laptop-only: it binds to 127.0.0.1.)
+- **Edit**: shopping list, skip list and stores (search any ICA/Willys/Hemköp/Coop by name or area, or "lidl"). Saves
+  automatically to `settings.json`, which the weekly push reads too. Each line shows how many offers it
+  matches as you type.
+- **Price history**: every fetch records the week's offers in `history.db`. From the second week on, cards
+  say whether a deal is actually good: "Best price in 6 wks", "Was 89 kr/kg in W39", "on offer 5 of 6 wks"
+  (so you can skip deals that come back every other week). Prices compare per kg/st, so "2 för 40" = 20 kr/st.
+  The Monday push refetches, so a week gets recorded even if you never open the app.
+- **↻ Refresh** refetches from the stores. Otherwise offers are cached for 3 h in `cache/`.
+
+Install the menu entry (`.desktop` files don't expand `~`):
+
+    sed "s|%h|$HOME|g" grocery-deals.desktop > ~/.local/share/applications/grocery-deals.desktop
+
+## Command line
+
+    python3 grocery.py deals          # the text report the push sends
+    python3 grocery.py alert          # push list matches no earlier push mentioned
+    python3 grocery.py browse [word]  # every offer at your stores
+    python3 grocery.py stores kvantum # find store ids
+
+Pushes go to `NTFY_ALERT_TOPIC` from `./.env`, else `../money/flip-bot/.env`.
+
+## Weekly push (Mondays 08:00, or at next boot if the computer was off)
+
+    ln -sf ~/projects/apps/grocery_deals/grocery-deals.{service,timer} ~/.config/systemd/user/
+    systemctl --user daemon-reload && systemctl --user enable --now grocery-deals.timer
+
+## Deal alerts (daily 09:00)
+
+Offers don't only change on Mondays: Lidl starts a second batch on Thursdays, and stores add some mid-week.
+`grocery.py alert` refetches and pushes only list matches that neither the Monday push nor an earlier alert
+already sent (one line per offer, with every store it's at). Already-sent offers are remembered in
+`alerted.json` until they end. The first run only remembers what's on offer, without pushing.
+
+    ln -sf ~/projects/apps/grocery_deals/grocery-deals-alert.{service,timer} ~/.config/systemd/user/
+    systemctl --user daemon-reload && systemctl --user enable --now grocery-deals-alert.timer
+
+## Matching
+
+A list line matches when any `|`-alternative starts or ends a word in the offer's name or brand (this suits
+Swedish compounds: `kyckling` finds Kycklingbröstfilé, `bröd` finds Lantbröd, `ris` does not find Krispiga).
+`-word` excludes when it appears anywhere; put exclusions at the end of the line.
+`<45` sets a top price (per st, or per kg/l when the deal is priced so): `zoégas <45` only matches, and so only
+alerts, when it is 45 kr or less. With the daily alert that makes it a price watch.
+
+## Data sources
+
+- **Willys / Hemköp** (both Axfood): the sites' public API, `/search/campaigns/offline?q=<storeId>`. The saving
+  comes from the store's "Spara X kr" label; offers without one count 0.
+- **ICA**: no API. Each store's page `ica.se/erbjudanden/<slug>/` embeds its offers as JS data
+  (`weeklyOffers`); the store id *is* that slug (the URL needs the name part). The saving is computed:
+  quantity × regular price − deal price. Store list: the JSON embedded in `ica.se/butiker/`.
+- **Coop**: the API its store pages use, `external.api.coop.se/dke/offers/<ledger no>?api-version=v3` (v1 returns
+  empty lists), with the subscription key coop.se embeds for browsers (`dkeKey`, read fresh each fetch). Store ids
+  are ledger account numbers. Coop gives no regular price, so its savings are unknown: matches show, but rank
+  after deals with a known saving and add 0 to the store total.
+- **Lidl**: food offers are national, so Lidl is one "store". The start page links the week's campaign pages;
+  only the deal pages (måndag–söndag, torsdag–söndag, Lidl Plus, superklipp, veckans frukt & grönt) are read,
+  since theme pages ("smaker från Italien") list plain products. Each product's data is JSON in
+  `data-grid-data`. Saving comes from the struck-out price or the "-20%" Lidl Plus badge.
+- Member prices (ICA Stammis / Willys Plus / Hemköp Klubb / Coop medlem / Lidl Plus, all free) are tagged;
+  untick "member prices" to hide them.
+- If a site changes its layout, that store's card shows the error and the others keep working.
+
+Tests: `python3 tests/test_grocery.py`.

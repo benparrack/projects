@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Grocery Deals
-Comment=This week's offers at ICA, Willys and Hemköp, matched to your list
-Exec=%h/projects/grocery_deals/grocery-deals-app
-Icon=%h/projects/grocery_deals/web/icon.svg
-Categories=Utility;
-StartupWMClass=GroceryDeals
-Terminal=false

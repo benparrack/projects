@@ -5,19 +5,33 @@ testing its limits by building random project ideas — a single git repo contai
 many unrelated, self-contained sub-projects (games, visualizers, tools, etc.), not
 one cohesive product.
 
+## Layout
+
+- `apps/`: tools Ben actually uses (planners, trackers, bots, dashboards).
+- `games/`: real games with more than one pass of work.
+- `playground/`: one-shot demos and experiments. Kept but rarely touched.
+- `money/`: money-making experiments (trading, bots, Roblox).
+- `game_terminal/`: the big multiplayer hub, kept at the top level.
+- `ideas/`: idea backlogs (`IDEAS.md`, `NEW_IDEAS.md`, `USEFULL_IDEAS.md`,
+  `game_ideas.md`, `CV_IDEAS.md`).
+
+New projects go in the matching category folder, not the root. `README.md`
+indexes every project. `app-launch` is the shared launcher behind the
+`~/.local/share/applications/*.desktop` files.
+
 ## Start of session
 
 Before starting work on anything here, read `TODO_FIRST.md` in this directory in
-full — it's short (the current picks from `IDEAS.md`, plus a "Done" log) and gives
+full — it's short (the current picks from `ideas/IDEAS.md`, plus a "Done" log) and gives
 situational awareness across all the sub-projects cheaply.
 
-For `IDEAS.md` (the full numbered backlog, each entry with enough context to pick
+For `ideas/IDEAS.md` (the full numbered backlog, each entry with enough context to pick
 back up cold — much longer, and grows over time):
 - If Ben already named a sub-project or idea number to work on, don't full-read
   it — just look up that one entry (grep the number/name) plus anything
   `TODO_FIRST.md` already told you.
 - If there's no clear target yet (Ben's asking what to work on next, or starting
-  something genuinely new), skim `IDEAS.md` fully — that's what it's for.
+  something genuinely new), skim `ideas/IDEAS.md` fully — that's what it's for.
 
 ## Browser automation
 
@@ -29,12 +43,12 @@ testing of a web-based project in here, use the **`playwright` MCP server**
 
 **Exception — pointer-lock / mouse-look / 3D shooter games:** Firefox has a
 confirmed Firefox+X11 bug where the pointer-lock cursor gets stuck at a screen
-edge after a direction reversal (hit in `3dgames/shooter/`; not reproducible in
+edge after a direction reversal (hit in `games/shooter/`; not reproducible in
 Chromium-family browsers on the same machine). For any project using
 `requestPointerLock` (FPS-style mouselook, etc.) or 3D shooter games generally,
 default to testing/playing in **actual Google Chrome** (not Chromium — Ben has it
 installed and it's worked best in practice across these games), and mention this
-tradeoff if the user hasn't already made the call for that project. See IDEAS.md
+tradeoff if the user hasn't already made the call for that project. See ideas/IDEAS.md
 entry "0. 3D-Rendered Games" for the full writeup.
 
 ## Git safety with concurrent sessions
@@ -103,5 +117,5 @@ fixes that actually move this number:
   `.claude/rules/game_terminal.md` for an example) over adding to this file —
   it only loads into context when that sub-project's files are actually read.
 - When picking up new work, prefer finishing/polishing an in-progress idea from
-  `TODO_FIRST.md` over starting something new from `IDEAS.md`, unless Ben asks
+  `TODO_FIRST.md` over starting something new from `ideas/IDEAS.md`, unless Ben asks
   otherwise.
