@@ -206,5 +206,5 @@ function bestMove({ pits, side, mode = 'capture', level = 'hard', timeMs }) {
 }
 
 module.exports = {
-  PITS, SIZE, STONES, storeOf, firstPit, sideOfPit, opposite, initialPits, sideEmpty, legalMoves, sow, bestMove, LEVELS,
+  SIZE, STONES, storeOf, firstPit, sideOfPit, opposite, initialPits, legalMoves, sow, bestMove, LEVELS,
 };

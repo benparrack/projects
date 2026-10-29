@@ -584,24 +584,4 @@ function bestMove(input) {
   };
 }
 
-// perft is exported for move-generator testing.
-function perft(input, depth) {
-  const pos = fromGame(input);
-  const count = (d, ply) => {
-    if (d === 0) return 1;
-    const start = ply * 256;
-    const end = pos.gen(MOVE_BUF, start, false);
-    let n = 0;
-    const us = pos.side;
-    for (let i = start; i < end; i++) {
-      const m = MOVE_BUF[i];
-      pos.make(m);
-      if (!pos.inCheck(us)) n += count(d - 1, ply + 1);
-      pos.unmake(m);
-    }
-    return n;
-  };
-  return count(depth, 0);
-}
-
-module.exports = { bestMove, perft };
+module.exports = { bestMove };

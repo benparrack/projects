@@ -10,8 +10,7 @@ import { createBotBar } from '../tickBots.js';
 import { createResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { N, extendPath } from './path.js';
-
-const POINTS = (len) => (len < 3 ? 0 : len === 3 ? 100 : len === 4 ? 400 : len === 5 ? 800 : len === 6 ? 1400 : len === 7 ? 1800 : 2200);
+import { injectStyle, el, fmtClock } from '../dom.js';
 
 const CSS = `
 .wh-root { display: flex; flex-direction: column; gap: 8px; }
@@ -68,27 +67,8 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .wh-chip.fresh, .wh-timer.low b { animation: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
-const fmtClock = (ms) => {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-};
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   const clock = makeServerClock();
   const results = createResults(container);
   const fx = createFx();

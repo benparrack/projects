@@ -363,4 +363,4 @@ function bestMove({ board, color, level, timeMs, rng = Math.random }) {
   return toRC(bestIdx);
 }
 
-module.exports = { bestMove, N, SHAPE_NAMES: ['none', 'two', 'open2', 'three', 'open3', 'four', 'open4', 'five'] };
+module.exports = { bestMove, N };

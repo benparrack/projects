@@ -12,6 +12,7 @@ import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { createFx } from '../canvasFx.js';
 import { loadScript } from '../loadScript.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const COLORS = ['red', 'blue'];
 const TEAM = { red: '#ff4a5e', blue: '#4a9dff' };
@@ -24,8 +25,6 @@ const REJECT_MESSAGES = {
   locked: 'You already locked in this round.',
   invalid: 'Invalid move.',
 };
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const CSS = `
 .ko-root { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; color: #b8ffb0; width: 100%; }
@@ -50,14 +49,6 @@ const CSS = `
 .ko-help { font-size: 11px; opacity: .7; text-align: center; max-width: 560px; }
 .ko-fail { padding: 30px; text-align: center; color: #ff8080; }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 // Seeded scratches / cracks on the ice (world coords, fixed per page).
 function iceMarks(H0) {
@@ -86,7 +77,7 @@ function iceMarks(H0) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

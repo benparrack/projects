@@ -214,6 +214,6 @@ function bestTurn(g, seat, level, rng = Math.random) {
 }
 
 module.exports = {
-  COLS, ROWS, N, WC, WN, WALLS_EACH, START, GOALS, other,
-  emptyWalls, steps, distMap, wallFits, withWall, mapsIfOpen, wallLegal, pawnTargets, isGoal, bestTurn, LEVEL,
+  COLS, ROWS, N, WC, WALLS_EACH, START, other,
+  emptyWalls, steps, wallFits, withWall, mapsIfOpen, wallLegal, pawnTargets, isGoal, bestTurn, LEVEL,
 };

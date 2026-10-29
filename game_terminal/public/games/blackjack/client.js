@@ -8,6 +8,7 @@ import { createResults } from '../resultsPanel.js';
 import { sfx } from '../sfx.js';
 import { makeServerClock } from '../serverClock.js';
 import { handValue, cardValue, basicStrategy, adviceLabel } from './strategy.js';
+import { injectStyle } from '../dom.js';
 
 const HINT_KEY = 'gt.blackjack.hints';
 
@@ -150,15 +151,6 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .bj-res, .bj-chip.in, .bj-banner, .bj-act button.hint { animation: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const signed = (n) => (n > 0 ? `+${fmt(n)}` : n < 0 ? `−${fmt(-n)}` : '0');
 
@@ -180,7 +172,7 @@ function chipBreakdown(amount) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let hints = false;

@@ -18,7 +18,7 @@ const atLeast = (level, min) => (min && LEVELS.indexOf(level) < LEVELS.indexOf(m
 const BOT_NAMES = ['Ace', 'Byte', 'Chip', 'Dot', 'Echo', 'Flux', 'Gizmo'];
 const POLL_MS = 250;
 
-const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
+const { isBotId: isBot } = require('./tickBots');
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (xs) => xs[Math.floor(Math.random() * xs.length)];
 // A bot's difficulty rides in its id ('bot-Ace~expert') so every client can show it without each
@@ -648,4 +648,4 @@ function installCardBots(registry) {
   if (registry.spades) withBots(registry.spades, spadesBrain());
 }
 
-module.exports = { withBots, installCardBots, isBot, seatResult, _test: { war, crazyeights, bs, pokerBrain, heartsBrain, spadesBrain } };
+module.exports = { installCardBots, seatResult };

@@ -1,9 +1,8 @@
+import { reduced } from './dom.js';
 // Shared 2D-canvas juice for the real-time games: particle bursts, expanding rings, floating
 // text, screen shake and a big countdown pop. One `createFx()` per game; call `fx.draw(ctx)`
 // once per frame after drawing the scene (in whatever coordinate space the effects were
 // spawned in) and wrap the scene in `fx.applyShake(ctx)` / `ctx.restore()` for shake.
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function createFx() {
   const parts = [];
@@ -56,7 +55,7 @@ export function createFx() {
     },
     get active() { return parts.length + rings.length + texts.length > 0 || shakeMag > 0.3 || !!big; },
     draw(ctx) {
-      const { now, dt } = step();
+      const { dt } = step();
       shakeMag *= Math.pow(0.0015, dt); // ~decays to nothing in ~0.4s
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';

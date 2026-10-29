@@ -5,6 +5,7 @@
 import { sfx, boardSounds } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
+import { injectStyle } from '../dom.js';
 
 const N = 15;
 const STAR_POINTS = [[3, 3], [3, 11], [11, 3], [11, 11], [7, 7]];
@@ -34,14 +35,6 @@ const CSS = `
 .gt-gomoku canvas.idle { cursor: default; }
 .gt-gomoku canvas.myturn { box-shadow: 0 6px 24px rgba(0,0,0,.6), 0 0 0 2px #39ff14, 0 0 16px 2px rgba(57,255,20,.45); }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 // Board geometry in canvas units (independent of CSS size / DPR).
 const SIZE = 600;
@@ -50,7 +43,7 @@ const STEP = (SIZE - MARGIN * 2) / (N - 1);
 const pos = (i) => MARGIN + i * STEP;
 
 // Pure helper (also used by tests): canvas-unit point -> nearest intersection, or null if too far.
-export function pointToCell(x, y) {
+function pointToCell(x, y) {
   const c = Math.round((x - MARGIN) / STEP);
   const r = Math.round((y - MARGIN) / STEP);
   if (r < 0 || r >= N || c < 0 || c >= N) return null;
@@ -59,7 +52,7 @@ export function pointToCell(x, y) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

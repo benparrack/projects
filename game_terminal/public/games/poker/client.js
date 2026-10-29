@@ -3,6 +3,7 @@
 
 import { renderCard, isBot, botName, botSeatControls } from '../cardCommon.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
+import { injectStyle } from '../dom.js';
 
 const money = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const REJECT = {
@@ -70,15 +71,6 @@ const CSS = `
 }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 export function mount(container, api) {
   let view = null;
   let roster = [];
@@ -87,7 +79,7 @@ export function mount(container, api) {
   let buyIn = null; // chosen buy-in amount, defaults to the max you can afford
   let notice = '';
 
-  ensureStyles();
+  injectStyle(CSS);
   const root = document.createElement('div');
   root.className = 'pk cz';
   container.appendChild(root);

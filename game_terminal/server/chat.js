@@ -168,4 +168,4 @@ function toClient(msg) {
   return rest;
 }
 
-module.exports = { createChat, toClient, clean, LINK_RE, MAX_LEN, RATE_N };
+module.exports = { createChat, toClient, clean, LINK_RE, MAX_LEN };

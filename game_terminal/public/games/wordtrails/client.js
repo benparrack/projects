@@ -7,6 +7,7 @@ import { sfx } from '../sfx.js';
 import { createBotBar } from '../tickBots.js';
 import { createResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
+import { injectStyle, el } from '../dom.js';
 
 const PREF_KEY = 'gt-wordtrails-prefs';
 
@@ -90,27 +91,11 @@ const CSS = `
 @media (max-width: 520px) { .wt-tile { width: 34px; height: 44px; font-size: 22px; } .wt-countdown { font-size: 48px; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 const DEFAULT_PREFS = { lives: 3, turnSecs: 12, minLen: 3 };
 function loadPrefs() {
   try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch { return { ...DEFAULT_PREFS }; }
 }
 function savePrefs(p) { try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch { /* private mode */ } }
-
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 
 const REASON_TEXT = {
   not_word: 'not in the dictionary',
@@ -122,7 +107,7 @@ const REASON_TEXT = {
 };
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   const clock = makeServerClock();
   const prefs = loadPrefs();
   const results = createResults(container);

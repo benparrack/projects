@@ -120,4 +120,4 @@ function createDb(env = process.env) {
   return env.FIREBASE_SERVICE_ACCOUNT ? createFirestoreDb(env.FIREBASE_SERVICE_ACCOUNT) : createMemoryDb();
 }
 
-module.exports = { createDb, createMemoryDb, inc, deepMerge };
+module.exports = { createDb, createMemoryDb, inc };

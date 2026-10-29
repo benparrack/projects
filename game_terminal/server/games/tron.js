@@ -18,7 +18,6 @@ const GRID_H = 96;
 // for a bigger map"). Same tick speed, so a large map is a longer round, not a faster one.
 const MAP_SIZES = { normal: { w: GRID_W, h: GRID_H }, large: { w: 192, h: 144 } };
 const MAX_CELLS = 192 * 144;
-const CELL_PX = 5; // client-side only in spirit, but kept here as documentation of the pairing
 const SPAWN_MARGIN = 12;
 const COUNTDOWN_MS = 3000;
 const ROUND_OVER_DISPLAY_MS = 4000;

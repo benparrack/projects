@@ -10,6 +10,7 @@ import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { loadScript } from '../loadScript.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const FRAME_MS = 1000 / 60;
 const HOLD_FRAMES = 18; // ball rests in the cup / on the floor this long before the anim ends
@@ -23,8 +24,6 @@ const REJECT_MESSAGES = {
   not_playing: 'The game is not running.',
   invalid: 'Invalid throw.',
 };
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const CSS = `
 .cp-root { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; color: #b8ffb0; width: 100%; }
@@ -61,14 +60,6 @@ const CSS = `
 .cp-help { font-size: 11px; opacity: .7; text-align: center; max-width: 520px; }
 .cp-fail { padding: 30px; text-align: center; color: #ff8080; }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 // ---- textures --------------------------------------------------------------------------------
 function tableTexture(THREE, S) {
@@ -272,7 +263,7 @@ function toWorld(S, by, x, y, z) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

@@ -282,4 +282,4 @@ function bestMove(input) {
   };
 }
 
-module.exports = { bestMove, _test: { genTurns, evaluate, toFrame, flip } };
+module.exports = { bestMove, _test: { genTurns, evaluate, flip } };

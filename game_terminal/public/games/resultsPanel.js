@@ -5,8 +5,7 @@
 // It pops in once per game over; if dismissed, a small "RESULTS" pill brings it back.
 
 import { avatarEl, nameColor, roomAccount } from '../avatars.js';
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+import { injectStyle, reduced } from './dom.js';
 
 const CSS = `
 .gt-res-back {
@@ -66,15 +65,6 @@ const CSS = `
   .gt-res-back, .gt-res-card, .gt-res-card.lose, .gt-res-title, .gt-res-row, .gt-res-btns .primary, .gt-res-pill { animation: none; }
 }
 `;
-
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 const OUTCOME = {
   win: { color: '#ffd23f' },
@@ -136,7 +126,7 @@ function confetti(canvas) {
 // opts: { title, subtitle?, outcome: 'win'|'lose'|'draw'|'over', rows?: [{ name, value?, win?, you? }],
 //         rematch?: { label?, onClick } }  — rows are shown in the given order, numbered 1..n.
 export function createResults(container) {
-  ensureStyles();
+  injectStyle(CSS);
   let back = null;
   let pill = null;
   let stopConfetti = () => {};

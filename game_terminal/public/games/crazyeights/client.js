@@ -4,7 +4,7 @@
 
 import { renderCard, SUIT_GLYPH, isBot, botName, botSeatControls, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
-import { sfx, tableSounds, seatResult } from '../sfx.js';
+import { tableSounds, seatResult } from '../sfx.js';
 
 const SUITS = ['S', 'H', 'D', 'C'];
 

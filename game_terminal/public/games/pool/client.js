@@ -11,6 +11,7 @@ import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { sharpCanvas } from '../canvasFx.js';
 import { loadScript } from '../loadScript.js';
+import { injectStyle } from '../dom.js';
 
 const COLORS = {
   1: '#f2c200', 2: '#1d48c8', 3: '#d21f1f', 4: '#5c2a96', 5: '#ef7a00', 6: '#10803a', 7: '#7d1b1b', 8: '#111111',
@@ -75,12 +76,7 @@ function miniBall(n, gone) {
 }
 
 export function mount(container, api) {
-  if (!document.getElementById('pl-style')) {
-    const style = document.createElement('style');
-    style.id = 'pl-style';
-    style.textContent = CSS;
-    document.head.appendChild(style);
-  }
+  injectStyle(CSS);
 
   let Sim = null;
   let view = null;

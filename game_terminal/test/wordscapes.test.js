@@ -5,7 +5,7 @@ const assert = require('assert');
 const path = require('path');
 const plugin = require('../server/games/wordscapes');
 const { isWord, isCommon } = require('../server/games/words');
-const { makePuzzle, validateLayout, slotCells, wheelSizeFor, BOT_SPEED, BOT_CFG } = plugin._test;
+const { makePuzzle, validateLayout, wheelSizeFor, BOT_SPEED, BOT_CFG } = plugin._test;
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });

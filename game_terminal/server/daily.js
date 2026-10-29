@@ -33,6 +33,15 @@ function mulberry32(seed) {
   };
 }
 
+// In-place Fisher-Yates; pass a mulberry32 rand to make it repeatable.
+function shuffle(arr, rand = Math.random) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 function createDaily(db, { now = () => Date.now() } = {}) {
   const path = (date, game, uid) => `daily/${date}_${game}_${uid}`;
   const today = () => dayOf(now());
@@ -86,4 +95,4 @@ function createDaily(db, { now = () => Date.now() } = {}) {
   return { today, attempted, start, finish, board, liveStreak };
 }
 
-module.exports = { createDaily, DAILY_GAMES, dayOf, seedOf, mulberry32 };
+module.exports = { createDaily, DAILY_GAMES, dayOf, seedOf, mulberry32, shuffle };

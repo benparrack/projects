@@ -17,6 +17,7 @@
 const { DICT_LIST, COMMON_SET, isWord } = require('./words');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
 const { reportRanked } = require('./wordResults');
+const { mulberry32 } = require('../daily');
 
 const TYPE = 'wordbites';
 const COLS = 8;
@@ -52,17 +53,6 @@ function countsOf(s) {
   const c = new Array(26).fill(0);
   for (const ch of s) c[ch.charCodeAt(0) - 97]++;
   return c;
-}
-
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 // --- piece generation ---------------------------------------------------------------------------

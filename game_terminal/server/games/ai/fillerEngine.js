@@ -250,7 +250,7 @@ function bestMove({ colors, owner, player, level = 'hard', timeMs }) {
 }
 
 module.exports = {
-  COLS, ROWS, CELLS, NCOLORS, HALF, MAX_MOVES, START, NEIGHBORS, LEVELS,
+  COLS, ROWS, CELLS, NCOLORS, HALF, START, NEIGHBORS, LEVELS,
   randomBoard, initialOwner, colorOf, other, legalColors, counts, applyColor, gainFor, isOver, winnerOf,
   evaluate, bestMove,
 };

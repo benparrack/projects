@@ -6,6 +6,7 @@
 import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
+import { injectStyle } from '../dom.js';
 
 const SEAT_LABEL = { p1: 'P1', p2: 'P2' };
 const SEAT_COLOR = { p1: '#39ff14', p2: '#3ad7ff' };
@@ -68,22 +69,13 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .ms-c.o.pop { animation: none; } .ms-bar > div { transition: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 const fmt = (ms) => {
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashTimer = null;

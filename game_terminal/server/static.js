@@ -88,4 +88,4 @@ function handleStaticRequest(req, res) {
   });
 }
 
-module.exports = { handleStaticRequest, SECURITY_HEADERS };
+module.exports = { handleStaticRequest };

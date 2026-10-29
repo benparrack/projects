@@ -7,6 +7,7 @@ import { sfx, boardSounds } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
 import { changeTracker } from '../boardFx.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const PALETTE = [
   { name: 'RED', hex: '#ef4f5a', dark: '#a8222d' },
@@ -85,19 +86,8 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .fl-num.bump { animation: none; } .fl-cell { transition: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
 // Cells `color` would absorb for player p (mirrors the server's flood) — for the hover preview.
-export function absorbPreview(view, p, color) {
+function absorbPreview(view, p, color) {
   const { cols, rows } = view;
   const owner = view.owner.slice();
   const out = [];
@@ -124,7 +114,7 @@ export function absorbPreview(view, p, color) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

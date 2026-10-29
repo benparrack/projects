@@ -22,6 +22,7 @@
 const { COMMON, DICT_LIST, isWord, letterCounts, canSpell } = require('./words');
 const { isBotId, newBot, humanCount, dropBotsIfAlone } = require('./tickBots');
 const { reportRanked } = require('./wordResults');
+const { mulberry32, shuffle } = require('../daily');
 
 const TYPE = 'wordscapes';
 const COLOR_PALETTE = ['#00eaff', '#ff2fb0', '#39ff14', '#ffb000', '#8c52ff', '#ff4d4d', '#ffee58', '#00ffa2'];
@@ -41,24 +42,6 @@ const BOT_SPEED = {
   hard: { ms: [4000, 6500], bonus: 0.25 },
   expert: { ms: [2200, 3600], bonus: 0.3 },
 };
-
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function rand() {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function shuffle(arr, rand) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
 
 const wheelSizeFor = (level) => (level <= 3 ? 5 : level <= 9 ? 6 : 7);
 

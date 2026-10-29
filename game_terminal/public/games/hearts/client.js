@@ -2,7 +2,7 @@
 // it's a "no pass" hand) pick 3 cards to pass; then play by clicking a legal card on your turn.
 // Server plugin: ../../../server/games/hearts.js
 
-import { renderCard, SUIT_GLYPH, isBot, botName, addBotButton, removeBotButton, markBotSeat, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
+import { renderCard, isBot, botName, addBotButton, removeBotButton, markBotSeat, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 

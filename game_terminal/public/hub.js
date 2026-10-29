@@ -180,7 +180,7 @@ const CATEGORIES = [
 
 // Flat list, derived from CATEGORIES — everything below that just needs "all games" (initial
 // selection, session restore) keeps working unchanged without knowing about categories.
-// A game may be listed in more than one category (e.g. GAMEPIGEON reuses chess), so dedupe by type.
+// A game may be listed in more than one category (e.g. POCKET CLASSICS reuses chess), so dedupe by type.
 const GAMES = [...new Map(CATEGORIES.flatMap((cat) => cat.games).map((g) => [g.type, g])).values()];
 
 const SESSION_KEY = 'game_terminal.session';

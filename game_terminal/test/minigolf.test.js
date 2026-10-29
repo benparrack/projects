@@ -99,7 +99,6 @@ test('sim: balls stay on the course for random putts', () => {
 
 test('sim: movers depend on phase', () => {
   const a = Sim.moverShapes(2, 0);
-  const b = Sim.moverShapes(2, 0.7);
   assert.ok(a.length > 0);
   const tips = (T) => Sim.moverShapes(2, T).map((m) => [Math.round(m.bx * 1e6), Math.round(m.by * 1e6)]);
   assert.notDeepStrictEqual(tips(0), tips(0.7));

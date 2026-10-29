@@ -8,6 +8,7 @@ import { sfx } from '../sfx.js';
 import { createBotBar } from '../tickBots.js';
 import { createResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
+import { injectStyle, el } from '../dom.js';
 
 const PREF_KEY = 'gt-crossword-prefs';
 const PENDING_MS = 2500;
@@ -94,15 +95,6 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .cw-cell.pop, .cw-cell.wrong { animation: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
@@ -114,12 +106,6 @@ function loadPrefs() {
 }
 function savePrefs(p) { try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch { /* private mode */ } }
 
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 const fmtClock = (ms) => {
   const s = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -130,7 +116,7 @@ const cellsOf = (w) => Array.from({ length: w.len }, (_, i) => [w.r + DIRS[w.dir
 const label = (w) => `${w.num}${w.dir === 'across' ? 'A' : 'D'}`;
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   const clock = makeServerClock();
   const prefs = loadPrefs();
   const results = createResults(container);

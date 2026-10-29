@@ -13,6 +13,7 @@ import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { createFx } from '../canvasFx.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const COLORS = ['red', 'blue'];
 const TEAM = {
@@ -34,8 +35,6 @@ const REJECT_MESSAGES = {
   invalid: 'Invalid shot.',
   no_ammo: 'Out of that ammo.',
 };
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function loadSim() {
   if (window.TanksSim) return Promise.resolve(window.TanksSim);
@@ -92,21 +91,13 @@ const CSS = `
 .tk-fail { padding: 30px; text-align: center; color: #ff8080; }
 @media (prefers-reduced-motion: reduce) { .tk-callout, .tk-fire:not(:disabled) { animation: none; } }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 function hpColor(f) {
   return f > 0.6 ? '#39ff14' : f > 0.3 ? '#ffd23f' : '#ff4d4d';
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let S = null;
   let view = null;
   let roster = [];

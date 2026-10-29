@@ -6,6 +6,7 @@ import { sfx, boardSounds } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { changeTracker } from '../boardFx.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const N = 8;
 const DIRS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
@@ -73,16 +74,6 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .rv-callout, .rv-num.bump { animation: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const opponent = (c) => (c === 'black' ? 'white' : 'black');
 
 // Discs `color` would flip by playing (r, c) — mirrors the server's rule (used for hover preview).
@@ -118,7 +109,7 @@ function discEl(color, backColor) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

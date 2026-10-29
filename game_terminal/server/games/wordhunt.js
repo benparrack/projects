@@ -13,7 +13,7 @@
 const { DICT_LIST, COMMON_SET, isWord } = require('./words');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
 const { reportRanked } = require('./wordResults');
-const { mulberry32 } = require('../daily');
+const { mulberry32, shuffle } = require('../daily');
 
 const TYPE = 'wordhunt';
 const N = 4;
@@ -52,14 +52,6 @@ function hasPrefix(p) {
 }
 
 const pointsFor = (len) => (len < 3 ? 0 : len === 3 ? 100 : len === 4 ? 400 : len === 5 ? 800 : len === 6 ? 1400 : len === 7 ? 1800 : 2200);
-
-function shuffle(arr, rand = Math.random) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
 
 const NEIGHBORS = (() => {
   const out = [];

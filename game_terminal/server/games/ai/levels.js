@@ -16,4 +16,4 @@ function setBotLevel(st, seat, level) {
 
 const botLevelOf = (st, seat) => normLevel(st.botLevels && st.botLevels[seat]);
 
-module.exports = { LEVELS, DEFAULT_LEVEL, normLevel, setBotLevel, botLevelOf };
+module.exports = { LEVELS, normLevel, setBotLevel, botLevelOf };

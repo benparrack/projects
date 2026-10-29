@@ -8,6 +8,7 @@ import { createFx } from '../canvasFx.js';
 import { createBotBar } from '../tickBots.js';
 import { createResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
+import { injectStyle, el, fmtClock } from '../dom.js';
 
 const PREF_KEY = 'gt-wordsearch-prefs';
 
@@ -60,15 +61,6 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .ws-word.fresh, .ws-timer.low { animation: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
@@ -77,17 +69,7 @@ function loadPrefs() {
 }
 function savePrefs(p) { try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch { /* private mode */ } }
 
-const fmtClock = (ms) => {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-};
 const easeOut = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 
 // Snap a drag from cell (r0, c0) toward pointer position (fr, fc) (fractional cell coords) onto
 // one of the 8 directions, clamped to the grid. Exported for tests.
@@ -119,7 +101,7 @@ export function lettersOf(grid, s) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   const clock = makeServerClock();
   const prefs = loadPrefs();
   const results = createResults(container);

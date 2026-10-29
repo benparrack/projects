@@ -20,7 +20,7 @@ const NEXT_HAND_MS = 6000; // the result stays up this long before the next deal
 const START_MS = 3000; // a fresh table waits this long after the second seat fills
 
 let clock = () => Date.now();
-const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
+const { isBotId: isBot } = require('./tickBots');
 
 // --- Hand evaluation: returns a comparable tuple [category, ...tiebreakers], higher = better ---
 
@@ -136,7 +136,6 @@ function nextActiveSeat(st, fromIdx, predicate) {
 }
 
 function startHand(st) {
-  const n = st.seats.length;
   const deck = shuffle(createDeck());
   st.hand = {
     deck,
@@ -472,10 +471,8 @@ module.exports = {
   stats: { none: true },
   tickIntervalMs: 500,
   HAND_NAMES,
-  evaluate5,
   evaluate7,
   compareHandTuples,
-  buildSidePots,
 
   createInitialState() {
     return { phase: 'waiting', seats: [], chips: [], dealerIdx: 0, hand: null, leaving: [], nextAt: null, moneyNotes: [], flair: {} };

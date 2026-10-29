@@ -37,4 +37,4 @@ function maskText(text) {
   });
 }
 
-module.exports = { isOffensiveName, maskText, normalise };
+module.exports = { isOffensiveName, maskText };

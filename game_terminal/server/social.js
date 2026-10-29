@@ -148,4 +148,4 @@ function createSocial(db, accounts) {
   return { request, accept, remove, block, noteRecent, isBlocked, areFriends, friendUids, view, forget, forgetProfile };
 }
 
-module.exports = { createSocial, MAX_FRIENDS, RECENT_MAX };
+module.exports = { createSocial };

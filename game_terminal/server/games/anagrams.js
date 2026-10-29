@@ -17,7 +17,7 @@
 const { COMMON, isWord, letterCounts, canSpell, wordsFromLetters } = require('./words');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
 const { reportRanked } = require('./wordResults');
-const { mulberry32 } = require('../daily');
+const { mulberry32, shuffle } = require('../daily');
 
 const TYPE = 'anagrams';
 const LETTERS = 6;
@@ -41,14 +41,6 @@ const isAnagramWord = (w) => w.length >= MIN_LEN && w.length <= LETTERS && !JUNK
 const pointsFor = (word) => POINTS[word.length] || 0;
 
 const BASES = COMMON.filter((w) => w.length === LETTERS && /^[a-z]+$/.test(w));
-
-function shuffle(arr, rand = Math.random) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
 
 // Picks a base word with enough everyday sub-words and returns the shuffled letter set plus the
 // full answer list (longest first). The shuffled order never spells a 6-letter answer.

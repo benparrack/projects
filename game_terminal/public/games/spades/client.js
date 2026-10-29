@@ -4,7 +4,7 @@
 // Legal-card highlighting below mirrors the server's `legalCardIndices` by hand (no shared
 // module in this repo — same pattern as e.g. slither's client-side `computeZoom`).
 
-import { renderCard, SUIT_GLYPH, isBot, botName, addBotButton, removeBotButton, markBotSeat, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
+import { renderCard, isBot, botName, addBotButton, removeBotButton, markBotSeat, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
 import { sfx, tableSounds, seatResult } from '../sfx.js';
 

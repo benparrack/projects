@@ -11,6 +11,7 @@ import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { createFx } from '../canvasFx.js';
 import { loadScript } from '../loadScript.js';
+import { injectStyle } from '../dom.js';
 
 const COLORS = ['red', 'blue'];
 const PUCK = {
@@ -74,14 +75,6 @@ const CSS = `
 .sb-help { font-size: 11px; opacity: .7; text-align: center; max-width: 520px; }
 .sb-fail { padding: 30px; text-align: center; color: #ff8080; }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 // Top-down texture of the playing surface, far end (y = L) at the top. PX px per table unit.
 const PX = 10;
@@ -161,7 +154,7 @@ function tableTexture(S) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

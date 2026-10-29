@@ -25,7 +25,7 @@ const BOT_NAMES = ['Ace', 'Byte', 'Chip', 'Dot', 'Echo', 'Flux', 'Gizmo'];
 const BOT_DELAY_MS = [380, 720];
 const BOT_CHAIN_DELAY_MS = [170, 300]; // quicker while sweeping up a chain of boxes
 
-const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
+const { isBotId: isBot } = require('./tickBots');
 const levelOfId = (id) => normLevel(String(id).split('~')[1]);
 
 // ---------------------------------------------------------------------------------------------

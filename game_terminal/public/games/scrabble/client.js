@@ -6,6 +6,7 @@
 import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
+import { injectStyle, el } from '../dom.js';
 
 const SIZE = 15;
 const VALUES = {
@@ -46,7 +47,6 @@ const REASONS = {
 const PREMIUM_LABEL = { TW: 'TRIPLE WORD', DW: 'DOUBLE WORD', TL: 'TRIPLE LETTER', DL: 'DOUBLE LETTER' };
 const PREMIUM_SHORT = { TW: 'TW', DW: 'DW', TL: 'TL', DL: 'DL' };
 
-const STYLE_ID = 'gt-scr-style';
 const CSS = `
 .gt-scr { display:flex; flex-direction:column; align-items:center; gap:10px; width:100%; max-width:1000px; margin:0 auto; font-family:inherit; color:#39ff14; user-select:none; -webkit-user-select:none; }
 .gt-scr .scr-status { font-size:17px; font-weight:bold; padding:6px 14px; border-radius:6px; border:2px solid transparent; text-align:center; background:rgba(255,255,255,0.04); }
@@ -120,25 +120,11 @@ const CSS = `
 }
 `;
 
-function ensureStyle() {
-  if (document.getElementById(STYLE_ID)) return;
-  const s = document.createElement('style');
-  s.id = STYLE_ID;
-  s.textContent = CSS;
-  document.head.appendChild(s);
-}
-
 // Board wire format: 15 strings, '.' empty, lowercase tile, UPPERCASE = blank.
-export function decodeBoard(rows) {
+function decodeBoard(rows) {
   return rows.map((row) => [...row].map((ch) => (ch === '.' ? null : { l: ch.toLowerCase(), b: ch !== ch.toLowerCase() })));
 }
 
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 const btn = (label, onClick, cls) => {
   const b = el('button', cls, label);
   b.addEventListener('click', onClick);
@@ -146,7 +132,7 @@ const btn = (label, onClick, cls) => {
 };
 
 export function mount(container, api) {
-  ensureStyle();
+  injectStyle(CSS);
   let view = null;
   let board = null;
   let roster = [];

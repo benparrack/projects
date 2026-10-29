@@ -12,6 +12,7 @@ import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { createFx } from '../canvasFx.js';
 import { loadScript } from '../loadScript.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const FRAME_MS = 1000 / 60;
 const HOLD_FRAMES = 22; // the ball settles / drops this long before the putt animation ends
@@ -27,8 +28,6 @@ const REJECT_MESSAGES = {
   not_playing: 'The game is not running.',
   invalid: 'Invalid putt.',
 };
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const CSS = `
 .mg-root { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; color: #b8ffb0; width: 100%; }
@@ -85,14 +84,6 @@ const CSS = `
 .mg-help { font-size: 11px; opacity: .7; text-align: center; max-width: 520px; }
 .mg-fail { padding: 30px; text-align: center; color: #ff8080; }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 const deep = (o) => JSON.parse(JSON.stringify(o));
 
@@ -276,7 +267,7 @@ function drawCourse(S, hi, pw, ph) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

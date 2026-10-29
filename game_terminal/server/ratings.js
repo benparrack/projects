@@ -70,4 +70,4 @@ function seasonOf(ms = Date.now()) {
 // On season rollover: halve the distance to the starting rating.
 const softReset = (rating) => Math.round(START + ((rating ?? START) - START) / 2);
 
-module.exports = { START, kFactor, rate, rateMatch, TIERS, tierOf, seasonOf, softReset };
+module.exports = { START, rate, rateMatch, TIERS, tierOf, seasonOf, softReset };

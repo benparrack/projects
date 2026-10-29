@@ -11,6 +11,7 @@ import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { loadScript } from '../loadScript.js';
+import { injectStyle, reduced, fmtClock } from '../dom.js';
 
 const COLORS = ['red', 'blue'];
 const TEXT_COLOR = { red: '#ff5a6a', blue: '#5aa0ff' };
@@ -23,8 +24,6 @@ const REJECT_MESSAGES = {
   time_up: "Time's up.",
   invalid: 'Invalid shot.',
 };
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const CSS = `
 .bb-root { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; color: #b8ffb0; width: 100%; }
@@ -73,22 +72,9 @@ const CSS = `
 .bb-fail { padding: 30px; text-align: center; color: #ff8080; }
 @media (prefers-reduced-motion: reduce) { .bb-callout, .bb-score.bump, .bb-clock.low, .bb-tag.fire, .bb-hint { animation: none; } }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
-const fmtClock = (ms) => {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-};
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

@@ -34,7 +34,7 @@ const BOT_WORDS = {
   expert: COMMON_UP.slice(200).filter((w) => w.length >= 3 && w.length <= 6 && rareScore(w) >= 2),
 };
 const EN_FREQ = 'ETAOINSRHLDCUMFPGWYBVKXJQZ';
-const isBotId = (id) => typeof id === 'string' && id.startsWith('bot-');
+const { isBotId } = require('./tickBots');
 const botLevel = (id) => { const l = id.split('~')[1]; return LEVEL_LABEL[l] ? l : 'hard'; };
 const BY_LEN = new Map();
 function wordsOfLen(n) {

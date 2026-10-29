@@ -14,6 +14,7 @@ import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { loadScript } from '../loadScript.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const SEATS = ['p1', 'p2'];
 const SEAT_COLOR = { p1: '#3ad7ff', p2: '#ff5ad1' };
@@ -27,7 +28,6 @@ const REJECT_MESSAGES = {
   invalid: 'Invalid roll.',
 };
 
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -87,14 +87,6 @@ const CSS = `
 .bw-help { font-size: 11px; opacity: .7; text-align: center; max-width: 520px; }
 .bw-fail { padding: 30px; text-align: center; color: #ff8080; }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 // ---- textures --------------------------------------------------------------------------------
 // Lane boards from the foul line (canvas bottom) to the end of the pin deck (canvas top).
@@ -435,7 +427,7 @@ function createScene(THREE, S, canvas) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

@@ -98,8 +98,6 @@ function guessMatches(guess, secret) {
   return false;
 }
 
-const article = (w) => (/^[aeiou]/i.test(w) ? 'an' : 'a');
-
 // ---------------------------------------------------------------------------------------------
 // Bot as picker: answer a free-text question about KB noun `noun`.
 function botAnswer(noun, text) {

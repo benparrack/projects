@@ -289,4 +289,4 @@ function bestMove({ board, color, level, timeMs }) {
   return pick(bestSq);
 }
 
-module.exports = { bestMove, LEVELS, _internal: { toFlat, flipsAt, legalMoves, evaluate, finalScore } };
+module.exports = { bestMove, LEVELS, _internal: { toFlat } };

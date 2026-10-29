@@ -5,6 +5,7 @@
 import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
+import { injectStyle } from '../dom.js';
 
 const N = 10;
 const COLS = 'ABCDEFGHIJ';
@@ -138,14 +139,6 @@ const CSS = `
 .gt-sb .sb-hint { font-size: 12px; opacity: .65; text-align: center; max-width: 560px; }
 @media (prefers-reduced-motion: reduce) { .gt-sb .sb-grid::before, .gt-sb .sb-mark.hit::before, .gt-sb .sb-mark.hit::after, .gt-sb .sb-last, .gt-sb .sb-radar.ship::before, .gt-sb .sb-scan.fresh { animation: none; } }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 // ---- pure fleet helpers (also handy for tests) -------------------------------------------------
 export function shipCells(ship, len) {
@@ -185,7 +178,7 @@ export function randomFleet(spec) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;

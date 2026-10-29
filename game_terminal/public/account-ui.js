@@ -90,7 +90,7 @@ function googleMark() {
 }
 
 // Pick-one avatar grid. Returns { el, value() }.
-export function avatarPicker(initial = AVATARS[0].id) {
+function avatarPicker(initial = AVATARS[0].id) {
   let value = initial;
   const grid = h('div.avatar-grid', { role: 'radiogroup', 'aria-label': 'Avatar' });
   const buttons = AVATARS.map((a) => {

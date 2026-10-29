@@ -33,7 +33,7 @@ export function mount(container, api) {
   let autoTimer = null;
   let seedsNow = null;
 
-  const { root, panel, stage, foot, below } = shell(container, CSS);
+  const { panel, stage, foot, below } = shell(container, CSS);
   const limits = () => (view ? view.limits : { min: 0.1, max: 1000 });
 
   // ---- panel ----

@@ -65,7 +65,6 @@ const RECONCILE_SMOOTH_RATE = 0.25; // fraction of the remaining gap corrected p
 const TELEPORT_DIST_SQ = 3 * 3;
 
 const WEAPON_IDS = ['pistol', 'shotgun', 'sniper'];
-const WEAPON_KEYS = { Digit1: 'pistol', Digit2: 'shotgun', Digit3: 'sniper' };
 const WEAPON_LABELS = { pistol: 'PISTOL', shotgun: 'SHOTGUN', sniper: 'SNIPER' };
 const PERK_INFO = {
   reload: { icon: 'R', name: 'FAST HANDS', desc: 'reloads 40% faster' },

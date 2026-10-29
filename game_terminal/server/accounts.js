@@ -199,4 +199,4 @@ function sanitizeSettings(input) {
   return out;
 }
 
-module.exports = { createAccounts, validateUsername, publicUser, sanitizeSettings, AVATAR_IDS, TERMS_VERSION };
+module.exports = { createAccounts, validateUsername, publicUser, AVATAR_IDS, TERMS_VERSION };

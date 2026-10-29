@@ -25,6 +25,7 @@
 const CLUES = require('./data/crossword_clues.json');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
 const { reportRanked } = require('./wordResults');
+const { mulberry32, shuffle } = require('../daily');
 
 const TYPE = 'crossword';
 const COLOR_PALETTE = ['#00eaff', '#ff2fb0', '#ffb000', '#8c52ff', '#00ffa2', '#ff4d4d', '#ffee58', '#39ff14'];
@@ -51,24 +52,6 @@ const BOT_SPEED = {
 const WORDS = Object.keys(CLUES).filter((w) => /^[a-z]{3,7}$/.test(w) && CLUES[w].length);
 
 // ---- generation ------------------------------------------------------------------------------
-
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function rand() {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function shuffle(arr, rand) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
 
 const key = (r, c) => `${r},${c}`;
 const DIR = { across: [0, 1], down: [1, 0] };

@@ -22,7 +22,7 @@ const MAX_CRASH = 10000;
 const MIN_AUTO = 1.01;
 const HISTORY = 30;
 
-const { send, broadcast, reject, settle, limits } = kit(TYPE);
+const { broadcast, reject, settle, limits } = kit(TYPE);
 let clock = () => Date.now();
 let forcePoint = null; // tests
 

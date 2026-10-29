@@ -14,6 +14,7 @@
 const { COMMON, isWord } = require('./words');
 const { isBotId, newBot, dropBotsIfAlone } = require('./tickBots');
 const { reportRanked } = require('./wordResults');
+const { shuffle } = require('../daily');
 
 const TYPE = 'wordsearch';
 const SIZES = {
@@ -59,14 +60,6 @@ const FORWARD = new Set(['0,1', '1,0', '1,1', '-1,1']);
 
 // English letter frequency for filler, so the grid looks like real text rather than X/Q/Z noise.
 const FREQ = 'eeeeeeeeeeeetttttttttaaaaaaaaooooooooiiiiiiinnnnnnnsssssshhhhhhrrrrrrddddlllluuummmwwffggyyppbbvkjxqz';
-
-function shuffle(arr, rand = Math.random) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
 
 const reverse = (w) => w.split('').reverse().join('');
 

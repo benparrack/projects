@@ -34,10 +34,6 @@ function makeRoom(ids = ['A', 'B', 'C']) {
 const ctxFor = (room, id) => ({ senderId: id, broadcast: room.broadcast, sendTo: room.sendTo });
 const send = (room, id, data) => plugin.onMessage(room, { clientId: id }, data, ctxFor(room, id));
 const view = (room) => plugin.serializeSnapshot(room, { clientId: 'A' });
-const lastReject = (room, id) => {
-  const s = [...room.sent].reverse().find((x) => x.to === id && x.m.payload.data.kind === 'moveRejected');
-  return s && s.m.payload.data.reason;
-};
 const rejects = (room, id, data, reason) => {
   const before = room.sent.length;
   send(room, id, data);

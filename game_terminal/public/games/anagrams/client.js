@@ -7,6 +7,7 @@ import { sfx } from '../sfx.js';
 import { createBotBar } from '../tickBots.js';
 import { createResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
+import { injectStyle, el, fmtClock } from '../dom.js';
 
 const CSS = `
 .an-root { display: flex; flex-direction: column; gap: 8px; }
@@ -92,26 +93,7 @@ const CSS = `
 }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 const POINTS = { 3: 100, 4: 400, 5: 1200, 6: 2000 };
-const fmtClock = (ms) => {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-};
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 const shuffled = (arr) => {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -122,7 +104,7 @@ const shuffled = (arr) => {
 };
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   const clock = makeServerClock();
   const results = createResults(container);
   const botBar = createBotBar(api);

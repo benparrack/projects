@@ -77,4 +77,4 @@ class Parties {
   }
 }
 
-module.exports = { Parties, MAX_PARTY };
+module.exports = { Parties };

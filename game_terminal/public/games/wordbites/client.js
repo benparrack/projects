@@ -8,6 +8,7 @@ import { sfx } from '../sfx.js';
 import { createBotBar } from '../tickBots.js';
 import { createResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
+import { injectStyle, el, fmtClock } from '../dom.js';
 
 const CSS = `
 .wb-root { display: flex; flex-direction: column; gap: 8px; }
@@ -69,25 +70,6 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .wb-piece, .wb-pop, .wb-cell.flash, .wb-words li.fresh, .wb-timer.low { transition: none; animation: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
-const fmtClock = (ms) => {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-};
 const pieceSize = (pc) => (pc.kind === 'h' ? [1, 2] : pc.kind === 'v' ? [2, 1] : [1, 1]); // [rows, cols]
 
 // Board letters for an arrangement. Exported for tests.
@@ -107,7 +89,7 @@ export function gridOf(pieces, pos, rows, cols) {
 }
 
 // Can piece `pc` sit with its top-left at (r, c) given the other pieces? Exported for tests.
-export function canPlace(pieces, pos, pc, r, c, rows, cols) {
+function canPlace(pieces, pos, pc, r, c, rows, cols) {
   const [h, w] = pieceSize(pc);
   if (r < 0 || c < 0 || r + h > rows || c + w > cols) return false;
   const g = gridOf(pieces, pos, rows, cols);
@@ -119,7 +101,7 @@ export function canPlace(pieces, pos, pc, r, c, rows, cols) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   const clock = makeServerClock();
   const results = createResults(container);
 

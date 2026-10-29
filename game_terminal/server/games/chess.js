@@ -604,7 +604,7 @@ function maybeScheduleBotMove(room) {
 module.exports = {
   type: 'chess',
   // Exposed for tests.
-  _internals: { sanOf, fenOf, getLegalMoves, evalFromScore, createInitialBoard },
+  _internals: { sanOf, fenOf, getLegalMoves, createInitialBoard },
 
   createInitialState() {
     const st = { phase: 'waiting', players: { white: null, black: null }, timeControlMs: null };

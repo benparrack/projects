@@ -86,4 +86,4 @@ function kit(TYPE) {
   return { send, broadcast, reject, draw, publicSeeds, rotate, stake, settle, limits };
 }
 
-module.exports = { kit, parseBet, payout, floats, sha256, newPair, round2, MIN_BET, MAX_BET, EDGE, MAX_WIN };
+module.exports = { kit, parseBet, payout, floats, sha256, round2, MIN_BET, MAX_BET, EDGE, MAX_WIN };

@@ -310,7 +310,7 @@ export function mount(container, api) {
   const built = new Map(); // piece index -> { group, obs: [{ mesh, p, o }] }
   const terrain = new Map(); // chunk index -> group
   const ghosts = new Map(); // clientId -> { mesh, label, cur, tgt }
-  let ball = null; let alive = false;
+  let ball = null;
   let acc = 0; let lastFrame = 0; let lastSend = 0;
   let camPos = null; let shake = 0; let deathAt = 0; let deathS = 0; let watching = null;
   let zoomV = 17; let boostFlash = 0;
@@ -558,7 +558,6 @@ export function mount(container, api) {
     track = Sim.makeTrack(seed);
     trackSeed = seed;
     ball = Sim.newBall(track);
-    alive = true;
     acc = 0;
     camPos = null;
     zoomV = Sim.targetSpeed(0);
@@ -686,7 +685,6 @@ export function mount(container, api) {
           if (impact > 11) { shake = Math.max(shake, Math.min(0.28, impact / 90)); sfx.play('pop', { vol: Math.min(1, impact / 25) }); }
         }
         if (wasAlive && !ball.alive) {
-          alive = false;
           deathAt = performance.now();
           deathS = Math.floor(ball.s);
           sfx.play('crash');

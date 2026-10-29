@@ -248,4 +248,4 @@ function createWallet(db, { now = () => Date.now() } = {}) {
   return { load, forget, buy, equip, vip, flair, leaderboards, buyIn, sync, cashOut, noteBet, claimStipend, payShift, dinerOf, dinerBuy, dinerRename, view, dropGuest, flush, feedJackpot, hitJackpot, jackpot: () => jackpot.amount, isLoaded: (key) => isGuest(key) || cache.has(key) };
 }
 
-module.exports = { createWallet, utcDay };
+module.exports = { createWallet };

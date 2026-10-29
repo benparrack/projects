@@ -5,7 +5,7 @@ import { icon, HAT, face, setMood } from './art.js';
 export const GRILL_KEYS = ['q', 'w', 'e', 'r'];
 export const STATION_KEYS = { fryer: 'f', fountain: 'd', shake: 's' };
 const ZONE = { rare: '#a8483a', medium: '#8e6240', well: '#5a4334' };
-export const FLAVOR = { fries: '#d9a446', cola: '#4a2a1c', lemon: '#c4c86a', orange: '#d9853a', vanilla: '#efe6cc', chocolate: '#6b4430', strawberry: '#d98a8a' };
+const FLAVOR = { fries: '#d9a446', cola: '#4a2a1c', lemon: '#c4c86a', orange: '#d9853a', vanilla: '#efe6cc', chocolate: '#6b4430', strawberry: '#d98a8a' };
 const STATION_VERB = { fryer: ['DROP BASKET', 'PULL'], fountain: ['HOLD TO POUR', 'RELEASE'], shake: ['BLEND', 'POUR'] };
 
 export function makeCook(c) {

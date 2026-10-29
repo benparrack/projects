@@ -2,9 +2,9 @@
 // they're the required rank. Anyone else can CALL BS; the next player in turn order can instead
 // let the play ride. Server plugin: ../../../server/games/bs.js
 
-import { renderCard, SUIT_GLYPH, isBot, botName, botSeatControls, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
+import { renderCard, isBot, botName, botSeatControls, handOrder, handToolbar, orderArrow } from '../cardCommon.js';
 import { createResults, seatResults } from '../resultsPanel.js';
-import { sfx, tableSounds, seatResult } from '../sfx.js';
+import { tableSounds, seatResult } from '../sfx.js';
 
 export function mount(container, api) {
   let view = null;

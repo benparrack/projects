@@ -23,7 +23,7 @@ function makeRoom(type, ids) {
   room.act = (id, data) => plugin.onMessage(room, { clientId: id }, data, { senderId: id, broadcast: room.broadcast, sendTo: room.sendTo });
   return room;
 }
-const join = (type, room) => { for (const [id, c] of room.clients) G(type).onJoin(room, c); };
+const join = (type, room) => { for (const c of room.clients.values()) G(type).onJoin(room, c); };
 // Runs fn with setTimeout captured: nothing fires on its own, the callbacks are returned in order.
 function captureTimers(fn) {
   const real = global.setTimeout;

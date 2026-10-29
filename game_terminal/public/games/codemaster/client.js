@@ -8,8 +8,9 @@ import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
+import { injectStyle } from '../dom.js';
 
-export const PEG_COLORS = [
+const PEG_COLORS = [
   { name: 'Red', hex: '#ff4d4d', dark: '#a61e1e', sym: '▲' },
   { name: 'Orange', hex: '#ff9f1c', dark: '#a85d00', sym: '★' },
   { name: 'Yellow', hex: '#ffe14d', dark: '#a68e00', sym: '●' },
@@ -37,7 +38,7 @@ const REJECT = {
   two_bots: 'At least one seat must be a human',
 };
 
-export function fmtTime(ms) {
+function fmtTime(ms) {
   if (ms == null || !Number.isFinite(ms) || ms < 0) return '0:00';
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -112,14 +113,6 @@ const CSS = `
 @media (max-width:520px) { .cm-slot { width:26px; height:26px; } .cm-pal { width:38px; height:38px; } .cm-line .by { display:none; } }
 @media (prefers-reduced-motion: reduce) { .cm-peg.drop,.cm-peg.flip,.cm-fbp.pop,.cm-err { animation:none; } }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -164,7 +157,7 @@ function fbEl(exact, near, { animate = false, pegs = PEGS } = {}) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flash = null;

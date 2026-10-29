@@ -9,6 +9,7 @@ import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
 import { changeTracker } from '../boardFx.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const SEAT_COLOR = { p1: '#3ad7ff', p2: '#ffb000' };
 const REJECT_MESSAGES = {
@@ -72,15 +73,6 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .ar-callout, .ar-card .big.bump { animation: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 function loadSim() {
   if (window.ArcherySim) return Promise.resolve(window.ArcherySim);
   return new Promise((resolve, reject) => {
@@ -92,7 +84,6 @@ function loadSim() {
   });
 }
 
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ringColor = (label) => (label === 'X' || label === '10' || label === '9' ? '#f8d21c' : label === '8' || label === '7' ? '#ff5a4f' : label === '6' || label === '5' ? '#3ab8ff' : label === 'M' ? '#ff4d4d' : '#ffffff');
 const ptsOf = (l) => (l === 'X' ? 10 : l === 'M' ? 0 : Number(l));
 
@@ -257,7 +248,7 @@ function paintBackground(g, scale) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let Sim = null;
   let view = null;
   let roster = [];
@@ -635,7 +626,6 @@ export function mount(container, api) {
   // +x = shooting direction, +y = down the bow, grip at the origin, u = half the bow's length.
   const bowGrip = () => ({ x: g.W * 0.22, y: g.H * 0.67 });
   function drawBow(ctx, now, swayPx) {
-    const W = g.W;
     const H = g.H;
     const u = H * 0.3;
     let draw = 0;

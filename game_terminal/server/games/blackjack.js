@@ -18,7 +18,7 @@
 
 'use strict';
 
-const { createDeck, shuffle } = require('./cardCommon');
+const { createDeck } = require('./cardCommon');
 const { normLevel } = require('./ai/levels');
 
 const TYPE = 'blackjack';
@@ -45,7 +45,7 @@ const SETTLE_MS = 4500;
 const PEEK_MS = 900;
 
 const BOT_NAMES = ['Ace', 'Byte', 'Chip', 'Dot', 'Echo', 'Flux', 'Gizmo'];
-const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
+const { isBotId: isBot } = require('./tickBots');
 const botLevelOf = (id) => normLevel(String(id).split('~')[1]);
 const botBase = (id) => id.slice(4).split('~')[0];
 

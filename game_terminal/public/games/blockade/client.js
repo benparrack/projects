@@ -6,6 +6,7 @@
 import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults, duelResults } from '../resultsPanel.js';
+import { injectStyle } from '../dom.js';
 
 const COLS = 11;
 const ROWS = 14;
@@ -81,17 +82,8 @@ const CSS = `
 .bk-hint { font-size: 12px; opacity: .65; text-align: center; max-width: 460px; }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashTimer = null;

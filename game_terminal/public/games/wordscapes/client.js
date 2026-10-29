@@ -5,9 +5,9 @@ import { sfx } from '../sfx.js';
 import { createResults } from '../resultsPanel.js';
 import { createBotBar } from '../tickBots.js';
 import { makeServerClock } from '../serverClock.js';
+import { injectStyle, reduced, el } from '../dom.js';
 import { wheelPositions, hitNode, applyDragNode, keyPick, sceneFor, fitCell } from './wheel.js';
 
-const STYLE_ID = 'ws-style';
 const CSS = `
 .ws-root{width:100%;max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:8px;padding:8px;box-sizing:border-box;font-family:"Courier New",monospace;color:var(--fg,#39ff14);user-select:none;-webkit-user-select:none}
 .ws-top{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between}
@@ -67,30 +67,15 @@ const CSS = `
 @media (max-width:420px){.ws-side button{width:40px;height:40px;font-size:17px}.ws-preview span{min-width:24px;height:28px;font-size:17px}}
 `;
 
-function ensureStyle() {
-  if (document.getElementById(STYLE_ID)) return;
-  const s = document.createElement('style');
-  s.id = STYLE_ID;
-  s.textContent = CSS;
-  document.head.appendChild(s);
-}
-
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 const SVG = 'http://www.w3.org/2000/svg';
 const svgEl = (tag, attrs = {}) => {
   const e = document.createElementNS(SVG, tag);
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
   return e;
 };
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function mount(container, api) {
-  ensureStyle();
+  injectStyle(CSS);
   const clock = makeServerClock();
   const myId = () => api.getClientId();
   let snap = null;

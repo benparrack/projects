@@ -91,7 +91,6 @@ function fb(a, b) {
   }
   return table[a * ALL.length + b];
 }
-const SOLVED = PEGS * 5;
 
 // Candidates still consistent with every (guess, feedback) seen so far.
 function consistent(space, history) {
@@ -421,7 +420,7 @@ function broadcastState(room) {
 module.exports = {
   type: TYPE,
   // exported for tests
-  _internal: { score, randomCode, botGuess, validCode, ALL, codeIndex, NODUP, MAX_GUESSES },
+  _internal: { score, botGuess, validCode, ALL, NODUP, MAX_GUESSES },
 
   createInitialState,
 

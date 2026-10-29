@@ -4,6 +4,7 @@
 // orientation, toggles) and rebuilds this on every change, like the rest of the hub's clients.
 import { slideFrom, captureGhost, LAST_MOVE_TINT, CHECK_GLOW } from '../boardFx.js';
 import { fenToBoard, fenTurn, whiteWinPct, formatEval, classifyMove, summarize, CLASSES } from './review.js';
+import { injectStyle } from '../dom.js';
 
 const CSS = `
 .chrv { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
@@ -43,15 +44,6 @@ const CSS = `
 .chrv-toggles { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .chrv-toggles button.on { background: #1f8f0c; color: #000; }
 `;
-
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 let arrowSeq = 0;
@@ -172,7 +164,7 @@ function evalGraph(review, onJump) {
 // opts: { review, flipped, cell, glyphs, glyphColors, glyphOutline, resultText, prevIdx,
 //         onNav(delta|'start'|'end'), onJump(i), onExit(), onFlip(), onToggleBest() }
 export function buildReviewView(opts) {
-  ensureStyles();
+  injectStyle(CSS);
   const { review, flipped, cell: CELL, glyphs, glyphColors, glyphOutline } = opts;
   const plies = review.moves.length;
   const idx = review.idx;

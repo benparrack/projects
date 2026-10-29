@@ -441,7 +441,7 @@ const { reportRanked } = require('./wordResults');
 
 const BOT_NAMES = ['Ace', 'Byte', 'Chip', 'Dot'];
 const LEVEL_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard', expert: 'Expert' };
-const isBot = (id) => typeof id === 'string' && id.startsWith('bot-');
+const { isBotId: isBot } = require('./tickBots');
 const BOT_DELAY_MIN = 900;
 const BOT_DELAY_MAX = 1700;
 

@@ -5,6 +5,7 @@
 import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect, levelLabel } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const SEATS = ['gold', 'jade'];
 const SEAT_COLOR = { gold: '#ffc94a', jade: '#3ee6a8' };
@@ -37,7 +38,7 @@ const storeOf = (side) => (side === 0 ? 6 : 13);
 const firstPit = (side) => (side === 0 ? 0 : 7);
 const sideOfPit = (i) => (i >= 0 && i <= 5 ? 0 : i >= 7 && i <= 12 ? 1 : -1);
 
-export function previewMove(pits, side, pit, mode) {
+function previewMove(pits, side, pit, mode) {
   const p = pits.slice();
   const myStore = storeOf(side);
   const oppStore = storeOf(1 - side);
@@ -141,20 +142,10 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .mc-callout { animation-duration:.01s; } .mc-pit.land::before { animation:none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null; // the state currently drawn (lags the server while a move animates)
   let roster = [];
   let flashError = null;

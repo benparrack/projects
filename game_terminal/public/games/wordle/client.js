@@ -4,6 +4,7 @@
 // Server plugin: ../../../server/games/wordle.js (checks words and marks guesses).
 import { sfx } from '../sfx.js';
 import { createResults } from '../resultsPanel.js';
+import { injectStyle, el } from '../dom.js';
 
 const CSS = `
 .wd-root { display: flex; flex-direction: column; gap: 10px; }
@@ -47,25 +48,11 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .wd-tile, .wd-row.bad { animation: none !important; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 const KEYS = ['qwertyuiop', 'asdfghjkl', '+zxcvbnm-'];
 const RANK = { x: 1, y: 2, g: 3 };
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   const results = createResults(container);
   let view = null;
   let typed = '';

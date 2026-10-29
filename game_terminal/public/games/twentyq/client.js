@@ -10,6 +10,7 @@
 import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const SEAT_COLOR = { p1: '#3ad7ff', p2: '#ffb000' };
 const CAT_LABEL = { animal: 'ANIMAL', food: 'FOOD & DRINK', object: 'OBJECT', place: 'PLACE', person: 'PERSON / JOB', any: 'ANYTHING' };
@@ -140,16 +141,6 @@ const CSS = `
 }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -165,7 +156,7 @@ function btn(text, onClick, cls) {
 const dots = () => { const d = el('span', 'tq-dots'); d.innerHTML = '<span>.</span><span>.</span><span>.</span>'; return d; };
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashTimer = null;
@@ -232,7 +223,7 @@ export function mount(container, api) {
   pickInput.spellcheck = true;
   const pickCat = el('select');
   for (const c of ['object', 'animal', 'food', 'place', 'person', 'any']) {
-    const o = el('option', '', `${CAT_EMOJI[c]} ${CAT_LABEL[c].toLowerCase()}`);
+    const o = el('option', '', CAT_LABEL[c].toLowerCase());
     o.value = c;
     pickCat.appendChild(o);
   }

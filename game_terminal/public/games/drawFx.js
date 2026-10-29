@@ -3,6 +3,7 @@
 // helpers, and a throttled pencil-scribble sound while drawing. CSS is injected once.
 
 import { sfx } from './sfx.js';
+import { injectStyle } from './dom.js';
 
 const CSS = `
 .dfx-timer { width: 100%; height: 8px; background: #1a1e24; border: 1px solid #333; border-radius: 4px; overflow: hidden; }
@@ -39,15 +40,7 @@ const CSS = `
   .dfx-bit { display: none; }
 }`;
 
-let injected = false;
-function injectCss() {
-  if (injected) return;
-  injected = true;
-  const style = document.createElement('style');
-  style.textContent = CSS;
-  document.head.appendChild(style);
-}
-injectCss();
+injectStyle(CSS);
 
 // Restart a one-shot animation class on an element.
 export function replay(el, cls) {

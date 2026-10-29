@@ -8,6 +8,7 @@ import { sfx } from '../sfx.js';
 import { preferredLevel, levelSelect } from '../botLevel.js';
 import { createResults } from '../resultsPanel.js';
 import { changeTracker } from '../boardFx.js';
+import { injectStyle, reduced } from '../dom.js';
 
 const SEAT_COLOR = { p1: '#3ad7ff', p2: '#ffb000' };
 const MODE_LABEL = { 501: '501 · DOUBLE OUT', 301: '301 · STRAIGHT OUT', cricket: 'CRICKET' };
@@ -73,15 +74,6 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .dt-callout, .dt-card .big.bump { animation: none; } }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
 function loadSim() {
   if (window.DartsSim) return Promise.resolve(window.DartsSim);
   return new Promise((resolve, reject) => {
@@ -93,7 +85,6 @@ function loadSim() {
   });
 }
 
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const rad = (deg) => (deg * Math.PI) / 180;
 
 // --- board painting ---------------------------------------------------------------------------
@@ -294,7 +285,7 @@ function markGlyph(n) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let Sim = null;
   let view = null;
   let roster = [];

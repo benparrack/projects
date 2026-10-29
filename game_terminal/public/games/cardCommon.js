@@ -1,4 +1,5 @@
 import { preferredLevel, levelSelect, levelLabel, atLeast } from './botLevel.js';
+import { injectStyle } from './dom.js';
 // Shared rendering helper for the standard-52-card games (War, Crazy Eights, BS, Poker, Hearts,
 // Spades) — one DOM building block so they all share the same card face, back and animations.
 // Styles live in an injected stylesheet; callers may still set inline cursor/outline/opacity/
@@ -101,9 +102,7 @@ function ensureStyles() {
   if (styled) return;
   styled = true;
   document.body.classList.toggle('gt-hand-large', handPrefs.large);
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
+  injectStyle(CSS);
 }
 
 // --- Your hand: sort order and size, shared by every hand-of-cards game, remembered per browser. ---

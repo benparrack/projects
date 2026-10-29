@@ -44,8 +44,6 @@ function humanRoom() {
   send(room, 'B', { kind: 'sit', seat: 'p2' });
   return room;
 }
-const pickerId = (room) => room.state.players[room.state.picker];
-const guesserId = (room) => room.state.players[room.state.guesser];
 
 // ------------------------------------------------------------------------------------------------
 test('KB: size, categories, attributes, values', () => {

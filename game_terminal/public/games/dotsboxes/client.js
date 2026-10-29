@@ -10,6 +10,7 @@ import { sfx } from '../sfx.js';
 import { isBot, botName, addBotButton, removeBotButton } from '../cardCommon.js';
 import { levelSelect } from '../botLevel.js';
 import { createResults, seatResults } from '../resultsPanel.js';
+import { injectStyle, el } from '../dom.js';
 
 export const COLORS = ['#ff5c7a', '#3ad7ff', '#ffd23f', '#b98cff'];
 const SIZES = [4, 5, 6];
@@ -74,21 +75,6 @@ const CSS = `
 }
 `;
 
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
-
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 const svgEl = (tag, attrs) => {
   const e = document.createElementNS(NS, tag);
   for (const k in attrs) e.setAttribute(k, attrs[k]);
@@ -96,14 +82,14 @@ const svgEl = (tag, attrs) => {
 };
 
 // Endpoints of line {o, r, c} in SVG units.
-export function lineEnds(o, r, c) {
+function lineEnds(o, r, c) {
   const x = M + c * S;
   const y = M + r * S;
   return o === 'h' ? [x, y, x + S, y] : [x, y, x, y + S];
 }
 
 // Diamond hit area for a line: its two dots plus the centres of the boxes either side.
-export function hitDiamond(o, r, c) {
+function hitDiamond(o, r, c) {
   const [x1, y1, x2, y2] = lineEnds(o, r, c);
   const mx = (x1 + x2) / 2;
   const my = (y1 + y2) / 2;
@@ -114,7 +100,7 @@ export function hitDiamond(o, r, c) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flash = null;

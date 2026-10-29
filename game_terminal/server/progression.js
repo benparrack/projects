@@ -126,4 +126,4 @@ const hasCosmetic = (c, user, staff = false) => staff || (typeof c.unlock === 'n
 const cosmeticsFor = (user, staff = false) => COSMETICS.filter((c) => staff || c.unlock !== 'staff')
   .map(({ unlock, ...c }) => ({ ...c, unlocked: hasCosmetic({ unlock }, user, staff) }));
 
-module.exports = { DAILY_CAP, matchXp, grantXp, xpToNext, levelFor, newAchievements, ACHIEVEMENT_LIST, COSMETICS, hasCosmetic, cosmeticsFor };
+module.exports = { DAILY_CAP, matchXp, grantXp, levelFor, newAchievements, ACHIEVEMENT_LIST, COSMETICS, hasCosmetic, cosmeticsFor };

@@ -1,8 +1,7 @@
+import { reduced } from './dom.js';
 // Shared board-game motion helpers. Board clients rebuild their DOM on every update, so a piece is
 // "slid" by rendering it at its destination and then animating it in from the source square's
 // on-screen position (a FLIP animation), before the first paint of the new DOM.
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Slide `pieceEl` (already placed in its destination) in from `fromEl`'s position. `fromEl` may be
 // a function (resolved at animation time, handy when the source cell isn't built yet) or an array

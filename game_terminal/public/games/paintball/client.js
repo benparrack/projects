@@ -11,6 +11,7 @@ import { createResults, duelResults } from '../resultsPanel.js';
 import { makeServerClock } from '../serverClock.js';
 import { createFx, flashEl } from '../canvasFx.js';
 import { loadScript } from '../loadScript.js';
+import { injectStyle } from '../dom.js';
 
 const COLORS = ['red', 'blue'];
 const PAINT = { red: '#ff2d55', blue: '#2f8bff' };
@@ -32,8 +33,6 @@ const REJECT_MESSAGES = {
   too_many: 'Too many shots.',
   invalid: 'Invalid shot.',
 };
-
-const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const CSS = `
 .pb-root { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; color: #b8ffb0; width: 100%; }
@@ -58,14 +57,6 @@ const CSS = `
 .pb-help { font-size: 11px; opacity: .7; text-align: center; max-width: 620px; }
 .pb-fail { padding: 30px; text-align: center; color: #ff8080; }
 `;
-let styled = false;
-function ensureStyles() {
-  if (styled) return;
-  styled = true;
-  const tag = document.createElement('style');
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
-}
 
 // ---- drawing helpers (all in the 800 x 500 logical space) -------------------------------------
 function rng(seed) {
@@ -475,7 +466,7 @@ function drawTarget(g, tg, p, fall, hit, T, scale) {
 }
 
 export function mount(container, api) {
-  ensureStyles();
+  injectStyle(CSS);
   let view = null;
   let roster = [];
   let flashError = null;
