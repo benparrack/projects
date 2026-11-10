@@ -217,6 +217,56 @@ L.measuredMaintenance = (state, today, days = 28) => {
   return { ready: true, kcal: L.round(intake - change * L.KCAL_PER_LB / span, 10), intake: L.round(intake, 10), logged: logged.length, change };
 };
 
+// ---- sync ----
+// The state as one flat map of records: 'plan', 'e/<day>/<entry id>', 'w/<day>', 'f/<food id>', 'u/<food id>', 'm/<meal id>'.
+// Saving stamps every record that changed (state.ts), and two copies merge record by record, newest stamp
+// winning. A deleted record keeps its stamp, so the deletion reaches the other device too.
+const TOP = ['profile', 'plan', 'settings'];
+L.flatten = s => {
+  const o = {};
+  for (const k of TOP) if (s[k] != null) o[k] = s[k];
+  for (const [d, day] of Object.entries(s.days || {})) for (const e of day.entries || []) o[`e/${d}/${e.id}`] = e;
+  for (const [d, lb] of Object.entries(s.weights || {})) o['w/' + d] = lb;
+  for (const [id, f] of Object.entries(s.foods || {})) o['f/' + id] = f;
+  for (const [id, u] of Object.entries(s.usage || {})) o['u/' + id] = u;
+  for (const m of s.meals || []) o['m/' + m.id] = m;
+  return o;
+};
+// Record -> JSON text, to spot what changed since the last save.
+L.snapshot = s => Object.fromEntries(Object.entries(L.flatten(s)).map(([k, v]) => [k, JSON.stringify(v)]));
+L.stamp = (s, prev, now = Date.now()) => {
+  const cur = L.snapshot(s);
+  let changed = false;
+  for (const k of new Set([...Object.keys(cur), ...Object.keys(prev)])) if (cur[k] !== prev[k]) { (s.ts ||= {})[k] = now; changed = true; }
+  return { snap: cur, changed };
+};
+L.merge = (a, b, now = Date.now()) => {
+  const fa = L.flatten(a), fb = L.flatten(b), ta = a.ts || {}, tb = b.ts || {};
+  const keys = [...new Set([...Object.keys(fa), ...Object.keys(fb), ...Object.keys(ta), ...Object.keys(tb)])].sort();
+  const s = { v: 1, profile: null, plan: null, settings: fa.settings || fb.settings || { units: 'us', theme: 'auto' },
+    days: {}, weights: {}, foods: {}, usage: {}, meals: [], ts: {}, backupAt: Math.max(a.backupAt || 0, b.backupAt || 0) || null };
+  const cut = now - 120 * 864e5; // older stamps are dropped: both copies agreed on those long ago
+  for (const k of keys) {
+    const x = ta[k] || 0, y = tb[k] || 0, va = fa[k], vb = fb[k];
+    // A tie (same stamp, or old unstamped data) keeps whichever copy has the record, then picks one the same way on every device.
+    const v = y > x ? vb : x > y ? va : va === undefined ? vb : vb === undefined ? va : JSON.stringify(vb) > JSON.stringify(va) ? vb : va;
+    if (Math.max(x, y) > cut) s.ts[k] = Math.max(x, y);
+    if (v === undefined) continue;
+    const i = k.indexOf('/'), rest = k.slice(i + 1);
+    if (i < 0) s[k] = v;
+    else if (k[0] === 'e') (s.days[rest.slice(0, 10)] ||= { entries: [] }).entries.push(v);
+    else if (k[0] === 'm') s.meals.push(v);
+    else ({ w: s.weights, f: s.foods, u: s.usage })[k[0]][rest] = v;
+  }
+  const byId = (p, q) => p.id < q.id ? -1 : p.id > q.id ? 1 : 0; // ids start with a timestamp, so this is the order they were added
+  for (const d of Object.values(s.days)) d.entries.sort(byId);
+  s.meals.sort(byId);
+  return s;
+};
+
+// Everything a sync compares: the records and their stamps, independent of key order.
+L.digest = s => JSON.stringify([Object.entries(L.snapshot(s)).sort(), Object.entries(s.ts || {}).sort()]);
+
 L.mealFor = hour => hour < 11 ? 'breakfast' : hour < 15 ? 'lunch' : hour < 17 ? 'snacks' : hour < 21 ? 'dinner' : 'snacks';
 L.MEALS = [['breakfast', 'Breakfast'], ['lunch', 'Lunch'], ['dinner', 'Dinner'], ['snacks', 'Snacks']];
 

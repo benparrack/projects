@@ -216,10 +216,107 @@ await click('#sheet [data-act="close"]');
 // replan keeps the log
 await click('.tabs a[data-view="plan"]');
 await click('[data-act="replan"]');
-await p.fill('#sgoal', '150'); await click('[data-act="snext"]'); await click('[data-act="snext"]'); await click('[data-act="snext"]');
+await p.fill('#sgoal', '100');
+assert(await p.isVisible('#gwarn'), 'under-range goal warns while typing');
+await p.fill('#sgoal', '150');
+assert(!(await p.isVisible('#gwarn')));
+await click('[data-act="snext"]'); await click('[data-act="snext"]'); await click('[data-act="snext"]');
 await click('[data-act="sfinish"]');
 s = await st();
 assert.equal(s.plan.goalLb, 150); assert((s.days[today] || {}).entries.length >= 5, 'log survives a new plan');
+
+// ---------- sync: two devices through a mocked GitHub gist ----------
+const TOKEN = 'ghp_TestToken1234567890abcdefXYZ';
+const hub = { content: null, etag: 1, deny: false, gets: 0, patches: 0 };
+const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'ETag, X-OAuth-Scopes' };
+const reply = (r, status, body, extra = {}) => r.fulfill({ status, headers: { ...cors, 'Content-Type': 'application/json', ...extra }, body: body === undefined ? '' : JSON.stringify(body) });
+const hubHas = async (re, want = true) => { for (let i = 0; i < 80 && re.test(hub.content) !== want; i++) await p.waitForTimeout(100); assert.equal(re.test(hub.content), want, `gist ${want ? 'has' : 'lacks'} ${re}`); };
+const github = r => {
+  const q = r.request(), u = new URL(q.url()), m = q.method(), h = q.headers();
+  if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: { ...cors, 'Access-Control-Allow-Headers': 'authorization, content-type, if-none-match, accept', 'Access-Control-Allow-Methods': 'GET, POST, PATCH' } });
+  if (hub.deny || h.authorization !== 'Bearer ' + TOKEN) return reply(r, 401, { message: 'Bad credentials' });
+  const gistJson = () => ({ id: 'a1b2c3', description: 'Tally sync', files: { 'tally.json': { content: hub.content, truncated: false } } });
+  if (u.pathname === '/user') return reply(r, 200, { login: 'tester' }, { 'X-OAuth-Scopes': 'gist' });
+  if (u.pathname === '/gists' && m === 'GET') return reply(r, 200, hub.content ? [{ id: 'a1b2c3', description: 'Tally sync', files: { 'tally.json': {} } }] : []);
+  if (u.pathname === '/gists' && m === 'POST') { hub.content = JSON.parse(q.postData()).files['tally.json'].content; hub.etag++; return reply(r, 201, gistJson()); }
+  if (u.pathname === '/gists/a1b2c3' && m === 'GET') { hub.gets++; return h['if-none-match'] === `"${hub.etag}"` ? r.fulfill({ status: 304, headers: { ...cors, ETag: `"${hub.etag}"` } }) : reply(r, 200, gistJson(), { ETag: `"${hub.etag}"` }); }
+  if (u.pathname === '/gists/a1b2c3' && m === 'PATCH') { hub.patches++; hub.content = JSON.parse(q.postData()).files['tally.json'].content; hub.etag++; return reply(r, 200, gistJson(), { ETag: `"${hub.etag}"` }); }
+  return reply(r, 404, { message: 'Not Found' });
+};
+await ctx.route('https://api.github.com/**', github);
+// Device A (this one, with a log) connects with a token.
+await click('.tabs a[data-view="plan"]');
+assert.match(await p.textContent('.settings'), /Keep your phone and computer in step/);
+await click('[data-act="syncsheet"]');
+await shot('60-sync-setup');
+await click('[data-act="syncconnect"]');
+assert.match(await p.textContent('#sheet .warn'), /Paste the token/);
+await p.fill('#stoken', 'nonsense');
+await click('[data-act="syncconnect"]');
+await p.waitForSelector('#sheet .warn:has-text("look like a token")');
+await p.fill('#stoken', TOKEN);
+await click('[data-act="syncconnect"]');
+await p.waitForFunction(() => tally.sync && tally.sync.gist === 'a1b2c3' && tally.sync.at);
+assert(JSON.parse(hub.content).days[today].entries.length >= 5, 'log uploaded to the gist');
+assert(!(await p.evaluate(() => localStorage.getItem('tally'))).includes(TOKEN), 'token kept out of the synced data');
+await p.waitForSelector('.settings .syncstat:has-text("Synced")');
+await click('[data-act="syncsheet"]');
+await p.waitForSelector('#sheet .qr svg');
+await shot('61-sync-connected');
+const code = `tally-sync:${TOKEN}:a1b2c3`;
+await click('#sheet [data-act="close"]');
+
+// Device B: a fresh browser links from the welcome screen with the code and skips setup.
+const ctx2 = await b.newContext({ viewport: { width: 1280, height: 860 } });
+await ctx2.route('https://api.github.com/**', github);
+await ctx2.route('**/world.openfoodfacts.org/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"products":[]}' }));
+const q2 = await ctx2.newPage(); q2.on('pageerror', e => errs.push('B: ' + e.message));
+await q2.goto(url); await q2.waitForSelector('[data-act="syncsheet"]');
+await q2.click('[data-act="syncsheet"]');
+await q2.fill('#stoken', code);
+await q2.click('[data-act="syncconnect"]');
+await q2.waitForSelector('.label .lbig', { timeout: 8000 }).catch(async e => { await q2.screenshot({ path: '/tmp/claude-1000/-home-ben-projects/bade083f-fb09-497c-a901-38d230136afd/scratchpad/shots/dbg.png' }); console.log(await q2.evaluate(() => JSON.stringify({ sync: tally.sync, plan: !!tally.state.plan, sheet: document.querySelector('#sheet').open, txt: document.querySelector('#sheet-body').innerText.slice(-400), body: document.body.className }))); console.log(errs); throw e; });
+const stB = () => q2.evaluate(() => JSON.parse(JSON.stringify(tally.state)));
+assert.deepEqual((await stB()).days[today].entries.map(e => e.id), (await entries()).map(e => e.id), 'B has A\'s log');
+assert.equal((await stB()).plan.goalLb, 150);
+// B logs something; A picks it up on its next sync and shows it.
+await q2.click('#fab'); await q2.click('[data-act="quick"]');
+await q2.fill('#qk', '321'); await q2.fill('#qn', 'Synced snack'); await q2.click('[data-act="savequick"]');
+await hubHas(/Synced snack/);
+await click('.tabs a[data-view="today"]');
+await p.evaluate(() => tally.syncNow());
+await p.waitForSelector('.meal:has-text("Synced snack")', { timeout: 4000 });
+// A deletes it; the deletion reaches B instead of B putting it back.
+const snackId = (await entries()).find(e => e.name === 'Synced snack').id;
+await click(`[data-act="edit"][data-id="${snackId}"]`);
+await click('#sheet [data-act="delentry"]');
+await hubHas(/Synced snack/, false);
+await q2.evaluate(() => tally.syncNow());
+await q2.waitForFunction(() => !JSON.stringify(tally.state.days).includes('Synced snack'), null, { timeout: 4000 });
+if (shots) await q2.screenshot({ path: `${shots}/62-sync-device-b.png` });
+// Nothing changed: the next check is a cheap 304, not another upload.
+const before = { ...hub };
+await q2.evaluate(() => tally.syncNow()); await q2.waitForTimeout(400);
+assert.equal(hub.patches, before.patches, 'no upload when nothing changed');
+// A revoked token stops sync and Today says so.
+hub.deny = true;
+await p.evaluate(() => tally.syncNow());
+await p.waitForSelector('.nag:has-text("Sync is paused")', { timeout: 4000 });
+await shot('63-sync-revoked');
+hub.deny = false;
+await ctx2.close();
+await click('.nag [data-act="syncsheet"]');
+await click('#sheet [data-act="syncoff"]'); await click('#sheet [data-act="yes"]');
+assert.equal(await p.evaluate(() => tally.sync), null);
+
+// a quick add opens as a quick add, with its numbers, when tapped
+await click('.tabs a[data-view="today"]');
+const pz = await p.getAttribute('.entry:has-text("Pizza slice") >> nth=0', 'data-id');
+await click(`.entry[data-id="${pz}"]`);
+assert.match(await p.textContent('#sheet h3'), /Edit quick add/);
+assert.equal(await p.inputValue('#qk'), '450');
+await p.fill('#qk', '500'); await click('[data-act="savequick"]');
+assert.equal((await entries()).find(e => e.id === pz).kcal, 500);
 
 // persistence across reloads
 await p.reload(); await p.waitForTimeout(300);

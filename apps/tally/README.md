@@ -18,8 +18,26 @@ for today, and over the weeks it shows how fast the weight is really moving comp
   you ate and how the trend moved, and offers to use it.
 - **Foods**: saved foods, saved meals, and the whole list. Create your own foods (per serving or per 100 g).
 - **Plan**: the plan as a label, change goal or pace (the log is kept), edit your details, tips and tricks,
-  lb/kg, theme, and back up / restore (one JSON file; once there are two weeks of logs, Today nags
-  whenever the last backup is over a month old).
+  lb/kg, theme, sync, and back up / restore (one JSON file; without sync, once there are two weeks of logs,
+  Today nags whenever the last backup is over a month old).
+
+## Sync
+
+Phone and computer stay in step through a secret gist on your GitHub account (`tally.json`, description
+"Tally sync"). Set it up once per device under Plan, Sync:
+
+1. **Make a sync token** (the link opens GitHub with only the `gist` box ticked). Set Expiration to
+   **No expiration**, generate, copy.
+2. Paste it and Connect. The first device creates the gist; later devices find it.
+3. On the next device, tap **Sync it here** on the welcome screen (or Plan, Sync), then **Scan a code** and
+   point it at the QR on a connected device. No camera: copy the code there and paste it, or make a second token.
+
+How it works: every saved change stamps the records it touched (an entry, a weigh-in, a food, the plan...), and
+a sync merges the two copies record by record with the newer stamp winning, so edits on both devices while
+apart are all kept, and deletes carry over too. Devices sync on open, a couple of seconds after each change,
+when coming back online, and every 30 s while open; an unchanged gist costs a free 304. The token stays in
+its own localStorage key and never goes into the gist or a backup. A revoked token or deleted gist pauses
+sync and shows a banner on Today. Merge rules are in `logic.js` (`flatten`, `stamp`, `merge`).
 
 ## Run
 
@@ -41,12 +59,15 @@ know opens the create-a-food form, and the food is remembered for next time.
 ## Test
 
 - `node test.js`: food data checks, search, BMR/TDEE, paces, flex days, trend weight and ETA, measured
-  maintenance, Open Food Facts parsing, suggestions.
+  maintenance, Open Food Facts parsing, suggestions, and the sync merge (concurrent edits, deletes, undo,
+  erase, old unstamped data).
 - `python3 -m http.server 5192`, then `node e2e.mjs [screenshot-dir]`: drives setup, logging, barcode,
-  edits/undo, meals, progress, foods, plan, metric and dark mode in Firefox at phone size (Open Food Facts mocked).
+  edits/undo, meals, progress, foods, plan, metric and dark mode in Firefox at phone size, then sync between
+  two browsers (Open Food Facts and the GitHub API mocked).
 - The service worker is network-first: deploys show up on the next open.
 
 ## Files
 
-`logic.js` (pure maths, no DOM), `foods.js` (built-in list), `app.js` (UI), `style.css`, `sw.js` (offline
-cache), `manifest.webmanifest`, `archivo.woff2` (Archivo, OFL).
+`logic.js` (pure maths and the sync merge, no DOM), `foods.js` (built-in list), `app.js` (UI and sync),
+`style.css`, `sw.js` (offline cache), `manifest.webmanifest`, `archivo.woff2` (Archivo, OFL),
+`vendor/qrcode.js` (qrcode-generator, MIT) for the device-linking QR.

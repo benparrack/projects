@@ -46,7 +46,7 @@ small { font-size: inherit; }
 
 .app { max-width: 640px; margin: 0 auto; }
 #view {
-  padding: calc(env(safe-area-inset-top) + 10px) max(var(--gut), env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 112px) max(var(--gut), env(safe-area-inset-left));
+  padding: calc(env(safe-area-inset-top) + 10px) max(var(--gut), env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 148px) max(var(--gut), env(safe-area-inset-left));
 }
 body.setup #view { padding-bottom: calc(env(safe-area-inset-bottom) + 32px); }
 body.setup .tabs, body.setup .fab { display: none; }
@@ -478,7 +478,7 @@ details.tips[open] summary::after { transform: rotate(225deg) translate(-2px, -1
 
 /* ---------- toast ---------- */
 #toast {
-  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 84px); z-index: 1000;
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 142px); z-index: 1000; /* clears the + button */
   transform: translate(-50%, 20px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
   display: flex; align-items: center; gap: 14px; max-width: calc(100% - 32px); width: max-content;
   background: var(--ink); color: var(--bg); padding: 11px 14px 11px 16px; border-radius: 12px; font-size: 15px; font-weight: 600;
@@ -498,3 +498,17 @@ body.setup #toast { bottom: calc(env(safe-area-inset-bottom) + 24px); }
   dialog#sheet.tall { height: 88vh; }
 }
 #sheet #toast { bottom: calc(env(safe-area-inset-bottom) + 16px); }
+
+/* ---------- sync ---------- */
+.syncnow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--soft); border-radius: 12px; }
+.syncnow p { line-height: 1.4; min-width: 0; }
+.syncnow .syncstat { display: block; font-size: 14px; color: var(--ink2); }
+.syncstat.bad { color: var(--over); }
+.ssub { font-size: 15px; font-weight: 750; margin: 22px 0 10px; }
+.qr { width: min(216px, 60vw); margin: 0 auto 12px; padding: 8px; background: #fff; border-radius: 12px; }
+.qr svg { display: block; width: 100%; height: auto; }
+.steps { margin: 14px 0 6px; padding-left: 22px; font-size: 14px; line-height: 1.45; color: var(--ink2); }
+.steps li + li { margin-top: 8px; }
+.steps b { color: var(--ink); }
+.cam .frame.sq { inset: 14% 26%; }
+.hint + .hint { margin-top: 8px; }

@@ -120,4 +120,44 @@ assert.equal(L.mealFor(19), 'dinner');
 assert.equal(L.amountText({ qty: 0.5, g: 118, label: '1 medium' }), '½ × 1 medium');
 assert.equal(L.amountText({ qty: 150, g: 1, label: 'g' }), '150 g');
 assert.equal(L.amountText({ qty: 1, g: 118, label: '1 medium' }), '1 medium');
+// ---- sync: record-by-record merge ----
+{
+  const blank = () => ({ v: 1, profile: null, plan: null, settings: { units: 'us', theme: 'auto' }, days: {}, weights: {}, foods: {}, usage: {}, meals: [], ts: {}, backupAt: null });
+  const ent = (id, kcal, meal = 'lunch') => ({ id, meal, foodId: null, name: 'x', qty: 1, g: 1, label: '', kcal, p: 0, c: 0, f: 0 });
+  const edit = (s, snap, fn, t) => { fn(s); return L.stamp(s, snap, t).snap; };
+  const T = 1_800_000_000_000;
+  // Phone and laptop start from the same synced copy.
+  let phone = blank(), pSnap = L.snapshot(phone);
+  pSnap = edit(phone, pSnap, s => { s.plan = { kcal: 2000 }; s.days['2026-11-10'] = { entries: [ent('a1', 100), ent('a2', 200)] }; s.weights['2026-11-10'] = 165; }, T);
+  let laptop = L.merge(blank(), phone, T), lSnap = L.snapshot(laptop);
+  assert.deepEqual(L.flatten(laptop), L.flatten(phone));
+  // Both change things while apart: phone adds breakfast and deletes a2; laptop adds lunch, edits a1, logs a weight.
+  pSnap = edit(phone, pSnap, s => { s.days['2026-11-10'].entries.push(ent('b1', 300, 'breakfast')); s.days['2026-11-10'].entries = s.days['2026-11-10'].entries.filter(e => e.id !== 'a2'); }, T + 10);
+  lSnap = edit(laptop, lSnap, s => { s.days['2026-11-10'].entries.push(ent('c1', 400)); s.days['2026-11-10'].entries[0].kcal = 150; s.weights['2026-11-11'] = 164; }, T + 20);
+  const m1 = L.merge(phone, laptop, T + 30), m2 = L.merge(laptop, phone, T + 30);
+  assert.equal(JSON.stringify(m1), JSON.stringify(m2), 'merge is the same from either side');
+  assert.deepEqual(m1.days['2026-11-10'].entries.map(e => [e.id, e.kcal]), [['a1', 150], ['b1', 300], ['c1', 400]]);
+  assert.deepEqual(m1.weights, { '2026-11-10': 165, '2026-11-11': 164 });
+  assert.equal(L.merge(m1, m1, T + 30).days['2026-11-10'].entries.length, 3, 'merging twice changes nothing');
+  // Undo after a delete brings the entry back everywhere (newer stamp than the deletion).
+  phone = m1; pSnap = L.snapshot(phone);
+  const gone = phone.days['2026-11-10'].entries.find(e => e.id === 'b1');
+  pSnap = edit(phone, pSnap, s => { s.days['2026-11-10'].entries = s.days['2026-11-10'].entries.filter(e => e.id !== 'b1'); }, T + 40);
+  assert(!L.merge(m1, phone, T + 41).days['2026-11-10'].entries.some(e => e.id === 'b1'), 'deletion wins over the older copy');
+  pSnap = edit(phone, pSnap, s => { s.days['2026-11-10'].entries.push(gone); }, T + 50);
+  assert(L.merge(m1, phone, T + 51).days['2026-11-10'].entries.some(e => e.id === 'b1'));
+  // Erasing everything reaches the other copy instead of being filled back in.
+  const wiped = { ...blank(), ts: { ...phone.ts } };
+  L.stamp(wiped, pSnap, T + 60);
+  const after = L.merge(m1, wiped, T + 61);
+  assert.equal(after.plan, null); assert.deepEqual(after.days, {}); assert.deepEqual(after.weights, {});
+  // Data from before sync existed (no stamps) is kept from both sides.
+  const old1 = { ...blank(), days: { '2026-11-01': { entries: [ent('o1', 50)] } } }, old2 = { ...blank(), weights: { '2026-11-01': 170 } };
+  const mo = L.merge(old1, old2, T);
+  assert.equal(mo.days['2026-11-01'].entries.length, 1); assert.equal(mo.weights['2026-11-01'], 170);
+  // Stamps older than four months are dropped; recent ones stay.
+  assert.equal(L.merge(m1, m1, T + 200 * 864e5).ts.plan, undefined);
+  assert.equal(L.merge(m1, m1, T + 60).ts.plan, T);
+}
+
 console.log(`ok: ${foods.length} foods, all checks passed`);

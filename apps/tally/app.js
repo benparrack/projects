@@ -7,12 +7,141 @@ const OFF = 'https://world.openfoodfacts.org';
 const OFF_FIELDS = 'code,product_name,product_name_en,product_name_sv,brands,nutriments,serving_size,serving_quantity,quantity';
 
 // ---------- state ----------
-const blank = () => ({ v: 1, profile: null, plan: null, settings: { units: 'us', theme: 'auto' }, days: {}, weights: {}, foods: {}, usage: {}, meals: [], backupAt: null });
+const blank = () => ({ v: 1, profile: null, plan: null, settings: { units: 'us', theme: 'auto' }, days: {}, weights: {}, foods: {}, usage: {}, meals: [], ts: {}, backupAt: null });
 const load = () => { try { return { ...blank(), ...JSON.parse(localStorage.getItem(KEY)) }; } catch { return blank(); } };
 let state = load();
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { toast('Could not save. Storage may be full.'); } };
+let snap = L.snapshot(state); // what each record looked like at the last save, so save() can stamp the ones that changed
+function save() {
+  const r = L.stamp(state, snap); snap = r.snap;
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { toast('Could not save. Storage may be full.'); }
+  if (r.changed && sync) { sync.dirty = true; syncStore(); syncSoon(); }
+}
 const ui = { today: L.day(), day: L.day(), range: 91, foodsTab: 'saved', foodsQ: '' };
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+let lastId = 0; // ids sort in the order they were made, which is how a day's entries are ordered after a sync
+const uid = () => (lastId = Math.max(Date.now(), lastId + 1)).toString(36) + Math.random().toString(36).slice(2, 7);
+
+// ---------- sync: a private GitHub gist that every device merges into ----------
+// The token lives in its own key so it never lands in the gist or a backup file.
+const SYNC_KEY = 'tally-sync', GH = 'https://api.github.com', GIST_FILE = 'tally.json';
+const TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=gist&description=Tally%20sync';
+let sync = (() => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)); } catch { return null; } })(); // { token, gist, etag, at, dirty, login }
+const syncStore = () => { try { sync ? localStorage.setItem(SYNC_KEY, JSON.stringify(sync)) : localStorage.removeItem(SYNC_KEY); } catch { /* private mode */ } };
+const syncRun = { busy: false, again: false, err: null, timer: null };
+let needRender = false;
+const syncSoon = () => { clearTimeout(syncRun.timer); syncRun.timer = setTimeout(syncNow, 1500); };
+class GHError extends Error { constructor(status) { super('github ' + status); this.status = status; } }
+async function gh(path, opts = {}, token = sync.token) {
+  const r = await fetch(GH + path, { cache: 'no-store', ...opts,
+    headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + token, ...(opts.body ? { 'Content-Type': 'application/json' } : {}), ...opts.headers } });
+  if (!r.ok && r.status !== 304) throw new GHError(r.status);
+  return r;
+}
+// The gist's copy of the data. A file over 1 MB comes back truncated and has to be fetched whole.
+async function gistData(g) {
+  const f = g.files && g.files[GIST_FILE];
+  if (!f) return null;
+  const text = f.truncated ? await (await fetch(f.raw_url, { cache: 'no-store' })).text() : f.content;
+  try { const d = JSON.parse(text); return d && typeof d.days === 'object' ? d : null; } catch { return null; }
+}
+const gistBody = () => JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(state) } } });
+// Take in a merged copy without stamping it as a fresh local change.
+function adopt(next) {
+  state = next; snap = L.snapshot(state);
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* the next save reports it */ }
+  if (ob && ob.step === 0 && !ob.editOnly && state.plan) ob = null; // a second device that just linked skips setup
+  paintIfQuiet();
+}
+// Re-render now unless that would yank a field out from under the user; then it waits for the next quiet moment.
+function paintIfQuiet() {
+  const a = document.activeElement;
+  if (sheetEl.open || (a && view.contains(a) && a.matches('input, textarea, select'))) { needRender = true; return; }
+  needRender = false; render();
+}
+const stuck = () => ['auth', 'gone'].includes(syncRun.err); // needs the user; retrying won't help
+async function syncNow(force) {
+  if (!sync || !sync.gist || (stuck() && force !== true)) return;
+  if (syncRun.busy) { syncRun.again = true; return; }
+  if (needRender) paintIfQuiet();
+  if (!navigator.onLine) { syncRun.err = 'offline'; return paintSync(); }
+  syncRun.busy = true; syncRun.again = false; paintSync();
+  try {
+    const r = await gh(`/gists/${sync.gist}`, { headers: sync.etag ? { 'If-None-Match': sync.etag } : {} });
+    let push = sync.dirty;
+    if (r.status !== 304) { // the gist changed since we last looked
+      const remote = await gistData(await r.json());
+      sync.etag = r.headers.get('ETag');
+      const merged = remote ? L.merge(state, remote) : state;
+      if (L.digest(merged) !== L.digest(state)) adopt(merged);
+      push = !remote || L.digest(merged) !== L.digest(remote);
+    }
+    if (push) {
+      sync.dirty = false; // a save while this is in flight sets it again
+      try { const p = await gh(`/gists/${sync.gist}`, { method: 'PATCH', body: gistBody() }); sync.etag = p.headers.get('ETag'); }
+      catch (e) { sync.dirty = true; throw e; }
+    }
+    sync.at = Date.now(); syncRun.err = null;
+  } catch (e) {
+    syncRun.err = e.status === 401 ? 'auth' : e.status === 404 ? 'gone' : e.status === 403 || e.status === 429 ? 'limit' : 'net';
+    if (stuck()) paintIfQuiet(); // Today shows a banner for these
+  } finally {
+    syncRun.busy = false;
+    if (sync) syncStore();
+    paintSync();
+    if (syncRun.again || (sync && sync.dirty && !syncRun.err)) syncSoon();
+  }
+}
+const ago = t => { const m = Math.round((Date.now() - t) / 6e4); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : dateTxt(L.day(new Date(t))); };
+function syncLine() {
+  if (!sync) return 'Keep your phone and computer in step';
+  if (syncRun.busy) return 'Syncing…';
+  return ({ offline: 'Offline. Changes sync when you\'re back online.', net: 'Couldn\'t reach GitHub. Trying again shortly.', limit: 'GitHub is limiting requests. Trying again shortly.',
+    auth: 'The sync token stopped working (expired or revoked).', gone: 'The sync gist was deleted on GitHub.' })[syncRun.err] || (sync.at ? `Synced ${ago(sync.at)}` : 'Not synced yet');
+}
+function paintSync() { document.querySelectorAll('.syncstat').forEach(el => { el.textContent = syncLine(); el.classList.toggle('bad', stuck()); }); }
+// Connect with a token (or a code from another device's QR): find the existing Tally gist or make one.
+async function connect(raw) {
+  let token = raw.trim(), gist = null;
+  const code = /^tally-sync:([\w-]+):([0-9a-f]+)$/i.exec(token);
+  if (code) [, token, gist] = code;
+  if (!/^[\w-]{20,}$/.test(token)) throw new Error('That doesn\'t look like a token. It starts with ghp_ or github_pat_.');
+  let me;
+  try { const r = await gh('/user', {}, token); me = await r.json(); me.scopes = r.headers.get('X-OAuth-Scopes') || ''; }
+  catch (e) { throw new Error(e.status === 401 ? 'GitHub didn\'t accept that token. Check it was copied whole.' : 'Couldn\'t reach GitHub. Check your connection.'); }
+  let found = null;
+  try {
+    if (gist) found = await (await gh(`/gists/${gist}`, {}, token)).json();
+    for (let page = 1; !found && page <= 10; page++) {
+      const list = await (await gh(`/gists?per_page=100&page=${page}`, {}, token)).json();
+      const hit = list.find(g => g.files && g.files[GIST_FILE] && g.description === 'Tally sync');
+      if (hit) found = await (await gh(`/gists/${hit.id}`, {}, token)).json();
+      if (list.length < 100) break;
+    }
+  } catch { throw new Error('Couldn\'t read your gists. Make sure the token has the gist box ticked.'); }
+  const remote = found && await gistData(found);
+  return { token, login: me.login, broad: /\brepo\b/.test(me.scopes), gist: found && found.id, remote };
+}
+async function finishConnect(c, how) {
+  sync = { token: c.token, gist: c.gist, login: c.login, etag: null, at: 0, dirty: true };
+  if (how === 'replace') adopt({ ...blank(), ...c.remote, backupAt: state.backupAt });
+  else if (c.remote) adopt(L.merge(state, c.remote));
+  try {
+    if (!c.gist) {
+      const r = await gh('/gists', { method: 'POST', body: JSON.stringify({ description: 'Tally sync', public: false, files: { [GIST_FILE]: { content: JSON.stringify(state) } } }) });
+      sync.gist = (await r.json()).id;
+    }
+  } catch (e) { sync = null; throw new Error(e.status === 403 || e.status === 404 ? 'That token can\'t make gists. Make one with the gist box ticked.' : 'Couldn\'t reach GitHub. Check your connection.'); }
+  syncStore(); syncRun.err = null;
+  await syncNow();
+}
+// Another tab of the app (a second window on the computer) saved: merge it in rather than overwrite it later.
+window.addEventListener('storage', e => {
+  if (e.key === SYNC_KEY) { try { sync = JSON.parse(e.newValue); } catch { sync = null; } return paintSync(); }
+  if (e.key !== KEY || !e.newValue) return;
+  try { const merged = L.merge(state, JSON.parse(e.newValue)); if (L.digest(merged) !== L.digest(state)) adopt(merged); } catch { /* ignore a half-written value */ }
+});
+window.addEventListener('online', () => syncNow());
+setInterval(() => { if (!document.hidden) { syncNow(); paintSync(); } }, 30000);
+const loadQR = () => window.qrcode ? Promise.resolve() : new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'vendor/qrcode.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
 
 // ---------- formatting ----------
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -57,7 +186,7 @@ const entriesOf = key => (state.days[key] || {}).entries || [];
 
 function makeEntry(f, a, meal) {
   const n = L.of(f, a.qty * a.g);
-  return { id: uid(), meal, foodId: f.id, name: f.name, brand: f.brand || '', qty: r1(a.qty * 100) / 100 * 1, g: a.g, label: a.label,
+  return { id: uid(), meal, foodId: f.id, name: f.name, brand: f.brand || '', qty: Math.round(a.qty * 1000) / 1000, g: a.g, label: a.label,
     kcal: r1(n.kcal), p: r1(n.p), c: r1(n.c), f: r1(n.f) };
 }
 // Logging a food remembers the amount and keeps Open Food Facts items so they work offline next time.
@@ -72,7 +201,14 @@ function addEntries(key, list) {
   const day = state.days[key] || (state.days[key] = { entries: [] });
   day.entries.push(...list);
   save();
-  return () => { day.entries = day.entries.filter(e => !list.includes(e)); save(); render(); };
+  return () => { dropEntries(key, list.map(e => e.id)); render(); };
+}
+// Undo goes through these rather than a saved reference to the day, which a sync may have replaced since.
+function dropEntries(key, ids) { const day = state.days[key]; if (day) day.entries = day.entries.filter(e => !ids.includes(e.id)); save(); }
+function putEntries(key, list) {
+  const day = state.days[key] || (state.days[key] = { entries: [] }), ids = list.map(e => e.id);
+  day.entries = [...day.entries.filter(e => !ids.includes(e.id)), ...list].sort((a, b) => a.id < b.id ? -1 : 1);
+  save();
 }
 
 // ---------- toast ----------
@@ -229,9 +365,10 @@ function tipCard() {
   return `<aside class="tip"><span class="tk">Tip</span><b>${esc(tip[0])}</b><p>${esc(tip[1])}</p><a href="#plan">More tips</a></aside>`;
 }
 function backupNag() {
+  if (sync) return stuck() ? `<p class="nag">Sync is paused: ${syncRun.err === 'auth' ? 'the token stopped working' : 'the gist was deleted on GitHub'}. <button class="link" data-act="syncsheet">Fix it</button></p>` : '';
   const n = Object.keys(state.days).length;
   if (n < 14 || (state.backupAt && Date.now() - state.backupAt < 30 * 864e5)) return '';
-  return `<p class="nag">Your log only lives on this phone. <button class="link" data-act="export">Back it up</button></p>`;
+  return `<p class="nag">Your log only lives on this device. <button class="link" data-act="syncsheet">Turn on sync</button> or <button class="link" data-act="export">back it up</button>.</p>`;
 }
 
 // ======================================================================
@@ -245,12 +382,12 @@ function openSheet(s) {
   if (!sheetEl.open) { sheetEl.showModal(); document.body.classList.add('locked'); }
 }
 function closeSheet() { stopScan(); sh = null; if (sheetEl.open) sheetEl.close(); }
-sheetEl.addEventListener('close', () => { stopScan(); sh = null; document.body.classList.remove('locked'); render(); });
+sheetEl.addEventListener('close', () => { if (sheetEl.open) return; stopScan(); sh = null; document.body.classList.remove('locked'); render(); });
 sheetEl.addEventListener('click', e => { if (e.target === sheetEl) closeSheet(); }); // tap the backdrop
 function renderSheet() {
   sheetEl.className = ['add', 'scan'].includes(sh.mode) ? 'tall' : '';
   sheetBody.innerHTML = ({ add: sheetAdd, amount: sheetAmount, quick: sheetQuick, create: sheetCreate, scan: sheetScan, menu: sheetMenu,
-    confirm: sheetConfirm, savemeal: sheetSaveMeal, meal: sheetMeal, weight: sheetWeight, food: sheetFood })[sh.mode]();
+    confirm: sheetConfirm, savemeal: sheetSaveMeal, meal: sheetMeal, weight: sheetWeight, food: sheetFood, sync: sheetSync, syncpick: sheetSyncPick })[sh.mode]();
   if (sh.mode === 'add') renderResults();
   const f = sheetBody.querySelector('[autofocus]');
   if (f) f.focus();
@@ -327,17 +464,17 @@ function searchOFF(q) {
   if (q.length < 3) { sh.off = { q, status: 'idle', results: [] }; return; }
   sh.off = { q, status: 'loading', results: [] };
   offTimer = setTimeout(async () => {
-    offCtl = new AbortController();
-    const kill = setTimeout(() => offCtl.abort(), 9000);
+    const ctl = offCtl = new AbortController(), live = () => ctl === offCtl && sh && sh.mode === 'add' && sh.off.q === q;
+    const kill = setTimeout(() => ctl.abort(), 9000);
     try {
-      const r = await fetch(`${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=30&fields=${OFF_FIELDS}`, { signal: offCtl.signal });
+      const r = await fetch(`${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=30&fields=${OFF_FIELDS}`, { signal: ctl.signal });
       if (!r.ok) throw new Error(r.status);
       const data = await r.json(), seen = new Set();
       const results = (data.products || []).map(L.fromOFF).filter(f => f && !seen.has(f.name + f.brand) && seen.add(f.name + f.brand)).slice(0, 15);
       results.forEach(f => offCache.set(f.id, f));
-      if (sh && sh.mode === 'add' && sh.off.q === q) { sh.off = { q, status: 'done', results: results.map(withUsage) }; renderResults(); }
-    } catch (e) {
-      if (sh && sh.mode === 'add' && sh.off.q === q && e.name !== 'AbortError' || (e.name === 'AbortError' && sh && sh.off.q === q && sh.off.status === 'loading')) { sh.off.status = 'error'; renderResults(); }
+      if (live()) { sh.off = { q, status: 'done', results: results.map(withUsage) }; renderResults(); }
+    } catch {
+      if (live()) { sh.off.status = 'error'; renderResults(); }
     } finally { clearTimeout(kill); }
   }, 450);
 }
@@ -357,7 +494,7 @@ function sheetAmount() {
   const { f, a, entry } = sh;
   const n = L.of(f, a.qty * a.g), opts = unitOptions(f);
   const step = a.g === 1 ? (a.qty >= 100 ? 10 : 5) : a.qty < 1 ? 0.25 : 0.5;
-  const canStar = f.src !== 'quick';
+  const canStar = f.src !== 'gone';
   return `${sheetHead(entry ? 'Edit' : 'How much?', sh.back ? 'backadd' : null)}
     <div class="food-h"><h2>${esc(f.name)}</h2>${canStar ? `<button class="star${f.star ? ' on' : ''}" data-act="star" aria-pressed="${!!f.star}">${icon.star}<span>${f.star ? 'Saved' : 'Save'}</span></button>` : ''}</div>
     <p class="src">${f.brand ? esc(f.brand) + ' · ' : ''}${{ db: 'Built-in list', off: 'Open Food Facts', custom: 'Your food' }[f.src] || ''} · ${fmt(f.k)} kcal per 100 ${f.ml ? 'ml' : 'g'}</p>
@@ -387,15 +524,16 @@ function updateFacts() {
 
 // ---- quick add ----
 function sheetQuick() {
-  return `${sheetHead('Quick add', sh.back ? 'backadd' : null)}
-    <p class="hint">For meals out or anything you'd rather not look up. A rough number beats skipping it.</p>
+  const e = sh.entry;
+  return `${sheetHead(e ? 'Edit quick add' : 'Quick add', sh.back ? 'backadd' : null)}
+    ${e ? '' : '<p class="hint">For meals out or anything you\'d rather not look up. A rough number beats skipping it.</p>'}
     <div class="form">
-      <label class="f wide"><span>Calories</span><input id="qk" type="text" inputmode="numeric" autofocus placeholder="0"></label>
-      <label class="f"><span>Protein g <i>optional</i></span><input id="qp" type="text" inputmode="decimal"></label>
-      <label class="f"><span>Label <i>optional</i></span><input id="qn" type="text" placeholder="Dinner out" maxlength="60"></label>
+      <label class="f wide"><span>Calories</span><input id="qk" type="text" inputmode="numeric" autofocus placeholder="0" value="${e ? e.kcal : ''}"></label>
+      <label class="f"><span>Protein g <i>optional</i></span><input id="qp" type="text" inputmode="decimal" value="${e && e.p ? e.p : ''}"></label>
+      <label class="f"><span>Label <i>optional</i></span><input id="qn" type="text" placeholder="Dinner out" maxlength="60" value="${e && e.name !== 'Quick add' ? esc(e.name) : ''}"></label>
     </div>
     ${mealSeg(sh.meal)}
-    <div class="sh-actions"><button class="btn wide" data-act="savequick">Add</button></div>`;
+    <div class="sh-actions">${e ? '<button class="btn ghost danger" data-act="delentry">Delete</button>' : ''}<button class="btn wide" data-act="savequick">${e ? 'Save' : 'Add'}</button></div>`;
 }
 
 // ---- create / edit a food ----
@@ -445,6 +583,9 @@ function readCreate() {
 // ---- barcode scan ----
 let scanStream = null, scanLoop = null;
 function sheetScan() {
+  if (sh.qr) return `${sheetHead('Scan the sync code', 'syncback')}
+    <div class="cam"><video id="cam" playsinline muted autoplay></video><div class="frame sq"></div></div>
+    <p class="hint" id="scanmsg">${esc(sh.msg || 'Starting camera…')}</p>`;
   return `${sheetHead('Scan a barcode', 'backadd')}
     <div class="cam"><video id="cam" playsinline muted autoplay></video><div class="frame"></div></div>
     <p class="hint" id="scanmsg">${esc(sh.msg || 'Starting camera…')}</p>
@@ -459,15 +600,20 @@ async function startScan() {
     const video = $('#cam');
     video.srcObject = scanStream;
     await video.play().catch(() => {});
-    msg('Point at the barcode. It reads on its own.');
-    const det = await detector();
+    const qr = sh.qr;
+    msg(qr ? 'On your other device, open Plan, then Sync, and point the camera at the code.' : 'Point at the barcode. It reads on its own.');
+    const det = await detector(qr ? ['qr_code'] : FORMATS);
     const tick = async () => {
       if (!scanStream || !sh || sh.mode !== 'scan') return;
       try {
         if (video.readyState >= 2) {
           const codes = await det.detect(video);
-          const code = codes.find(c => /^\d{8,14}$/.test(c.rawValue));
-          if (code) { navigator.vibrate?.(40); stopScan(); return lookupCode(code.rawValue); }
+          const code = codes.find(c => qr ? c.rawValue.startsWith('tally-sync:') : /^\d{8,14}$/.test(c.rawValue));
+          if (code) {
+            navigator.vibrate?.(40); stopScan();
+            if (!qr) return lookupCode(code.rawValue);
+            openSheet({ mode: 'sync', token: code.rawValue }); return act.syncconnect();
+          }
         }
       } catch { /* a bad frame; keep going */ }
       scanLoop = setTimeout(tick, 180);
@@ -475,7 +621,8 @@ async function startScan() {
     tick();
   } catch (e) {
     stopScan();
-    msg(e.name === 'NotAllowedError' ? 'Camera access is off. Allow it in Settings, or type the number below.' : 'No camera available. Type the barcode number below.');
+    const qr = sh && sh.qr;
+    msg(e.name === 'NotAllowedError' ? `Camera access is off. Allow it in Settings, or ${qr ? 'go back and paste the code' : 'type the number below'}.` : qr ? 'No camera here. Go back and paste the code or a token instead.' : 'No camera available. Type the barcode number below.');
   }
 }
 function stopScan() {
@@ -483,12 +630,12 @@ function stopScan() {
   if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
 }
 const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
-async function detector() {
+async function detector(formats) {
   if ('BarcodeDetector' in window) {
-    try { const ok = await BarcodeDetector.getSupportedFormats(); if (ok.includes('ean_13')) return new BarcodeDetector({ formats: FORMATS }); } catch { /* fall through */ }
+    try { const ok = await BarcodeDetector.getSupportedFormats(); if (ok.includes(formats[0])) return new BarcodeDetector({ formats }); } catch { /* fall through */ }
   }
   const m = await import('./vendor/ponyfill.js'); // zxing in WebAssembly, for Safari
-  return new m.BarcodeDetector({ formats: FORMATS });
+  return new m.BarcodeDetector({ formats });
 }
 async function lookupCode(code) {
   code = String(code).replace(/\D/g, '');
@@ -523,8 +670,43 @@ function sheetMenu() {
     </div>`;
 }
 function sheetConfirm() {
-  return `${sheetHead(sh.title)}<p class="hint">${sh.text}</p>
+  return `${sheetHead(esc(sh.title))}<p class="hint">${sh.text}</p>
     <div class="sh-actions"><button class="btn ghost" data-act="close">Cancel</button><button class="btn wide${sh.danger ? ' dangerbg' : ''}" data-act="yes">${esc(sh.yes)}</button></div>`;
+}
+function sheetSync() {
+  if (sh.c) return sheetSyncPick();
+  if (sync) {
+    let qr = '';
+    try { const q = qrcode(0, 'M'); q.addData(`tally-sync:${sync.token}:${sync.gist}`); q.make(); qr = q.createSvgTag({ cellSize: 4, margin: 3, scalable: true }); } catch { /* QR script didn't load (offline) */ }
+    return `${sheetHead('Sync')}
+      <div class="syncnow"><p><b>Connected${sync.login ? ` as ${esc(sync.login)}` : ''}</b><span class="syncstat${stuck() ? ' bad' : ''}">${esc(syncLine())}</span></p><button class="btn sm ghost" data-act="syncgo">Sync now</button></div>
+      ${syncRun.err === 'auth' ? `<p class="warn">Make a new token (<a class="link" href="${TOKEN_URL}" target="_blank" rel="noopener">on GitHub</a>, Expiration: No expiration), then disconnect and connect with it. Nothing is lost.</p>` : ''}
+      ${syncRun.err === 'gone' ? '<p class="warn">Disconnect, then connect again to start a new gist from what\'s on this device.</p>' : ''}
+      <h4 class="ssub">Add another device</h4>
+      ${qr ? `<div class="qr">${qr}</div><p class="hint">On the other device, open Tally and tap <b>Set up</b> next to Sync in Plan (or <b>Sync it here</b> on the first screen). Then tap <b>Scan a code</b> and point it at this one.</p>` : ''}
+      <p class="hint">No camera there? <button class="link" data-act="synccopy">Copy the code</button> and paste it into the token box instead.</p>
+      <p class="fine">The code contains your sync token. Only show it to your own devices.</p>
+      <div class="sh-actions"><button class="btn ghost danger wide" data-act="syncoff">Disconnect this device</button></div>`;
+  }
+  return `${sheetHead('Sync', sh.back ? 'syncback' : null)}
+    <p class="hint">Keeps your phone and computer in step. Your data is saved to a private gist on your own GitHub account, and every device merges in changes a few seconds after they're made.</p>
+    <ol class="steps">
+      <li><span><a class="link" href="${TOKEN_URL}" target="_blank" rel="noopener">Make a sync token on GitHub</a>. Set <b>Expiration</b> to <b>No expiration</b>, leave only <b>gist</b> ticked, then <b>Generate token</b> and copy it.</span></li>
+      <li><span>Paste it here and connect.</span></li>
+    </ol>
+    <div class="form"><label class="f wide"><span>Token or sync code</span><input id="stoken" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ghp_…" value="${esc(sh.token || '')}"></label></div>
+    ${sh.err ? `<p class="warn">${esc(sh.err)}</p>` : ''}
+    <div class="sh-actions"><button class="btn ghost" data-act="syncscan">Scan a code</button><button class="btn wide" data-act="syncconnect" ${sh.busy ? 'disabled' : ''}>${sh.busy ? 'Connecting…' : 'Connect'}</button></div>
+    <p class="fine">Already syncing on another device? Scan the code it shows under Plan, Sync. Or make a second token the same way: it finds the same data.</p>`;
+}
+function sheetSyncPick() {
+  const r = sh.c.remote, n = o => plural(Object.keys(o.days || {}).length, 'logged day');
+  return `${sheetHead('Both devices have data')}
+    <p class="hint">The synced copy has ${n(r)}. This device has ${n(state)}.</p>
+    <div class="choices">
+      <button class="choice" data-act="syncpick" data-v="merge"><b>Combine them</b><span class="pd">Keeps every log and weigh-in from both. Where both changed the same thing, the newer change wins.</span></button>
+      <button class="choice" data-act="syncpick" data-v="replace"><b>Use the synced copy</b><span class="pd">Replaces what's on this device. Pick this if this device was only a test.</span></button>
+    </div>`;
 }
 function sheetSaveMeal() {
   return `${sheetHead('Save as a meal')}
@@ -778,8 +960,9 @@ function renderPlan() {
   <section class="card settings">
     <div class="set"><span>Units</span><div class="seg small">${[['us', 'lb, ft'], ['metric', 'kg, cm']].map(([v, n]) => `<button class="${state.settings.units === v ? 'on' : ''}" data-act="units" data-v="${v}">${n}</button>`).join('')}</div></div>
     <div class="set"><span>Theme</span><div class="seg small">${[['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([v, n]) => `<button class="${state.settings.theme === v ? 'on' : ''}" data-act="theme" data-v="${v}">${n}</button>`).join('')}</div></div>
+    <div class="set"><span>Sync<small class="syncstat">${esc(syncLine())}</small></span><button class="btn sm${sync ? ' ghost' : ''}" data-act="syncsheet">${sync ? 'Manage' : 'Set up'}</button></div>
     <div class="set"><span>Backup<small>${state.backupAt ? 'Last: ' + dateTxt(L.day(new Date(state.backupAt))) : 'Never backed up'}</small></span><div class="btnrow tight"><button class="btn sm ghost" data-act="import">Restore</button><button class="btn sm" data-act="export">Back up</button></div></div>
-    <div class="set"><span>Start over<small>Deletes your log, weigh-ins and foods</small></span><button class="btn sm ghost danger" data-act="reset">Erase</button></div>
+    <div class="set"><span>Start over<small>Deletes your log, weigh-ins and foods${sync ? ' everywhere' : ''}</small></span><button class="btn sm ghost danger" data-act="reset">Erase</button></div>
   </section>
   <p class="foot">Food data: USDA FoodData Central, Livsmedelsverket and <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a> (ODbL). Calorie targets are estimates, not medical advice.</p>
   <input type="file" id="importfile" accept="application/json,.json" hidden>`;
@@ -822,7 +1005,7 @@ function setupWelcome() {
     </div>
     <div class="f wide"><span>Units</span><div class="seg two">${[['us', 'lb, ft, in'], ['metric', 'kg, cm']].map(([v, n]) => `<button class="${state.settings.units === v ? 'on' : ''}" data-act="units" data-v="${v}">${n}</button>`).join('')}</div></div>
     <button class="btn wide big" data-act="snext">Get started</button>
-    <p class="fine">Everything stays on this device. Nothing to sign up for.</p>
+    <p class="fine">Everything stays on this device unless you turn on sync.<br>Already using Tally somewhere else? <button class="link" data-act="syncsheet">Sync it here</button></p>
   </div>`;
 }
 function setupYou() {
@@ -848,10 +1031,8 @@ function setupGoal() {
   const [lo, hi] = L.healthyRange(prof);
   const presets = [[0, 'No date'], [8, '2 months'], [13, '3 months'], [26, '6 months']];
   const g = ob.goalLb;
-  let warn = '';
-  if (g && g < lo) warn = `That's under the healthy range for your height (${wTxt(lo, false)}–${wTxt(hi)}). Consider a higher goal.`;
   return `<h1 class="sq">Your goal</h1>
-    <p class="sh">You burn roughly <b>${fmt(L.round(maint, 10))} kcal</b> a day right now. The healthy range for your height is ${wTxt(lo, false)}–${wTxt(hi)}.</p>
+    <p class="sh">You burn roughly <b>${fmt(L.round(maint, 10))} kcal</b> a day right now. The healthy range for your height is ${rangeTxt(lo, hi)}.</p>
     <div class="form">
       <label class="f wide"><span>Goal weight, ${wUnit()}</span><input id="sgoal" type="text" inputmode="decimal" value="${g ? wVal(g).toFixed(1) : ''}" autofocus></label>
       <div class="f wide"><span>By when?</span>
@@ -859,9 +1040,11 @@ function setupGoal() {
         <label class="datef"><span>Or pick a date</span><input id="sdate" type="date" min="${L.addDays(ui.today, 7)}" value="${ob.by}"></label>
       </div>
     </div>
-    ${warn ? `<p class="warn">${warn}</p>` : ''}
+    <p class="warn" id="gwarn" ${g && g < lo ? '' : 'hidden'}>${goalWarn(lo, hi)}</p>
     <button class="btn wide big" data-act="snext">See my options</button>`;
 }
+const rangeTxt = (lo, hi) => `${Math.round(wVal(lo))}–${Math.round(wVal(hi))} ${wUnit()}`;
+const goalWarn = (lo, hi) => `That's under the healthy range for your height (${rangeTxt(lo, hi)}). Consider a higher goal.`;
 function setupPace() {
   const po = paceOptions();
   if (!ob.pace || !po.options.some(o => o.id === ob.pace)) ob.pace = (po.options.find(o => o.meets && o.id !== 'fast') || po.options.find(o => o.id === 'steady') || po.options[0]).id;
@@ -992,7 +1175,11 @@ const act = {
     delete state.weights[d]; save(); closeSheet();
     toast('Weigh-in deleted', () => { state.weights[d] = old; save(); render(); });
   },
-  edit(el) { const e = entriesOf(ui.day).find(x => x.id === el.dataset.id); if (!e) return; openAmount(e.foodId ? (anyFood(e.foodId) || entryFood(e)) : entryFood(e), { entry: e }); },
+  edit(el) {
+    const e = entriesOf(ui.day).find(x => x.id === el.dataset.id); if (!e) return;
+    if (!e.foodId) return openSheet({ mode: 'quick', meal: e.meal, entry: e });
+    openAmount(anyFood(e.foodId) || entryFood(e), { entry: e });
+  },
   repeat(el) {
     const meal = el.dataset.meal, src = entriesOf(L.addDays(ui.day, -1)).filter(e => e.meal === meal);
     const copies = src.map(e => ({ ...e, id: uid() }));
@@ -1015,9 +1202,9 @@ const act = {
     toast(`Copied ${plural(items.length, 'item')} to today`, undo);
   },
   clearmeal() {
-    const day = state.days[ui.day], meal = sh.meal, removed = day.entries.filter(e => e.meal === meal);
-    day.entries = day.entries.filter(e => e.meal !== meal); save(); closeSheet();
-    toast(`Cleared ${plural(removed.length, 'item')}`, () => { day.entries.push(...removed); save(); render(); });
+    const key = ui.day, removed = entriesOf(key).filter(e => e.meal === sh.meal);
+    dropEntries(key, removed.map(e => e.id)); closeSheet();
+    toast(`Cleared ${plural(removed.length, 'item')}`, () => { putEntries(key, removed); render(); });
   },
   // add sheet
   setmeal(el) { sh.meal = el.dataset.meal; sheetBody.querySelectorAll('.seg button').forEach(b => { b.classList.toggle('on', b.dataset.meal === sh.meal); b.setAttribute('aria-checked', b.dataset.meal === sh.meal); }); if (sh.mode === 'add') renderResults(); },
@@ -1030,10 +1217,10 @@ const act = {
   },
   quickfood(el) {
     const f = anyFood(el.dataset.id); if (!f) return;
-    const a = L.defaultAmount(f), e = makeEntry(f, a, sh.meal);
-    touch(f, a, sh.meal); addEntries(ui.day, [e]); sh.added.push(e);
-    const keep = sh; renderSheet(); keep.q && ($('#q').value = keep.q);
-    toast(`Added ${f.name} · ${fmt(e.kcal)} kcal`, () => { const day = state.days[ui.day]; day.entries = day.entries.filter(x => x !== e); keep.added = keep.added.filter(x => x !== e); save(); if (sh === keep) renderSheet(); else render(); });
+    const a = L.defaultAmount(f), e = makeEntry(f, a, sh.meal), key = ui.day;
+    touch(f, a, sh.meal); addEntries(key, [e]); sh.added.push(e);
+    const keep = sh; renderSheet();
+    toast(`Added ${f.name} · ${fmt(e.kcal)} kcal`, () => { dropEntries(key, [e.id]); keep.added = keep.added.filter(x => x !== e); if (sh === keep) renderSheet(); else render(); });
   },
   retryoff() { sh.off.q = ''; searchOFF(sh.q.trim()); renderResults(); },
   scan() { const back = sh; openSheet({ mode: 'scan', back, meal: back.meal }); startScan(); },
@@ -1071,37 +1258,35 @@ const act = {
   },
   addfood() {
     if (!(sh.a.qty > 0)) return;
-    const f = sh.f, e = makeEntry(f, sh.a, sh.meal);
-    touch(f, sh.a, sh.meal); addEntries(ui.day, [e]);
+    const f = sh.f, e = makeEntry(f, sh.a, sh.meal), key = ui.day;
+    touch(f, sh.a, sh.meal); addEntries(key, [e]);
     const back = sh.back;
     if (back) { back.added.push(e); back.meal = sh.meal; sh = back; renderSheet(); } else closeSheet();
-    toast(`Added ${f.name} · ${fmt(e.kcal)} kcal`, () => { const day = state.days[ui.day]; day.entries = day.entries.filter(x => x !== e); if (back) back.added = back.added.filter(x => x !== e); save(); if (sh === back) renderSheet(); else render(); });
+    toast(`Added ${f.name} · ${fmt(e.kcal)} kcal`, () => { dropEntries(key, [e.id]); if (back) back.added = back.added.filter(x => x !== e); if (sh && sh === back) renderSheet(); else render(); });
   },
   saveentry() {
-    const old = sh.entry, f = sh.f;
-    const day = state.days[ui.day], i = day.entries.findIndex(x => x.id === old.id);
-    if (i < 0) return closeSheet();
-    const e = old.foodId ? { ...makeEntry(f, sh.a, sh.meal), id: old.id, foodId: old.foodId } : { ...old, meal: sh.meal };
-    if (old.foodId) { e.name = old.name; e.brand = old.brand; }
-    day.entries[i] = e;
-    if (old.foodId && state.usage[old.foodId]) state.usage[old.foodId].last = { qty: sh.a.qty, g: sh.a.g, label: sh.a.label };
-    save(); closeSheet();
-    toast('Saved', () => { day.entries[day.entries.findIndex(x => x.id === old.id)] = old; save(); render(); });
+    const old = sh.entry, f = sh.f, key = ui.day;
+    if (!entriesOf(key).some(x => x.id === old.id)) return closeSheet();
+    const e = { ...makeEntry(f, sh.a, sh.meal), id: old.id, foodId: old.foodId, name: old.name, brand: old.brand };
+    if (state.usage[old.foodId]) state.usage[old.foodId].last = { qty: sh.a.qty, g: sh.a.g, label: sh.a.label };
+    putEntries(key, [e]); closeSheet();
+    toast('Saved', () => { putEntries(key, [old]); render(); });
   },
   delentry() {
-    const day = state.days[ui.day], old = sh.entry, i = day.entries.findIndex(x => x.id === old.id);
-    if (i >= 0) day.entries.splice(i, 1);
-    save(); closeSheet();
-    toast(`Removed ${old.name}`, () => { day.entries.splice(Math.max(0, i), 0, old); save(); render(); });
+    const key = ui.day, old = sh.entry;
+    dropEntries(key, [old.id]); closeSheet();
+    toast(`Removed ${old.name}`, () => { putEntries(key, [old]); render(); });
   },
   savequick() {
     const k = num($('#qk').value), p = num($('#qp').value) || 0;
     if (!(k > 0 && k < 10000)) { toast('Enter the calories.'); return $('#qk').focus(); }
-    const e = { id: uid(), meal: sh.meal, foodId: null, name: $('#qn').value.trim() || 'Quick add', qty: 1, g: 1, label: '', kcal: Math.round(k), p: r1(p), c: 0, f: 0 };
-    addEntries(ui.day, [e]);
+    const old = sh.entry, key = ui.day;
+    const e = { id: old ? old.id : uid(), meal: sh.meal, foodId: null, name: $('#qn').value.trim() || 'Quick add', qty: 1, g: 1, label: '', kcal: Math.round(k), p: r1(p), c: 0, f: 0 };
+    if (old) { putEntries(key, [e]); closeSheet(); return toast('Saved', () => { putEntries(key, [old]); render(); }); }
+    addEntries(key, [e]);
     const back = sh.back;
     if (back) { back.added.push(e); back.meal = sh.meal; sh = back; renderSheet(); } else closeSheet();
-    toast(`Added ${fmt(k)} kcal`, () => { const day = state.days[ui.day]; day.entries = day.entries.filter(x => x !== e); if (back) back.added = back.added.filter(x => x !== e); save(); if (sh === back) renderSheet(); else render(); });
+    toast(`Added ${fmt(k)} kcal`, () => { dropEntries(key, [e.id]); if (back) back.added = back.added.filter(x => x !== e); if (sh && sh === back) renderSheet(); else render(); });
   },
   // create food
   per(el) { const keep = snapshotCreate(); sh.per = el.dataset.v; renderSheet(); restoreCreate(keep); },
@@ -1132,10 +1317,10 @@ const act = {
   newfood() { openSheet({ mode: 'create', fromFoods: true, meal: 'snacks' }); },
   newmealhelp() { toast('Log the foods on Today, then tap ··· on that meal and choose Save as meal.'); },
   editfood() { const f = anyFood(sh.id); openSheet({ mode: 'create', edit: f, fromFoods: true, meal: 'snacks' }); },
-  logfood() { const f = anyFood(sh.id); closeSheet(); location.hash = '#today'; ui.day = ui.today; openAdd(); openAmount(f); },
+  logfood() { const f = anyFood(sh.id); location.hash = '#today'; ui.day = ui.today; openAdd(); openAmount(f); },
   mealedit(el) { openSheet({ mode: 'meal', id: el.dataset.id }); },
-  mitemdel(el) { const m = state.meals.find(x => x.id === sh.id); m.items.splice(+el.dataset.i, 1); save(); renderSheet(); },
-  mealsave() { const m = state.meals.find(x => x.id === sh.id); m.name = $('#mname').value.trim() || m.name; save(); closeSheet(); },
+  mitemdel(el) { const m = state.meals.find(x => x.id === sh.id); if (!m) return closeSheet(); m.items.splice(+el.dataset.i, 1); save(); renderSheet(); },
+  mealsave() { const m = state.meals.find(x => x.id === sh.id); if (!m) return closeSheet(); m.name = $('#mname').value.trim() || m.name; save(); closeSheet(); },
   mealdel() {
     const i = state.meals.findIndex(x => x.id === sh.id), m = state.meals[i];
     state.meals.splice(i, 1); save(); closeSheet();
@@ -1172,9 +1357,39 @@ const act = {
     } catch (e) { if (e.name !== 'AbortError') toast('Backup failed'); }
   },
   import() { $('#importfile').click(); },
+  async syncsheet() { if (sync) await loadQR().catch(() => {}); openSheet({ mode: 'sync' }); },
+  syncback() { openSheet({ mode: 'sync' }); },
+  async syncconnect() {
+    const keep = sh, v = (($('#stoken') || {}).value ?? keep.token ?? '').trim();
+    if (!v) { keep.err = 'Paste the token first.'; return renderSheet(); }
+    keep.token = v; keep.busy = true; keep.err = null; renderSheet();
+    try {
+      const c = await connect(v);
+      if (sh !== keep) return;
+      if (c.remote && c.remote.plan && state.plan) { keep.c = c; keep.busy = false; return renderSheet(); }
+      await finishConnect(c);
+      if (sh === keep) closeSheet();
+      toast(c.broad ? 'Connected. This token can also change your repos, so a gist-only one is safer.' : c.remote ? 'Connected and synced' : 'Connected. Your data is now saved to GitHub too.');
+    } catch (e) { if (sh === keep) { keep.busy = false; keep.err = e.message; renderSheet(); } }
+  },
+  async syncpick(el) {
+    const keep = sh;
+    try { await finishConnect(keep.c, el.dataset.v); if (sh === keep) closeSheet(); toast('Connected and synced'); }
+    catch (e) { toast(e.message || 'Couldn\'t finish connecting. Try again.'); }
+  },
+  syncgo() { syncNow(true); },
+  async synccopy() {
+    try { await navigator.clipboard.writeText(`tally-sync:${sync.token}:${sync.gist}`); toast('Copied. Paste it on the other device.'); }
+    catch { toast('Couldn\'t copy. Make a second token on the other device instead.'); }
+  },
+  syncscan() { openSheet({ mode: 'scan', qr: true }); startScan(); },
+  syncoff() {
+    openSheet({ mode: 'confirm', title: 'Disconnect sync?', text: 'This device stops syncing. Its data stays here, and the gist keeps the synced copy for your other devices.', yes: 'Disconnect',
+      onYes: () => { sync = null; syncStore(); syncRun.err = null; closeSheet(); toast('Sync is off on this device'); } });
+  },
   reset() {
-    openSheet({ mode: 'confirm', title: 'Erase everything?', text: 'Your log, weigh-ins, foods, meals and plan are deleted from this device. Back up first if you might want them.', yes: 'Erase', danger: true,
-      onYes: () => { const units = state.settings.units; state = blank(); state.settings.units = units; save(); ob = null; closeSheet(); location.hash = '#today'; render(); } });
+    openSheet({ mode: 'confirm', title: 'Erase everything?', text: `Your log, weigh-ins, foods, meals and plan are deleted from ${sync ? '<b>every synced device</b>' : 'this device'}. Back up first if you might want them.`, yes: 'Erase', danger: true,
+      onYes: () => { state = { ...blank(), settings: state.settings, ts: state.ts }; save(); ob = null; closeSheet(); location.hash = '#today'; render(); } });
   },
   // setup
   snext: () => setupNext(),
@@ -1191,7 +1406,8 @@ const act = {
   sfinish() { ob = null; location.hash = '#today'; ui.day = ui.today; render(); },
 };
 function readGoalInput() { const g = toLb(num(($('#sgoal') || {}).value)); if (g >= 70) ob.goalLb = r1(g); }
-const entryFood = e => ({ id: e.foodId || 'quick', src: 'quick', name: e.name, brand: e.brand, k: 0, p: 0, c: 0, f: 0, servings: [], ml: false });
+// An entry whose food was deleted: rebuild per-100 g values from the entry itself so its amount can still change.
+const entryFood = e => { const m = 100 / (e.qty * e.g || 100); return { id: e.foodId, src: 'gone', name: e.name, brand: e.brand, k: e.kcal * m, p: e.p * m, c: e.c * m, f: e.f * m, servings: e.g !== 1 ? [{ label: e.label, g: e.g }] : [], ml: false }; };
 const snapshotCreate = () => [...sheetBody.querySelectorAll('input')].map(i => [i.id, i.type === 'checkbox' ? i.checked : i.value]);
 const restoreCreate = vals => vals.forEach(([id, v]) => { const i = document.getElementById(id); if (i && !['ck', 'cp', 'cc', 'cf'].includes(id)) i.type === 'checkbox' ? (i.checked = v) : (i.value = v); });
 
@@ -1210,7 +1426,8 @@ document.addEventListener('input', e => {
     const pos = t.selectionStart; renderFoods(); const n = $('#fq'); n.focus(); n.setSelectionRange(pos, pos);
   } else if (t.id === 'qtyIn') { const v = num(t.value); sh.a.qty = v > 0 ? v : 0; updateFacts(); }
   else if (t.id === 'sgoal' && ob) {
-    // live healthy-range warning without re-rendering the input
+    const g = toLb(num(t.value)), [lo] = L.healthyRange(profileFromOb());
+    $('#gwarn').hidden = !(g >= 70 && g < lo);
   }
 });
 document.addEventListener('change', e => {
@@ -1231,14 +1448,15 @@ async function importFile(file) {
   try {
     const data = JSON.parse(await file.text());
     if (!data || typeof data.days !== 'object' || typeof data.weights !== 'object') throw new Error('shape');
-    openSheet({ mode: 'confirm', title: 'Restore this backup?', text: `It has ${plural(Object.keys(data.days).length, 'logged day')} and ${plural(Object.keys(data.weights).length, 'weigh-in')}. It replaces everything on this device.`, yes: 'Restore',
-      onYes: () => { state = { ...blank(), ...data }; save(); closeSheet(); toast('Restored'); } });
+    openSheet({ mode: 'confirm', title: 'Restore this backup?', text: `It has ${plural(Object.keys(data.days).length, 'logged day')} and ${plural(Object.keys(data.weights).length, 'weigh-in')}. It replaces everything on ${sync ? 'every synced device' : 'this device'}.`, yes: 'Restore',
+      onYes: () => { state = { ...blank(), ...data, ts: state.ts }; save(); closeSheet(); toast('Restored'); } });
   } catch { toast('That file isn\'t a Tally backup.'); }
   $('#importfile') && ($('#importfile').value = '');
 }
 // A new day while the app sat open in the background.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) return;
+  if (document.hidden) { if (sync && sync.dirty) syncNow(); return; }
+  syncNow();
   const now = L.day();
   if (now !== ui.today) { if (ui.day === ui.today) ui.day = now; ui.today = now; if (!sheetEl.open) render(); }
 });
@@ -1248,5 +1466,6 @@ window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() =
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 render();
-window.tally = { get state() { return state; }, L, ui, render };
+syncNow();
+window.tally = { get state() { return state; }, get sync() { return sync; }, syncNow, L, ui, render };
 })();
