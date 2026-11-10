@@ -21,7 +21,7 @@ This directory is mainly just me playing around with Claude Code and testing its
 | [notify_when](apps/notify_when) | Watch any page or API, get a phone push when a condition is true |
 | [rise](apps/rise) | Wake-up system for morning classes (iPhone alarms from my schedule) |
 | [skill_wheel](apps/skill_wheel) | Spin a wheel, learn one new skill a week |
-| [tally](apps/tally) | Calorie and weight tracker PWA: fast logging, weight trend, goal pace |
+| [tally](https://github.com/benparrack/tally) | Calorie and weight tracker with accounts and real-time sync. Own repo (private), cloned at `apps/tally/` |
 
 ## games/
 

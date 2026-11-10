@@ -32,3 +32,6 @@ apps/workouts/
 # Private: freelance gig plans and pricing
 apps/freelance/
 
+
+# Own repo (github.com/benparrack/tally, private), cloned here
+apps/tally/
