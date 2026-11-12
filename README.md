@@ -64,6 +64,7 @@ Mostly single-prompt builds. They still work. Open the `index.html` or see the f
 |---|---|
 | [animated_short](playground/animated_short) | Fully generated 2:56 wordless sci-fi short |
 | [ant_colony_optimization](playground/ant_colony_optimization) | Ant colony optimization visualizer |
+| [black_hole](playground/black_hole) | Real-time black hole: every pixel traces a light path through curved spacetime |
 | [dungeon_crawler](playground/dungeon_crawler) | Small dungeon crawler |
 | [generative_art_gallery](playground/generative_art_gallery) | New flow-field artwork on every load |
 | [hand_paintbrush](playground/hand_paintbrush) | Paint watercolor with your fingertip via webcam |

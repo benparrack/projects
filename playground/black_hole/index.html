@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Black Hole</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  canvas{display:block;width:100vw;height:100vh;cursor:grab;touch-action:none}
+  canvas:active{cursor:grabbing}
+  #hud{position:fixed;left:24px;bottom:20px;font:12px/1.6 ui-monospace,Menlo,monospace;
+    color:#cdb9a0;letter-spacing:.08em;opacity:.7;pointer-events:none;text-shadow:0 0 6px #000}
+  #hud b{display:block;font-size:13px;letter-spacing:.3em;color:#fff;font-weight:500}
+  #err{position:fixed;inset:0;margin:0;padding:24px;color:#f88;font:13px monospace;white-space:pre-wrap}
+</style>
+<canvas id="c"></canvas>
+<div id="hud"><b>SCHWARZSCHILD</b>drag to orbit / scroll to zoom / every pixel is a traced light path</div>
+<pre id="err" hidden></pre>
+<script>
+// Each pixel integrates a photon path through Schwarzschild spacetime (units: event horizon radius = 1).
+// The "top arch" of the disk is not drawn anywhere: it is the far side of the disk, bent over the hole.
+const FRAG = `
+precision highp float;
+uniform vec2 R; uniform float T; uniform vec3 C;
+const float RIN=3., ROUT=13.;   // innermost stable orbit is at 3 horizon radii
+
+float hash(vec3 p){p=fract(p*.3183099+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float noise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
+  return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+float fbm(vec3 p){float a=.5,s=0.;for(int i=0;i<4;i++){s+=a*noise(p);p=p*2.03+7.;a*=.5;}return s;}
+
+vec3 stars(vec3 d){
+  vec3 c=vec3(0.);
+  for(int l=0;l<2;l++){
+    float s=l==0?38.:85.;
+    vec3 p=d*s,i=floor(p)+float(l)*31.,f=fract(p);
+    float h=hash(i);
+    vec3 o=vec3(hash(i+1.3),hash(i+2.7),hash(i+4.1))*.6+.2;
+    c+=smoothstep(.09,0.,length(f-o))*step(.45,h)*(.3+3.*fract(h*37.)*fract(h*91.))
+       *mix(vec3(1.,.75,.55),vec3(.65,.8,1.),hash(i+9.));
+  }
+  float mw=exp(-pow(dot(d,normalize(vec3(.35,1.,.25)))*3.5,2.)), n=fbm(d*4.);
+  return c+mw*n*n*vec3(.30,.26,.42)*.3;
+}
+
+// Emission where a ray crosses the disk plane. Gas orbits at Keplerian speed, so the side
+// rotating toward the camera is beamed brighter and bluer, the receding side dimmer and redder.
+vec4 disk(vec3 p,vec3 v){
+  float r=length(p.xz);
+  if(r<RIN||r>ROUT)return vec4(0.);
+  float a=atan(p.z,p.x),w=5.*pow(r,-1.5),ph=T*.07;
+  // two phase-offset layers crossfaded, so differential rotation never winds the pattern up
+  float t1=fract(ph),t2=fract(ph+.5),a1=a-w*t1*9.,a2=a-w*t2*9.+2.;
+  float n=mix(fbm(vec3(cos(a1)*3.,sin(a1)*3.,r*2.2)),fbm(vec3(cos(a2)*3.,sin(a2)*3.,r*2.2+5.)),abs(2.*t1-1.));
+  float dens=smoothstep(RIN,RIN+.5,r)*smoothstep(ROUT,ROUT*.5,r)*pow(.15+1.7*n,3.);
+  float b=sqrt(.5/r);
+  vec3 vel=b*vec3(-p.z,0.,p.x)/r;
+  float g=sqrt((1.-b*b)*(1.-1./r))/(1.+dot(vel,normalize(v)));   // doppler * gravitational redshift
+  vec3 col=vec3(1.,.5*g,.2*g*g)*2.6*pow(RIN/r,2.2)*pow(g,3.5);
+  return vec4(col*dens,clamp(dens,0.,1.)*.92);
+}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy*2.-R)/R.y;
+  vec3 f=normalize(-C),rt=normalize(cross(f,vec3(0,1,0))),up=cross(rt,f);
+  vec3 v=normalize(f*1.7+uv.x*rt+uv.y*up),p=C;
+  vec3 hv=cross(p,v); float h2=dot(hv,hv);   // conserved angular momentum of the photon
+  vec3 col=vec3(0.); float tr=1.;
+  for(int i=0;i<240;i++){
+    float r2=dot(p,p);
+    if(r2<1.){tr=0.;break;}                    // fell through the horizon
+    if(r2>1200.&&dot(p,v)>0.)break;            // escaped
+    float r=sqrt(r2),dt=clamp(.06*r,.03,2.);
+    v-=1.5*h2*p/(r2*r2*r)*dt;                  // exact null-geodesic bending term
+    vec3 q=p+v*dt;
+    if(p.y*q.y<0.){vec4 d=disk(mix(p,q,p.y/(p.y-q.y)),v);col+=tr*d.rgb;tr*=1.-d.a;}
+    // faint hot haze hugging the disk
+    col+=tr*vec3(1.,.5,.2)*dt*.05*exp(-abs(p.y)*3.)*smoothstep(2.2,RIN+1.,r)*smoothstep(ROUT,RIN,r)/r2;
+    p=q;
+  }
+  col+=tr*stars(normalize(v));
+  col=1.-exp(-col*1.25);
+  col=pow(col,vec3(.4545))*(1.-.18*dot(uv,uv)*.5);
+  col+=(hash(vec3(gl_FragCoord.xy,T))-.5)/255.;
+  gl_FragColor=vec4(col,1.);
+}`;
+
+const cv = document.getElementById('c'), gl = cv.getContext('webgl');
+const fail = m => { const e = document.getElementById('err'); e.hidden = false; e.textContent = m; throw new Error(m); };
+if (!gl) fail('WebGL is not available in this browser.');
+const sh = (type, src) => {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail(gl.getShaderInfoLog(s));
+  return s;
+};
+const pr = gl.createProgram();
+gl.attachShader(pr, sh(gl.VERTEX_SHADER, 'attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}'));
+gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(pr);
+if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) fail(gl.getProgramInfoLog(pr));
+gl.useProgram(pr);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+const U = n => gl.getUniformLocation(pr, n), uR = U('R'), uT = U('T'), uC = U('C');
+
+let yaw = 0.6, pitch = 0.11, dist = 20, tDist = 20, vy = 0, vp = 0, drag = false, idle = 0;
+cv.onpointerdown = e => { drag = true; cv.setPointerCapture(e.pointerId); };
+cv.onpointerup = cv.onpointercancel = () => drag = false;
+cv.onpointermove = e => { if (drag) { vy = -e.movementX * .005; vp = e.movementY * .005; idle = 0; } };
+cv.onwheel = e => { e.preventDefault(); tDist = Math.min(32, Math.max(5, tDist * Math.exp(e.deltaY * .001))); };
+
+let last = 0;
+function frame(ms) {
+  const dt = Math.min(.05, (ms - last) / 1000); last = ms; idle += dt;
+  const dpr = Math.min(devicePixelRatio || 1, 1.5), w = innerWidth * dpr | 0, h = innerHeight * dpr | 0;
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; gl.viewport(0, 0, w, h); }
+  yaw += vy + (idle > 2 ? dt * .04 : 0); vy *= drag ? 0 : .92;   // glide after release, slow auto-orbit when idle
+  pitch = Math.min(1.5, Math.max(-1.5, pitch + vp)); vp *= drag ? 0 : .92;
+  dist += (tDist - dist) * Math.min(1, dt * 6);
+  gl.uniform2f(uR, w, h); gl.uniform1f(uT, ms / 1000);
+  gl.uniform3f(uC, dist * Math.cos(pitch) * Math.sin(yaw), dist * Math.sin(pitch), dist * Math.cos(pitch) * Math.cos(yaw));
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</html>
