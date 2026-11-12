@@ -50,6 +50,19 @@ def source_block(f, text: str, limit: int) -> str:
             f"Outline of the whole file: {outline(f)}]")
 
 
+def notes_block(paths, texts) -> str:
+    """The project's own write-ups, in full: they hold the why and the numbers that code alone can't show."""
+    if not paths:
+        return ''
+    body = '\n\n'.join(f'=== {p} ===\n{texts[p]}' for p in paths)
+    return (f"\nThe author's own write-ups (decisions, experiments, results). Trust them for why and for "
+            f"numbers; trust the code for how. If they disagree with the code, the code is current.\n\n{body}\n")
+
+
+NOTES_ASK = ("\n\nWhere the write-ups explain why something is the way it is, what was tried and dropped, or what "
+             "it measured, bring that in with the real numbers. That history is part of understanding the project.")
+
+
 # ---------- 1. digests ----------
 
 DIGEST_SCHEMA = {
@@ -96,7 +109,8 @@ def digest(project, texts, cfg, log):
                 if d.get('path') in texts:
                     out[d['path']] = d
             log(f'  notes {i}/{len(batches)}', end=True)
-    return out
+    # batches finish in any order; a stable order keeps the plan prompt (and its cache key) identical across runs
+    return {f['path']: out[f['path']] for f in todo if f['path'] in out}
 
 
 # ---------- 2. plan ----------
@@ -146,7 +160,7 @@ Third-party packages: {[e['name'] for e in project['external']]}
 
 README:
 {project['readme'] or '(none)'}
-
+{cfg['notes']}
 File tree:
 {tree_text(project['files'])}
 
@@ -161,7 +175,7 @@ Write the syllabus as {chapters} chapters. Order them the way you would teach a 
 2. Then the core data model and central mechanism, then each subsystem, roughly from the outside in.
 3. Tests, tooling and build go late, unless the project is mostly tooling.
 Every non-trivial code file must appear in at least one chapter's files. A file can appear in several.
-Components are for an architecture diagram: keep them meaningful (e.g. "Game server", "Rendering", "Persistence"), not one per file."""
+Components are for an architecture diagram: keep them meaningful (e.g. "Game server", "Rendering", "Persistence"), not one per file.""" + NOTES_ASK * bool(cfg['notes'])
     log('Planning the course')
     return llm.ask(VOICE, prompt, PLAN_SCHEMA, model=cfg['model'], cache=cfg['cache'], effort=cfg['effort'])
 
@@ -254,14 +268,14 @@ What to cover: {ch['cover']}
 
 Neighbouring files (imported by or importing this chapter's files):
 {context or '(none)'}
-
+{cfg['notes']}
 Source code (line numbers on the left are real; cite them exactly in code excerpts):
 
 {chr(10).join(blocks)}
 
 Write the chapter. Lead with the idea, then show where it lives in the code. Put a diagram on the 1-3 \
 sections where a picture explains it faster than words (a request's journey, a pipeline, a state machine, \
-who-calls-whom), and leave it off elsewhere."""
+who-calls-whom), and leave it off elsewhere.""" + NOTES_ASK * bool(cfg['notes'])
     return llm.ask(VOICE, prompt, CHAPTER_SCHEMA, model=cfg['model'], cache=cfg['cache'], effort=cfg['effort'])
 
 
@@ -298,10 +312,74 @@ def capstone(course, chapters, cfg):
 {chr(10).join(parts)}
 
 Components: {', '.join(c['name'] + ': ' + c['summary'] for c in course['components'])}
-
+{cfg['notes']}
 Write the closing chapter: a recap that joins it all into one picture, the core mental model, a prioritised \
 improvement roadmap (merge duplicates, rank by value for effort), a final quiz across chapters, and next steps."""
     return llm.ask(VOICE, prompt, CAPSTONE_SCHEMA, model=cfg['model'], cache=cfg['cache'], effort=cfg['effort'])
+
+
+# ---------- 5. interview prep (optional) ----------
+
+INTERVIEW_SCHEMA = {
+    'type': 'object', 'required': ['pitch_short', 'pitch_long', 'numbers', 'stories', 'questions'],
+    'properties': {
+        'pitch_short': {'type': 'string', 'description': 'First person, about 30 seconds spoken (70-90 words): what it is, the core idea, the headline result.'},
+        'pitch_long': {'type': 'string', 'description': 'Markdown, first person, about 2 minutes spoken (250-320 words): problem, approach, the key decisions, results, what you learned. Short paragraphs.'},
+        'numbers': {'type': 'array', 'description': '8-14 figures worth knowing cold: results, dataset sizes, model sizes, speeds.', 'items': {
+            'type': 'object', 'required': ['label', 'value', 'context'],
+            'properties': {'label': {'type': 'string', 'description': 'What it measures, specific, e.g. "Static letters, val accuracy on unseen signers".'},
+                           'value': {'type': 'string', 'description': 'The figure exactly as measured, with units.'},
+                           'context': {'type': 'string', 'description': 'One sentence: what it means or what it beat.'}}}},
+        'stories': {'type': 'array', 'description': '3-5 concrete episodes for "tell me about a problem you solved": a bug, a misleading result, a hard trade-off.', 'items': {
+            'type': 'object', 'required': ['title', 'situation', 'action', 'result', 'lesson'],
+            'properties': {'title': {'type': 'string'}, 'situation': {'type': 'string'}, 'action': {'type': 'string'},
+                           'result': {'type': 'string', 'description': 'With the before and after numbers when there are any.'},
+                           'lesson': {'type': 'string', 'description': 'The general lesson, one sentence.'}}}},
+        'questions': {'type': 'array', 'description': '20-26 questions an interviewer is likely to ask, from easy to probing.', 'items': {
+            'type': 'object', 'required': ['category', 'question', 'answer', 'follow_up', 'follow_up_answer'],
+            'properties': {'category': {'type': 'string', 'enum': ['The project', 'Data and evaluation', 'Models', 'Engineering', 'Hard questions']},
+                           'question': {'type': 'string'},
+                           'answer': {'type': 'string', 'description': 'Markdown, first person, 70-160 words, how to say it out loud: lead with the direct answer, then the reason and a real number or file.'},
+                           'follow_up': {'type': 'string', 'description': 'The deeper question this answer invites.'},
+                           'follow_up_answer': {'type': 'string', 'description': 'First person, 40-100 words.'}}}},
+    }}
+
+INTERVIEWER = VOICE + """
+
+Right now you are preparing the person who owns this project to talk about it in depth in a job or \
+internship interview tomorrow. Write answers in their voice (first person), the way they would say them \
+out loud: direct answer first, then why, then a number or a concrete detail. Ground every claim and number \
+in the write-ups or the course; never invent results, experience or work that isn't there. Where the \
+evidence is thin (a small validation set, an untested split), say so plainly: owning a limit reads as \
+strength. The project was built with heavy help from AI coding tools, directed by its owner. Include one \
+question about that, answered honestly and confidently: what they decided, checked and learned."""
+
+
+def interview(course, chapters, cap, cfg):
+    parts = []
+    for c, body in zip(course['chapters'], chapters):
+        if body:
+            parts.append(f"## {c['title']}\n{body['summary']}\nTakeaways: {' | '.join(body['takeaways'])}\n"
+                         f"Design notes: {' | '.join(d['decision'] + ': ' + d['why'] for d in body['design_notes'])}")
+    ideas = '\n'.join(f"- {m['idea']}: {m['detail']}" for m in (cap or {}).get('mental_model', []))
+    prompt = f"""Project: "{course['title']}": {course['tagline']}
+
+{course['overview']}
+
+How it runs:
+{course['how_it_runs']}
+
+The course, chapter by chapter:
+{chr(10).join(parts)}
+
+The core mental model:
+{ideas or '(none)'}
+{cfg['notes']}
+Write the interview prep: a 30-second and a 2-minute pitch, the numbers to know cold, the stories to tell, \
+and the questions most likely to come up, each with an answer and the follow-up it invites. Cover what an \
+interviewer would probe for this kind of project (for ML: data, splits and leakage, baselines, why this \
+model, failure cases, how it runs live, what you'd do next), not just a tour of the code."""
+    return llm.ask(INTERVIEWER, prompt, INTERVIEW_SCHEMA, model=cfg['model'], cache=cfg['cache'], effort=cfg['effort'])
 
 
 # ---------- glue ----------
@@ -374,6 +452,13 @@ def build(project, texts, cfg, log):
     except llm.LLMError as e:
         log(f'  ✗ capstone: {e}')
         cap = None
-    return {'digests': digests, 'course': course, 'chapters': bodies, 'capstone': cap,
+    prep = None
+    if cfg.get('interview'):
+        log('Writing the interview prep')
+        try:
+            prep = interview(course, bodies, cap, cfg)
+        except llm.LLMError as e:
+            log(f'  ✗ interview prep: {e}')
+    return {'digests': digests, 'course': course, 'chapters': bodies, 'capstone': cap, 'interview': prep,
             'built': time.strftime('%Y-%m-%d %H:%M'), 'seconds': round(time.time() - t0),
             'models': {'model': cfg['model'], 'fast_model': cfg['fast_model']}}

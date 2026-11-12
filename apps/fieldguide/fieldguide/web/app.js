@@ -156,6 +156,7 @@ function side(active) {
       <div class="group label">Chapters</div>
       ${C.chapters.map((c, i) => link(`#/ch/${i + 1}`, pad2(i + 1), c.title, active === 'ch' + (i + 1), P.read[i])).join('')}
       ${link('#/review', '∎', 'Putting it together', active === 'review', P.read.review)}
+      ${G.interview ? link('#/interview', 'Q', 'Interview prep', active === 'interview') : ''}
       <div class="group label">Reference</div>
       ${link('#/map', '', 'Map of the code', active === 'map')}
       ${link('#/files', '', 'Files', active === 'files')}
@@ -183,6 +184,7 @@ function route() {
   ctx.focus = null; ctx.cardKey = null;
   if ((r = h.match(/^\/ch\/(\d+)/))) { active = 'ch' + r[1]; main.innerHTML = chapterView(+r[1] - 1); }
   else if (h === '/review') { active = 'review'; main.innerHTML = reviewView(); }
+  else if (h === '/interview' && G.interview) { active = 'interview'; main.innerHTML = interviewView(); }
   else if (h.startsWith('/map')) { active = 'map'; main.innerHTML = mapView(); }
   else if ((r = h.match(/^\/files\/?(.*)$/))) { active = 'files'; main.innerHTML = filesView(r[1]); }
   else if (h === '/glossary') { active = 'glossary'; main.innerHTML = glossaryView(); }
@@ -192,7 +194,7 @@ function route() {
   else { active = 'cover'; main.innerHTML = coverView(); }
   side(active);
   wire(active);
-  document.body.classList.toggle('reading', /^ch|^review$/.test(active));
+  document.body.classList.toggle('reading', /^ch|^review$|^interview$/.test(active));
   $('#fab').hidden = !ctx.focus;
   if (!ctx.keepScroll) window.scrollTo(0, 0);
   ctx.keepScroll = false;
@@ -279,7 +281,7 @@ function coverView() {
       <div class="langkey">${S.languages.slice(0, 7).map(([l, n]) => `<span style="--c:${ctx.langColor[l]}">${l} ${Math.round((n / totalLoc) * 100)}%</span>`).join('')}</div>
       <a class="begin" href="${next < 0 ? '#/review' : `#/ch/${next + 1}`}">${!started ? 'Begin with chapter 1' : next < 0 ? 'Read the closing chapter' : `Continue with chapter ${next + 1}`} <span aria-hidden="true">→</span></a>
     </header>
-    ${G.stale.length ? `<div class="stale-note"><b>The code has moved on.</b> ${plural(G.stale.length, 'file')} changed since this guide was built on ${esc(G.built.slice(0, 10))}${G.stale.length <= 4 ? `: ${G.stale.map(p => `<a href="${fileHref(p)}"><code>${esc(p)}</code></a>`).join(', ')}` : ''}. Rebuild to bring it up to date; only the changed parts are rewritten.<pre>python3 -m fieldguide build ${esc(G.project.root)}${G.slug !== G.project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ? ` --name ${G.slug}` : ''}</pre></div>` : ''}
+    ${G.stale.length ? `<div class="stale-note"><b>The code has moved on.</b> ${plural(G.stale.length, 'file')} changed since this guide was built on ${esc(G.built.slice(0, 10))}${G.stale.length <= 4 ? `: ${G.stale.map(p => `<a href="${fileHref(p)}"><code>${esc(p)}</code></a>`).join(', ')}` : ''}. Rebuild to bring it up to date; only the changed parts are rewritten.<pre>python3 -m fieldguide build ${esc(G.project.root)}${G.slug !== G.project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ? ` --name ${G.slug}` : ''}${G.interview ? ' --interview' : ''}${G.notes?.length ? ' --notes ' + G.notes.map(esc).join(' ') : ''}</pre></div>` : ''}
     <div class="prose">${md(C.overview)}</div>
     <h2>How it runs</h2>
     <div class="prose">${md(C.how_it_runs)}</div>
@@ -289,7 +291,8 @@ function coverView() {
     ${C.how_to_run ? `<h2>Running it yourself</h2><div class="prose">${md(C.how_to_run)}</div>` : ''}
     <h2>Contents</h2>
     <ol class="toc">${C.chapters.map((c, i) => `<li><a href="#/ch/${i + 1}"><span class="num">${i + 1}</span><div><h4>${ti(c.title)}</h4><p>${inline(G.chapters[i]?.summary || c.goal)}</p></div><span class="tick">${P.read[i] ? '✓' : ''}</span></a></li>`).join('')}
-      <li><a href="#/review"><span class="num">∎</span><div><h4>Putting it together</h4><p>The whole system in one picture, the ideas to keep, a final quiz and where to improve it.</p></div><span class="tick">${P.read.review ? '✓' : ''}</span></a></li></ol>
+      <li><a href="#/review"><span class="num">∎</span><div><h4>Putting it together</h4><p>The whole system in one picture, the ideas to keep, a final quiz and where to improve it.</p></div><span class="tick">${P.read.review ? '✓' : ''}</span></a></li>
+      ${G.interview ? `<li><a href="#/interview"><span class="num">Q</span><div><h4>Interview prep</h4><p>Your pitch, the numbers to know, the stories to tell, and the questions likely to come up with answers.</p></div><span class="tick"></span></a></li>` : ''}</ol>
   </article>`;
 }
 function compStat(c) {
@@ -355,8 +358,43 @@ function reviewView() {
     ${roadmapHTML(K.roadmap)}
     <h2>Where to go from here</h2><div class="prose"><ul>${K.next_steps.map(s => `<li>${md(s).replace(/^<p>|<\/p>$/g, '')}</li>`).join('')}</ul></div>
     <nav class="ch-foot"><div><a href="#/ch/${G.course.chapters.length}"><small>← Chapter ${G.course.chapters.length}</small>${ti(G.course.chapters.at(-1).title)}</a></div>
-      <div class="mid"><button class="done-btn${P.read.review ? ' on' : ''}" data-read="review">${P.read.review ? '✓ Understood' : 'Mark as understood'}</button></div><div class="next"><a href="#/cards"><small>Next →</small>Flashcards</a></div></nav>
+      <div class="mid"><button class="done-btn${P.read.review ? ' on' : ''}" data-read="review">${P.read.review ? '✓ Understood' : 'Mark as understood'}</button></div><div class="next">${G.interview ? '<a href="#/interview"><small>Next →</small>Interview prep</a>' : '<a href="#/cards"><small>Next →</small>Flashcards</a>'}</div></nav>
   </article>`;
+}
+
+// ---------- interview prep ----------
+const IQ_CATS = ['The project', 'Data and evaluation', 'Models', 'Engineering', 'Hard questions'];
+function interviewView() {
+  const I = G.interview;
+  ctx.focus = { files: G.notes || [], where: 'Interview prep' };
+  const qs = I.questions.map((q, i) => ({ ...q, i }));
+  const cats = [...IQ_CATS.filter(c => qs.some(q => q.category === c)), ...new Set(qs.map(q => q.category).filter(c => !IQ_CATS.includes(c)))];
+  return `<article class="page">
+    <header class="ch-head"><div class="label">Interview prep</div><h1 class="title">Talking about ${esc(G.course.title)}</h1>
+      <p class="dek">Your pitch, the numbers to know, the stories to tell, and the questions most likely to come up. Answer each one out loud before you open it.</p></header>
+    <h2>The pitch</h2>
+    <div class="takeaways pitch"><div class="label">In 30 seconds</div><div class="prose">${md(I.pitch_short)}</div></div>
+    <h3 class="label" style="margin:30px 0 4px">In 2 minutes</h3><div class="prose">${md(I.pitch_long)}</div>
+    <h2>Numbers to know cold</h2>
+    <dl class="nums">${I.numbers.map(n => `<dt>${numValue(n.value)}</dt><dd><b>${inline(n.label)}</b><span>${inline(n.context)}</span></dd>`).join('')}</dl>
+    <h2>Stories to tell</h2><p style="color:var(--ink-2)">For "tell me about a problem you solved". Situation, what you did, what happened, what it taught you.</p>
+    <div class="decisions">${I.stories.map(st => `<div class="decision"><h4>${inline(st.title)}</h4>
+      ${[['Situation', st.situation], ['What I did', st.action], ['Result', st.result], ['Lesson', st.lesson]].map(([k, v]) => `<div class="k">${k}</div><div class="v">${md(v)}</div>`).join('')}</div>`).join('')}</div>
+    <h2 class="iq-head">Likely questions <span class="iq-tools"><button id="iq-open">Open all</button><button id="iq-close">Close all</button></span></h2>
+    <p style="color:var(--ink-2)">${plural(qs.length, 'question')}, from easy to probing. To drill them, use the <a href="#/cards" id="iq-drill">flashcards</a>: they keep track of which ones you've got.</p>
+    ${cats.map(c => `<h3 class="iq-cat">${esc(c)}</h3>${qs.filter(q => q.category === c).map(q => `<details class="iq" id="iq${q.i}"><summary>${inline(q.question)}</summary>
+      <div class="prose">${md(q.answer)}</div>
+      <div class="fu"><div class="label">They might follow up</div><p class="fq">${inline(q.follow_up)}</p><div class="prose">${md(q.follow_up_answer)}</div></div></details>`).join('')}`).join('')}
+    <nav class="ch-foot"><div><a href="#/review"><small>← Closing chapter</small>Putting it together</a></div><div class="mid"></div><div class="next"><a href="#/cards" id="iq-drill2"><small>Next →</small>Drill as flashcards</a></div></nav>
+  </article>`;
+}
+// "0.897 (~4.8M parameters, lr 2e-3)": the figure stays big, the parenthetical goes underneath
+const numValue = v => { const m = v.match(/^([^(]+?)\s*\((.+)\)$/); return m ? `${esc(m[1])}<small>${esc(m[2])}</small>` : esc(v); };
+function wireInterview() {
+  const all = open => $$('details.iq').forEach(d => (d.open = open));
+  $('#iq-open').onclick = () => all(true);
+  $('#iq-close').onclick = () => all(false);
+  ['#iq-drill', '#iq-drill2'].forEach(id => $(id).addEventListener('click', () => (ctx.cardFilter = 'interview')));
 }
 const roadmapHTML = rm => `<ol class="roadmap">${rm.map(r => `<li><div><h4>${inline(r.title)}</h4>
   <div class="imp ${r.impact}" style="border:0;padding:0;margin:0"><div class="meta"><span class="pill i">${r.impact} impact</span><span class="pill">${r.effort} effort</span>${r.files.filter(p => ctx.byPath[p]).map(p => `<a href="${fileHref(p)}"><code>${esc(p)}</code></a>`).join('')}</div></div>
@@ -486,7 +524,8 @@ function glossaryView() {
 }
 
 // ---------- flashcards ----------
-const KINDS = { term: 'Terms', why: 'Design decisions', idea: 'Big ideas' };
+const KINDS = { interview: 'Interview questions', number: 'Numbers', term: 'Terms', why: 'Design decisions', idea: 'Big ideas' };
+const CUES = { interview: 'Answer it out loud, as you would in the interview.', number: 'What was the figure?', term: 'What does it mean here?', why: 'Why was it built this way, and what was the alternative?', idea: 'Explain it in your own words.' };
 function deck() {
   const cards = [], seen = new Set();
   const add = (kind, front, back, ch) => {
@@ -498,6 +537,8 @@ function deck() {
     ch?.design_notes?.forEach(d => add('why', d.decision, `${d.why}\n\n**Instead:** ${d.alternative}`, i));
   });
   G.capstone?.mental_model?.forEach(m => add('idea', m.idea, m.detail));
+  G.interview?.questions?.forEach(q => add('interview', q.question, `${q.answer}\n\n**They might follow up:** ${q.follow_up}\n\n${q.follow_up_answer}`));
+  G.interview?.numbers?.forEach(n => add('number', n.label, `**${n.value}**. ${n.context}`));
   return cards;
 }
 // Leitner boxes: a card you know moves up a box and comes round less often; a miss sends it back to box 0
@@ -509,8 +550,8 @@ function cardsView() {
   const f = ctx.cardFilter || 'all', all = deck();
   const known = all.filter(c => (P.cards[c.id] || 0) >= 2).length;
   return `<article class="page"><header class="ch-head"><div class="label">Reference</div><h1 class="title">Flashcards</h1>
-    <p class="dek">The guide's vocabulary, its design decisions and its big ideas, one at a time. Say the answer out loud before you turn the card.</p></header>
-    <div class="filters">${[['all', `All ${all.length}`], ...Object.entries(KINDS).map(([k, t]) => [k, `${t} ${all.filter(c => c.kind === k).length}`])].map(([k, t]) => `<button data-f="${k}" class="${f === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <p class="dek">The guide's ${G.interview ? 'interview questions, numbers, ' : ''}vocabulary, design decisions and big ideas, one at a time. Say the answer out loud before you turn the card.</p></header>
+    <div class="filters">${[['all', `All ${all.length}`], ...Object.entries(KINDS).filter(([k]) => all.some(c => c.kind === k)).map(([k, t]) => [k, `${t} ${all.filter(c => c.kind === k).length}`])].map(([k, t]) => `<button data-f="${k}" class="${f === k ? 'on' : ''}">${t}</button>`).join('')}</div>
     <div class="deck-stats"><span>${known} of ${all.length} known</span><div class="bar"><i style="width:${all.length ? (known / all.length) * 100 : 0}%"></i></div></div>
     <div id="card"></div></article>`;
 }
@@ -529,7 +570,7 @@ function wireCards() {
     }
     const box = P.cards[c.id] || 0;
     el.innerHTML = `<div class="flash${shown ? ' shown' : ''}"><div class="label">${KINDS[c.kind].replace(/s$/, '')}${c.ch != null ? ` · <a href="#/ch/${c.ch + 1}">chapter ${c.ch + 1}</a>` : ''}<span class="pips" title="Box ${box} of 4">${[0, 1, 2, 3].map(k => `<i class="${k < box ? 'on' : ''}"></i>`).join('')}</span></div>
-      <p class="front">${inline(c.front)}</p>${c.kind === 'why' ? '<p class="cue">Why was it built this way, and what was the alternative?</p>' : c.kind === 'term' ? '<p class="cue">What does it mean here?</p>' : '<p class="cue">Explain it in your own words.</p>'}
+      <p class="front">${inline(c.front)}</p><p class="cue">${CUES[c.kind]}</p>
       ${shown ? `<div class="back prose">${md(c.back)}</div><div class="acts"><button id="miss"><kbd>1</kbd> Again</button><button class="primary" id="hit"><kbd>2</kbd> Knew it</button></div>`
         : `<div class="acts"><button class="primary" id="flip"><kbd>Space</kbd> Show answer</button></div>`}
       <div class="left">${plural(queue.length, 'card')} left in this round</div></div>`;
@@ -640,6 +681,8 @@ function setupPalette() {
     { k: 'Page', t: 'Flashcards', s: 'Terms, design decisions and big ideas', h: '#/cards' },
     { k: 'Page', t: 'Improvements', s: 'Roadmap and every finding', h: '#/improve' },
     { k: 'Page', t: 'Putting it together', s: 'Recap, mental model, final quiz', h: '#/review' },
+    ...(G.interview ? [{ k: 'Page', t: 'Interview prep', s: 'Pitch, numbers, stories, likely questions', h: '#/interview' },
+      ...G.interview.questions.map((q, i) => ({ k: 'Question', t: q.question, s: q.category, h: '#/interview', sec: `iq${i}` }))] : []),
   ];
   const inp = $('#pal-in');
   inp.oninput = () => { palSel = 0; renderPal(); };
@@ -667,7 +710,7 @@ function renderPal(rebuild = true) {
   $$('#pal-list a').forEach(a => (a.onclick = () => {
     const it = ctx.palShown[+a.dataset.i];
     closePalette();
-    if (it.sec) setTimeout(() => $('#' + it.sec)?.scrollIntoView(), 30);
+    if (it.sec) setTimeout(() => { const el = $('#' + it.sec); if (el?.tagName === 'DETAILS') el.open = true; el?.scrollIntoView(); }, 30);
     if (it.term) setTimeout(() => $('#t-' + it.term.toLowerCase().replace(/\W+/g, '-'))?.scrollIntoView({ block: 'center' }), 30);
   }));
   $('#pal-list li.sel')?.scrollIntoView({ block: 'nearest' });
@@ -695,6 +738,7 @@ function wire(active) {
   if (active === 'files') wireFiles();
   if (active === 'improve') $$('.filters button').forEach(b => (b.onclick = () => { ctx.impFilter = b.dataset.f; ctx.keepScroll = true; route(); }));
   if (active === 'cards') wireCards();
+  if (active === 'interview') wireInterview();
   if ($('.otp')) wireOutline();
   if (active === 'ask') wireAskForm($('#ask-main'), () => ({ files: [], where: '' }), $('#qa-list'), true);
 }

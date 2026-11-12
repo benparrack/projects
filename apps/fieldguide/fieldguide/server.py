@@ -58,7 +58,7 @@ def pick_files(g, question, focus):
 
 def answer(g, question, focus, model):
     budget, blocks = 90000, []
-    for f in pick_files(g, question, focus):
+    for f in pick_files(g, question, list(focus) + g.get('notes', [])):
         text = g['sources'].get(f['path'])
         if text is None or budget < 3000:
             continue

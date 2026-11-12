@@ -28,6 +28,7 @@ the standard library, and the viewer is plain ES modules with no build step.
 - **Ask.** On any page you can ask a follow-up question. Claude answers from the actual source, citing
   `file:line`, and the answers are kept under *Your questions*.
 
+- **Interview prep** (with `--interview`). Pitches, key numbers, stories and likely questions with answers.
 - **Flashcards.** Every glossary term, design decision and big idea becomes a card. Cards you know
   come round less often (Leitner boxes), and missed ones come back within the same round.
 
@@ -58,7 +59,22 @@ Every Claude call is cached by its input hash in `.cache/`, so after you edit a 
 redoes the files and chapters that changed. `fieldguide scan <path>` gives you the free static view
 first.
 
-Options: `--model`, `--fast-model`, `--effort low..max`, `--workers N`, `--name`, `--open`. Guides are
+Two options help most when the project has its own write-ups or you have to talk about it:
+
+- `--notes README.md docs/DECISIONS.md ...` gives the planner, every chapter, the capstone and Ask those
+  files in full. Use it for decision logs and experiment notes. Chapters then explain what was tried,
+  what was dropped and the real numbers, not just what the code does now.
+- `--interview` adds an **Interview prep** page: a 30-second and a 2-minute pitch, the numbers to know
+  cold, stories for "tell me about a problem you solved", and 20-odd likely questions. Each question
+  comes with a first-person answer and the follow-up it invites. The questions and numbers also go into
+  the flashcard deck.
+
+```
+python3 -m fieldguide build ~/school/ml-project/asl-recognition --interview \
+    --notes README.md docs/DECISIONS.md docs/NOTES.md docs/TODO.md
+```
+
+Other options: `--model`, `--fast-model`, `--effort low..max`, `--workers N`, `--name`, `--open`. Guides are
 written to `guides/<slug>/guide.json`, and Q&A history goes to `qa.json` next to it.
 
 ## Layout

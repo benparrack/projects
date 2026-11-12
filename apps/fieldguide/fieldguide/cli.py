@@ -53,13 +53,17 @@ def cmd_build(a):
     texts = {k: v for k, v in texts.items() if v is not None}
     s = project['stats']
     print(f"Field Guide: {project['name']}  ({s['loc']:,} lines, {s['files']} files)")
+    notes = [Path(n).as_posix().lstrip('./') for n in a.notes]
+    missing = [n for n in notes if n not in texts]
+    if missing:
+        sys.exit(f"--notes must be text files inside the project: {', '.join(missing)}")
     cfg = {'model': a.model, 'fast_model': a.fast_model, 'effort': a.effort, 'workers': a.workers,
-           'cache': HOME / '.cache' / name}
+           'cache': HOME / '.cache' / name, 'notes': course.notes_block(notes, texts), 'interview': a.interview}
     try:
         result = course.build(project, texts, cfg, log)
     except llm.LLMError as e:
         sys.exit(f'\nStopped: {e}\nEverything finished so far is cached; run the same command again to resume.')
-    guide = {'slug': name, 'project': project, 'sources': texts, **result}
+    guide = {'slug': name, 'project': project, 'sources': texts, 'notes': notes, **result}
     (out / 'guide.json').write_text(json.dumps(guide))
     done = sum(1 for c in result['chapters'] if c)
     print(f"\nDone in {result['seconds'] // 60}m{result['seconds'] % 60:02d}s: {done}/{len(result['chapters'])} chapters. "
@@ -97,6 +101,9 @@ def main(argv=None):
     p.add_argument('--fast-model', default='sonnet', help='model that takes notes on each file (default sonnet)')
     p.add_argument('--effort', default=None, help='reasoning effort for the writing model (low..max)')
     p.add_argument('--workers', type=int, default=3, help='parallel Claude calls (default 3)')
+    p.add_argument('--notes', nargs='+', default=[], metavar='FILE',
+                   help="the project's own write-ups (decision logs, experiment notes), relative to it; fed in full to every chapter")
+    p.add_argument('--interview', action='store_true', help='also write interview prep: pitches, numbers, stories, likely questions')
     p.add_argument('--open', action='store_true', help='serve and open it when done')
     p.add_argument('--ask-model', default='sonnet')
     p.set_defaults(fn=cmd_build)

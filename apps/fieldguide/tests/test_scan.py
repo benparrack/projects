@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fieldguide.course import fix_refs, source_block
+from fieldguide.course import fix_refs, notes_block, source_block
 from fieldguide.scan import scan
 
 FILES = {
@@ -77,6 +77,12 @@ class GlueTest(unittest.TestCase):
         cut = source_block(f, text, 500)
         self.assertIn('more lines cut', cut)
         self.assertNotIn('x300 = 300', cut)
+
+    def test_notes_block_is_empty_without_notes_and_full_with_them(self):
+        self.assertEqual(notes_block([], {}), '')
+        out = notes_block(['docs/WHY.md'], {'docs/WHY.md': 'Chose X over Y: 0.96 vs 0.90.'})
+        self.assertIn('=== docs/WHY.md ===', out)
+        self.assertIn('0.96 vs 0.90', out)
 
     def test_fix_refs_repairs_paths_and_clamps(self):
         project = {'files': [{'path': 'src/a.py', 'lines': 50}, {'path': 'src/b.py', 'lines': 10}]}
