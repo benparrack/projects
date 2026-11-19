@@ -18,6 +18,7 @@ const MIME_TYPES = {
   '.gb': 'application/octet-stream',
   '.gbc': 'application/octet-stream',
   '.wasm': 'application/wasm',
+  '.mp3': 'audio/mpeg',
 };
 
 // Firebase Auth's sign-in popup and token refresh need Google origins; the Game Boy emulator
@@ -42,7 +43,7 @@ const SECURITY_HEADERS = {
   'Content-Security-Policy': CSP,
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  'Permissions-Policy': 'camera=(), microphone=(self), geolocation=(), payment=()',
   // Required by Firebase's signInWithPopup to talk back to the opener window.
   'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
   ...(process.env.NODE_ENV === 'production' || process.env.RENDER ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),

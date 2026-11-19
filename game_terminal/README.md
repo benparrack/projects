@@ -23,7 +23,7 @@ something in the middle.
   and Boxes, Codebreaker, Minesweeper race, Blockade.
 - **ARENA & REAL-TIME**: Slither, Light Cycles, Arena Duel (1v1 FPS), Slope (3D runner), Maze
   Dash. These run on a server-side tick loop instead of only reacting to messages.
-- **WORD GAMES**: Wordle, Word Tiles, Word Wheel, Word Search, Hangman, Anagrams, Word Bites,
+- **WORD GAMES**: Wordle, Spelling Bee, Word Tiles, Word Wheel, Word Search, Hangman, Anagrams, Word Bites,
   Word Hunt, Word Trails, Crossword, 20 Questions.
 - **POCKET CLASSICS**: quick head-to-head games (Pool, Cup Pong, Darts, Basketball, Sea Battle,
   Filler, Tanks, Mini Golf, Archery, Shuffleboard, Bowling, Knockout, Paintball, Alley Ball)

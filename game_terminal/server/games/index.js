@@ -54,6 +54,7 @@ const skeeball = require('./skeeball');
 const minesweeper = require('./minesweeper');
 const blockade = require('./blockade');
 const wordle = require('./wordle');
+const spellingbee = require('./spellingbee');
 const slots = require('./slots');
 const crash = require('./crash');
 const plinko = require('./plinko');
@@ -120,6 +121,7 @@ const registry = {
   [minesweeper.type]: minesweeper,
   [blockade.type]: blockade,
   [wordle.type]: wordle,
+  [spellingbee.type]: spellingbee,
 };
 
 // CPU players for the card games — patches those plugins' onMessage in place (see cardBots.js).

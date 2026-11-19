@@ -1,6 +1,21 @@
 // How-to-play text for every hub game type, shown in the "i" info popover. Plain data only:
 // facts come from each game's server/games/<type>.js rules and its client hint text.
 export const HOWTO = {
+  spellingbee: {
+    about: 'Hear a word (or read its pronunciation guide and clues), then spell it. Words come in easy, medium, hard and expert, or a mix.',
+    rules: [
+      'RACE: everyone spells the same 10 words at once. One try each; faster answers score more, and a hint halves the points.',
+      'BEE: take turns, one word each. Miss yours and you are out at the end of the round. Last speller standing wins; alone it is a survival streak.',
+      'PRONOUNCER: players take turns choosing a word and saying it (recorded or on voice chat) for everyone else to spell.',
+      'WRITTEN clues need no sound: a pronunciation guide (capitals are stressed), the letter count, a definition and an example sentence.',
+      'After each word the answer is shown with your mistakes marked letter by letter.',
+    ],
+    controls: [
+      'Type or tap the keys. ENTER submits, BACKSPACE deletes, ESC clears.',
+      'SPACE plays the word again.',
+      'ENTER on the answer screen moves to the next word.',
+    ],
+  },
   wordle: {
     about: 'Everyone gets the same hidden five-letter word and six guesses.',
     rules: [
